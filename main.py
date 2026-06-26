@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from collections import defaultdict, Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from pyproj import Transformer
 
 LOCATIONIQ_GEOCODE_SLEEP = 1
+COORD_PRECISION = 4  # ~10 meter
 load_dotenv(Path(__file__).parent / ".env")
 LOCATIONIQ_API_KEY = os.getenv("LOCATIONIQ_API_KEY")
 if not LOCATIONIQ_API_KEY:
@@ -123,9 +124,8 @@ def map_cases(arcgis_cases):
         mapped_case["full_lat"] = lat
         mapped_case["full_lon"] = lon
 
-        precision = 4 # ~10 meter
-        rounded_lat = round(lat, precision)
-        rounded_lon = round(lon, precision)
+        rounded_lat = round(lat, COORD_PRECISION)
+        rounded_lon = round(lon, COORD_PRECISION)
 
         mapped_case["rounded_lat"] = rounded_lat
         mapped_case["rounded_lon"] = rounded_lon
@@ -160,12 +160,8 @@ def print_debug_info(
         pct = populated.get(key, 0) / total * 100
         print(f"{key:25s} {populated.get(key, 0):5d}/{total} ({pct:.1f}%)")
 
-
-    
-
     print(f"{len(arcgis_cases)} cases, {len(coord_to_cases)} unique coords")
-    print(f"{len(arcgis_cases) - len(coord_to_cases)} duplicates thrown out")
-
+    print(f"{len(arcgis_cases) - len(coord_to_cases)} cases share a coordinate with another")
 
 def epoch_ms_to_iso(ms):
     if ms is None:
@@ -186,7 +182,6 @@ def load_done_coords(jsonl_path):
             done.add((record["query_lat"], record["query_lon"]))
     return done
 
-
 def geocode_all(mapped_cases):
     jsonl_path = Path("out/geocodes.jsonl")
     jsonl_path.parent.mkdir(parents=True, exist_ok=True)
@@ -194,7 +189,6 @@ def geocode_all(mapped_cases):
     done = load_done_coords(jsonl_path)
     print(f"{len(done)} coords already geocoded, resuming")
 
-    # unique coords from cases, same pattern as your earlier dedup
     unique_coords = {(c["rounded_lat"], c["rounded_lon"]) for c in mapped_cases}
     remaining = unique_coords - done
     print(f"{len(remaining)} coords left to geocode")
@@ -214,6 +208,9 @@ def geocode_all(mapped_cases):
             f.flush()
             time.sleep(LOCATIONIQ_GEOCODE_SLEEP)
 
+LOCATIONIQ_REVERSE_URL = "https://us1.locationiq.com/v1/reverse"
+
+
 def call_locationiq(session, lat, lon):
     params = {
         "key": LOCATIONIQ_API_KEY,
@@ -222,12 +219,12 @@ def call_locationiq(session, lat, lon):
         "format": "json"
     }
 
-    resp = session.get("https://us1.locationiq.com/v1/reverse", params=params, timeout=DEFAULT_TIMEOUT)
+    resp = session.get(LOCATIONIQ_REVERSE_URL, params=params, timeout=DEFAULT_TIMEOUT)
 
     if resp.status_code == 429:
         print(f"Rate limited at ({lat}, {lon}), backing off")
         time.sleep(5)
-        resp = session.get("https://us1.locationiq.com/v1/reverse", params=params, timeout=DEFAULT_TIMEOUT)
+        resp = session.get(LOCATIONIQ_REVERSE_URL, params=params, timeout=DEFAULT_TIMEOUT)
 
     resp.raise_for_status()
 
