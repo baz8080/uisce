@@ -1,11 +1,11 @@
 [project]
 name = "uisce"
 version = "0.1.0"
-description = "Add your description here"
+description = "Download, transform, and geocode Uisce Éireann cases"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "dotenv>=0.9.9",
+    "python-dotenv>=1.0.0",
     "pyproj>=3.7.2",
     "requests>=2.34.2",
 ]
