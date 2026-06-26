@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-caching: true
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Lint
+        run: uv run ruff check
+
+      - name: Check syntax
+        run: uv run python -m py_compile main.py

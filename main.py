@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from collections import defaultdict, Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -208,6 +208,9 @@ def geocode_all(mapped_cases):
             f.flush()
             time.sleep(LOCATIONIQ_GEOCODE_SLEEP)
 
+LOCATIONIQ_REVERSE_URL = "https://us1.locationiq.com/v1/reverse"
+
+
 def call_locationiq(session, lat, lon):
     params = {
         "key": LOCATIONIQ_API_KEY,
@@ -216,12 +219,12 @@ def call_locationiq(session, lat, lon):
         "format": "json"
     }
 
-    resp = session.get("https://us1.locationiq.com/v1/reverse", params=params, timeout=DEFAULT_TIMEOUT)
+    resp = session.get(LOCATIONIQ_REVERSE_URL, params=params, timeout=DEFAULT_TIMEOUT)
 
     if resp.status_code == 429:
         print(f"Rate limited at ({lat}, {lon}), backing off")
         time.sleep(5)
-        resp = session.get("https://us1.locationiq.com/v1/reverse", params=params, timeout=DEFAULT_TIMEOUT)
+        resp = session.get(LOCATIONIQ_REVERSE_URL, params=params, timeout=DEFAULT_TIMEOUT)
 
     resp.raise_for_status()
 

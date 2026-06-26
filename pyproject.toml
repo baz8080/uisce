@@ -9,3 +9,14 @@ dependencies = [
     "pyproj>=3.7.2",
     "requests>=2.34.2",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.20",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
