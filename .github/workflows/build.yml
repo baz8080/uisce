@@ -33,8 +33,10 @@ jobs:
 
       - name: Publish DB
         run: |
-          gh release create "$(date +%Y-%m-%d)" out/uisce.db \
-            --title "$(date +%Y-%m-%d)" \
-            --notes "Weekly data refresh"
+          TAG="$(date +%Y-%m-%d)"
+          gh release create "$TAG" out/uisce.db \
+            --title "$TAG" \
+            --notes "Weekly data refresh" \
+          || gh release upload "$TAG" out/uisce.db --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
