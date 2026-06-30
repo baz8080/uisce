@@ -22,7 +22,6 @@ USABLE_CASE_THRESHOLD_FIELDS = ["TITLE", "DESCRIPTION"]
 DB_PATH = Path("out/uisce.db")
 CASES_RAW_PATH = Path("out/cases.json")
 CASES_MAPPED_PATH = Path("out/cases_mapped.json")
-GEOCODES_PATH = Path("out/geocodes.jsonl")
 
 DB_CASE_COLUMNS = [
     "id", "work_type", "title", "start_date", "end_date", "description",
@@ -163,33 +162,21 @@ def epoch_ms_to_iso(ms):
         return None
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).isoformat()
 
-def load_done_coords(jsonl_path):
-    done = set()
-    if not jsonl_path.exists():
-        return done
-
-    with open(jsonl_path) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            record = json.loads(line)
-            done.add((record["query_lat"], record["query_lon"]))
-    return done
-
 def geocode_all(cases_to_geocode):
-    GEOCODES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    done = load_done_coords(GEOCODES_PATH)
-    print(f"{len(done)} coords already geocoded, resuming")
+    with sqlite3.connect(DB_PATH) as conn:
+        _create_geocode_cache_table(conn)
 
-    unique_coords = {(c["rounded_lat"], c["rounded_lon"]) for c in cases_to_geocode}
-    remaining = unique_coords - done
-    print(f"{len(remaining)} coords left to geocode")
+        rows = conn.execute("SELECT rounded_lat, rounded_lon FROM geocode_cache")
+        done = {(row[0], row[1]) for row in rows}
+        print(f"{len(done)} coords already geocoded, resuming")
 
-    with open(GEOCODES_PATH, "a") as f:
+        unique_coords = {(c["rounded_lat"], c["rounded_lon"]) for c in cases_to_geocode}
+        remaining = unique_coords - done
+        print(f"{len(remaining)} coords left to geocode")
+
         session = make_session()
-
         for lat, lon in remaining:
             try:
                 result = call_locationiq(session, lat, lon)
@@ -197,9 +184,33 @@ def geocode_all(cases_to_geocode):
                 print(f"Failed at ({lat}, {lon}), skipping for now: {e}")
                 continue
 
-            record = {"query_lat": lat, "query_lon": lon, "result": result}
-            f.write(json.dumps(record) + "\n")
-            f.flush()
+            address = result.get("address", {})
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO geocode_cache (
+                    rounded_lat, rounded_lon, display_name,
+                    road, town, village, hamlet, suburb, city_district,
+                    county, postcode, city, municipality, region, raw_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    lat, lon,
+                    result.get("display_name"),
+                    address.get("road"),
+                    address.get("town"),
+                    address.get("village"),
+                    address.get("hamlet"),
+                    address.get("suburb"),
+                    address.get("city_district"),
+                    address.get("county"),
+                    address.get("postcode"),
+                    address.get("city"),
+                    address.get("municipality"),
+                    address.get("region"),
+                    json.dumps(result),
+                ),
+            )
+            conn.commit()
             time.sleep(LOCATIONIQ_GEOCODE_SLEEP)
 
 
@@ -223,32 +234,35 @@ def make_session():
     session.headers.update({"User-Agent": "uisce/1.0 https://github.com/baz8080/uisce"})
     return session
 
+def _create_geocode_cache_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS geocode_cache (
+            rounded_lat REAL NOT NULL,
+            rounded_lon REAL NOT NULL,
+            display_name TEXT,
+            road TEXT,
+            town TEXT,
+            village TEXT,
+            hamlet TEXT,
+            suburb TEXT,
+            city_district TEXT,
+            county TEXT,
+            postcode TEXT,
+            city TEXT,
+            municipality TEXT,
+            region TEXT,
+            raw_json TEXT NOT NULL,
+            PRIMARY KEY (rounded_lat, rounded_lon)
+        )
+    """)
+
 def create_db(cases):
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
 
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS geocode_cache (
-                rounded_lat REAL NOT NULL,
-                rounded_lon REAL NOT NULL,
-                display_name TEXT,
-                road TEXT,
-                town TEXT,
-                village TEXT,
-                hamlet TEXT,
-                suburb TEXT,
-                city_district TEXT,
-                county TEXT,
-                postcode TEXT,
-                city TEXT,
-                municipality TEXT,
-                region TEXT,
-                raw_json TEXT NOT NULL,
-                PRIMARY KEY (rounded_lat, rounded_lon)
-            )
-        """)
+        _create_geocode_cache_table(conn)
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS cases (
@@ -281,7 +295,6 @@ def create_db(cases):
             )
         """)
 
-        load_geocode_cache(conn)
         load_cases(conn, cases)
 
 def load_cases(conn, cases):
@@ -297,41 +310,6 @@ def load_cases(conn, cases):
         rows,
     )
 
-def load_geocode_cache(conn):
-    cur = conn.cursor()
-
-    with open(GEOCODES_PATH) as f:
-        for line in f:
-            record = json.loads(line)
-            result = record["result"]
-            address = result.get("address", {})
-
-            cur.execute(
-                """
-                INSERT OR IGNORE INTO geocode_cache (
-                    rounded_lat, rounded_lon, display_name,
-                    road, town, village, hamlet, suburb, city_district,
-                    county, postcode, region, city, municipality, raw_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    record["query_lat"],
-                    record["query_lon"],
-                    result.get("display_name"),
-                    address.get("road"),
-                    address.get("town"),
-                    address.get("village"),
-                    address.get("hamlet"),
-                    address.get("suburb"),
-                    address.get("city_district"),
-                    address.get("county"),
-                    address.get("postcode"),
-                    address.get("region"),
-                    address.get("city"),
-                    address.get("municipality"),
-                    json.dumps(result),
-                ),
-            )
 
 def is_usable_case(attrs):
     return any(attrs.get(f) for f in USABLE_CASE_THRESHOLD_FIELDS)
