@@ -2,7 +2,6 @@ import json
 import os
 import sqlite3
 import time
-from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,8 +18,16 @@ if not LOCATIONIQ_API_KEY:
     raise RuntimeError("LOCATIONIQ_API_KEY not set, check your .env file")
 
 DEFAULT_TIMEOUT = 15
-
+USABLE_CASE_THRESHOLD_FIELDS = ["TITLE", "DESCRIPTION"]
 DB_PATH = Path("out/uisce.db")
+
+DB_CASE_COLUMNS = [
+    "id", "work_type", "title", "start_date", "end_date", "description",
+    "status", "global_id", "approval_status", "location", "county", "reference_num",
+    "boil_water_notice", "traffic_disruptions", "pollution", "water_outage", "do_not_drink",
+    "discolouration", "reduced_pressure", "water_restrictions", "full_lat", "full_lon",
+    "rounded_lat", "rounded_lon",
+]
 
 
 def download_cases():
@@ -74,15 +81,17 @@ def read_mapped_cases():
     return json.loads(Path("out/cases_mapped.json").read_text())
 
 
-def map_cases(arcgis_cases):
+def map_cases(cases_to_map):
+    skipped = []
+
     transformer = Transformer.from_crs("EPSG:3857", "EPSG:4326", always_xy=True)
 
     field_map = {
         "OBJECTID": "id",
         "WORKTYPE": "work_type",
         "TITLE": "title",
-        "STARTDATE": "start_date",
-        "ENDDATE": "end_date",
+        "STARTDATE": "start_date",      # low trust - start / end often ~60s apart
+        "ENDDATE": "end_date",          # low trust - start / end often ~60s apart
         "DESCRIPTION": "description",
         "STATUS": "status",
         "GLOBALID": "global_id",
@@ -111,12 +120,15 @@ def map_cases(arcgis_cases):
         # "PROJECT": "project",
     }
 
-    populated = Counter()
-    total = len(arcgis_cases)
     all_cases = []
+    for case in cases_to_map:
+        attrs = case["attributes"]
 
-    for case in arcgis_cases:
-        mapped_case = {field_map[k]: v for k, v in case["attributes"].items() if k in field_map}
+        if not is_usable_case(attrs):
+            skipped.append(attrs.get("OBJECTID"))
+            continue
+        
+        mapped_case = {field_map[k]: v for k, v in attrs.items() if k in field_map}
 
         mapped_case["start_date"] = epoch_ms_to_iso(mapped_case["start_date"])
         mapped_case["end_date"] = epoch_ms_to_iso(mapped_case["end_date"])
@@ -128,46 +140,27 @@ def map_cases(arcgis_cases):
         mapped_case["rounded_lat"] = round(lat, COORD_PRECISION)
         mapped_case["rounded_lon"] = round(lon, COORD_PRECISION)
 
+        if mapped_case["county"] == "Dnegal":
+            mapped_case["county"] = "Donegal"
+
+        if mapped_case["title"] is None or mapped_case["title"] == "":
+            mapped_case["title"] = "unknown"
+
         all_cases.append(mapped_case)
 
-        for field_key, val in case["attributes"].items():
-            if val not in (None, "", 0):
-                populated[field_key] += 1
+    if skipped:
+        print(f"Skipped {len(skipped)} cases with no usable data: {skipped}")
 
     out_path = Path("out/cases_mapped.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(all_cases, indent=2))
 
-    print_debug_info(field_map, arcgis_cases, all_cases, populated, total)
     return all_cases
-
-
-def print_debug_info(field_map, arcgis_cases, all_cases, populated, total):
-    for key in field_map:
-        pct = populated.get(key, 0) / total * 100
-        print(f"{key:25s} {populated.get(key, 0):5d}/{total} ({pct:.1f}%)")
-
-    coord_groups = defaultdict(list)
-    for case in all_cases:
-        key = (case["rounded_lat"], case["rounded_lon"])
-        coord_groups[key].append(case)
-
-    for coord, group in coord_groups.items():
-        if len(group) > 1:
-            print(coord)
-            for case in group:
-                print(f"  ID:{case['id']}, Location: {case['location']}")
-
-    unique_coords = len(coord_groups)
-    print(f"{len(arcgis_cases)} cases, {unique_coords} unique coords")
-    print(f"{len(arcgis_cases) - unique_coords} cases share a coordinate with another")
-
 
 def epoch_ms_to_iso(ms):
     if ms is None:
         return None
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).isoformat()
-
 
 def load_done_coords(jsonl_path):
     done = set()
@@ -183,19 +176,18 @@ def load_done_coords(jsonl_path):
             done.add((record["query_lat"], record["query_lon"]))
     return done
 
-
-def geocode_all(mapped_cases):
+def geocode_all(cases_to_geocode):
     jsonl_path = Path("out/geocodes.jsonl")
     jsonl_path.parent.mkdir(parents=True, exist_ok=True)
 
     done = load_done_coords(jsonl_path)
     print(f"{len(done)} coords already geocoded, resuming")
 
-    unique_coords = {(c["rounded_lat"], c["rounded_lon"]) for c in mapped_cases}
+    unique_coords = {(c["rounded_lat"], c["rounded_lon"]) for c in cases_to_geocode}
     remaining = unique_coords - done
     print(f"{len(remaining)} coords left to geocode")
 
-    with open(jsonl_path, "a") as f:  # append mode, never overwrite
+    with open(jsonl_path, "a") as f:
         session = make_session()
 
         for lat, lon in remaining:
@@ -226,160 +218,96 @@ def call_locationiq(session, lat, lon):
     data = resp.json()
     return data
 
-
 def make_session():
     session = requests.Session()
     session.headers.update({"User-Agent": "uisce/1.0 https://github.com/baz8080/uisce"})
     return session
 
-
 def create_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("PRAGMA foreign_keys = ON")
+        cur = conn.cursor()
 
-    cur.executescript("""
-        DROP TABLE IF EXISTS cases;
-        DROP TABLE IF EXISTS geocode_cache;
+        cur.executescript("""
+            DROP TABLE IF EXISTS cases;
+            DROP TABLE IF EXISTS geocode_cache;
+    
+            CREATE TABLE geocode_cache (
+                rounded_lat REAL NOT NULL,
+                rounded_lon REAL NOT NULL,
+                display_name TEXT,
+                road TEXT,
+                town TEXT,
+                village TEXT,
+                hamlet TEXT,
+                suburb TEXT,
+                city_district TEXT,
+                county TEXT,
+                postcode TEXT,
+                city TEXT,
+                municipality TEXT,
+                region TEXT,
+                raw_json TEXT NOT NULL,
+                PRIMARY KEY (rounded_lat, rounded_lon)
+            );
+    
+            CREATE TABLE cases (
+                id INTEGER PRIMARY KEY,
+                work_type TEXT,
+                title TEXT,
+                start_date TEXT,
+                end_date TEXT,
+                description TEXT,
+                status TEXT,
+                global_id TEXT,
+                approval_status TEXT,
+                location TEXT,
+                county TEXT,
+                reference_num TEXT,
+                boil_water_notice INTEGER,
+                traffic_disruptions INTEGER,
+                pollution INTEGER,
+                water_outage INTEGER,
+                do_not_drink INTEGER,
+                discolouration INTEGER,
+                reduced_pressure INTEGER,
+                water_restrictions INTEGER,
+                full_lat REAL NOT NULL,
+                full_lon REAL NOT NULL,
+                rounded_lat REAL NOT NULL,
+                rounded_lon REAL NOT NULL,
+                FOREIGN KEY (rounded_lat, rounded_lon) 
+                    REFERENCES geocode_cache (rounded_lat, rounded_lon)
+            );
+        """)
 
-        CREATE TABLE geocode_cache (
-            rounded_lat REAL NOT NULL,
-            rounded_lon REAL NOT NULL,
-            display_name TEXT,
-            road TEXT,
-            town TEXT,
-            village TEXT,
-            hamlet TEXT,
-            suburb TEXT,
-            city_district TEXT,
-            county TEXT,
-            postcode TEXT,
-            city TEXT,
-            municipality TEXT,
-            region TEXT,
-            raw_json TEXT NOT NULL,
-            PRIMARY KEY (rounded_lat, rounded_lon)
-        );
-
-        CREATE TABLE cases (
-            id INTEGER PRIMARY KEY,
-            work_type TEXT,
-            title TEXT,
-            start_date TEXT,
-            end_date TEXT,
-            description TEXT,
-            status TEXT,
-            global_id TEXT,
-            approval_status TEXT,
-            location TEXT,
-            county TEXT,
-            reference_num TEXT,
-            boil_water_notice INTEGER,
-            traffic_disruptions INTEGER,
-            pollution INTEGER,
-            water_outage INTEGER,
-            do_not_drink INTEGER,
-            discolouration INTEGER,
-            reduced_pressure INTEGER,
-            water_restrictions INTEGER,
-            full_lat REAL NOT NULL,
-            full_lon REAL NOT NULL,
-            rounded_lat REAL NOT NULL,
-            rounded_lon REAL NOT NULL,
-            FOREIGN KEY (rounded_lat, rounded_lon) 
-                REFERENCES geocode_cache (rounded_lat, rounded_lon)
-        );
-    """)
-    conn.commit()
-
-    load_geocode_cache(conn)
-    load_cases(conn)
-
-    conn.close()
-
+        load_geocode_cache(conn)
+        load_cases(conn)
 
 def load_cases(conn):
     cur = conn.cursor()
     cases = json.loads(Path("out/cases_mapped.json").read_text())
 
-    for record in cases:
-        case_id = record["id"]
-        work_type = record["work_type"]
-        title = record["title"]
-        start_date = record["start_date"]
-        end_date = record["end_date"]
-        description = record["description"]
-        status = record["status"]
-        global_id = record["global_id"]
-        approval_status = record["approval_status"]
-        location = record["location"]
-        county = record["county"]
-        reference_num = record["reference_num"]
-        boil_water_notice = record["boil_water_notice"]
-        traffic_disruptions = record["traffic_disruptions"]
-        pollution = record["pollution"]
-        water_outage = record["water_outage"]
-        do_not_drink = record["do_not_drink"]
-        discolouration = record["discolouration"]
-        reduced_pressure = record["reduced_pressure"]
-        water_restrictions = record["water_restrictions"]
-        full_lat = record["full_lat"]
-        full_lon = record["full_lon"]
-        rounded_lat = record["rounded_lat"]
-        rounded_lon = record["rounded_lon"]
+    placeholders = ", ".join("?" * len(DB_CASE_COLUMNS))
+    columns = ", ".join(DB_CASE_COLUMNS)
 
-        cur.execute(
-            """
-            INSERT INTO cases (
-                id, work_type, title, start_date, end_date, description,
-                status, global_id, approval_status, location, county, reference_num,
-                boil_water_notice, traffic_disruptions, pollution, water_outage, do_not_drink,
-                discolouration, reduced_pressure, water_restrictions, full_lat, full_lon,
-                rounded_lat, rounded_lon
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """,
-            (
-                case_id,
-                work_type,
-                title,
-                start_date,
-                end_date,
-                description,
-                status,
-                global_id,
-                approval_status,
-                location,
-                county,
-                reference_num,
-                boil_water_notice,
-                traffic_disruptions,
-                pollution,
-                water_outage,
-                do_not_drink,
-                discolouration,
-                reduced_pressure,
-                water_restrictions,
-                full_lat,
-                full_lon,
-                rounded_lat,
-                rounded_lon,
-            ),
-        )
+    rows = [tuple(record[col] for col in DB_CASE_COLUMNS) for record in cases]
 
-    conn.commit()
-
+    cur.executemany(
+        f"INSERT INTO cases ({columns}) VALUES ({placeholders})",
+        rows,
+    )
 
 def load_geocode_cache(conn):
     cur = conn.cursor()
-    field_counts = Counter()
 
     with open("out/geocodes.jsonl") as f:
         for line in f:
             record = json.loads(line)
             result = record["result"]
             address = result.get("address", {})
-            field_counts.update(address.keys())
 
             cur.execute(
                 """
@@ -408,14 +336,11 @@ def load_geocode_cache(conn):
                 ),
             )
 
-        for field, count in field_counts.most_common():
-            print(f"{field:20s} {count}")
-
-    conn.commit()
-
+def is_usable_case(attrs):
+    return any(attrs.get(f) for f in USABLE_CASE_THRESHOLD_FIELDS)
 
 if __name__ == "__main__":
-    download_cases()
+    # download_cases()
     arcgis_cases = read_arcgis_cases()
     mapped_cases = map_cases(arcgis_cases)
     geocode_all(mapped_cases)
