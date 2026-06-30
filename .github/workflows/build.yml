@@ -1,0 +1,42 @@
+name: Build DB
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-caching: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Download existing DB
+        run: gh release download --pattern "uisce.db" --dir out/
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run pipeline
+        env:
+          LOCATIONIQ_API_KEY: ${{ secrets.LOCATIONIQ_API_KEY }}
+        run: uv run python main.py
+
+      - name: Publish DB
+        run: |
+          TAG="$(date +%Y-%m-%d)"
+          gh release create "$TAG" out/uisce.db \
+            --title "$TAG" \
+            --notes "Weekly data refresh" \
+          || gh release upload "$TAG" out/uisce.db --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
