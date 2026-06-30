@@ -20,6 +20,9 @@ if not LOCATIONIQ_API_KEY:
 DEFAULT_TIMEOUT = 15
 USABLE_CASE_THRESHOLD_FIELDS = ["TITLE", "DESCRIPTION"]
 DB_PATH = Path("out/uisce.db")
+CASES_RAW_PATH = Path("out/cases.json")
+CASES_MAPPED_PATH = Path("out/cases_mapped.json")
+GEOCODES_PATH = Path("out/geocodes.jsonl")
 
 DB_CASE_COLUMNS = [
     "id", "work_type", "title", "start_date", "end_date", "description",
@@ -68,17 +71,16 @@ def download_cases():
         time.sleep(0.3)
 
     print(f"Done: {len(all_features)} records")
-    out_path = Path("out/cases.json")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(all_features, indent=2))
+    CASES_RAW_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CASES_RAW_PATH.write_text(json.dumps(all_features, indent=2))
 
 
 def read_arcgis_cases():
-    return json.loads(Path("out/cases.json").read_text())
+    return json.loads(CASES_RAW_PATH.read_text())
 
 
 def read_mapped_cases():
-    return json.loads(Path("out/cases_mapped.json").read_text())
+    return json.loads(CASES_MAPPED_PATH.read_text())
 
 
 def map_cases(cases_to_map):
@@ -151,9 +153,8 @@ def map_cases(cases_to_map):
     if skipped:
         print(f"Skipped {len(skipped)} cases with no usable data: {skipped}")
 
-    out_path = Path("out/cases_mapped.json")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(all_cases, indent=2))
+    CASES_MAPPED_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CASES_MAPPED_PATH.write_text(json.dumps(all_cases, indent=2))
 
     return all_cases
 
@@ -177,17 +178,16 @@ def load_done_coords(jsonl_path):
     return done
 
 def geocode_all(cases_to_geocode):
-    jsonl_path = Path("out/geocodes.jsonl")
-    jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+    GEOCODES_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    done = load_done_coords(jsonl_path)
+    done = load_done_coords(GEOCODES_PATH)
     print(f"{len(done)} coords already geocoded, resuming")
 
     unique_coords = {(c["rounded_lat"], c["rounded_lon"]) for c in cases_to_geocode}
     remaining = unique_coords - done
     print(f"{len(remaining)} coords left to geocode")
 
-    with open(jsonl_path, "a") as f:
+    with open(GEOCODES_PATH, "a") as f:
         session = make_session()
 
         for lat, lon in remaining:
@@ -223,18 +223,14 @@ def make_session():
     session.headers.update({"User-Agent": "uisce/1.0 https://github.com/baz8080/uisce"})
     return session
 
-def create_db():
+def create_db(cases):
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
-        cur = conn.cursor()
 
-        cur.executescript("""
-            DROP TABLE IF EXISTS cases;
-            DROP TABLE IF EXISTS geocode_cache;
-    
-            CREATE TABLE geocode_cache (
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS geocode_cache (
                 rounded_lat REAL NOT NULL,
                 rounded_lon REAL NOT NULL,
                 display_name TEXT,
@@ -251,9 +247,11 @@ def create_db():
                 region TEXT,
                 raw_json TEXT NOT NULL,
                 PRIMARY KEY (rounded_lat, rounded_lon)
-            );
-    
-            CREATE TABLE cases (
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS cases (
                 id INTEGER PRIMARY KEY,
                 work_type TEXT,
                 title TEXT,
@@ -278,17 +276,16 @@ def create_db():
                 full_lon REAL NOT NULL,
                 rounded_lat REAL NOT NULL,
                 rounded_lon REAL NOT NULL,
-                FOREIGN KEY (rounded_lat, rounded_lon) 
+                FOREIGN KEY (rounded_lat, rounded_lon)
                     REFERENCES geocode_cache (rounded_lat, rounded_lon)
-            );
+            )
         """)
 
         load_geocode_cache(conn)
-        load_cases(conn)
+        load_cases(conn, cases)
 
-def load_cases(conn):
+def load_cases(conn, cases):
     cur = conn.cursor()
-    cases = json.loads(Path("out/cases_mapped.json").read_text())
 
     placeholders = ", ".join("?" * len(DB_CASE_COLUMNS))
     columns = ", ".join(DB_CASE_COLUMNS)
@@ -296,14 +293,14 @@ def load_cases(conn):
     rows = [tuple(record[col] for col in DB_CASE_COLUMNS) for record in cases]
 
     cur.executemany(
-        f"INSERT INTO cases ({columns}) VALUES ({placeholders})",
+        f"INSERT OR REPLACE INTO cases ({columns}) VALUES ({placeholders})",
         rows,
     )
 
 def load_geocode_cache(conn):
     cur = conn.cursor()
 
-    with open("out/geocodes.jsonl") as f:
+    with open(GEOCODES_PATH) as f:
         for line in f:
             record = json.loads(line)
             result = record["result"]
@@ -311,7 +308,7 @@ def load_geocode_cache(conn):
 
             cur.execute(
                 """
-                INSERT INTO geocode_cache (
+                INSERT OR IGNORE INTO geocode_cache (
                     rounded_lat, rounded_lon, display_name,
                     road, town, village, hamlet, suburb, city_district,
                     county, postcode, region, city, municipality, raw_json
@@ -340,8 +337,8 @@ def is_usable_case(attrs):
     return any(attrs.get(f) for f in USABLE_CASE_THRESHOLD_FIELDS)
 
 if __name__ == "__main__":
-    # download_cases()
+    download_cases()
     arcgis_cases = read_arcgis_cases()
     mapped_cases = map_cases(arcgis_cases)
     geocode_all(mapped_cases)
-    create_db()
+    create_db(mapped_cases)
