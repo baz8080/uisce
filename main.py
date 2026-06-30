@@ -38,7 +38,7 @@ def download_cases():
     offset = 0
     page_size = 1000
 
-    session = make_session()
+    session = _make_session()
 
     while True:
         params = {
@@ -125,14 +125,14 @@ def map_cases(cases_to_map):
     for case in cases_to_map:
         attrs = case["attributes"]
 
-        if not is_usable_case(attrs):
+        if not _is_usable_case(attrs):
             skipped.append(attrs.get("OBJECTID"))
             continue
         
         mapped_case = {field_map[k]: v for k, v in attrs.items() if k in field_map}
 
-        mapped_case["start_date"] = epoch_ms_to_iso(mapped_case["start_date"])
-        mapped_case["end_date"] = epoch_ms_to_iso(mapped_case["end_date"])
+        mapped_case["start_date"] = _epoch_ms_to_iso(mapped_case["start_date"])
+        mapped_case["end_date"] = _epoch_ms_to_iso(mapped_case["end_date"])
 
         lon, lat = transformer.transform(case["geometry"]["x"], case["geometry"]["y"])
         mapped_case["full_lat"] = lat
@@ -157,7 +157,7 @@ def map_cases(cases_to_map):
 
     return all_cases
 
-def epoch_ms_to_iso(ms):
+def _epoch_ms_to_iso(ms):
     if ms is None:
         return None
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).isoformat()
@@ -176,10 +176,10 @@ def geocode_all(cases_to_geocode):
         remaining = unique_coords - done
         print(f"{len(remaining)} coords left to geocode")
 
-        session = make_session()
+        session = _make_session()
         for lat, lon in remaining:
             try:
-                result = call_locationiq(session, lat, lon)
+                result = _call_locationiq(session, lat, lon)
             except requests.HTTPError as e:
                 print(f"Failed at ({lat}, {lon}), skipping for now: {e}")
                 continue
@@ -214,7 +214,7 @@ def geocode_all(cases_to_geocode):
             time.sleep(LOCATIONIQ_GEOCODE_SLEEP)
 
 
-def call_locationiq(session, lat, lon):
+def _call_locationiq(session, lat, lon):
     params = {"key": LOCATIONIQ_API_KEY, "lat": lat, "lon": lon, "format": "json"}
 
     resp = session.get(LOCATIONIQ_REVERSE_URL, params=params, timeout=DEFAULT_TIMEOUT)
@@ -229,7 +229,7 @@ def call_locationiq(session, lat, lon):
     data = resp.json()
     return data
 
-def make_session():
+def _make_session():
     session = requests.Session()
     session.headers.update({"User-Agent": "uisce/1.0 https://github.com/baz8080/uisce"})
     return session
@@ -295,9 +295,9 @@ def create_db(cases):
             )
         """)
 
-        load_cases(conn, cases)
+        _load_cases(conn, cases)
 
-def load_cases(conn, cases):
+def _load_cases(conn, cases):
     cur = conn.cursor()
 
     placeholders = ", ".join("?" * len(DB_CASE_COLUMNS))
@@ -311,12 +311,25 @@ def load_cases(conn, cases):
     )
 
 
-def is_usable_case(attrs):
+def _is_usable_case(attrs):
     return any(attrs.get(f) for f in USABLE_CASE_THRESHOLD_FIELDS)
+
+
+def _backfill_county(cases):
+    with sqlite3.connect(DB_PATH) as conn:
+        for case in cases:
+            if not case.get("county"):
+                row = conn.execute(
+                    "SELECT county FROM geocode_cache WHERE rounded_lat = ? AND rounded_lon = ?",
+                    (case["rounded_lat"], case["rounded_lon"]),
+                ).fetchone()
+                if row and row[0]:
+                    case["county"] = row[0].removeprefix("County ")
 
 if __name__ == "__main__":
     download_cases()
     arcgis_cases = read_arcgis_cases()
     mapped_cases = map_cases(arcgis_cases)
     geocode_all(mapped_cases)
+    _backfill_county(mapped_cases)
     create_db(mapped_cases)
