@@ -57,7 +57,7 @@ def download_cases():
     offset = 0
     page_size = 1000
 
-    session = make_session()
+    session = _make_session()
 
     while True:
         params = {
@@ -144,14 +144,14 @@ def map_cases(cases_to_map):
     for case in cases_to_map:
         attrs = case["attributes"]
 
-        if not is_usable_case(attrs):
+        if not _is_usable_case(attrs):
             skipped.append(attrs.get("OBJECTID"))
             continue
 
         mapped_case = {field_map[k]: v for k, v in attrs.items() if k in field_map}
 
-        mapped_case["start_date"] = epoch_ms_to_iso(mapped_case["start_date"])
-        mapped_case["end_date"] = epoch_ms_to_iso(mapped_case["end_date"])
+        mapped_case["start_date"] = _epoch_ms_to_iso(mapped_case["start_date"])
+        mapped_case["end_date"] = _epoch_ms_to_iso(mapped_case["end_date"])
 
         lon, lat = transformer.transform(case["geometry"]["x"], case["geometry"]["y"])
         mapped_case["full_lat"] = lat
@@ -197,10 +197,10 @@ def geocode_all(cases_to_geocode):
         remaining = unique_coords - done
         print(f"{len(remaining)} coords left to geocode")
 
-        session = make_session()
+        session = _make_session()
         for lat, lon in remaining:
             try:
-                result = call_locationiq(session, lat, lon)
+                result = _call_locationiq(session, lat, lon)
             except requests.HTTPError as e:
                 print(f"Failed at ({lat}, {lon}), skipping for now: {e}")
                 continue
@@ -236,7 +236,7 @@ def geocode_all(cases_to_geocode):
             time.sleep(LOCATIONIQ_GEOCODE_SLEEP)
 
 
-def call_locationiq(session, lat, lon):
+def _call_locationiq(session, lat, lon):
     params = {"key": LOCATIONIQ_API_KEY, "lat": lat, "lon": lon, "format": "json"}
 
     resp = session.get(LOCATIONIQ_REVERSE_URL, params=params, timeout=DEFAULT_TIMEOUT)
@@ -320,7 +320,7 @@ def create_db(cases):
             )
         """)
 
-        load_cases(conn, cases)
+        _load_cases(conn, cases)
 
 
 def load_cases(conn, cases):
@@ -337,7 +337,7 @@ def load_cases(conn, cases):
     )
 
 
-def is_usable_case(attrs):
+def _is_usable_case(attrs):
     return any(attrs.get(f) for f in USABLE_CASE_THRESHOLD_FIELDS)
 
 
@@ -346,4 +346,5 @@ if __name__ == "__main__":
     arcgis_cases = read_arcgis_cases()
     mapped_cases = map_cases(arcgis_cases)
     geocode_all(mapped_cases)
+    _backfill_county(mapped_cases)
     create_db(mapped_cases)
