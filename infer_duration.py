@@ -48,40 +48,49 @@ end_source must be one of: completion_update, scheduled_end_with_time, scheduled
 If no end time can be inferred, return null for inferred_end and not_found for end_source.
 """  # your working prompt
 
+
 def get_processed_ids(jsonl_path):
     if not jsonl_path.exists():
         return set()
     with open(jsonl_path) as f:
         return {json.loads(line)["case_id"] for line in f if line.strip()}
 
+
 def get_unprocessed_cases(db_path, processed_ids):
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    cur = conn.execute("SELECT id, start_date, description FROM cases WHERE description IS NOT NULL")
+    cur = conn.execute(
+        "SELECT id, start_date, description FROM cases WHERE description IS NOT NULL"
+    )
     cases = [row for row in cur if row["id"] not in processed_ids]
     conn.close()
     return cases
 
+
 def call_llm(start_date, description):
     import urllib.request
+
     payload = {
         "model": "gemma-4-12b-qat",
         "messages": [
-            {"role": "user", "content": f"{PROMPT}\n\nstart_date: {start_date}\ndescription: {description}"}
+            {
+                "role": "user",
+                "content": f"{PROMPT}\n\nstart_date: {start_date}\ndescription: {description}",
+            }
         ],
-        "temperature": 0.1
+        "temperature": 0.1,
     }
     req = urllib.request.Request(
-        MODEL_URL,
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"}
+        MODEL_URL, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}
     )
     with urllib.request.urlopen(req) as resp:
         data = json.loads(resp.read())
     return data["choices"][0]["message"]["content"]
 
+
 def parse_response(response_text):
     return json.loads(response_text)
+
 
 def run():
     processed_ids = get_processed_ids(JSONL_PATH)
@@ -101,7 +110,7 @@ def run():
                     "end_source": result.get("end_source"),
                     "end_confidence": result.get("confidence"),
                     "end_notes": result.get("notes"),
-                    "inferred_at": datetime.now(timezone.utc).isoformat()
+                    "inferred_at": datetime.now(timezone.utc).isoformat(),
                 }
 
                 if record["inferred_end"] and record["inferred_end"] < case["start_date"]:
@@ -116,6 +125,7 @@ def run():
                 print(f"Failed case {case['id']}: {e}")
                 # out.write(json.dumps({"case_id": case["id"], "end_source": "error", "end_confidence": "error", "end_notes": str(e), "inferred_at": datetime.now(timezone.utc).isoformat()}) + "\n")
                 out.flush()
+
 
 if __name__ == "__main__":
     run()
