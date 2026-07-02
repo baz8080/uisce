@@ -24,11 +24,30 @@ CASES_RAW_PATH = Path("out/cases.json")
 CASES_MAPPED_PATH = Path("out/cases_mapped.json")
 
 DB_CASE_COLUMNS = [
-    "id", "work_type", "title", "start_date", "end_date", "description",
-    "status", "global_id", "approval_status", "location", "county", "reference_num",
-    "boil_water_notice", "traffic_disruptions", "pollution", "water_outage", "do_not_drink",
-    "discolouration", "reduced_pressure", "water_restrictions", "full_lat", "full_lon",
-    "rounded_lat", "rounded_lon",
+    "id",
+    "work_type",
+    "title",
+    "start_date",
+    "end_date",
+    "description",
+    "status",
+    "global_id",
+    "approval_status",
+    "location",
+    "county",
+    "reference_num",
+    "boil_water_notice",
+    "traffic_disruptions",
+    "pollution",
+    "water_outage",
+    "do_not_drink",
+    "discolouration",
+    "reduced_pressure",
+    "water_restrictions",
+    "full_lat",
+    "full_lon",
+    "rounded_lat",
+    "rounded_lon",
 ]
 
 
@@ -91,8 +110,8 @@ def map_cases(cases_to_map):
         "OBJECTID": "id",
         "WORKTYPE": "work_type",
         "TITLE": "title",
-        "STARTDATE": "start_date",      # low trust - start / end often ~60s apart
-        "ENDDATE": "end_date",          # low trust - start / end often ~60s apart
+        "STARTDATE": "start_date",  # low trust - start / end often ~60s apart
+        "ENDDATE": "end_date",  # low trust - start / end often ~60s apart
         "DESCRIPTION": "description",
         "STATUS": "status",
         "GLOBALID": "global_id",
@@ -128,7 +147,7 @@ def map_cases(cases_to_map):
         if not _is_usable_case(attrs):
             skipped.append(attrs.get("OBJECTID"))
             continue
-        
+
         mapped_case = {field_map[k]: v for k, v in attrs.items() if k in field_map}
 
         mapped_case["start_date"] = _epoch_ms_to_iso(mapped_case["start_date"])
@@ -157,10 +176,12 @@ def map_cases(cases_to_map):
 
     return all_cases
 
+
 def _epoch_ms_to_iso(ms):
     if ms is None:
         return None
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).isoformat()
+
 
 def geocode_all(cases_to_geocode):
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -179,7 +200,7 @@ def geocode_all(cases_to_geocode):
         session = _make_session()
         for lat, lon in remaining:
             try:
-                result = _call_locationiq(session, lat, lon)
+                result = call_locationiq(session, lat, lon)
             except requests.HTTPError as e:
                 print(f"Failed at ({lat}, {lon}), skipping for now: {e}")
                 continue
@@ -194,7 +215,8 @@ def geocode_all(cases_to_geocode):
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    lat, lon,
+                    lat,
+                    lon,
                     result.get("display_name"),
                     address.get("road"),
                     address.get("town"),
@@ -214,7 +236,7 @@ def geocode_all(cases_to_geocode):
             time.sleep(LOCATIONIQ_GEOCODE_SLEEP)
 
 
-def _call_locationiq(session, lat, lon):
+def call_locationiq(session, lat, lon):
     params = {"key": LOCATIONIQ_API_KEY, "lat": lat, "lon": lon, "format": "json"}
 
     resp = session.get(LOCATIONIQ_REVERSE_URL, params=params, timeout=DEFAULT_TIMEOUT)
@@ -229,10 +251,12 @@ def _call_locationiq(session, lat, lon):
     data = resp.json()
     return data
 
+
 def _make_session():
     session = requests.Session()
     session.headers.update({"User-Agent": "uisce/1.0 https://github.com/baz8080/uisce"})
     return session
+
 
 def _create_geocode_cache_table(conn):
     conn.execute("""
@@ -255,6 +279,7 @@ def _create_geocode_cache_table(conn):
             PRIMARY KEY (rounded_lat, rounded_lon)
         )
     """)
+
 
 def create_db(cases):
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -295,9 +320,10 @@ def create_db(cases):
             )
         """)
 
-        _load_cases(conn, cases)
+        load_cases(conn, cases)
 
-def _load_cases(conn, cases):
+
+def load_cases(conn, cases):
     cur = conn.cursor()
 
     placeholders = ", ".join("?" * len(DB_CASE_COLUMNS))
@@ -325,6 +351,7 @@ def _backfill_county(cases):
                 ).fetchone()
                 if row and row[0]:
                     case["county"] = row[0].removeprefix("County ")
+
 
 if __name__ == "__main__":
     download_cases()
