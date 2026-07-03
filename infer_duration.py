@@ -9,61 +9,54 @@ MODEL_URL = "http://localhost:1234/v1/chat/completions"
 
 # might also need {%- set enable_thinking = false %} in system prompt for LM studio
 PROMPT = """
-/no_think
-You are a data extraction assistant. Your task is to extract the estimated end time of a water 
-outage or works event from a description field, and return it as a structured JSON object.
+You are a data extraction assistant. You read a single water outage / works notice and extract the raw end-time signal. You do NOT do any date maths or timezone conversion. Python does that afterwards. Your job is to read the text, decide which end-time signal is present, and report the date and a 24-hour local time.
 
-You will be given these fields as comma separated values:
+You will be given two fields as comma separated values:
 start_date: the start time of the event in UTC ISO 8601 format
-description: free text describing the event, which may contain update 
-blocks prepended to the original notice
+description: free text describing the event. Update blocks are prepended to the original notice, newest first.
 
-Important context:
+Rules for choosing the signal:
+- A completion update reports that the works have finished. Look for phrases like "Works are now complete" or, in Irish, "Ta crioch leis an obair". This is the strongest signal.
+- A scheduled end time is only an estimate of when works will finish.
+- If both a completion update and a scheduled end time are present, always use the completion update.
+- Descriptions may be in English, Irish, or both.
 
-All times in the description are Ireland local time and must be converted to UTC for output. 
-Ireland observes UTC+0 (GMT) from the last Sunday of October until the last Sunday of March, 
-and UTC+1 (IST) from the last Sunday of March until the last Sunday of October. 
-For 2026, UTC+1 applies from 29 March to 25 October. 
-Use the event's start_date to determine which offset applies. 
-Convert all local times to UTC by subtracting the applicable offset. 
-The inferred_end value must always use +00:00 as the timezone suffix. 
-For example, 5:19pm IST (UTC+1) becomes 16:19:00+00:00, not 17:19:00+01:00. 
-To convert IST (UTC+1) to UTC: take the local time and subtract 1 hour. 
-So 4:17pm local = 3:17pm UTC = 15:17:00+00:00. To convert GMT (UTC+0) to UTC: no change needed. 
-The inferred_end value must always end with +00:00.
+Reading Irish time-of-day words:
+- "rn" or "ar maidin" means AM.
+- "in" or "iarnoin" means PM.
 
-Dates are in Irish format: day/month/year
-Descriptions may be in English, Irish, or both
-In Irish language text, rn or ar maidin indicates AM, and in or iarnóin indicates PM.
-Update blocks are prepended to the description, newest first. 
-A completion update will contain phrases like "Works are now complete",
-or in Irish "Tá críoch leis an obair".
-A scheduled end time is an estimate only, not a confirmed completion
-If both a scheduled end time and a confirmed completion timestamp exist, prefer the
-confirmed completion timestamp
+Reporting the time:
+- Report the time as a 24-hour clock string "HH:MM" in Ireland local time. Do NOT convert the timezone. Just rewrite the local time in 24-hour form.
+- 1pm is 13:00, 5:19pm is 17:19, 9am is 09:00.
+- 12 noon (12:00pm) is 12:00. 12 midnight (12:00am) is 00:00.
+- If the text already gives a 24-hour time such as 17:00, report it unchanged.
 
-Confidence levels:
+Report the date using the day/month/year in the text, rewritten as YYYY-MM-DD. Irish dates are day/month/year.
 
-high: a confirmed completion timestamp was found in an update block
-medium: a scheduled end time with a specific time of day was found
-low: only a date was found with no specific time
-none: no useful end time signal found
+Set end_source to exactly one of:
+- "completion_update": a completion update with a specific time was found
+- "scheduled_end_with_time": a scheduled end with a specific time of day was found
+- "scheduled_end_date_only": an end date was found but no time of day
+- "not_found": no usable end-time signal
+- "lifted_immediate": the notice says a previous order or restriction has been lifted with immediate effect, with no separate end time given.
 
-You must populate the notes field first with your reasoning, then derive inferred_end from
-that reasoning. The inferred_end must be consistent with the conclusion in notes.
+Output format:
+Return exactly one JSON object and nothing else. No preamble, no explanation, no markdown fences. Write the notes field FIRST, as your reasoning, then fill the remaining fields to match that reasoning.
 
-Return only one JSON object, no preamble, no explanation, no markdown code fences. Example output:
-{
-  "inferred_end": "2026-04-28T15:13:00+00:00",
-  "end_source": "completion_update",
-  "confidence": "high",
-  "notes": "Update block states works complete at 4:13pm 28/04/2026, converted from UTC+1 (IST)"
-}
+Fields:
+- notes: string. Your reasoning: what phrase you found, in which block, and why you chose that end_source.
+- end_source: one of the four values above.
+- local_date: "YYYY-MM-DD", or null only when end_source is "not_found".
+- local_time: "HH:MM" in 24-hour Ireland local time, or null when only a date was found or nothing was found.
 
-end_source must be one of: completion_update, scheduled_end_with_time, scheduled_end_date_only, 
-duration_calculation, not_found
-If no end time can be inferred, return null for inferred_end and not_found for end_source.
-"""  # your working prompt
+Do not include inferred_end or confidence. Those are computed later in Python.
+
+Example (completion update, "Works are now complete at 4:13pm on 28/04/2026"):
+{"notes":"Newest update block states works complete at 4:13pm on 28/04/2026. Completion update takes priority, so end_source is completion_update.","end_source":"completion_update","local_date":"2026-04-28","local_time":"16:13"}
+
+Example (nothing found):
+{"notes":"No completion phrase and no scheduled end time or date in any block.","end_source":"not_found","local_date":null,"local_time":null}
+""" # noqa: E501
 
 
 def get_processed_ids(jsonl_path):
@@ -95,7 +88,7 @@ def call_llm(start_date, description):
                 "content": f"{PROMPT}\n\nstart_date: {start_date}\ndescription: {description}",
             }
         ],
-        "temperature": 0.1,
+        "temperature": 0,
     }
     req = urllib.request.Request(
         MODEL_URL, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}
@@ -123,20 +116,16 @@ def run():
                     raise ValueError("No JSON block found")
                 record = {
                     "case_id": case["id"],
-                    "inferred_end": result.get("inferred_end"),
+                    "notes": result.get("notes"),
                     "end_source": result.get("end_source"),
-                    "end_confidence": result.get("confidence"),
-                    "end_notes": result.get("notes"),
+                    "local_date": result.get("local_date"),
+                    "local_time": result.get("local_time"),
                     "inferred_at": datetime.now(timezone.utc).isoformat(),
                 }
 
-                if record["inferred_end"] and record["inferred_end"] < case["start_date"]:
-                    record["end_confidence"] = "error"
-                    record["end_notes"] = f"inferred_end before start_date: {record['end_notes']}"
-
                 out.write(json.dumps(record) + "\n")
                 out.flush()
-                if i % 10 == 0:
+                if i % 5 == 0:
                     print(f"{i}/{len(cases)} done")
             except Exception as e:
                 print(f"Failed case {case['id']}: {e}")
