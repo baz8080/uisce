@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sqlite3
 from datetime import datetime, timezone
@@ -6,6 +7,8 @@ from pathlib import Path
 JSONL_PATH = Path("out/inferred_duration.jsonl")
 DB_PATH = Path("out/uisce.db")
 MODEL_URL = "http://localhost:1234/v1/chat/completions"
+MODEL_NAME = "gemma-4-12b-qat"
+PROMPT_VERSION = 1
 
 # might also need {%- set enable_thinking = false %} in system prompt for LM studio
 PROMPT = """
@@ -59,6 +62,10 @@ Example (nothing found):
 """ # noqa: E501
 
 
+def hash_description(description):
+    return hashlib.sha256(description.encode("utf-8")).hexdigest()
+
+
 def get_processed_ids(jsonl_path):
     if not jsonl_path.exists():
         return set()
@@ -81,7 +88,7 @@ def call_llm(start_date, description):
     import urllib.request
 
     payload = {
-        "model": "gemma-4-12b-qat",
+        "model": MODEL_NAME,
         "messages": [
             {
                 "role": "user",
@@ -93,7 +100,7 @@ def call_llm(start_date, description):
     req = urllib.request.Request(
         MODEL_URL, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}
     )
-    with urllib.request.urlopen(req) as resp:
+    with urllib.request.urlopen(req, timeout=15) as resp:
         data = json.loads(resp.read())
     return data["choices"][0]["message"]["content"]
 
@@ -116,6 +123,10 @@ def run():
                     raise ValueError("No JSON block found")
                 record = {
                     "case_id": case["id"],
+                    "description_hash": hash_description(case["description"]),
+                    "start_date": case["start_date"],
+                    "model": MODEL_NAME,
+                    "prompt_version": PROMPT_VERSION,
                     "notes": result.get("notes"),
                     "end_source": result.get("end_source"),
                     "local_date": result.get("local_date"),
