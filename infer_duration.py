@@ -66,20 +66,32 @@ def hash_description(description):
     return hashlib.sha256(description.encode("utf-8")).hexdigest()
 
 
-def get_processed_ids(jsonl_path):
+def get_last_hash_by_case_id(jsonl_path):
     if not jsonl_path.exists():
-        return set()
+        return {}
+    latest = {}
     with open(jsonl_path) as f:
-        return {json.loads(line)["case_id"] for line in f if line.strip()}
+        for line in f:
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            current = latest.get(record["case_id"])
+            if current is None or record["inferred_at"] > current["inferred_at"]:
+                latest[record["case_id"]] = record
+    return {case_id: record["description_hash"] for case_id, record in latest.items()}
 
 
-def get_unprocessed_cases(db_path, processed_ids):
+def get_cases_needing_inference(db_path, last_hash_by_case_id):
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cur = conn.execute(
         "SELECT id, start_date, description FROM cases WHERE description IS NOT NULL"
     )
-    cases = [row for row in cur if row["id"] not in processed_ids]
+    cases = [
+        row
+        for row in cur
+        if last_hash_by_case_id.get(row["id"]) != hash_description(row["description"])
+    ]
     conn.close()
     return cases
 
@@ -110,8 +122,8 @@ def parse_response(response_text):
 
 
 def run():
-    processed_ids = get_processed_ids(JSONL_PATH)
-    cases = get_unprocessed_cases(DB_PATH, processed_ids)
+    last_hash_by_case_id = get_last_hash_by_case_id(JSONL_PATH)
+    cases = get_cases_needing_inference(DB_PATH, last_hash_by_case_id)
     print(f"{len(cases)} cases to process")
 
     with open(JSONL_PATH, "a") as out:
