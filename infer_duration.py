@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-JSONL_PATH = Path("out/inferred_duration.jsonl")
+JSONL_PATH = Path("data/inferred_duration.jsonl")
 DB_PATH = Path("out/uisce.db")
 MODEL_URL = "http://localhost:1234/v1/chat/completions"
 MODEL_NAME = "gemma-4-12b-qat"
