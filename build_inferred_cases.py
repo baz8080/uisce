@@ -5,7 +5,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 DB_PATH = Path("out/uisce.db")
-JSONL_PATH = Path("out/inferred_duration.jsonl")
+JSONL_PATH = Path("data/inferred_duration.jsonl")
 
 DUBLIN = ZoneInfo("Europe/Dublin")
 NO_DURATION_SOURCES = {"not_found", "lifted_immediate"}
