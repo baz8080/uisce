@@ -58,15 +58,39 @@ def latest_per_case(records):
     return latest.values()
 
 
+def first_start_date_per_case(records):
+    earliest = {}
+    for record in records:
+        current = earliest.get(record["case_id"])
+        if current is None or record["inferred_at"] < current["inferred_at"]:
+            earliest[record["case_id"]] = record
+    return {case_id: record["start_date"] for case_id, record in earliest.items()}
+
+
+def check_cases_cover(conn, case_ids):
+    known_ids = {row[0] for row in conn.execute("SELECT id FROM cases")}
+    missing = sorted(case_ids - known_ids)
+    if missing:
+        raise RuntimeError(
+            f"{len(missing)} case_id(s) in {JSONL_PATH} are not present in {DB_PATH} "
+            f"(range {missing[0]}-{missing[-1]}). The local DB is likely older than "
+            "whatever DB the inference run used. Refresh it first, e.g.:\n"
+            "  gh release download --pattern uisce.db --dir out/ --clobber"
+        )
+
+
 def run():
     with open(JSONL_PATH) as f:
         records = [json.loads(line) for line in f if line.strip()]
+
+    first_start_dates = first_start_date_per_case(records)
+    latest = list(latest_per_case(records))
 
     rows = [
         (
             r["case_id"],
             r["description_hash"],
-            r["start_date"],
+            first_start_dates[r["case_id"]],
             r["model"],
             r["prompt_version"],
             r["notes"],
@@ -75,14 +99,15 @@ def run():
             r["local_time"],
             r["inferred_at"],
             compute_duration_seconds(
-                r["start_date"], r["end_source"], r["local_date"], r["local_time"]
+                first_start_dates[r["case_id"]], r["end_source"], r["local_date"], r["local_time"]
             ),
         )
-        for r in latest_per_case(records)
+        for r in latest
     ]
 
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
+        check_cases_cover(conn, {r["case_id"] for r in latest})
         create_table(conn)
         conn.executemany(
             """
