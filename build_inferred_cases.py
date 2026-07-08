@@ -58,15 +58,26 @@ def latest_per_case(records):
     return latest.values()
 
 
+def first_start_date_per_case(records):
+    earliest = {}
+    for record in records:
+        current = earliest.get(record["case_id"])
+        if current is None or record["inferred_at"] < current["inferred_at"]:
+            earliest[record["case_id"]] = record
+    return {case_id: record["start_date"] for case_id, record in earliest.items()}
+
+
 def run():
     with open(JSONL_PATH) as f:
         records = [json.loads(line) for line in f if line.strip()]
+
+    first_start_dates = first_start_date_per_case(records)
 
     rows = [
         (
             r["case_id"],
             r["description_hash"],
-            r["start_date"],
+            first_start_dates[r["case_id"]],
             r["model"],
             r["prompt_version"],
             r["notes"],
@@ -75,7 +86,7 @@ def run():
             r["local_time"],
             r["inferred_at"],
             compute_duration_seconds(
-                r["start_date"], r["end_source"], r["local_date"], r["local_time"]
+                first_start_dates[r["case_id"]], r["end_source"], r["local_date"], r["local_time"]
             ),
         )
         for r in latest_per_case(records)
