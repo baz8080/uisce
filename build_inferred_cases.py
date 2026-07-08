@@ -67,11 +67,24 @@ def first_start_date_per_case(records):
     return {case_id: record["start_date"] for case_id, record in earliest.items()}
 
 
+def check_cases_cover(conn, case_ids):
+    known_ids = {row[0] for row in conn.execute("SELECT id FROM cases")}
+    missing = sorted(case_ids - known_ids)
+    if missing:
+        raise RuntimeError(
+            f"{len(missing)} case_id(s) in {JSONL_PATH} are not present in {DB_PATH} "
+            f"(range {missing[0]}-{missing[-1]}). The local DB is likely older than "
+            "whatever DB the inference run used. Refresh it first, e.g.:\n"
+            "  gh release download --pattern uisce.db --dir out/ --clobber"
+        )
+
+
 def run():
     with open(JSONL_PATH) as f:
         records = [json.loads(line) for line in f if line.strip()]
 
     first_start_dates = first_start_date_per_case(records)
+    latest = list(latest_per_case(records))
 
     rows = [
         (
@@ -89,11 +102,12 @@ def run():
                 first_start_dates[r["case_id"]], r["end_source"], r["local_date"], r["local_time"]
             ),
         )
-        for r in latest_per_case(records)
+        for r in latest
     ]
 
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
+        check_cases_cover(conn, {r["case_id"] for r in latest})
         create_table(conn)
         conn.executemany(
             """
