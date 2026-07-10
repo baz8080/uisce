@@ -2,13 +2,13 @@ import hashlib
 import json
 import sqlite3
 from datetime import datetime, timezone
-from pathlib import Path
 
-JSONL_PATH = Path("data/inferred_duration.jsonl")
-DB_PATH = Path("out/uisce.db")
+from uisce.config import DB_PATH, JSONL_PATH, make_session
+
 MODEL_URL = "http://localhost:1234/v1/chat/completions"
 MODEL_NAME = "gemma-4-12b-qat"
 PROMPT_VERSION = 1
+LLM_TIMEOUT = 120  # local model; long descriptions can take well over 15s
 
 # might also need {%- set enable_thinking = false %} in system prompt for LM studio
 PROMPT = """
@@ -96,9 +96,7 @@ def get_cases_needing_inference(db_path, last_hash_by_case_id):
     return cases
 
 
-def call_llm(start_date, description):
-    import urllib.request
-
+def call_llm(session, start_date, description):
     payload = {
         "model": MODEL_NAME,
         "messages": [
@@ -109,16 +107,31 @@ def call_llm(start_date, description):
         ],
         "temperature": 0,
     }
-    req = urllib.request.Request(
-        MODEL_URL, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}
-    )
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        data = json.loads(resp.read())
-    return data["choices"][0]["message"]["content"]
+    resp = session.post(MODEL_URL, json=payload, timeout=LLM_TIMEOUT)
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
 
 
 def parse_response(response_text):
-    return json.loads(response_text)
+    result = json.loads(response_text)
+    if not isinstance(result, dict):
+        raise ValueError(f"Expected a JSON object, got: {response_text[:80]!r}")
+    return result
+
+
+def build_record(case_id, description, start_date, result, inferred_at=None):
+    return {
+        "case_id": case_id,
+        "description_hash": hash_description(description),
+        "start_date": start_date,
+        "model": MODEL_NAME,
+        "prompt_version": PROMPT_VERSION,
+        "notes": result.get("notes"),
+        "end_source": result.get("end_source"),
+        "local_date": result.get("local_date"),
+        "local_time": result.get("local_time"),
+        "inferred_at": inferred_at or datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def run():
@@ -126,25 +139,24 @@ def run():
     cases = get_cases_needing_inference(DB_PATH, last_hash_by_case_id)
     print(f"{len(cases)} cases to process")
 
+    session = make_session()
+    results_by_hash = {}
+
     with open(JSONL_PATH, "a") as out:
         for i, case in enumerate(cases):
             try:
-                raw = call_llm(case["start_date"], case["description"])
-                result = parse_response(raw)
+                description_hash = hash_description(case["description"])
+
+                # Multi-pin events share one description; infer it once.
+                result = results_by_hash.get(description_hash)
                 if result is None:
-                    raise ValueError("No JSON block found")
-                record = {
-                    "case_id": case["id"],
-                    "description_hash": hash_description(case["description"]),
-                    "start_date": case["start_date"],
-                    "model": MODEL_NAME,
-                    "prompt_version": PROMPT_VERSION,
-                    "notes": result.get("notes"),
-                    "end_source": result.get("end_source"),
-                    "local_date": result.get("local_date"),
-                    "local_time": result.get("local_time"),
-                    "inferred_at": datetime.now(timezone.utc).isoformat(),
-                }
+                    raw = call_llm(session, case["start_date"], case["description"])
+                    result = parse_response(raw)
+                    results_by_hash[description_hash] = result
+
+                record = build_record(
+                    case["id"], case["description"], case["start_date"], result
+                )
 
                 out.write(json.dumps(record) + "\n")
                 out.flush()
@@ -153,7 +165,3 @@ def run():
             except Exception as e:
                 print(f"Failed case {case['id']}: {e}")
                 out.flush()
-
-
-if __name__ == "__main__":
-    run()

@@ -29,10 +29,10 @@ jobs:
       - name: Run pipeline
         env:
           LOCATIONIQ_API_KEY: ${{ secrets.LOCATIONIQ_API_KEY }}
-        run: uv run python main.py
+        run: uv run uisce-pipeline
 
       - name: Build inferred cases table
-        run: uv run python build_inferred_cases.py
+        run: uv run uisce-build-inferred
 
       - name: Publish DB
         run: |

@@ -1,11 +1,9 @@
 import json
 import sqlite3
 from datetime import datetime, timezone
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
-DB_PATH = Path("out/uisce.db")
-JSONL_PATH = Path("data/inferred_duration.jsonl")
+from uisce.config import DB_PATH, JSONL_PATH
 
 DUBLIN = ZoneInfo("Europe/Dublin")
 NO_DURATION_SOURCES = {"not_found", "lifted_immediate"}
@@ -121,7 +119,3 @@ def run():
         )
 
     print(f"Upserted {len(rows)} rows into inferred_cases")
-
-
-if __name__ == "__main__":
-    run()

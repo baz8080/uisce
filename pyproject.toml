@@ -10,9 +10,19 @@ dependencies = [
     "requests>=2.34.2",
 ]
 
+[project.scripts]
+uisce-pipeline = "uisce.pipeline:run"
+uisce-infer = "uisce.inference:run"
+uisce-build-inferred = "uisce.build:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [dependency-groups]
 dev = [
     "ruff>=0.15.20",
+    "pytest>=8.0",
 ]
 
 [tool.ruff]
@@ -20,3 +30,6 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
