@@ -20,5 +20,5 @@ jobs:
       - name: Lint
         run: uv run ruff check
 
-      - name: Check syntax
-        run: uv run python -m py_compile main.py
+      - name: Test
+        run: uv run pytest
