@@ -12,7 +12,7 @@ gh release download --clobber --pattern "uisce.db" --dir out/
 
 Tables:
 
-* `cases` — one row per published notice pin (title, description, dates, status, impact flags, WGS84 coordinates)
+* `cases` — one row per published notice pin (title, description, dates, status, impact flags, WGS84 coordinates). `work_category` is a slug normalised from the title (`burst_main`, `essential_works`, …); `work_type` (Planned/Unplanned) is taken from the feed but overridden for categories where the label is unambiguous (a burst main is never planned).
 * `geocode_cache` — reverse-geocoded address per rounded coordinate
 * `inferred_cases` — LLM-extracted end-time signal and computed `end_duration_seconds` per case
 
@@ -31,6 +31,11 @@ uv run uisce-pipeline
 ```
 
 `uisce-pipeline` downloads all cases from the ArcGIS feed, maps and geocodes them, and builds `out/uisce.db`. Geocoding results are cached in the DB, so the first run makes one LocationIQ request per unique coordinate (rate limited to 1/s — expect a couple of hours from scratch) and later runs only geocode new coordinates. Start from a released DB (see above) to skip most of that.
+
+Two options for working without the paid geocoding step:
+
+* `uisce-pipeline --skip-geocode` — refresh cases from the ArcGIS feed but skip LocationIQ; new coordinates get placeholder geocode rows (retried on the next real run). Handy for seeing the current source data quickly. Don't publish the result — those cases have no location yet.
+* `uisce-backfill` — re-derive the computed columns (trimmed title, `work_category`, `work_type`) on the existing `out/uisce.db` with no network at all. Run it after editing the category rules to re-apply them to data you've already downloaded.
 
 ## Running inference locally
 

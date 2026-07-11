@@ -6,15 +6,20 @@ import requests
 
 from uisce import pipeline
 from uisce.pipeline import (
+    CATEGORY_RULES,
     _epoch_ms_to_iso,
     _is_usable_case,
+    backfill,
+    backfill_work_category,
     backfill_work_type,
+    classify_category,
     download_cases,
     geocode_all,
     geocode_cache_row,
-    infer_work_type,
     map_cases,
     normalise_legacy_empty_strings,
+    skip_geocoding,
+    trim_titles,
 )
 
 
@@ -72,6 +77,16 @@ class TestMapCases:
         feature = make_feature({"COUNTY": "Dnegal", "TITLE": "", "DESCRIPTION": "text"})
         mapped, _ = map_cases([feature])
         assert mapped[0]["county"] == "Donegal"
+        assert mapped[0]["title"] == "unknown"
+
+    def test_trims_title_whitespace(self):
+        feature = make_feature({"TITLE": "  Burst Water Main – Cork  "})
+        mapped, _ = map_cases([feature])
+        assert mapped[0]["title"] == "Burst Water Main – Cork"
+
+    def test_whitespace_only_title_becomes_unknown(self):
+        feature = make_feature({"TITLE": "   ", "DESCRIPTION": "text"})
+        mapped, _ = map_cases([feature])
         assert mapped[0]["title"] == "unknown"
 
     def test_normalises_empty_strings_to_none(self):
@@ -171,6 +186,34 @@ class GeocodeSession:
         return Response()
 
 
+class TestSkipGeocoding:
+    def test_placeholders_only_new_coords_and_satisfy_the_fk(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        # a coord already geocoded for real must not be clobbered
+        geocode_all(
+            [{"rounded_lat": 51.9, "rounded_lon": -8.1}],
+            "key",
+            db_path=db_path,
+            session=GeocodeSession(),
+        )
+
+        cases = [
+            {"rounded_lat": 51.9, "rounded_lon": -8.1},  # already cached
+            {"rounded_lat": 53.3, "rounded_lon": -6.2},  # new
+        ]
+        skip_geocoding(cases, db_path=db_path)
+
+        with sqlite3.connect(db_path) as conn:
+            rows = dict(
+                conn.execute(
+                    """SELECT rounded_lat, json_extract(raw_json, '$.geocode_failed')
+                       FROM geocode_cache"""
+                )
+            )
+        assert rows[51.9] is None  # real result untouched
+        assert rows[53.3] == "geocode skipped"  # new coord gets a retryable placeholder
+
+
 class TestGeocodeAll:
     def _cases(self):
         return [{"rounded_lat": 51.9, "rounded_lon": -8.1}]
@@ -240,45 +283,211 @@ class TestGeocodeAll:
         assert session.calls == 1
 
 
+class TestCategoryRulesTable:
+    def test_no_variant_is_claimed_by_two_rules(self):
+        # a variant listed under two rules would be silently masked by
+        # _RULE_BY_VARIANT, so guard the whole table against it
+        seen = {}
+        for rule in CATEGORY_RULES:
+            for variant in rule.variants:
+                assert variant not in seen, (
+                    f"{variant!r} is in both {seen.get(variant)} and {rule.slug}"
+                )
+                seen[variant] = rule.slug
+
+    def test_slugs_are_unique(self):
+        slugs = [rule.slug for rule in CATEGORY_RULES]
+        assert len(slugs) == len(set(slugs))
+
+    def test_variants_are_normalised(self):
+        # variants are matched post-normalisation, so any un-normalised entry
+        # (uppercase, padded, doubled spaces) is dead and can never match
+        for rule in CATEGORY_RULES:
+            for variant in rule.variants:
+                assert variant == " ".join(variant.lower().split())
+
+    def test_work_type_is_a_valid_policy(self):
+        for rule in CATEGORY_RULES:
+            assert rule.work_type in (None, "Planned", "Unplanned")
+
+    def test_every_rule_is_reachable_via_classify(self):
+        # a representative title per rule resolves back to that exact rule
+        for rule in CATEGORY_RULES:
+            title = f"{rule.variants[0].title()} – Cork"
+            assert classify_category(title) is rule
+
+
+class TestCategoryClassification:
+    def test_classifies_known_categories_to_slugs(self):
+        assert classify_category("Burst Water Main – Cork").slug == "burst_main"
+        assert classify_category("Burst Water Mains - Kerry").slug == "burst_main"
+        assert classify_category("Burst Main - Tipperary").slug == "burst_main"
+        assert classify_category("Essential Works – Dublin").slug == "essential_works"
+        assert classify_category("Essential Maintenance Works - Mayo").slug == "essential_works"
+        assert classify_category("Leak Detection Works – Cork").slug == "leak_detection"
+        assert classify_category("Leak Detection/Step Testing - Dublin").slug == "leak_detection"
+        assert classify_category("Mains Flushing - Louth").slug == "mains_flushing"
+        assert classify_category("Boil Water Notice – Mayo").slug == "boil_notice_issued"
+        assert classify_category("Lifting of Boil Water Notice – Cork").slug == "boil_notice_lifted"
+        assert classify_category("Lifting of The Boil Water Notice").slug == "boil_notice_lifted"
+        assert classify_category("Valve Installation – Dublin").slug == "valve_installation"
+        assert classify_category("Valve Installation Works - Cork").slug == "valve_installation"
+        assert classify_category("Valve Repair Works– Roscommon").slug == "valve_repair"
+        assert classify_category("Valve Repair – Dublin").slug == "valve_repair"
+        assert classify_category("Valve Replacement Works – Kerry").slug == "valve_repair"
+        assert classify_category("Step Testing Works – Cork").slug == "leak_detection"
+        assert classify_category("Water Conservation Restrictions – X").slug == "water_conservation"
+        assert classify_category("Hydrant Repair Works – Cork").slug == "hydrant_repair"
+        assert classify_category("Hydrant Installation Works – Cork").slug == "hydrant_installation"
+        assert classify_category("Meter Installation Works – Cork").slug == "meter_installation"
+        assert classify_category("New Connection Works – Meath").slug == "new_connection"
+        assert classify_category("Pump Station Interruption").slug == "pump_station_interruption"
+        assert classify_category("Pump Failure – Cork").slug == "pump_failure"
+        assert classify_category("Pump Repair Works – Cork").slug == "pump_repair"
+        assert classify_category("Pump Installation Works – Cork").slug == "pump_installation"
+        assert classify_category("Discolouration – Cork").slug == "discolouration"
+        assert classify_category("Low Pressure – Cork").slug == "low_pressure"
+        assert classify_category("Do Not Consume – Cork").slug == "consumption_notice_issued"
+        assert classify_category("Do Not Consume Notice – Cork").slug == "consumption_notice_issued"
+        assert classify_category("Investigation Works – Cork").slug == "investigation"
+        assert classify_category("Under Investigation – Cork").slug == "investigation"
+        assert classify_category("Mains Rehabilitation Works – Cork").slug == "mains_rehabilitation"
+        assert classify_category("Mains Rehabilitation Works – Cork").work_type == "Planned"
+        assert classify_category("Reservoir Interruption – Cork").slug == "reservoir_interruption"
+        wtp = classify_category("Water Treatment Plant Interruption – Cork")
+        assert wtp.slug == "water_treatment_plant_interruption"
+        assert wtp.work_type == "Unplanned"
+
+    def test_new_category_work_types(self):
+        assert classify_category("Water Conservation – Mayo").work_type == "Unplanned"
+        assert classify_category("Hydrant Repair Works – Cork").work_type == "Unplanned"
+        assert classify_category("Pump Failure – Cork").work_type == "Unplanned"
+        assert classify_category("Hydrant Installation Works – Cork").work_type == "Planned"
+        assert classify_category("New Connection Works – Meath").work_type == "Planned"
+        assert classify_category("Pump Installation Works – Cork").work_type == "Planned"
+
+    def test_normalises_messy_dashes_and_spacing(self):
+        assert classify_category("Burst Water Main- Cork").slug == "burst_main"  # no space
+        assert classify_category("essential works –  dublin").slug == "essential_works"  # lower
+        assert classify_category("  Mains Flushing – Kerry  ").slug == "mains_flushing"  # padded
+
+    def test_returns_none_for_unknown_or_empty(self):
+        assert classify_category("Meter Exchange Works – Cork") is None
+        assert classify_category("Something Novel – Kerry") is None
+        assert classify_category("unknown") is None
+        assert classify_category(None) is None
+
+    def test_slug_only_rules_carry_no_work_type(self):
+        # category is clear but planned vs unplanned genuinely isn't
+        for title in ("Mains Repair Works – Cork", "Power Outage – Dublin"):
+            rule = classify_category(title)
+            assert rule.work_type is None
+        assert classify_category("Mains Repair Works – Cork").slug == "mains_repair"
+        assert classify_category("Power Outage – Dublin").slug == "power_outage"
+
+    def test_each_rule_forces_the_expected_work_type(self):
+        assert classify_category("Burst Water Main – Cork").work_type == "Unplanned"
+        assert classify_category("Essential Works – Dublin").work_type == "Planned"
+        assert classify_category("Leak Detection Works – Cork").work_type == "Planned"
+        assert classify_category("Mains Flushing - Louth").work_type == "Planned"
+        assert classify_category("Boil Water Notice – Mayo").work_type == "Unplanned"
+        assert classify_category("Lifting of Boil Water Notice – Cork").work_type == "Unplanned"
+        assert classify_category("Valve Installation Works - Cork").work_type == "Planned"
+        assert classify_category("Valve Repair Works– Roscommon").work_type == "Unplanned"
+
+
 class TestWorkTypeBackfill:
-    def test_infer_work_type_known_categories(self):
-        assert infer_work_type("Burst Water Main – Cork") == "Unplanned"
-        assert infer_work_type("Burst Water Main - Cork") == "Unplanned"  # hyphen variant
-        assert infer_work_type("Mains Rehabilitation Works – Dublin") == "Planned"
-
-    def test_infer_work_type_handles_messy_titles_from_real_data(self):
-        assert infer_work_type("investigation Works - Tipperary") == "Unplanned"  # lowercase
-        assert infer_work_type("Valve Repair Works– Roscommon") == "Unplanned"  # no space
-        assert infer_work_type("Burst Water Main- Cork") == "Unplanned"  # no space, hyphen
-        assert infer_work_type("Reservoir interruption  - Cork") == "Unplanned"  # double space
-        assert infer_work_type("Burst Main - Tipperary") == "Unplanned"  # abbreviation
-        assert infer_work_type("Valve Repair – Dublin") == "Unplanned"  # abbreviation
-
-    def test_infer_work_type_leaves_ambiguous_and_unknown_alone(self):
-        assert infer_work_type("Essential Works – Dublin") is None  # 64/36 split in feed
-        assert infer_work_type("Mains Repair Works – Cork") is None
-        assert infer_work_type("Something Novel – Kerry") is None
-        assert infer_work_type("unknown") is None
-        assert infer_work_type(None) is None
-
-    def test_backfill_fills_missing_and_preserves_feed_values(self):
+    def test_backfill_overrides_rules_and_leaves_others_alone(self):
         conn = sqlite3.connect(":memory:")
         conn.execute("CREATE TABLE cases (id INTEGER PRIMARY KEY, title TEXT, work_type TEXT)")
         conn.executemany(
             "INSERT INTO cases VALUES (?, ?, ?)",
             [
-                (1, "Burst Water Main – Cork", None),
-                (2, "Burst Water Main – Cork", "Planned"),  # feed value wins, however odd
-                (3, "Essential Works – Dublin", None),
-                (4, "New Connection Works – Meath", ""),
+                (1, "Burst Water Main – Cork", None),          # override fills the NULL
+                (2, "Burst Water Main – Cork", "Planned"),     # override wins over the feed
+                (3, "Essential Works – Dublin", "Unplanned"),  # override to Planned
+                (4, "Mains Repair Works – Cork", None),        # slug-only rule: stays NULL
+                (5, "Mains Repair Works – Cork", "Planned"),   # slug-only rule: feed kept
+                (6, "Something Novel – Kerry", "Unplanned"),   # no rule: untouched
             ],
         )
 
-        filled = backfill_work_type(conn)
+        overridden = backfill_work_type(conn)
 
-        assert filled == 2
+        assert overridden == 3
         rows = dict(conn.execute("SELECT id, work_type FROM cases"))
-        assert rows == {1: "Unplanned", 2: "Planned", 3: None, 4: "Planned"}
+        assert rows == {
+            1: "Unplanned",
+            2: "Unplanned",
+            3: "Planned",
+            4: None,
+            5: "Planned",
+            6: "Unplanned",
+        }
+
+    def test_backfill_work_category_sets_slug_for_known_categories(self):
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            "CREATE TABLE cases (id INTEGER PRIMARY KEY, title TEXT, work_category TEXT)"
+        )
+        conn.executemany(
+            "INSERT INTO cases VALUES (?, ?, ?)",
+            [
+                (1, "Burst Water Main – Cork", None),
+                (2, "Leak Detection/Step Testing - Dublin", None),
+                (3, "Mains Flushing - Louth", None),
+                (4, "Something Novel – Kerry", None),
+            ],
+        )
+
+        count = backfill_work_category(conn)
+
+        assert count == 3
+        rows = dict(conn.execute("SELECT id, work_category FROM cases"))
+        assert rows == {1: "burst_main", 2: "leak_detection", 3: "mains_flushing", 4: None}
+
+
+def test_backfill_runs_standalone_on_existing_db(tmp_path):
+    # a DB predating work_category, as if only the download/map ran
+    db_path = tmp_path / "test.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "CREATE TABLE cases (id INTEGER PRIMARY KEY, work_type TEXT, status TEXT, title TEXT)"
+        )
+        conn.executemany(
+            "INSERT INTO cases VALUES (?, ?, ?, ?)",
+            [
+                (1, "Planned", "Open", "  Burst Water Main – Cork  "),  # override + trim
+                (2, "", "Open", "Mains Flushing – Kerry"),  # override a blank
+                (3, None, "Open", "Something Novel – Kerry"),  # left alone
+            ],
+        )
+
+    backfill(db_path=db_path)  # no network, adds the column and derives
+
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT id, title, work_type, work_category FROM cases ORDER BY id"
+        ).fetchall()
+    assert rows == [
+        (1, "Burst Water Main – Cork", "Unplanned", "burst_main"),
+        (2, "Mains Flushing – Kerry", "Planned", "mains_flushing"),
+        (3, "Something Novel – Kerry", None, None),
+    ]
+
+
+def test_trim_titles():
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE cases (id INTEGER PRIMARY KEY, title TEXT)")
+    conn.executemany(
+        "INSERT INTO cases VALUES (?, ?)",
+        [(1, "  Burst Water Main – Cork  "), (2, "Clean Title"), (3, "unknown")],
+    )
+
+    trim_titles(conn)
+
+    rows = conn.execute("SELECT id, title FROM cases ORDER BY id").fetchall()
+    assert rows == [(1, "Burst Water Main – Cork"), (2, "Clean Title"), (3, "unknown")]
 
 
 def test_normalise_legacy_empty_strings():
