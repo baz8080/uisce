@@ -1,8 +1,10 @@
+import argparse
 import json
 import os
 import re
 import sqlite3
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -186,8 +188,10 @@ def map_cases(cases_to_map):
         if mapped_case["county"] == "Dnegal":
             mapped_case["county"] = "Donegal"
 
-        if mapped_case["title"] is None:
-            mapped_case["title"] = "unknown"
+        # titles frequently carry leading/trailing whitespace in the feed;
+        # trim so the stored value is clean and category matching is exact
+        title = (mapped_case["title"] or "").strip()
+        mapped_case["title"] = title or "unknown"
 
         all_cases.append(mapped_case)
 
@@ -333,6 +337,7 @@ def create_db(cases):
             CREATE TABLE IF NOT EXISTS cases (
                 id INTEGER PRIMARY KEY,
                 work_type TEXT,
+                work_category TEXT,
                 title TEXT,
                 start_date TEXT,
                 end_date TEXT,
@@ -360,7 +365,18 @@ def create_db(cases):
             )
         """)
 
+        _ensure_work_category_column(conn)
+
         load_cases(conn, cases)
+
+
+def _ensure_work_category_column(conn):
+    """The published DB is downloaded and updated in place each build, so a
+    CREATE TABLE IF NOT EXISTS won't add work_category to an existing table.
+    Add it here; idempotent for both fresh and pre-existing DBs."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(cases)")}
+    if "work_category" not in columns:
+        conn.execute("ALTER TABLE cases ADD COLUMN work_category TEXT")
 
 
 def load_cases(conn, cases):
@@ -381,28 +397,163 @@ def _is_usable_case(attrs):
     return any(attrs.get(f) for f in USABLE_CASE_THRESHOLD_FIELDS)
 
 
-# Titles are structured "Category – County". These are the categories whose
-# Planned/Unplanned split was at least 95% one-sided among the cases where
-# the feed did populate work_type, with at least 20 such labelled cases
-# (2026-07 snapshot; counts are unplanned/planned). Ambiguous categories
-# (Essential Works 125/227, Mains Repair Works 119/93, Leak Detection Works,
-# Power Outage, Mains Flushing, ...) are deliberately absent and stay NULL.
-# Keys are lowercase; lookups go through _normalise_category.
-WORK_TYPE_BY_TITLE_CATEGORY = {
-    "burst water main": "Unplanned",  # 540/3
-    "burst water mains": "Unplanned",  # 49/0
-    "burst main": "Unplanned",  # abbreviation of burst water main
-    "reservoir interruption": "Unplanned",  # 131/2
-    "under investigation": "Unplanned",  # 82/0
-    "water treatment plant interruption": "Unplanned",  # 58/1
-    "investigation works": "Unplanned",  # 47/0
-    "valve repair works": "Unplanned",  # 33/1
-    "valve repair": "Unplanned",  # abbreviation of valve repair works
-    "low pressure": "Unplanned",  # 31/0
-    "discolouration": "Unplanned",  # 31/0
-    "new connection works": "Planned",  # 2/56
-    "mains rehabilitation works": "Planned",  # 0/30
-}
+# titles are structured "Category – County". Each rule normalises the category
+# part to a stable slug for work_category, and carries a work_type policy:
+#   - "Unplanned"/"Planned": set work_type to this, OVERRIDING the feed, because
+#     the label is editorially unambiguous (a burst main is never planned; the
+#     odd contradicting row is the completion update at the end of the job).
+#   - None: give a work_category slug but leave work_type as the feed reported it
+#     (e.g. mains repair / power outage — genuinely both planned and unplanned).
+# This is the single categorisation mechanism; there is no separate fill tier.
+@dataclass(frozen=True)
+class CategoryRule:
+    slug: str
+    work_type: str | None
+    # normalised category strings (lowercase, single-spaced) that map here
+    variants: tuple[str, ...]
+
+
+CATEGORY_RULES = (
+    CategoryRule(
+        "burst_main",
+        "Unplanned",
+        ("burst water main", "burst water mains", "burst main"),
+    ),
+    CategoryRule(
+        "essential_works",
+        "Planned",
+        ("essential works", "essential maintenance works"),
+    ),
+    CategoryRule(
+        "leak_detection",
+        "Planned",
+        ("leak detection works", "leak detection/step testing", "step testing works"),
+    ),
+    CategoryRule(
+        "mains_flushing",
+        "Planned",
+        ("mains flushing",),
+    ),
+    CategoryRule(
+        "boil_notice_issued",
+        "Unplanned",
+        ("boil water notice",),
+    ),
+    CategoryRule(
+        "boil_notice_lifted",
+        "Unplanned",
+        ("lifting of boil water notice", "lifting of the boil water notice"),
+    ),
+    CategoryRule(
+        "valve_installation",
+        "Planned",
+        ("valve installation", "valve installation works"),
+    ),
+    CategoryRule(
+        "valve_repair",
+        "Unplanned",
+        ("valve repair works", "valve repair", "valve replacement works"),
+    ),
+    CategoryRule(
+        "water_conservation",
+        "Unplanned",  # supply-shortage restrictions, not deliberate works
+        (
+            "water conservation restrictions",
+            "water conservation",
+            "water conservation/restrictions",
+            "water conservation works",
+        ),
+    ),
+    CategoryRule(
+        "hydrant_repair",
+        "Unplanned",
+        ("hydrant repair works", "hydrant repair", "hydrant replacement works"),
+    ),
+    CategoryRule(
+        "hydrant_installation",
+        "Planned",
+        ("hydrant installation works",),
+    ),
+    CategoryRule(
+        "meter_installation",
+        "Planned",
+        ("meter installation works",),
+    ),
+    CategoryRule(
+        "new_connection",
+        "Planned",
+        ("new connection works", "new connections"),
+    ),
+    CategoryRule(
+        "pump_station_interruption",
+        "Unplanned",  # "interruption" family, like reservoir/WTP interruption
+        ("pump station interruption",),
+    ),
+    CategoryRule(
+        "pump_failure",
+        "Unplanned",
+        ("pump failure", "pump failure issue"),
+    ),
+    CategoryRule(
+        "pump_repair",
+        "Unplanned",
+        ("pump repair works", "pump repair"),
+    ),
+    CategoryRule(
+        "pump_installation",
+        "Planned",
+        ("pump installation works",),
+    ),
+    CategoryRule(
+        "discolouration",
+        "Unplanned",
+        ("discolouration",),
+    ),
+    CategoryRule(
+        "low_pressure",
+        "Unplanned",
+        ("low pressure",),
+    ),
+    CategoryRule(
+        "consumption_notice_issued",
+        "Unplanned",
+        ("do not consume", "do not consume notice"),
+    ),
+    CategoryRule(
+        "investigation",
+        "Unplanned",
+        ("investigation works", "under investigation"),
+    ),
+    CategoryRule(
+        "mains_rehabilitation",
+        "Planned",
+        ("mains rehabilitation works",),
+    ),
+    CategoryRule(
+        "reservoir_interruption",
+        "Unplanned",  # "interruption" family; 131/2 in the feed
+        ("reservoir interruption",),
+    ),
+    CategoryRule(
+        "water_treatment_plant_interruption",
+        "Unplanned",  # "interruption" family; 58/1 in the feed
+        ("water treatment plant interruption",),
+    ),
+    # slug-only: the category is clear but planned vs unplanned genuinely isn't,
+    # so work_type is left as the feed reported it
+    CategoryRule(
+        "mains_repair",
+        None,
+        ("mains repair works", "mains repair", "mains repair work", "mains repairs works"),
+    ),
+    CategoryRule(
+        "power_outage",
+        None,
+        ("power outage",),
+    ),
+)
+
+_RULE_BY_VARIANT = {variant: rule for rule in CATEGORY_RULES for variant in rule.variants}
 
 # titles use an en-dash or hyphen between category and county, inconsistently,
 # and sometimes without the space before the dash ("...Works– Roscommon");
@@ -414,11 +565,15 @@ def _normalise_category(category):
     return " ".join(category.lower().split())
 
 
-def infer_work_type(title):
+def _title_category(title):
     if not title:
         return None
-    category = _TITLE_CATEGORY_SPLIT.split(title, maxsplit=1)[0]
-    return WORK_TYPE_BY_TITLE_CATEGORY.get(_normalise_category(category))
+    return _normalise_category(_TITLE_CATEGORY_SPLIT.split(title, maxsplit=1)[0])
+
+
+def classify_category(title):
+    """Return the CategoryRule for a title, or None if no known rule matches."""
+    return _RULE_BY_VARIANT.get(_title_category(title))
 
 
 def normalise_legacy_empty_strings(conn):
@@ -429,15 +584,38 @@ def normalise_legacy_empty_strings(conn):
         conn.execute(f"UPDATE cases SET {column} = NULL WHERE {column} = ''")
 
 
-def backfill_work_type(conn):
-    rows = conn.execute(
-        "SELECT id, title FROM cases WHERE work_type IS NULL OR work_type = ''"
-    ).fetchall()
+def trim_titles(conn):
+    """map_cases trims titles for rows still in the feed; rows that dropped out
+    before trimming existed keep their untrimmed title, so clean them in the DB
+    too. (Category matching normalises whitespace regardless; this is for the
+    stored value.)"""
+    conn.execute("UPDATE cases SET title = trim(title) WHERE title != trim(title)")
 
+
+def backfill_work_category(conn):
+    """Derive work_category from the title for every case matching a known
+    CategoryRule. Pure normalisation of an existing column, so it lives in
+    cases rather than inferred_cases."""
+    rows = conn.execute("SELECT id, title FROM cases").fetchall()
     updates = [
-        (work_type, case_id)
+        (rule.slug, case_id)
         for case_id, title in rows
-        if (work_type := infer_work_type(title))
+        if (rule := classify_category(title))
+    ]
+    conn.executemany("UPDATE cases SET work_category = ? WHERE id = ?", updates)
+    return len(updates)
+
+
+def backfill_work_type(conn):
+    """Override work_type from the title category: each CategoryRule with a
+    definitive work_type sets it regardless of the feed value (a burst main is
+    never planned). Rules with work_type=None give a slug but leave work_type
+    untouched. Returns the number of rows changed."""
+    rows = conn.execute("SELECT id, title, work_type FROM cases").fetchall()
+    updates = [
+        (rule.work_type, case_id)
+        for case_id, title, work_type in rows
+        if (rule := classify_category(title)) and rule.work_type and work_type != rule.work_type
     ]
     conn.executemany("UPDATE cases SET work_type = ? WHERE id = ?", updates)
     return len(updates)
@@ -455,9 +633,44 @@ def backfill_county(cases):
                     case["county"] = row[0].removeprefix("County ")
 
 
-def run():
-    api_key = require_api_key()
+def skip_geocoding(cases, db_path=DB_PATH):
+    """Populate geocode_cache with placeholder rows instead of calling
+    LocationIQ. Coords already cached are left untouched; any new coord gets
+    the same placeholder a failed lookup would leave, which satisfies the cases
+    FK and is retried on the next real run. Lets you rebuild the cases table
+    against fresh source data (and re-apply the backfills) without spending
+    geocoding calls."""
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db_path) as conn:
+        _create_geocode_cache_table(conn)
+        cached = {
+            (row[0], row[1])
+            for row in conn.execute("SELECT rounded_lat, rounded_lon FROM geocode_cache")
+        }
+        missing = {(c["rounded_lat"], c["rounded_lon"]) for c in cases} - cached
+        conn.executemany(
+            _GEOCODE_INSERT,
+            [geocode_failure_row(lat, lon, "geocode skipped") for lat, lon in missing],
+        )
+    print(f"Skipped geocoding: {len(missing)} new coord(s) got placeholder rows")
 
+
+def backfill(db_path=DB_PATH):
+    """Re-derive the computed columns (trimmed title, work_category, work_type)
+    on an existing DB. Pure DB work — no download, mapping, or geocoding — so
+    it's safe to re-run on its own after editing the category rules to
+    re-derive against data that's already been downloaded."""
+    with sqlite3.connect(db_path) as conn:
+        _ensure_work_category_column(conn)
+        normalise_legacy_empty_strings(conn)
+        trim_titles(conn)
+        categorised = backfill_work_category(conn)
+        overridden = backfill_work_type(conn)
+    print(f"Set work_category for {categorised} cases from title categories")
+    print(f"Overrode work_type for {overridden} cases from title categories")
+
+
+def run(skip_geocode=False):
     features = download_cases(make_session())
     CASES_RAW_PATH.parent.mkdir(parents=True, exist_ok=True)
     CASES_RAW_PATH.write_text(json.dumps(features, indent=2))
@@ -468,11 +681,22 @@ def run():
     CASES_MAPPED_PATH.parent.mkdir(parents=True, exist_ok=True)
     CASES_MAPPED_PATH.write_text(json.dumps(mapped_cases, indent=2))
 
-    geocode_all(mapped_cases, api_key)
+    if skip_geocode:
+        skip_geocoding(mapped_cases)
+    else:
+        geocode_all(mapped_cases, require_api_key())
     backfill_county(mapped_cases)
     create_db(mapped_cases)
 
-    with sqlite3.connect(DB_PATH) as conn:
-        normalise_legacy_empty_strings(conn)
-        filled = backfill_work_type(conn)
-    print(f"Backfilled work_type for {filled} cases from title categories")
+    backfill()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Build the uisce cases database.")
+    parser.add_argument(
+        "--skip-geocode",
+        action="store_true",
+        help="don't call LocationIQ; give new coordinates placeholder geocode rows "
+        "(retried on the next real run). Rebuilds cases without spending calls.",
+    )
+    run(skip_geocode=parser.parse_args().skip_geocode)
