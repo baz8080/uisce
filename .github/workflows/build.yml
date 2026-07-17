@@ -2,7 +2,7 @@ name: Build DB
 
 on:
   schedule:
-    - cron: '23 17 * * 3'
+    - cron: '23 17 * * MON,WED,FRI'
   workflow_dispatch:
 
 permissions:
