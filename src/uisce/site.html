@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Irish Water Supply Disruptions — unofficial</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --border: rgba(11,11,11,0.10);
+    --good: #0ca30c; --warning: #fab219; --serious: #ec835a;
+    --critical: #d03b3b; --maint: #2a78d6;
+    --cell-empty: #e8e7e1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19;
+      --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
+      --maint: #3987e5;
+      --cell-empty: #2c2c2a;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--page); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 24px 16px 64px;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  header h1 { font-size: 22px; font-weight: 650; }
+  header .sub { color: var(--ink-2); margin-top: 4px; font-size: 14px; }
+  .banner {
+    margin: 20px 0; padding: 14px 18px; border-radius: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .banner .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .banner strong { font-weight: 650; }
+  .banner .meta { color: var(--muted); font-size: 13px; margin-left: auto; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px;
+  }
+  .tile .v { font-size: 24px; font-weight: 650; }
+  .tile .k { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
+
+  .controls { display: flex; gap: 8px; align-items: center; margin: 22px 0 10px; flex-wrap: wrap; }
+  .months { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+  .months button {
+    border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 13.5px;
+    padding: 5px 12px; border-radius: 6px; cursor: pointer;
+  }
+  .months button.on { background: var(--grid); color: var(--ink); font-weight: 600; }
+  .controls select {
+    margin-left: auto; font: inherit; font-size: 13.5px; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px;
+  }
+  .partial-note { font-size: 12.5px; color: var(--muted); width: 100%; }
+
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 10px 0 18px; font-size: 12.5px; color: var(--ink-2); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  .county {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; margin-bottom: 8px; overflow: hidden;
+  }
+  .row {
+    display: grid; grid-template-columns: 150px 1fr 150px; gap: 14px;
+    padding: 12px 16px; align-items: center; cursor: pointer;
+  }
+  .row:hover { background: color-mix(in srgb, var(--grid) 35%, transparent); }
+  .cname { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14.5px; }
+  .gradechip {
+    width: 26px; height: 26px; border-radius: 6px; flex: none;
+    display: grid; place-items: center;
+    color: #fff; font-weight: 700; font-size: 14px;
+  }
+  .g-A { background: var(--good); } .g-B { background: color-mix(in srgb, var(--good) 60%, var(--warning)); }
+  .g-C { background: var(--warning); color: #1a1a19 !important; }
+  .g-D { background: var(--serious); } .g-F { background: var(--critical); }
+  .bar { display: flex; gap: 2px; height: 28px; }
+  .bar i { flex: 1; border-radius: 2px; background: var(--good); min-width: 3px; }
+  .bar i.outage { background: var(--critical); }
+  .bar i.quality { background: var(--serious); }
+  .bar i.degraded { background: var(--warning); }
+  .bar i.maintenance { background: var(--maint); }
+  .bar i.future { background: var(--cell-empty); }
+  .bar i.n1 { opacity: 0.40; }
+  .bar i.n2 { opacity: 0.70; }
+  .stats { text-align: right; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+  .stats b { color: var(--ink); font-weight: 650; }
+
+  .detail { display: none; border-top: 1px solid var(--grid); padding: 12px 16px 14px; font-size: 13.5px; }
+  .county.openrow .detail { display: block; }
+  .detail .drow { display: flex; gap: 18px; flex-wrap: wrap; color: var(--ink-2); margin-bottom: 8px; }
+  .detail .drow b { color: var(--ink); }
+  .incident { display: flex; gap: 8px; padding: 5px 0; border-top: 1px dashed var(--grid); align-items: baseline; }
+  .incident .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; position: relative; top: -1px; }
+  .incident .t { color: var(--ink); }
+  .incident .m { color: var(--muted); font-size: 12.5px; margin-left: auto; white-space: nowrap; }
+  .s-outage { background: var(--critical); } .s-quality { background: var(--serious); }
+  .s-degraded { background: var(--warning); } .s-maintenance { background: var(--maint); }
+
+  footer { margin-top: 28px; color: var(--muted); font-size: 12.5px; }
+  footer p { margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Irish Water Supply Disruptions</h1>
+    <div class="sub">Unofficial tracker of Uisce Éireann supply &amp; works notices — what was announced, where, and how long it took to fix · county-level view</div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+  <div class="tiles" id="tiles"></div>
+
+  <div class="controls">
+    <div class="months" id="months"></div>
+    <select id="sort">
+      <option value="name">Sort: county name</option>
+      <option value="grade">Sort: worst grade first</option>
+      <option value="events">Sort: most outages first</option>
+    </select>
+    <div class="partial-note" id="partialNote"></div>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--good)"></i> No announced disruption</span>
+    <span><i style="background:var(--critical)"></i> Supply disruption</span>
+    <span><i style="background:var(--serious)"></i> Water quality notice</span>
+    <span><i style="background:var(--warning)"></i> Restrictions / low pressure</span>
+    <span><i style="background:var(--maint)"></i> Works (planned / non-disruptive)</span>
+    <span><i style="background:var(--critical);opacity:.4"></i><i style="background:var(--critical);opacity:.7"></i><i style="background:var(--critical)"></i> deeper = larger share of county affected (&lt;0.5% / 0.5–2% / &gt;2%)</span>
+  </div>
+
+  <div id="list"></div>
+
+  <footer>
+    <p><b>What this measures:</b> supply disruptions <em>announced</em> by Uisce Éireann and how long they took to resolve — not measured availability at anyone's tap. Each notice pin is assumed to affect the Census 2022 Small Areas whose centres lie within 500&nbsp;m (CSO SAPS populations); the headline percentage is the population-weighted share of person-time not covered by an announced supply disruption. Only hard disruptions count against it: bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages, and unplanned repair works. Investigations, leak detection, hydrant works and installations are shown as works but never count; restrictions, low pressure and discolouration are shown but never count. Median time to fix covers resolved events with a known end. Grades: A ≥ 99.9%, B ≥ 99.75%, C ≥ 99.45%, D ≥ 99.0%, else F; an active boil-water / do-not-drink / do-not-consume notice knocks one grade (discolouration does not). County <em>rankings</em> are robust to the 500&nbsp;m assumption; the letter grades are calibrated to it. End times are LLM-inferred from notice text; start times are when the notice was <em>published</em>, so durations are a floor on true length. Closed cases with no usable end signal still mark their start day and event counts, but add no disruption time. Full methodology: <a href="https://github.com/baz8080/uisce/blob/main/notes/statuspage-methodology.md" style="color:inherit">notes/statuspage-methodology.md</a>.</p>
+    <p id="gen"></p>
+  </footer>
+</div>
+
+<script src="data.js"></script>
+<script>
+const D = window.UISCE_DATA;
+const SEVLABEL = { outage: "Supply disruption", quality: "Water quality notice",
+                   degraded: "Restrictions / low pressure", maintenance: "Works (planned / non-disruptive)",
+                   "": "No announced disruption" };
+const MONTH_NAMES = {"01":"January","02":"February","03":"March","04":"April","05":"May","06":"June",
+                     "07":"July","08":"August","09":"September","10":"October","11":"November","12":"December"};
+let curMonth = D.months[D.months.length - 1];
+let sortBy = "name";
+const expanded = new Set();
+const today = new Date().toISOString().slice(0, 10);
+
+function monthLabel(ym) { return MONTH_NAMES[ym.slice(5)] + " " + ym.slice(0, 4); }
+
+function render() {
+  // month tabs
+  document.getElementById("months").innerHTML = D.months.map(m =>
+    `<button class="${m === curMonth ? "on" : ""}" onclick="setMonth('${m}')">${monthLabel(m)}</button>`).join("");
+
+  const isCurrent = today.slice(0, 7) === curMonth;
+  const isFirst = curMonth === D.months[0];
+  document.getElementById("partialNote").textContent =
+    isCurrent ? "Partial month — in progress." :
+    isFirst ? "Measured from 20 April 2026, when data collection began." : "";
+
+  // national tiles
+  let ev = 0, personH = 0, quality = 0, openNow = 0, popH = 0, worst = [];
+  for (const [name, c] of Object.entries(D.counties)) {
+    const m = c.months[curMonth];
+    ev += m.events.outage; personH += m.person_h; quality += m.events.quality;
+    openNow += c.open_total;
+    popH += c.pop * m.period_h;
+    worst.push([name, m]);
+  }
+  const natAvail = 100 * (1 - personH / popH);
+  const nat = D.national[curMonth] || {};
+  const natFix = nat.median_fix_h == null ? "—" : nat.median_fix_h + "h";
+  document.getElementById("tiles").innerHTML = `
+    <div class="tile"><div class="v">${natAvail.toFixed(2)}%</div><div class="k">of person-time free of announced disruption</div></div>
+    <div class="tile"><div class="v">${ev}</div><div class="k">announced supply disruptions</div></div>
+    <div class="tile"><div class="v">${natFix}</div><div class="k">median time to fix (${nat.fixed_n || 0} resolved)</div></div>
+    <div class="tile"><div class="v">${personH >= 1e6 ? (personH / 1e6).toFixed(1) + "M" : Math.round(personH).toLocaleString()}</div><div class="k">person-hours of announced disruption</div></div>
+    <div class="tile"><div class="v">${quality}</div><div class="k">water-quality notices</div></div>
+    <div class="tile"><div class="v">${openNow}</div><div class="k">open cases right now</div></div>`;
+
+  const nF = worst.filter(w => w[1].grade === "F").length;
+  const dot = nF > 8 ? "var(--critical)" : nF > 3 ? "var(--serious)" : nF > 0 ? "var(--warning)" : "var(--good)";
+  document.getElementById("banner").innerHTML =
+    `<span class="dot" style="background:${dot}"></span>
+     <strong>${monthLabel(curMonth)}:</strong> ${ev} announced supply disruptions · median fix ${natFix} · ${nF} of 26 counties graded F
+     <span class="meta">data to ${D.generated}</span>`;
+
+  // county rows
+  const names = Object.keys(D.counties).sort((a, b) => {
+    const ma = D.counties[a].months[curMonth], mb = D.counties[b].months[curMonth];
+    if (sortBy === "grade") return mb.grade.localeCompare(ma.grade) || ma.availability - mb.availability;
+    if (sortBy === "events") return mb.events.outage - ma.events.outage;
+    return a.localeCompare(b);
+  });
+
+  document.getElementById("list").innerHTML = names.map(name => {
+    const c = D.counties[name], m = c.months[curMonth];
+    const cells = m.days.map(([s, pct], i) => {
+      const date = `${curMonth}-${String(i + 1).padStart(2, "0")}`;
+      if (date > today) return `<i class="future" title="${date}: —"></i>`;
+      if (s === "nd") return `<i class="future" title="${date}: no data (before collection began)"></i>`;
+      const intensity = !s ? "" : pct < 0.5 ? "n1" : pct < 2 ? "n2" : "";
+      const label = s ? `${SEVLABEL[s]} — ~${pct < 0.1 ? "<0.1" : pct.toFixed(1)}% of county affected` : SEVLABEL[s];
+      return `<i class="${s} ${intensity}" title="${date}: ${label}"></i>`;
+    }).join("");
+    const openBadge = c.open_total ? ` · <b>${c.open_total}</b> open` : "";
+    const outWord = m.events.outage === 1 ? "disruption" : "disruptions";
+    const detail = `
+      <div class="drow">
+        <span><b>${m.availability.toFixed(2)}%</b> of person-time undisrupted</span>
+        <span><b>${m.events.outage}</b> supply disruptions (<b>${m.person_h.toLocaleString()}</b> person-hours)</span>
+        <span>median fix <b>${m.median_fix_h == null ? "—" : m.median_fix_h + "h"}</b> (${m.fixed_n} resolved)</span>
+        <span><b>${m.events.maintenance}</b> planned works</span>
+        <span><b>${m.events.quality}</b> quality notices</span>
+        <span><b>${m.clear_days}</b>/${m.days.length} clear days</span>
+      </div>
+      ${c.open.length ? c.open.map(o => `
+        <div class="incident">
+          <span class="dot s-${o.sev}"></span>
+          <span class="t">${o.title}</span>
+          <span class="m">${o.loc ? o.loc + " · " : ""}since ${o.since}</span>
+        </div>`).join("") : `<div class="incident" style="border-top:none;color:var(--muted)">No open cases right now.</div>`}
+      ${c.open_total > c.open.length ? `<div class="incident" style="color:var(--muted)">…and ${c.open_total - c.open.length} more open cases</div>` : ""}`;
+
+    return `<div class="county ${expanded.has(name) ? "openrow" : ""}" id="c-${name}">
+      <div class="row" onclick="toggle('${name}')">
+        <div class="cname"><span class="gradechip g-${m.grade}">${m.grade}</span>${name}</div>
+        <div class="bar">${cells}</div>
+        <div class="stats"><b>${m.availability.toFixed(2)}%</b><br>${m.events.outage} ${outWord}${openBadge}</div>
+      </div>
+      <div class="detail">${detail}</div>
+    </div>`;
+  }).join("");
+
+  document.getElementById("gen").textContent =
+    "Generated " + D.generated + " from uisce.db · github.com/baz8080/uisce · not affiliated with Uisce Éireann.";
+}
+function setMonth(m) { curMonth = m; render(); }
+function toggle(n) { expanded.has(n) ? expanded.delete(n) : expanded.add(n); render(); }
+document.getElementById("sort").addEventListener("change", e => { sortBy = e.target.value; render(); });
+render();
+</script>
+</body>
+</html>

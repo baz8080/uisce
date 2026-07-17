@@ -15,6 +15,8 @@ uisce-pipeline = "uisce.pipeline:main"
 uisce-backfill = "uisce.pipeline:backfill"
 uisce-infer = "uisce.inference:run"
 uisce-build-inferred = "uisce.build:run"
+uisce-site = "uisce.site:run"
+uisce-fetch-sa-pop = "uisce.sa_pop:run"
 
 [build-system]
 requires = ["hatchling"]
