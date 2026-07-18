@@ -54,3 +54,14 @@ Production weighting: `completion_update` (92% here) is by far the largest class
 **Prompt-fix backlog from this round** (in impact order): (1) strengthen completion-over-scheduled precedence, (2) recurring-window pattern → final date + window end time, (3) probe the `d/mm/yyyy` time-drop hypothesis, (4) clarify the `lifted_immediate` `local_time` convention in the spec and this guide so the next labelling round measures extraction, not convention.
 
 Labelled CSV: `data/eval/end_time_sample_2026-07-18_gemma-4-12b-qat_pv1.csv`.
+
+## Next steps: the pv2 prompt update (handoff notes, 2026-07-18)
+
+The plan for the next working session, in order:
+
+1. **Iterate the prompt against the known misses first.** The 32 incorrect round-1 rows (with the human's notes and corrected answers) are the development set — run candidate prompts against those descriptions via the local model (LM Studio, `http://localhost:1234`, `gemma-4-12b-qat` — see `MODEL_URL`/`MODEL_NAME` in `src/uisce/inference.py`) before touching the corpus. Target the backlog above; [model-and-runtime-benchmarks.md](model-and-runtime-benchmarks.md) shows qwen handled the recurring-window cases, so its outputs hint at what a sufficient behaviour looks like.
+2. **Cheap regression check before any relabelling:** re-run the new prompt over all 114 round-1 descriptions and score against the *existing* human labels (`human_end_source`/`human_local_date`/`human_local_time`, treating `correct` rows as endorsing the model's original three fields). No human time needed; this gives a pv1-labels-vs-pv2-outputs accuracy directly comparable to 71.9%.
+3. **Ship it:** edit `PROMPT` in `src/uisce/inference.py`, bump `PROMPT_VERSION` to 2, and update the eval spec/guide for the `lifted_immediate` convention (backlog item 4).
+4. **Beware: `uisce-infer` skips unchanged descriptions.** `get_cases_needing_inference` keys on the last JSONL description hash per case, so a prompt bump alone re-infers *nothing*. Re-inference for pv2 needs the skip logic to also consider the record's `prompt_version` (or a `--force` flag) — small code change, doesn't exist yet.
+5. **Re-infer, `uisce-build-inferred`, then `uisce-eval-sample`** for a fresh pv2 round (prior-round case ids are excluded automatically; the minority-class pools were nearly exhausted under pv1 but re-inference reclassifies cases and refills them). Label, `uisce-eval-score`, record a pv2 entry under Results next to pv1's 71.9%.
+6. **Opportunity spotted in round 1 (case 233792):** boil-notice *lift* descriptions can state the original notice's issue date — extracting it would give real durations for a class that currently stores NULL, and complements the issue→lift pairing in the status site.
