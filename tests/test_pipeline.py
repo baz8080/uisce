@@ -516,3 +516,41 @@ def test_geocode_cache_row_flattens_address():
     assert row[4] == "Midleton"  # town
     assert row[9] == "County Cork"  # county
     assert json.loads(row[-1]) == result  # raw_json round-trips
+
+
+class TestLoadCasesSeenStamps:
+    def _conn(self):
+        conn = sqlite3.connect(":memory:")
+        cols = ", ".join(f"{c} TEXT" if c != "id" else "id INTEGER PRIMARY KEY"
+                         for c in pipeline.DB_CASE_COLUMNS)
+        conn.execute(f"CREATE TABLE cases ({cols})")
+        pipeline._ensure_seen_columns(conn)
+        return conn
+
+    def _record(self, **overrides):
+        record = dict.fromkeys(pipeline.DB_CASE_COLUMNS)
+        record.update({"id": 1, "title": "Burst Water Main – Cork", "status": "Open"})
+        record.update(overrides)
+        return record
+
+    def test_fresh_insert_stamps_first_and_last_seen(self):
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record()], now="2026-07-01T00:00:00+00:00")
+        row = conn.execute("SELECT first_seen, last_seen FROM cases").fetchone()
+        assert row == ("2026-07-01T00:00:00+00:00", "2026-07-01T00:00:00+00:00")
+
+    def test_reload_advances_last_seen_but_preserves_first_seen(self):
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record()], now="2026-07-01T00:00:00+00:00")
+        pipeline.load_cases(conn, [self._record(status="Closed")],
+                            now="2026-07-08T00:00:00+00:00")
+        row = conn.execute("SELECT first_seen, last_seen, status FROM cases").fetchone()
+        assert row == ("2026-07-01T00:00:00+00:00", "2026-07-08T00:00:00+00:00", "Closed")
+
+    def test_case_absent_from_download_keeps_stale_last_seen(self):
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record(), self._record(id=2)],
+                            now="2026-07-01T00:00:00+00:00")
+        pipeline.load_cases(conn, [self._record()], now="2026-07-08T00:00:00+00:00")
+        stale = conn.execute("SELECT last_seen FROM cases WHERE id = 2").fetchone()
+        assert stale == ("2026-07-01T00:00:00+00:00",)

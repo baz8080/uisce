@@ -1,6 +1,6 @@
 # uisce
 
-Download, transform, and geocode [Uisce Éireann](https://www.water.ie/) (Irish Water) supply and works notices, and infer real outage durations from the notice text with a local LLM. The result is a single SQLite database, rebuilt weekly by CI and published as a GitHub release.
+Download, transform, and geocode [Uisce Éireann](https://www.water.ie/) (Irish Water) supply and works notices, and infer real outage durations from the notice text with a local LLM. The result is a single SQLite database, rebuilt weekly by CI and published as a GitHub release, plus a statuspage-style static site with per-county supply availability and A–F grades.
 
 ## Just want the data?
 
@@ -37,6 +37,21 @@ Two options for working without the paid geocoding step:
 * `uisce-pipeline --skip-geocode` — refresh cases from the ArcGIS feed but skip LocationIQ; new coordinates get placeholder geocode rows (retried on the next real run). Handy for seeing the current source data quickly. Don't publish the result — those cases have no location yet.
 * `uisce-backfill` — re-derive the computed columns (trimmed title, `work_category`, `work_type`) on the existing `out/uisce.db` with no network at all. Run it after editing the category rules to re-apply them to data you've already downloaded.
 
+## Building the status site
+
+```
+uv run uisce-site
+```
+
+Reads `out/uisce.db` and writes a fully static site to `out/site/` (serve it with any file server, e.g. `python -m http.server -d out/site`). Per county and month it shows day-by-day status bars, population-weighted supply availability, and an A–F grade — only hard supply outages (bursts, plant/reservoir/pump interruptions, unplanned repairs) count against availability; restrictions, discolouration and non-disruptive works are shown but never accrue downtime.
+
+The availability weighting uses Census 2022 Small Area populations (`data/sa_pop.csv`, committed; regenerate with `uv run uisce-fetch-sa-pop`). Before reading too much into the numbers, see the notes:
+
+* [notes/statuspage-methodology.md](notes/statuspage-methodology.md) — every modelling decision and its rationale
+* [notes/water-sla-benchmarks.md](notes/water-sla-benchmarks.md) — Ofwat/CRU service levels and why the grades can't borrow them
+* [notes/population-data-sources.md](notes/population-data-sources.md) — the CSO/Tailte open-data join
+* [notes/data-quality.md](notes/data-quality.md) — what the source fields actually mean
+
 ## Running inference locally
 
 Duration inference reads each notice and extracts the end-time signal using a local model (currently `gemma-4-12b-qat`) behind an OpenAI-compatible API, e.g. [LM Studio](https://lmstudio.ai/).
@@ -53,6 +68,9 @@ src/uisce/
   pipeline.py    download, map, geocode, load cases   (uisce-pipeline)
   inference.py   LLM end-time extraction to JSONL      (uisce-infer)
   build.py       build inferred_cases from the JSONL   (uisce-build-inferred)
+  site.py        generate the static status site       (uisce-site)
+  sa_pop.py      fetch Census Small Area populations   (uisce-fetch-sa-pop)
+  site.html      front end copied into out/site/
   config.py      shared paths, constants, HTTP session
 tests/           pytest suite (no network access needed)
 notes/           data-quality findings and pipeline caveats

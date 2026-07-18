@@ -366,6 +366,7 @@ def create_db(cases):
         """)
 
         _ensure_work_category_column(conn)
+        _ensure_seen_columns(conn)
 
         load_cases(conn, cases)
 
@@ -379,16 +380,37 @@ def _ensure_work_category_column(conn):
         conn.execute("ALTER TABLE cases ADD COLUMN work_category TEXT")
 
 
-def load_cases(conn, cases):
+def _ensure_seen_columns(conn):
+    """first_seen/last_seen record when each case was present in a feed
+    download. The feed has not deleted anything since collection began
+    (verified 2026-07: every pre-May case is still queryable), so today these
+    stamps are a tripwire: a case whose last_seen stops advancing means the
+    operator has started pruning, and downstream consumers must react. NULL
+    first_seen means "already present before stamping began"."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(cases)")}
+    for column in ("first_seen", "last_seen"):
+        if column not in columns:
+            conn.execute(f"ALTER TABLE cases ADD COLUMN {column} TEXT")
+
+
+def load_cases(conn, cases, now=None):
     cur = conn.cursor()
+    now = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     placeholders = ", ".join("?" * len(DB_CASE_COLUMNS))
     columns = ", ".join(DB_CASE_COLUMNS)
+    updates = ", ".join(f"{c} = excluded.{c}" for c in DB_CASE_COLUMNS if c != "id")
 
-    rows = [tuple(record[col] for col in DB_CASE_COLUMNS) for record in cases]
+    rows = [
+        tuple(record[col] for col in DB_CASE_COLUMNS) + (now, now) for record in cases
+    ]
 
+    # upsert rather than INSERT OR REPLACE so an existing row's first_seen
+    # survives; last_seen advances on every download that includes the case
     cur.executemany(
-        f"INSERT OR REPLACE INTO cases ({columns}) VALUES ({placeholders})",
+        f"INSERT INTO cases ({columns}, first_seen, last_seen) "
+        f"VALUES ({placeholders}, ?, ?) "
+        f"ON CONFLICT(id) DO UPDATE SET {updates}, last_seen = excluded.last_seen",
         rows,
     )
 
