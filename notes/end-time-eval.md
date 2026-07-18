@@ -4,10 +4,14 @@ The LLM end-time extraction (`uisce-infer`) is the least-validated link in the c
 
 ## Workflow
 
-1. `uv run uisce-eval-sample` — writes a stratified random sample (~120 unique descriptions; minority `end_source` classes oversampled so per-class error rates are meaningful; seeded, default 42) to `data/eval/end_time_sample.csv`.
+Each labelling session is a **round**: one CSV under `data/eval/`, named `end_time_sample_<date>_<model>_pv<N>.csv` for the model and prompt version that produced the sampled outputs (both are read per-case from `inferred_cases.end_model` / `end_prompt_version`, and repeated in each row's `model` / `prompt_version` columns). Round files are never appended to or overwritten — old rounds stay committed as the evidence behind their Results entries.
+
+1. `uv run uisce-eval-sample` — writes a new round file: a stratified random sample (minority `end_source` classes oversampled so per-class error rates are meaningful; seeded, default 42). Cases drawn in any earlier round are excluded automatically, so each round extends coverage rather than re-asking.
 2. A human labels the CSV (spreadsheet app recommended; the fill-in columns sit between the model's answer and the description text).
-3. `uv run uisce-eval-score` — prints per-class and overall accuracy plus a list of the misses.
-4. Commit the labelled CSV and record the headline numbers (with date, model, and prompt version) at the bottom of this file.
+3. `uv run uisce-eval-score` — prints per-class and overall accuracy plus a list of the misses. Defaults to the newest round file; pass `--csv` to score an older one.
+4. Commit the labelled round file and record the headline numbers under Results below.
+
+**Prompt discipline:** any edit to the prompt in `src/uisce/inference.py` must bump `PROMPT_VERSION` there. That number flows through the JSONL into `inferred_cases` and onto every eval round, which is what makes rounds comparable — "pv1 scored 72%, pv2 scored X%" — without digging through git history. After a prompt change, re-run inference and rebuild before sampling a new round, or the sample will still contain pv-old outputs.
 
 ## Labelling guide
 
@@ -27,7 +31,7 @@ Interpretation rules, matching the prompt spec in `src/uisce/inference.py`:
 
 ## Results
 
-### 2026-07-18 — gemma-4-12b-qat, prompt as of f620d9a, N = 114 (0 unsure)
+### 2026-07-18 — gemma-4-12b-qat, prompt v1, N = 114 (0 unsure)
 
 | end_source | correct | incorrect | accuracy |
 |---|---|---|---|
@@ -49,4 +53,4 @@ Production weighting: `completion_update` (92% here) is by far the largest class
 
 **Prompt-fix backlog from this round** (in impact order): (1) strengthen completion-over-scheduled precedence, (2) recurring-window pattern → final date + window end time, (3) probe the `d/mm/yyyy` time-drop hypothesis, (4) clarify the `lifted_immediate` `local_time` convention in the spec and this guide so the next labelling round measures extraction, not convention.
 
-Labelled CSV: `data/eval/end_time_sample.csv` (this commit).
+Labelled CSV: `data/eval/end_time_sample_2026-07-18_gemma-4-12b-qat_pv1.csv`.
