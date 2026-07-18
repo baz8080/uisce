@@ -27,4 +27,26 @@ Interpretation rules, matching the prompt spec in `src/uisce/inference.py`:
 
 ## Results
 
-_None recorded yet. Format: date, model, prompt version, N judged, overall accuracy, per-class accuracy, link to the labelled CSV commit._
+### 2026-07-18 — gemma-4-12b-qat, prompt as of f620d9a, N = 114 (0 unsure)
+
+| end_source | correct | incorrect | accuracy |
+|---|---|---|---|
+| completion_update | 37 | 3 | 92% |
+| scheduled_end_with_time | 27 | 3 | 90% |
+| not_found | 18 | 2 | 90% |
+| scheduled_end_date_only | 0 | 9 | 0% |
+| lifted_immediate | 0 | 15 | 0% |
+| **total** | **82** | **32** | **71.9%** |
+
+The raw 71.9% is misleading in both directions, so read it alongside the error taxonomy:
+
+- **All 15 `lifted_immediate` rows failed on a labelling-convention point, not an extraction error.** In every case the model correctly identified the class; the disagreement is that the labeller expected `local_time` to be filled from `start_date` when the text gives no time, whereas the prompt spec says `local_time` is null when no time appears in the text — the model followed the spec as written. Downstream this class is stored with a NULL duration regardless (see [data-quality.md](data-quality.md)), so these rows carry zero weight in any site metric. Setting them aside, accuracy on the classes that actually feed durations is **82/99 = 82.8%**. One genuine improvement was spotted here (case 233792): the lift description states the original notice's issue date, so a true boil-notice duration could be derived instead of NULL — relevant to the issue→lift pairing work.
+- **Completion-update precedence failures (7 cases: 233443, 231591, 238390, 238481, 236122, 238536, 238574) are the most damaging real error.** The description contains a newer "works are now complete" block, but the model reported the older scheduled end (or `not_found`). The prompt already states that the newest update wins and shows a worked example; the model doesn't reliably follow it. Worst case (231591) reports a scheduled end 8 days before the actual completion. These directly distort the site's median time-to-fix, and the two `not_found` cases drop real durations entirely.
+- **Recurring-window scheduled ends (8 of the 9 `scheduled_end_date_only` misses) are the known nightly/daily-works pattern** — "works nightly from 10pm until 7am, from 8 July until 17 August". The model should report the final date with the window's end time (`scheduled_end_with_time`); instead it reports date-only (correct date in 6 of 8, a wrong date in 2, one of them not in the text at all). This confirms with production data what [model-and-runtime-benchmarks.md](model-and-runtime-benchmarks.md) found on the benchmark set (qwen got these right; gemma didn't). Impact is modest per case — date-only ends fall back to 23:59:59, overstating by hours — except for the two wrong-date cases (days off).
+- **Missing time on `completion_update` (2 cases: 234755, 237498):** date and source right, time null despite being present. Labeller's hypothesis: single-digit-day `d/mm/yyyy` dates in the text throw the extraction.
+
+Production weighting: `completion_update` (92% here) is by far the largest class in the real corpus (~3,500 of ~6,800 inferred cases), so corpus-wide accuracy is meaningfully better than the sample's unweighted 82.8% — the sample deliberately oversamples the minority classes to make their error rates measurable.
+
+**Prompt-fix backlog from this round** (in impact order): (1) strengthen completion-over-scheduled precedence, (2) recurring-window pattern → final date + window end time, (3) probe the `d/mm/yyyy` time-drop hypothesis, (4) clarify the `lifted_immediate` `local_time` convention in the spec and this guide so the next labelling round measures extraction, not convention.
+
+Labelled CSV: `data/eval/end_time_sample.csv` (this commit).
