@@ -63,6 +63,82 @@ Round 1 spent 15 of its 32 misses on this class, so it was measured properly bef
 
 Full reasoning, measurements and the three publishing patterns are in [boil-notices.md](boil-notices.md), along with the related finding that boil notices as a whole are structurally unable to end themselves, which puts them outside this eval's scope entirely.
 
+### 2026-07-19 — pv2 replay against round 1 (regression check, not a labelled round)
+
+Replay re-runs a prompt over round 1's descriptions and scores against round 1's human
+labels. It is a **regression filter, not an accuracy estimate**: the class mix is round 1's
+deliberately-stratified one, and by the second iteration you are tuning against rows you have
+already seen. Recorded separately from labelled rounds for that reason.
+
+Both versions scored by the same field comparison, so the numbers are comparable to each
+other — but *not* to the 71.9% in the round-1 table above, which counts `human_verdict`
+rather than comparing fields:
+
+| prompt | overall | excl. `lifted_immediate` |
+|---|---|---|
+| pv1 | 81/114 = 71.1% | 81/99 = 81.8% |
+| **pv2** | **99/114 = 86.8%** | **99/99 = 100%** |
+
+pv2 closes all three targeted backlog items: `completion_update` is 46/46 (all 7
+completion-precedence misses fixed), both `d/mm/yyyy` time-drop cases fixed, and
+`scheduled_end_with_time` is 35/35 with every recurring-window case fixed.
+
+The 15 `lifted_immediate` rows still "fail" on the labelling-convention point; per the
+decision above that class is excluded from site metrics, so it is not a prompt problem.
+
+**Read the 100% as a warning, not a result.** These 114 rows are the development set the pv2
+prompt was reasoned from — a perfect score on them is the expected outcome of a successful
+fix, and it is also exactly what overfitting looks like. It says the three targeted failure
+modes are gone; it says nothing about failure modes round 1 never contained. The unseen round
+below is what carries evidential weight, and a drop there is information rather than
+regression.
+
+Round 1's last disputed row, case 232613 ("daily from 9pm unil 9am, from 5 May until 31
+July"), was resolved in pv2's favour: the labeller confirmed on review that 09:00 — the
+window's closing time on the last date of the range — is correct, and that the 21:00
+originally entered was the window's *start*. Amended in the round file. Worth noting the
+prompt's rule is still under-specified for windows crossing midnight (arguably the last
+window closes 1 August 09:00, a date absent from the text), but no round-1 case turns on it.
+
+#### Two fixes this round depended on
+
+- **`truth_for()` in `eval_replay.py` was scoring corrected rows as unmatchable.** It fell
+  back to the model's value for `end_source` when the labeller left the column blank, but not
+  for date or time. Round 1's labeller corrected only the wrong field and left the others
+  blank ("the other model fields were correct"), so those rows got an empty-string truth that
+  no prompt could ever match — the harness understated every prompt equally. Each field now
+  falls back independently. `tests/test_eval_replay.py` had encoded the old behaviour as
+  expected; corrected.
+- **Three round-1 ground-truth defects were amended** (see the `[amended 2026-07-19: ...]`
+  markers in `human_notes`). The labeller's judgement is unchanged in all three; only the
+  transcription was fixed. 233443: the correction (09:28) was written in `human_notes` but
+  never into the columns. 238481: `human_local_date` and `human_local_time` held each other's
+  values. 237632: endorsed `correct` with a blank `model_local_time`, though the description
+  reads "Update 9:57am 6/07/2026" — reclassified `incorrect` with the time the text supports.
+  232613: the labeller revised their own correction from 21:00 to 09:00 on review. This is a
+  deliberate exception to the never-overwrite rule, taken because the file is the measuring
+  instrument for every future prompt and the defects cost ~4 points on any version.
+
+## Sampling a fresh round without re-inferring the corpus
+
+`uisce-eval-sample` draws from `inferred_cases`, so a round showing a new prompt's behaviour
+used to require a full corpus re-inference first (~7,550 calls, ~4.2 hours at the measured
+~2.4s/call). **`uisce-eval-sample-fresh`** inverts that: it draws N unseen case ids from
+`cases`, runs the current prompt over just those, and writes the round from those answers.
+A 120-row round takes about 5 minutes.
+
+The cost is stratification. `end_source` is unknown until the model has run, so minority
+classes cannot be oversampled — the draw is uniform and rare classes may land few rows or
+none. That trade is worth taking now for two reasons: a uniform draw is what a corpus-wide
+accuracy estimate actually requires (no stratified round has ever produced one), and the two
+classes that most justified oversampling no longer need it — `lifted_immediate` is excluded
+from site metrics, and `scheduled_end_date_only` has largely collapsed into
+`scheduled_end_with_time` under pv2.
+
+Use it as a gate: validate on N calls before committing to the full corpus run. It does not
+replace `uisce-eval-sample`, which is still the right tool when per-class error rates for a
+specific minority class are the question.
+
 ## Next steps: the pv2 prompt update (handoff notes, 2026-07-18)
 
 ### Done offline (2026-07-18) — written but **not yet validated against the model**
@@ -71,11 +147,34 @@ Full reasoning, measurements and the three publishing patterns are in [boil-noti
 - **The skip-logic trap is fixed** (old item 4). `get_last_hash_by_case_id` now returns `(description_hash, prompt_version)` per case and `get_cases_needing_inference` compares both, so a version bump re-infers the corpus; `uisce-infer` also gained `--force` and `--limit`. Verified against the live DB: pv2 flags all 7,552 cases where pv1 flagged 0. Records written before this change carry no `prompt_version` and read as `None`, so they re-infer too.
 - **`uisce-eval-replay` added** (`src/uisce/eval_replay.py`) for step 2 below. Ground truth per row is the human correction on `incorrect` rows and the endorsed model fields on `correct` rows; `unsure` rows are dropped; times compare at minute precision because some human labels carry seconds. Scoring logic is unit-tested without the model.
 
-### Still needs the model
+### Validated 2026-07-19 — the prompt is settled, `PROMPT_VERSION` stays at 2
 
-Both steps need LM Studio on `http://localhost:1234` with `gemma-4-12b-qat` (see `MODEL_URL`/`MODEL_NAME`). This is slow on a MacBook Air — a full corpus re-inference is 7,552 calls, so use `--limit` to sanity-check first.
+Step 1 is done: the replay above shows pv2 beating pv1 on every class that feeds a duration,
+100% against 81.8%, with all three targeted backlog items closed. **The prompt was not edited
+during validation**, so pv2 as committed is the validated version — and since the replay set
+is the development set, the clean sweep raises the value of the unseen round rather than
+settling the question.
 
-1. **Regression before anything else:** `uv run uisce-eval-replay` re-runs the pv2 prompt over the 114 labelled round-1 rows and prints an accuracy directly comparable to pv1's 71.9%, with a per-row CSV of the misses. No human time needed. **If pv2 does not beat pv1 here, iterate the prompt before re-inferring anything** — the 32 known misses are the development set, and [model-and-runtime-benchmarks.md](model-and-runtime-benchmarks.md) shows qwen already handles the recurring-window cases, so its outputs hint at sufficient behaviour.
-2. **Then ship the corpus:** `uisce-infer`, `uisce-build-inferred`, `uisce-eval-sample` for a fresh pv2 round (prior-round case ids are excluded automatically; the minority-class pools were nearly exhausted under pv1, but re-inference reclassifies cases and refills them). Label, `uisce-eval-score`, and record a pv2 entry under Results next to pv1's 71.9%.
+### Still needs a human: label round 2
 
-Note that the replay in step 1 measures the prompt against round-1's *class distribution*, which deliberately oversamples minority classes — it is a comparison instrument for pv1-vs-pv2, not an estimate of corpus-wide accuracy.
+`data/eval/end_time_sample_2026-07-19_gemma-4-12b-qat_pv2.csv` — 120 unseen cases, drawn
+uniformly and inferred with pv2 via `uisce-eval-sample-fresh` (about 5 minutes; no corpus
+run). These are the first pv2 numbers on cases nobody has looked at, so this is the round
+that actually measures the prompt rather than confirming it.
+
+Class mix as pv2 labelled it — the corpus's real distribution, not an oversampled one:
+`completion_update` 80, `scheduled_end_with_time` 35, `not_found` 5, and **zero**
+`scheduled_end_date_only` or `lifted_immediate`. The empty `scheduled_end_date_only` is
+itself a pv2 signal: the recurring-window rule moved that traffic into
+`scheduled_end_with_time`.
+
+1. Label it per the guide above, then `uv run uisce-eval-score`.
+2. Record the result under Results as the pv2 entry. Because the draw is uniform, this
+   headline **is** a corpus-wide estimate — unlike round 1's 71.9%, which is not. Say so in
+   the entry; the two numbers are not directly comparable.
+3. Only then **ship the corpus**: `uisce-infer` (7,552 calls, ~4.2 hours at ~2.4s/call on
+   this machine; `--force` and `--limit` exist), then `uisce-build-inferred`.
+
+If the labelled round contradicts the replay — plausible, since replay had seen these
+failure modes and this round has not — iterate the prompt *before* the corpus run, and only
+then bump `PROMPT_VERSION` to 3.

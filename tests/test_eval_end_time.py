@@ -1,6 +1,6 @@
 from datetime import date
 
-from uisce.eval_end_time import draw_sample, round_filename
+from uisce.eval_end_time import draw_sample, draw_uniform, round_filename
 
 
 def make_row(case_id, source, desc_hash=None):
@@ -38,6 +38,36 @@ class TestDrawSample:
         rows = [make_row(i, "not_found") for i in range(10)]
         picked = draw_sample(rows, {"not_found": 3}, seed=1)
         assert len(picked) == 3
+
+
+def make_case(case_id, description=None):
+    return {"id": case_id, "description": description or f"desc-{case_id}"}
+
+
+class TestDrawUniform:
+    def test_dedups_by_description(self):
+        rows = [make_case(1, "same"), make_case(2, "same"), make_case(3)]
+        picked = draw_uniform(rows, 10, seed=1, hash_of=hash)
+        assert sorted(r["id"] for r in picked) in ([1, 3], [2, 3])
+
+    def test_excludes_previously_sampled_case_ids(self):
+        rows = [make_case(i) for i in range(1, 6)]
+        picked = draw_uniform(rows, 10, seed=1, exclude_ids={2, 4}, hash_of=hash)
+        assert sorted(r["id"] for r in picked) == [1, 3, 5]
+
+    def test_size_caps_the_draw(self):
+        rows = [make_case(i) for i in range(20)]
+        assert len(draw_uniform(rows, 5, seed=1, hash_of=hash)) == 5
+
+    def test_draw_is_seeded_and_reproducible(self):
+        rows = [make_case(i) for i in range(20)]
+        a = [r["id"] for r in draw_uniform(rows, 5, seed=7, hash_of=hash)]
+        b = [r["id"] for r in draw_uniform(rows, 5, seed=7, hash_of=hash)]
+        assert a == b
+
+    def test_smaller_pool_than_requested_returns_what_there_is(self):
+        rows = [make_case(i) for i in range(3)]
+        assert len(draw_uniform(rows, 50, seed=1, hash_of=hash)) == 3
 
 
 class TestRoundFilename:

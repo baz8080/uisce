@@ -19,7 +19,14 @@ from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
 
-from uisce.config import DB_PATH
+from uisce.config import DB_PATH, make_session
+from uisce.inference import (
+    MODEL_NAME,
+    PROMPT_VERSION,
+    call_llm,
+    hash_description,
+    parse_response,
+)
 
 EVAL_DIR = Path("data/eval")
 ROUND_GLOB = "end_time_sample*.csv"
@@ -62,11 +69,62 @@ def draw_sample(rows, quotas, seed, exclude_ids=frozenset()):
     return sample
 
 
+def draw_uniform(rows, size, seed, exclude_ids=frozenset(), hash_of=None):
+    """Uniform sample, one row per unique description.
+
+    Used by the sample-then-infer path, where end_source is not known before the
+    model runs and so cannot be stratified on. A uniform draw reproduces the
+    corpus's own class mix, which is what a corpus-wide accuracy estimate needs;
+    the stratified draw above deliberately does not.
+    """
+    rng = random.Random(seed)
+    seen_hashes = set()
+    pool = []
+    for row in rows:
+        if row["id"] in exclude_ids:
+            continue
+        digest = hash_of(row["description"])
+        if digest in seen_hashes:
+            continue
+        seen_hashes.add(digest)
+        pool.append(row)
+    rng.shuffle(pool)
+    return pool[:size]
+
+
 def round_filename(day, models, versions):
     """One CSV per labelling round, named for what produced the sampled outputs."""
     model = next(iter(models)) if len(models) == 1 else "mixed"
     version = next(iter(versions)) if len(versions) == 1 else "mixed"
     return f"end_time_sample_{day.isoformat()}_{model}_pv{version}.csv"
+
+
+def unique_round_path(day, models, versions):
+    """Round files are never overwritten; suffix _r2, _r3 ... if the name is taken."""
+    base = round_filename(day, models, versions)
+    out_path = EVAL_DIR / base
+    n = 1
+    while out_path.exists():
+        n += 1
+        out_path = EVAL_DIR / base.replace(".csv", f"_r{n}.csv")
+    return out_path
+
+
+def write_round(out_path, records):
+    """Write a round file: the model's three fields, then blank human_* columns to fill."""
+    EVAL_DIR.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+        writer.writeheader()
+        for rec in records:
+            writer.writerow({
+                "human_verdict": "",
+                "human_end_source": "",
+                "human_local_date": "",
+                "human_local_time": "",
+                "human_notes": "",
+                **rec,
+            })
 
 
 def round_files():
@@ -107,41 +165,103 @@ def sample(argv=None):
 
     models = {row["end_model"] for row in picked}
     versions = {row["end_prompt_version"] for row in picked}
-    base = round_filename(date.today(), models, versions)
-    out_path = EVAL_DIR / base
-    n = 1
-    while out_path.exists():
-        n += 1
-        out_path = EVAL_DIR / base.replace(".csv", f"_r{n}.csv")
+    out_path = unique_round_path(date.today(), models, versions)
 
-    EVAL_DIR.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        for row in picked:
-            writer.writerow({
-                "case_id": row["case_id"],
-                "county": row["county"],
-                "title": row["title"],
-                "start_date": row["start_date"],
-                "model": row["end_model"],
-                "prompt_version": row["end_prompt_version"],
-                "model_end_source": row["end_source"],
-                "model_local_date": row["end_local_date"] or "",
-                "model_local_time": row["end_local_time"] or "",
-                "human_verdict": "",
-                "human_end_source": "",
-                "human_local_date": "",
-                "human_local_time": "",
-                "human_notes": "",
-                "description": row["description"],
-            })
+    write_round(out_path, [
+        {
+            "case_id": row["case_id"],
+            "county": row["county"],
+            "title": row["title"],
+            "start_date": row["start_date"],
+            "model": row["end_model"],
+            "prompt_version": row["end_prompt_version"],
+            "model_end_source": row["end_source"],
+            "model_local_date": row["end_local_date"] or "",
+            "model_local_time": row["end_local_time"] or "",
+            "description": row["description"],
+        }
+        for row in picked
+    ])
 
     counts = Counter(row["end_source"] for row in picked)
     print(f"Wrote {len(picked)} rows to {out_path} (seed {args.seed}, "
           f"{len(exclude)} previously sampled cases excluded)")
     for source, n in sorted(counts.items()):
         print(f"  {source}: {n}")
+    print("Label per notes/end-time-eval.md, then run: uv run uisce-eval-score")
+
+
+def sample_fresh(argv=None):
+    """Draw N unseen cases and infer only those — a fresh round without a corpus run.
+
+    uisce-eval-sample draws from inferred_cases, so measuring a new prompt on unseen
+    cases would mean re-inferring all ~7,500 first. This path inverts that: sample
+    from `cases`, run the current prompt over just the sampled rows, and write the
+    round from those answers. N calls instead of the whole corpus.
+
+    The cost is stratification. end_source is not known until the model has run, so
+    minority classes cannot be oversampled and rare ones may land few rows or none.
+    In exchange the draw is uniform, so the round reflects the corpus's real class
+    mix and its headline number is an unbiased corpus-wide estimate — which the
+    stratified rounds, by design, are not.
+    """
+    parser = argparse.ArgumentParser(description=sample_fresh.__doc__)
+    parser.add_argument("-n", "--size", type=int, default=120,
+                        help="Number of unseen cases to draw and infer (default 120)")
+    parser.add_argument("--seed", type=int, default=42, help="RNG seed (default 42)")
+    args = parser.parse_args(argv)
+
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT id, county, title, start_date, description
+            FROM cases WHERE description IS NOT NULL
+            ORDER BY id
+            """
+        ).fetchall()
+
+    exclude = previously_sampled_ids()
+    picked = draw_uniform(rows, args.size, args.seed, exclude, hash_of=hash_description)
+    if not picked:
+        sys.exit("Nothing left to sample — all eligible cases appear in earlier rounds.")
+
+    print(f"Inferring {len(picked)} unseen cases with prompt v{PROMPT_VERSION}, "
+          f"model {MODEL_NAME} ({len(exclude)} previously sampled cases excluded)")
+
+    session = make_session()
+    records = []
+    for i, row in enumerate(picked, 1):
+        try:
+            result = parse_response(call_llm(session, row["start_date"], row["description"]))
+            source = result.get("end_source") or ""
+            local_date = result.get("local_date") or ""
+            local_time = result.get("local_time") or ""
+        except Exception as exc:  # a failed call still gets a row, flagged for the labeller
+            print(f"  case {row['id']} failed: {exc}")
+            source, local_date, local_time = "", "", ""
+        records.append({
+            "case_id": row["id"],
+            "county": row["county"],
+            "title": row["title"],
+            "start_date": row["start_date"],
+            "model": MODEL_NAME,
+            "prompt_version": PROMPT_VERSION,
+            "model_end_source": source,
+            "model_local_date": local_date,
+            "model_local_time": local_time,
+            "description": row["description"],
+        })
+        if i % 10 == 0:
+            print(f"  {i}/{len(picked)} inferred")
+
+    out_path = unique_round_path(date.today(), {MODEL_NAME}, {PROMPT_VERSION})
+    write_round(out_path, records)
+
+    counts = Counter(rec["model_end_source"] for rec in records)
+    print(f"\nWrote {len(records)} rows to {out_path} (seed {args.seed}, uniform draw)")
+    for source, n in sorted(counts.items()):
+        print(f"  {source or '(failed)'}: {n}")
     print("Label per notes/end-time-eval.md, then run: uv run uisce-eval-score")
 
 

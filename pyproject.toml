@@ -18,6 +18,7 @@ uisce-build-inferred = "uisce.build:run"
 uisce-site = "uisce.site:run"
 uisce-fetch-sa-pop = "uisce.sa_pop:run"
 uisce-eval-sample = "uisce.eval_end_time:sample"
+uisce-eval-sample-fresh = "uisce.eval_end_time:sample_fresh"
 uisce-eval-score = "uisce.eval_end_time:score"
 uisce-eval-replay = "uisce.eval_replay:run"
 
