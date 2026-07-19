@@ -59,6 +59,13 @@ QUALITY_CATS = {"boil_notice_issued", "consumption_notice_issued", "discolourati
 DEGRADED_CATS = {"water_conservation", "low_pressure"}
 IGNORE_CATS = {"boil_notice_lifted"}  # the lift is good news, not an event
 
+# Boil notices are the weakest class in the dataset: only 1 of 23 has a real end
+# (see boil_notice_fate and notes/boil-notices.md). Setting this to True drops the
+# class from the metrics entirely — a defensible position, since what survives is
+# a handful of events resting on a status flag known to go stale. Left False so
+# genuinely-live notices still show; flip it if the class stays this thin.
+IGNORE_BOIL_NOTICES = False
+
 # Hard supply outages: the title itself announces lost supply.
 HARD_CATS = {
     "burst_main", "reservoir_interruption", "water_treatment_plant_interruption",
@@ -79,6 +86,8 @@ def classify(row):
     """Severity class for a case row, or None if it isn't an event."""
     cat = row["work_category"]
     if cat in IGNORE_CATS:
+        return None
+    if IGNORE_BOIL_NOTICES and cat == "boil_notice_issued":
         return None
     if row["do_not_drink"] or row["boil_water_notice"] or cat in QUALITY_CATS:
         return "quality"
@@ -102,6 +111,36 @@ def norm_scheme(location):
     """'Ardfinnan Regional Public Water Supply' -> 'ardfinnan' etc."""
     cleaned = "".join(ch if ch.isalnum() else " " for ch in (location or "").lower())
     return " ".join(w for w in cleaned.split() if w not in SCHEME_NOISE)
+
+
+def boil_notice_fate(row, lifts, now):
+    """What a boil-notice case contributes to the metrics: the whole policy, in one place.
+
+    Boil notices cannot end themselves. The notice text never states its own end
+    (`end_source` is `not_found` for every one of them), because Uisce publishes the
+    lift as a *separate* case. So the LLM extraction is structurally irrelevant here
+    and no prompt version will change that — the only real end signal is a paired lift.
+
+    Returns (outcome, end):
+      "paired"  — a matching lift was found; `end` is the real end of the notice.
+      "accrue"  — no lift, but the notice is younger than CAP_DAYS, so status='Open'
+                  is still plausible; `end` runs to now.
+      "exclude" — no lift and older than CAP_DAYS. The feed's status is known to go
+                  stale (case 221165 has been 'Open' since 2025-11-13 and its own
+                  description says it was lifted), so accruing these fabricates
+                  downtime that never happened. `end` is None; drop the case.
+
+    See notes/boil-notices.md for the measurements behind this.
+    """
+    start = parse_dt(row["start_date"])
+    lift = paired_lift(lifts, row["county"], row["location"], start)
+    if lift is not None:
+        return "paired", max(lift, start)
+    if row["status"] != "Open":
+        return "closed_no_signal", None
+    if now - start > timedelta(days=CAP_DAYS):
+        return "exclude", None
+    return "accrue", min(now, start + timedelta(days=CAP_DAYS))
 
 
 def paired_lift(lifts, county, location, start):
@@ -262,15 +301,21 @@ def build_site(rows, sa_index, now):
             )
 
         duration = r["end_duration_seconds"]
-        lift = None
+        has_real_end = duration is not None
+
         if r["work_category"] == "boil_notice_issued":
-            lift = paired_lift(lifts, county, r["location"], start)
-        if lift is not None:
-            end = max(lift, start)
-        elif duration is None:
+            # This class never ends itself; boil_notice_fate owns the whole decision.
+            outcome, end = boil_notice_fate(r, lifts, now)
+            if outcome == "exclude":
+                open_now[county].pop(ref, None)
+                continue
+            has_real_end = outcome == "paired"
+            if end is None:
+                # closed with no lift: token footprint, as for any no-signal case
+                end = start + timedelta(seconds=1)
+        elif not has_real_end:
             if r["status"] == "Open" and start < now:
-                # ongoing with no inferred end (e.g. active boil notice):
-                # runs from start until now, capped
+                # ongoing with no inferred end: runs from start until now, capped
                 end = min(now, start + cap)
             else:
                 # closed with no usable end signal: a token 1s footprint so
@@ -283,7 +328,7 @@ def build_site(rows, sa_index, now):
         county_sev_iv[county][sev].append((start, end))
         event_iv[county][sev][ref].append((start, end))
         event_sas[county][sev][ref].update(sa_index.affected(r["full_lat"], r["full_lon"]))
-        event_has_end[county][sev][ref] |= duration is not None or lift is not None
+        event_has_end[county][sev][ref] |= has_real_end
         if knocks_grade(r):
             knock_refs[county].add(ref)
 
