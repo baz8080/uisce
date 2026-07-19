@@ -29,6 +29,7 @@ class TestGetLastHashByCaseId:
                 "case_id": case_id,
                 "inferred_at": inferred_at,
                 "description_hash": description_hash,
+                "prompt_version": PROMPT_VERSION,
             }
 
         write_jsonl(
@@ -39,13 +40,29 @@ class TestGetLastHashByCaseId:
                 record(2, "2026-06-01T00:00:00+00:00", "only"),
             ],
         )
-        assert get_last_hash_by_case_id(jsonl) == {1: "new", 2: "only"}
+        assert get_last_hash_by_case_id(jsonl) == {
+            1: ("new", PROMPT_VERSION),
+            2: ("only", PROMPT_VERSION),
+        }
 
     def test_blank_lines_are_skipped(self, tmp_path):
         jsonl = tmp_path / "inferred.jsonl"
-        record = {"case_id": 1, "inferred_at": "2026-06-01T00:00:00+00:00", "description_hash": "h"}
+        record = {
+            "case_id": 1,
+            "inferred_at": "2026-06-01T00:00:00+00:00",
+            "description_hash": "h",
+            "prompt_version": PROMPT_VERSION,
+        }
         jsonl.write_text("\n" + json.dumps(record) + "\n\n")
-        assert get_last_hash_by_case_id(jsonl) == {1: "h"}
+        assert get_last_hash_by_case_id(jsonl) == {1: ("h", PROMPT_VERSION)}
+
+    def test_records_predating_prompt_version_read_as_none(self, tmp_path):
+        jsonl = tmp_path / "inferred.jsonl"
+        write_jsonl(
+            jsonl,
+            [{"case_id": 1, "inferred_at": "2026-06-01T00:00:00+00:00", "description_hash": "h"}],
+        )
+        assert get_last_hash_by_case_id(jsonl) == {1: ("h", None)}
 
 
 class TestGetCasesNeedingInference:
@@ -70,14 +87,28 @@ class TestGetCasesNeedingInference:
                 (4, "2026-06-01", None),
             ],
         )
-        last_hashes = {
-            1: hash_description("unchanged text"),
-            2: hash_description("previous version of text"),
+        last_state = {
+            1: (hash_description("unchanged text"), PROMPT_VERSION),
+            2: (hash_description("previous version of text"), PROMPT_VERSION),
         }
 
-        cases = get_cases_needing_inference(db, last_hashes)
+        cases = get_cases_needing_inference(db, last_state)
 
         assert [c["id"] for c in cases] == [2, 3]
+
+    def test_prompt_version_bump_reinfers_unchanged_descriptions(self, tmp_path):
+        """A prompt edit must re-infer the corpus; keying on the hash alone re-inferred nothing."""
+        db = self._make_db(tmp_path, [(1, "2026-06-01", "unchanged text")])
+        stale = {1: (hash_description("unchanged text"), PROMPT_VERSION - 1)}
+
+        assert [c["id"] for c in get_cases_needing_inference(db, stale)] == [1]
+
+    def test_force_reinfers_everything(self, tmp_path):
+        db = self._make_db(tmp_path, [(1, "2026-06-01", "unchanged text")])
+        current = {1: (hash_description("unchanged text"), PROMPT_VERSION)}
+
+        assert get_cases_needing_inference(db, current) == []
+        assert [c["id"] for c in get_cases_needing_inference(db, current, force=True)] == [1]
 
 
 def test_build_record_shape():
