@@ -23,6 +23,11 @@ Read `description` (and `start_date` for context) and judge the model's three fi
   - `unsure` — the notice is genuinely ambiguous even to a human; excluded from the accuracy denominator.
 - When `incorrect`, fill `human_end_source` / `human_local_date` / `human_local_time` with what the text actually supports, and say what went wrong in `human_notes`.
 
+**You only need to fill the cells the model got wrong** — leaving the rest blank is correct and expected. `uisce-eval-replay` falls back to the model's own value for any blank cell on an `incorrect` row, so a blank reads as "the model's value here was right". Two consequences follow, and round 1 tripped on both:
+
+- **A wrong field must get its corrected value in its cell, not only in `human_notes`.** Otherwise the blank claims the model was right about the very field you are marking wrong, and no tool can tell that apart from a genuine endorsement. Round 1's case 233443 recorded "the model picked 20:00 rather than the update time 09:28" in prose with all three cells empty; the corrected 09:28 was invisible to scoring.
+- **Marking a row `correct` endorses blank model cells too.** An empty `model_local_time` on a `correct` row asserts that the text states no time of day. Round 1's case 237632 was endorsed that way while its description read "Update 9:57am 6/07/2026". When a model cell is empty, check the text before accepting it.
+
 **`lifted_immediate` convention (settled 2026-07-18, after round 1 spent 15 rows on it):** `local_time` is **null** unless the text itself states a time of day for the lift. Do not expect the model to copy a time from `start_date` — `start_date` is UTC ISO, so filling it means a timezone conversion, which is Python's job, not the model's. A lift row with the right class and a null time is `correct`. The class is excluded from site metrics anyway ([boil-notices.md](boil-notices.md)), so these rows should cost the labeller almost nothing from round 2 onwards.
 
 Interpretation rules, matching the prompt spec in `src/uisce/inference.py`:
