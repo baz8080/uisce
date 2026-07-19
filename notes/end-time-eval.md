@@ -68,6 +68,44 @@ Round 1 spent 15 of its 32 misses on this class, so it was measured properly bef
 
 Full reasoning, measurements and the three publishing patterns are in [boil-notices.md](boil-notices.md), along with the related finding that boil notices as a whole are structurally unable to end themselves, which puts them outside this eval's scope entirely.
 
+### 2026-07-19 — gemma-4-12b-qat, prompt v2, N = 120 (0 unsure) — **first corpus-wide estimate**
+
+| end_source | correct | incorrect | accuracy |
+|---|---|---|---|
+| completion_update | 80 | 0 | 100% |
+| scheduled_end_with_time | 35 | 0 | 100% |
+| not_found | 5 | 0 | 100% |
+| **total** | **120** | **0** | **100%** |
+
+Drawn with `uisce-eval-sample-fresh`: 120 unseen cases, uniform draw, inferred with pv2 in
+about five minutes rather than a full corpus run. Because the draw is uniform this headline
+**is** an unbiased corpus-wide estimate — the first this project has produced. It is *not*
+comparable to round 1's 71.9%, which oversamples minority classes by design; the like-for-like
+pv1-vs-pv2 comparison is the replay below (81 vs 99 on identical rows).
+
+**Read 100% as "no errors detectable at this sample size", not as perfect.** With zero errors
+in 120 draws the rule of three puts the 95% confidence lower bound at ~97.5% — the data cannot
+distinguish a 99.9% prompt from a 97.6% one. Detecting a ~2% error rate would need several
+hundred labelled rows. The measurement's resolution is exhausted, not its subject.
+
+Two limits on scope:
+
+- **Two classes drew zero rows** (`lifted_immediate`, `scheduled_end_date_only`), so nothing is
+  measured about them. That is the corpus's real rarity rather than a sampling failure, and the
+  overall estimate stands — but no per-class claim can be made for either. The empty
+  `scheduled_end_date_only` is itself a pv2 signal: the recurring-window rule moved that traffic
+  into `scheduled_end_with_time`.
+- **The headline is dominated by `completion_update`** (80/120 = 67%), which is the corpus mix
+  and therefore correct for a corpus estimate, but it means the number is mostly a statement
+  about that one class.
+
+Labelling was audited afterwards for the failure mode that damaged round 1: rows endorsed
+`correct` while a model cell was blank, where the blank silently asserts the text states no
+time. Five such rows exist and all five are the `not_found` cases, none of whose descriptions
+contain a time-like string. Clean.
+
+Labelled CSV: `data/eval/end_time_sample_2026-07-19_gemma-4-12b-qat_pv2.csv`.
+
 ### 2026-07-19 — pv2 replay against round 1 (regression check, not a labelled round)
 
 Replay re-runs a prompt over round 1's descriptions and scores against round 1's human
@@ -160,6 +198,15 @@ during validation**, so pv2 as committed is the validated version — and since 
 is the development set, the clean sweep raises the value of the unseen round rather than
 settling the question.
 
+### Round 2 is labelled and clean — remaining step is the corpus run
+
+Round 2 came in at 120/120 (see Results). The gate we set before spending four hours of
+inference has been passed, so the next action is `uisce-infer` then `uisce-build-inferred`.
+`PROMPT_VERSION` stays at 2: the prompt was never edited during validation.
+
+<details>
+<summary>Original handoff for round 2 (completed 2026-07-19)</summary>
+
 ### Still needs a human: label round 2
 
 `data/eval/end_time_sample_2026-07-19_gemma-4-12b-qat_pv2.csv` — 120 unseen cases, drawn
@@ -183,3 +230,5 @@ itself a pv2 signal: the recurring-window rule moved that traffic into
 If the labelled round contradicts the replay — plausible, since replay had seen these
 failure modes and this round has not — iterate the prompt *before* the corpus run, and only
 then bump `PROMPT_VERSION` to 3.
+
+</details>
