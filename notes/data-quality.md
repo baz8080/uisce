@@ -30,7 +30,21 @@ Further evidence (2026-07 snapshot, 6,758 cases) that `start_date` records when 
 - **Day-of-week clusters mid-week.** Thursday has 1,466 starts vs Sunday's 252 (Mon 981, Tue 1,398, Wed 1,419, Fri 848, Sat 388). Again consistent with staffed publishing, not with when water infrastructure actually fails.
 - This holds even for `work_type = 'Unplanned'` cases, which is the giveaway — planned works clustering in business hours would be expected; emergencies clustering there would not.
 
-Practical consequence: `end_duration_seconds` in `inferred_cases` measures "notice published → works complete", which systematically *understates* the real outage duration for events that happened overnight or at weekends and weren't posted until the next working morning. There's no in-feed signal to correct for this; it's a floor, not a point estimate.
+Practical consequence: `end_duration_seconds` in `inferred_cases` measures "notice published → works complete", which *understates* the real outage duration for events that happened overnight or at weekends and weren't posted until the next working morning.
+
+### Sharpened 2026-07-19: the timestamp is machine-generated, and the error is not one-directional
+
+Two refinements from a follow-up pass, prompted by case 234595 (`start_date` 15:37:59, description says "from 10am until 6pm on 3 June"):
+
+- **The seconds field settles it.** 97.6% of the 7,887 populated `start_date` values carry non-zero seconds, and minute values are uniformly spread — only ~2% land on `:00`, which is chance (1/60). A human-stated schedule clusters hard on round hours and `:00` minutes. This is a machine timestamp, not a transcribed event time.
+- **There *is* an in-feed alternative signal, contradicting the "no in-feed signal" line above.** 55% of case descriptions (4,352/7,892) state their own start, e.g. "Works are scheduled to take place from 10am until 6pm". Top categories: `essential_works` (892), `burst_main` (753), `mains_repair` (661).
+- **The gap runs both ways, so "a floor, not a point estimate" is too kind.** Comparing publication time against the description-stated start: median −0.6h, p25 −2.3h, p75 +2.8h, with publication *preceding* the stated start in 59% of cases. Both directions are real but belong to different populations — planned works get published in advance (overstating duration measured from publication), while unplanned overnight bursts get published late (understating). The direction is likely predictable from `work_type`, which is worth checking before any correction is attempted. *Method caveat: crude probe — first regex match only, compares time-of-day and ignores the date, so treat the spread as indicative rather than measured.*
+
+**Why this matters enough to act on eventually:** median inferred duration is 9.9h (p25 4.1h, p75 23.8h), so start-side noise of ±2–3h is roughly a quarter of the signal — the same order of distortion as the completion-precedence prompt bug fixed in pv2, hitting the same published median-time-to-fix.
+
+**Parked as a possible pv3, with a caveat that makes it more than an extraction problem.** Neither field records the *observed* start: the description states the plan, `start_date` records publication. So a prompt can at best extract "scheduled start per the notice" — it cannot recover when the works truly began. That makes this a definitional question for the site (does a published duration mean *scheduled* or *observed*?) as much as a modelling one, and the current pipeline is incoherent on it: for the `completion_update` class it pairs a machine publication timestamp with a genuinely observed, human-reported end.
+
+Design notes for whenever this is picked up: keep start extraction out of the end-time prompt — pv2 reached 99/99 on the round-1 dev set and a larger prompt puts that at risk, whereas a separate call keeps the two independently measurable. A start-only eval round is also cheaper on the labeller than widening the existing CSV.
 
 ## Multi-pin events inflate per-case statistics
 
@@ -64,6 +78,26 @@ Every inferred duration above 30 days belongs to `water_conservation` (real 40�
 All 23 `boil_notice_issued` cases have NULL `end_duration_seconds` (there is no end signal in an issue notice), so any duration-based view silently drops active boil notices unless open cases accrue start→now. The lift arrives later as a **separate case with a fresh `reference_num`** (e.g. Downings: issued without a reference, lifted as DON00112xxx), so issue→lift pairing must key on county + normalised scheme name from `location` (strip public/water/supply/scheme/regional/pws: "Ardfinnan Regional Public Water Supply" → "ardfinnan"). Multi-pin publication is not chronologically tidy — lifts can be stamped up to ~2 days before their issue pins. On the 2026-07 snapshot only one pair completes (every other lift refers to a pre-collection notice); the open notices for Achill (MAY00116204), Ballymacarbry (WAT00116255) and Ardfinnan (TIP00113432) are good future test cases for the pairing.
 
 Related: the duplicate case_ids in `data/inferred_duration.jsonl` (422 cases with >1 record) are re-inferences after a description changed, not cross-case links. The 13 `not_found → lifted_immediate` transitions are the lift-notice cases themselves being correctly reclassified once re-read — `build.py` keeps latest-per-case and stores NULL duration for them; no cross-case pairing exists upstream yet.
+
+## "We are investigating" notices: reference pairing works, but rescues almost nothing
+
+These are correctly modelled `not_found` — an investigation notice genuinely carries no end signal — so the question is whether a paired case found via the reference number supplies one, or whether they should simply be excluded.
+
+**The pairing mechanism works.** Reference numbers (`[A-Z]{2,4}\d{6,}`) yield 6,109 distinct refs across 7,892 cases; 806 refs span more than one case, covering 2,326 cases. The worked example resolves exactly as hoped — `LIM00111812` appears in two cases: 233185, the "We are investigating … Patrick Street, O'Connell Street" notice, and 233184, its sibling carrying "Works are now complete at 10:39am 14/05/2026".
+
+**But it almost never fires.** Of 296 `not_found` cases (pv1 data), 203 are "we are investigating". Of those:
+
+| outcome | count |
+|---|---|
+| no reference number in the description at all | 145 |
+| reference present, no sibling with a real end signal | 56 |
+| **rescuable via a paired reference** | **2** |
+
+The 145 unpairable ones are the short variant — "We are investigating reports of supply disruptions affecting X … More information to follow." — which carries no reference number by construction. The `LIM00111812` case is one of the two that do pair; a lucky pick rather than a representative one.
+
+**Conclusion: exclude, don't pair.** A cross-case join is real work (schema, build step, ordering rules for pins that publish out of sequence — see the boil-notice section) to recover two cases. Worth revisiting only if the feed's publishing behaviour changes such that investigation notices routinely carry references *and* resolving siblings.
+
+Note these already contribute NULL duration, so they do not distort duration aggregates today. The live question is narrower: whether they should still count as *events* in per-county and per-day case counts, where they currently do. That interacts with the false-green-days handling below.
 
 ## Closed cases with no end signal create false-green days
 
