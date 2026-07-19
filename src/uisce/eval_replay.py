@@ -44,12 +44,19 @@ def normalise_time(value):
 
 
 def truth_for(row):
-    """The human's answer: their corrections when incorrect, else the endorsed model fields."""
+    """The human's answer: their corrections when incorrect, else the endorsed model fields.
+
+    On an `incorrect` row the labeller fills only the fields that were wrong and leaves
+    the rest blank — "the other model fields were correct", as round 1's notes put it.
+    So each field falls back to the model's own value independently; reading a blank as
+    an empty-string truth would score a corrected row as a miss no matter what the
+    prompt answers.
+    """
     if row["human_verdict"].strip().lower() == "incorrect":
         return (
-            (row["human_end_source"] or row["model_end_source"]).strip(),
-            (row["human_local_date"] or "").strip(),
-            normalise_time(row["human_local_time"]),
+            (row["human_end_source"].strip() or row["model_end_source"].strip()),
+            (row["human_local_date"].strip() or (row["model_local_date"] or "").strip()),
+            (normalise_time(row["human_local_time"]) or normalise_time(row["model_local_time"])),
         )
     return (
         row["model_end_source"].strip(),

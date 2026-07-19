@@ -27,10 +27,16 @@ class TestTruthFor:
         ))
         assert got == ("scheduled_end_with_time", "2026-08-17", "08:00")
 
-    def test_incorrect_row_keeps_model_class_when_human_left_it_blank(self):
-        """Round 1's labeller left human_end_source empty when only the time was wrong."""
+    def test_incorrect_row_keeps_model_fields_the_human_left_blank(self):
+        """Round 1's labeller corrected only the wrong field and left the rest blank
+        (case 233443: "The other model fields are correct"). Every blank field falls
+        back to the model's value, not to an unmatchable empty string."""
         got = truth_for(row(human_verdict="incorrect", human_local_time="09:28"))
-        assert got == ("completion_update", "", "09:28")
+        assert got == ("completion_update", "2026-05-18", "09:28")
+
+    def test_incorrect_row_keeps_model_time_when_only_the_date_was_corrected(self):
+        got = truth_for(row(human_verdict="incorrect", human_local_date="2026-05-19"))
+        assert got == ("completion_update", "2026-05-19", "20:00")
 
     def test_verdict_matching_ignores_case_and_padding(self):
         got = truth_for(row(human_verdict="  Incorrect  ", human_local_date="2026-01-01"))
