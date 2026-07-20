@@ -198,11 +198,12 @@ during validation**, so pv2 as committed is the validated version — and since 
 is the development set, the clean sweep raises the value of the unseen round rather than
 settling the question.
 
-### Round 2 is labelled and clean — remaining step is the corpus run
+### Round 2 is labelled and clean — corpus run done 2026-07-20
 
 Round 2 came in at 120/120 (see Results). The gate we set before spending four hours of
-inference has been passed, so the next action is `uisce-infer` then `uisce-build-inferred`.
-`PROMPT_VERSION` stays at 2: the prompt was never edited during validation.
+inference was passed, and the corpus run followed: all 8,130 inferred cases now carry
+`end_prompt_version = 2`. `PROMPT_VERSION` stays at 2: the prompt was never edited during
+validation. Nothing in this workflow is pending.
 
 <details>
 <summary>Original handoff for round 2 (completed 2026-07-19)</summary>

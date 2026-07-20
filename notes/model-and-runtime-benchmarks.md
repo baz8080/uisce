@@ -40,4 +40,3 @@ Making it work would need a text-only gemma-4-12b GGUF (~7GB).
 
 - **100% agreement with gemma-4-12b-qat on all 567 records** — same values everywhere, including the same date-only call on the nightly-works cases. This task appears saturated at 12B; the bigger model adds nothing.
 - **2.70s/call vs ~1.9s** on the real workload. Short requests tie (~1.35s), but the MoE loses on prefill-heavy long descriptions. MLX showed no runtime advantage over llama.cpp/GGUF on this machine.
-- 
