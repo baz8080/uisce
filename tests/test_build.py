@@ -5,6 +5,7 @@ import pytest
 from uisce.build import (
     check_cases_cover,
     compute_notice_to_end_seconds,
+    count_never_inferred,
     first_start_date_per_case,
     latest_per_case,
 )
@@ -78,6 +79,24 @@ def test_first_start_date_per_case_pins_earliest_run():
         _record(1, "2026-06-01T00:00:00+00:00", start_date="2026-05-01T00:00:00+00:00"),
     ]
     assert first_start_date_per_case(records) == {1: "2026-05-01T00:00:00+00:00"}
+
+
+def test_count_never_inferred_reports_backlog_and_open_share():
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE cases (id INTEGER PRIMARY KEY, description TEXT, status TEXT)")
+    conn.execute("CREATE TABLE inferred_cases (case_id INTEGER PRIMARY KEY)")
+    conn.executemany(
+        "INSERT INTO cases VALUES (?, ?, ?)",
+        [
+            (1, "inferred already", "Open"),
+            (2, "backlog, open", "Open"),
+            (3, "backlog, closed", "Closed"),
+            (4, None, "Open"),  # no description: never a candidate for inference
+        ],
+    )
+    conn.execute("INSERT INTO inferred_cases VALUES (1)")
+
+    assert count_never_inferred(conn) == (2, 1)
 
 
 class TestCheckCasesCover:

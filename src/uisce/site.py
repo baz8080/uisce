@@ -116,6 +116,19 @@ def knocks_grade(row):
     )
 
 
+def ended_by_publication(row):
+    """True when the notice's own text says the event was already over when the
+    notice went up: a lift with immediate effect, or an extracted end whose span
+    build.py nulled because the end precedes publication (532 cases on the
+    2026-07-20 snapshot — mostly notices published just after the works window
+    they announce; see notes/data-quality.md). Whatever the feed's status claims,
+    these must not accrue "ongoing" time: 12 outage-class open cases were doing
+    exactly that, fabricating downtime toward the 14-day cap."""
+    if row["end_source"] == "lifted_immediate":
+        return True
+    return row["end_source"] not in (None, "not_found") and row["end_local_date"] is not None
+
+
 def norm_scheme(location):
     """'Ardfinnan Regional Public Water Supply' -> 'ardfinnan' etc."""
     cleaned = "".join(ch if ch.isalnum() else " " for ch in (location or "").lower())
@@ -340,13 +353,14 @@ def build_site(rows, sa_index, now):
                 # closed with no lift: token footprint, as for any no-signal case
                 end = start + timedelta(seconds=1)
         elif not has_real_end:
-            if r["status"] == "Open" and start < now:
+            if r["status"] == "Open" and start < now and not ended_by_publication(r):
                 # ongoing with no inferred end: runs from start until now, capped
                 end = min(now, start + cap)
             else:
-                # closed with no usable end signal: a token 1s footprint so
-                # its start day still colours and it counts as an event,
-                # while adding ~nothing to downtime
+                # closed with no usable end signal, or already over per the
+                # notice's own text: a token 1s footprint so its start day
+                # still colours and it counts as an event, while adding
+                # ~nothing to downtime
                 end = start + timedelta(seconds=1)
         else:
             end = start + min(timedelta(seconds=notice_to_end), cap)
@@ -475,7 +489,7 @@ def load_cases(conn):
                c.full_lat, c.full_lon,
                c.boil_water_notice, c.do_not_drink, c.water_restrictions,
                c.reduced_pressure,
-               i.notice_to_end_seconds, i.end_source
+               i.notice_to_end_seconds, i.end_source, i.end_local_date
         FROM cases c
         LEFT JOIN inferred_cases i ON i.case_id = c.id
         WHERE c.county IS NOT NULL AND c.start_date IS NOT NULL

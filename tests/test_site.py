@@ -40,6 +40,7 @@ def _case(**overrides):
         "reduced_pressure": 0,
         "notice_to_end_seconds": 86400.0,
         "end_source": "completion_update",
+        "end_local_date": "2026-05-02",
     }
     base.update(overrides)
     return base
@@ -222,12 +223,33 @@ class TestBuildSite:
         assert month["events"]["outage"] == 1
 
     def test_closed_case_without_end_signal_still_marks_its_day(self):
-        rows = [_case(notice_to_end_seconds=None, status="Closed")]
+        rows = [_case(notice_to_end_seconds=None, status="Closed",
+                      end_source="not_found", end_local_date=None)]
         month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["outage"] == 1
         assert month["person_h"] == 0
         assert month["days"][0][0] == "outage"  # May 1st is not a false green
         assert month["median_completion_h"] is None  # unknown ends can't drag the median
+
+    def test_open_case_whose_text_says_it_ended_does_not_accrue_to_now(self):
+        # the negative-span family: build.py nulls the span when the reported
+        # end precedes publication, but the works are over — a stale 'Open'
+        # must not turn that into 9 days of fabricated downtime
+        rows = [_case(status="Open", notice_to_end_seconds=None,
+                      end_source="completion_update", end_local_date="2026-05-01")]
+        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["events"]["outage"] == 1
+        assert month["person_h"] == 0
+        assert month["days"][0][0] == "outage"  # its day still colours
+        assert month["median_completion_h"] is None  # no usable span either way
+
+    def test_open_case_with_no_signal_at_all_still_accrues(self):
+        # end_source None = downloaded since the last uisce-infer run
+        for source in ("not_found", None):
+            rows = [_case(status="Open", notice_to_end_seconds=None,
+                          end_source=source, end_local_date=None)]
+            month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+            assert month["person_h"] == 9 * 24 * 1000  # May 1 -> NOW, uncapped
 
     def test_open_boil_notice_closed_by_paired_lift_and_knocks_grade(self):
         issue = _case(

@@ -1,6 +1,6 @@
 # uisce
 
-Download, transform, and geocode [Uisce Éireann](https://www.water.ie/) (Irish Water) supply and works notices, and infer each notice's end time from its text with a local LLM. The result is a single SQLite database, rebuilt weekly by CI and published as a GitHub release, plus a statuspage-style static site with per-county supply availability and A–F grades.
+Download, transform, and geocode [Uisce Éireann](https://www.water.ie/) (Irish Water) supply and works notices, and infer each notice's end time from its text with a local LLM. The result is a single SQLite database, rebuilt by CI three times a week and published as a GitHub release, plus a statuspage-style static site with per-county supply availability and A–F grades.
 
 **What the time figures mean.** This project does not measure outage duration and cannot: the feed never records when supply was actually lost. What it measures is the span from **when a notice was published** to **the end that notice reports** (`notice_to_end_seconds`), and the site publishes the subset where that end is an observed "works are now complete" update rather than a schedule. Every figure is a floor on true length. See [notes/data-quality.md](notes/data-quality.md) and [notes/statuspage-methodology.md](notes/statuspage-methodology.md).
 
@@ -90,7 +90,7 @@ uv run pytest
 uv run ruff check
 ```
 
-CI lints and tests on every push. The `Build DB` workflow runs the pipeline weekly and publishes the refreshed DB as a release.
+CI lints and tests on every push. The `Build DB` workflow runs the pipeline three times a week (Mon/Wed/Fri) and publishes the refreshed DB as a release.
 
 ## Interesting APIs
 
