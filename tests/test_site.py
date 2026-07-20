@@ -38,7 +38,8 @@ def _case(**overrides):
         "do_not_drink": 0,
         "water_restrictions": 0,
         "reduced_pressure": 0,
-        "end_duration_seconds": 86400.0,
+        "notice_to_end_seconds": 86400.0,
+        "end_source": "completion_update",
     }
     base.update(overrides)
     return base
@@ -77,7 +78,7 @@ class TestBoilNoticeFate:
         defaults = {
             "work_category": "boil_notice_issued",
             "boil_water_notice": 1,
-            "end_duration_seconds": None,
+            "notice_to_end_seconds": None,
             "status": "Open",
         }
         return _case(**(defaults | overrides))
@@ -188,9 +189,32 @@ class TestBuildSite:
         assert month["events"]["outage"] == 1
         assert month["person_h"] == 24 * 1000
         assert month["availability"] < 100.0
-        assert month["median_fix_h"] == 24.0
-        assert month["fixed_n"] == 1
-        assert site["national"]["2026-05"]["median_fix_h"] == 24.0
+        assert month["median_completion_h"] == 24.0
+        assert month["completed_n"] == 1
+        assert site["national"]["2026-05"]["median_completion_h"] == 24.0
+
+    def test_scheduled_end_accrues_downtime_but_stays_out_of_the_headline(self):
+        # a scheduled finish is a published plan, not evidence the works ended
+        # then, so it must not be pooled into the completion median
+        rows = [_case(end_source="scheduled_end_with_time")]
+        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["person_h"] == 24 * 1000  # still accrues
+        assert month["median_completion_h"] is None
+        assert month["completed_n"] == 0
+        assert month["median_scheduled_h"] == 24.0
+        assert month["scheduled_n"] == 1
+
+    def test_headline_median_ignores_scheduled_ends(self):
+        # pooling would give median 13h; the observed-only headline is 2h
+        rows = [
+            _case(id=1, reference_num="CAR1", notice_to_end_seconds=2 * 3600),
+            _case(id=2, reference_num="CAR2", full_lat=52.900,
+                  end_source="scheduled_end_with_time", notice_to_end_seconds=24 * 3600),
+        ]
+        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["median_completion_h"] == 2.0
+        assert month["completed_n"] == 1
+        assert month["scheduled_n"] == 1
 
     def test_multi_pin_event_counts_once(self):
         rows = [_case(id=1), _case(id=2, full_lat=52.837)]
@@ -198,19 +222,19 @@ class TestBuildSite:
         assert month["events"]["outage"] == 1
 
     def test_closed_case_without_end_signal_still_marks_its_day(self):
-        rows = [_case(end_duration_seconds=None, status="Closed")]
+        rows = [_case(notice_to_end_seconds=None, status="Closed")]
         month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["outage"] == 1
         assert month["person_h"] == 0
         assert month["days"][0][0] == "outage"  # May 1st is not a false green
-        assert month["median_fix_h"] is None  # unknown ends can't drag the median
+        assert month["median_completion_h"] is None  # unknown ends can't drag the median
 
     def test_open_boil_notice_closed_by_paired_lift_and_knocks_grade(self):
         issue = _case(
             work_category="boil_notice_issued",
             boil_water_notice=1,
             status="Open",
-            end_duration_seconds=None,
+            notice_to_end_seconds=None,
             location="Ardfinnan Public Water Supply",
             reference_num="TIP1",
         )
@@ -218,7 +242,7 @@ class TestBuildSite:
             id=99,
             work_category="boil_notice_lifted",
             status="Closed",
-            end_duration_seconds=None,
+            notice_to_end_seconds=None,
             location="Ardfinnan Regional Water Supply Scheme",
             reference_num="TIP2",
             start_date="2026-05-03T00:00:00+00:00",
@@ -238,6 +262,6 @@ class TestBuildSite:
 
     def test_future_scheduled_end_does_not_accrue_beyond_now(self):
         rows = [_case(start_date="2026-05-09T00:00:00+00:00",
-                      end_duration_seconds=10 * 86400.0, status="Open")]
+                      notice_to_end_seconds=10 * 86400.0, status="Open")]
         month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["person_h"] == 24 * 1000  # May 9 -> NOW (May 10) only

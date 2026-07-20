@@ -447,15 +447,25 @@ class TestWorkTypeBackfill:
         assert rows == {1: "burst_main", 2: "leak_detection", 3: "mains_flushing", 4: None}
 
 
-def test_backfill_runs_standalone_on_existing_db(tmp_path):
-    # a DB predating work_category, as if only the download/map ran
-    db_path = tmp_path / "test.db"
+def _v1_cases_db(db_path):
+    """A DB carrying the full declared v1 `cases` schema, as create_db writes it."""
+    cols = ", ".join(
+        f"{c} TEXT" if c != "id" else "id INTEGER PRIMARY KEY"
+        for c in pipeline.DB_CASE_COLUMNS
+    )
     with sqlite3.connect(db_path) as conn:
         conn.execute(
-            "CREATE TABLE cases (id INTEGER PRIMARY KEY, work_type TEXT, status TEXT, title TEXT)"
+            f"CREATE TABLE cases ({cols}, work_category TEXT, first_seen TEXT, last_seen TEXT)"
         )
+        conn.execute(f"PRAGMA user_version = {pipeline.SCHEMA_VERSION}")
+
+
+def test_backfill_runs_standalone_on_existing_db(tmp_path):
+    db_path = tmp_path / "test.db"
+    _v1_cases_db(db_path)
+    with sqlite3.connect(db_path) as conn:
         conn.executemany(
-            "INSERT INTO cases VALUES (?, ?, ?, ?)",
+            "INSERT INTO cases (id, work_type, status, title) VALUES (?, ?, ?, ?)",
             [
                 (1, "Planned", "Open", "  Burst Water Main – Cork  "),  # override + trim
                 (2, "", "Open", "Mains Flushing – Kerry"),  # override a blank
@@ -474,6 +484,45 @@ def test_backfill_runs_standalone_on_existing_db(tmp_path):
         (2, "Mains Flushing – Kerry", "Planned", "mains_flushing"),
         (3, "Something Novel – Kerry", None, None),
     ]
+
+
+class TestSchemaVersion:
+    """The schema is declared once and never migrated; check_schema_version is
+    the whole compatibility story, so its three outcomes are pinned here."""
+
+    def test_stamped_current_version_passes(self, tmp_path):
+        db_path = tmp_path / "v1.db"
+        _v1_cases_db(db_path)
+        with sqlite3.connect(db_path) as conn:
+            pipeline.check_schema_version(conn, db_path)  # no raise
+
+    def test_unstamped_but_structurally_current_db_is_stamped_in_place(self, tmp_path):
+        # DBs built before versioning began read as v0 but already carry every
+        # declared column; they are adopted rather than rejected.
+        db_path = tmp_path / "v0.db"
+        _v1_cases_db(db_path)
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("PRAGMA user_version = 0")
+        with sqlite3.connect(db_path) as conn:
+            pipeline.check_schema_version(conn, db_path)
+            assert conn.execute("PRAGMA user_version").fetchone()[0] == pipeline.SCHEMA_VERSION
+
+    def test_genuinely_older_db_is_rejected_not_migrated(self, tmp_path):
+        db_path = tmp_path / "old.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("CREATE TABLE cases (id INTEGER PRIMARY KEY, title TEXT)")
+        with sqlite3.connect(db_path) as conn:
+            with pytest.raises(RuntimeError, match="does not migrate"):
+                pipeline.check_schema_version(conn, db_path)
+
+    def test_newer_db_is_rejected(self, tmp_path):
+        db_path = tmp_path / "future.db"
+        _v1_cases_db(db_path)
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(f"PRAGMA user_version = {pipeline.SCHEMA_VERSION + 1}")
+        with sqlite3.connect(db_path) as conn:
+            with pytest.raises(RuntimeError, match="Update the package"):
+                pipeline.check_schema_version(conn, db_path)
 
 
 def test_trim_titles():
@@ -523,8 +572,7 @@ class TestLoadCasesSeenStamps:
         conn = sqlite3.connect(":memory:")
         cols = ", ".join(f"{c} TEXT" if c != "id" else "id INTEGER PRIMARY KEY"
                          for c in pipeline.DB_CASE_COLUMNS)
-        conn.execute(f"CREATE TABLE cases ({cols})")
-        pipeline._ensure_seen_columns(conn)
+        conn.execute(f"CREATE TABLE cases ({cols}, first_seen TEXT, last_seen TEXT)")
         return conn
 
     def _record(self, **overrides):

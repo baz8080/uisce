@@ -33,6 +33,11 @@ COORD_PRECISION = 4  # ~10 meter
 
 USABLE_CASE_THRESHOLD_FIELDS = ["TITLE", "DESCRIPTION"]
 
+# Stamped into PRAGMA user_version. The `cases` schema is declared once, in
+# create_db; bump this only when that declaration changes, and see
+# check_schema_version for why there is deliberately no migration ladder.
+SCHEMA_VERSION = 1
+
 DB_CASE_COLUMNS = [
     "id",
     "work_type",
@@ -59,6 +64,11 @@ DB_CASE_COLUMNS = [
     "rounded_lat",
     "rounded_lon",
 ]
+
+# Columns not in DB_CASE_COLUMNS (they are derived or stamped, not fed) but
+# still required by the declared schema, so an unstamped older DB can be
+# recognised as structurally v1.
+REQUIRED_CASE_COLUMNS = set(DB_CASE_COLUMNS) | {"work_category", "first_seen", "last_seen"}
 
 FIELD_MAP = {
     "OBJECTID": "id",
@@ -356,6 +366,9 @@ def create_db(cases):
                 discolouration INTEGER,
                 reduced_pressure INTEGER,
                 water_restrictions INTEGER,
+                work_category TEXT,
+                first_seen TEXT,
+                last_seen TEXT,
                 full_lat REAL NOT NULL,
                 full_lon REAL NOT NULL,
                 rounded_lat REAL NOT NULL,
@@ -365,32 +378,39 @@ def create_db(cases):
             )
         """)
 
-        _ensure_work_category_column(conn)
-        _ensure_seen_columns(conn)
-
+        check_schema_version(conn)
         load_cases(conn, cases)
 
 
-def _ensure_work_category_column(conn):
-    """The published DB is downloaded and updated in place each build, so a
-    CREATE TABLE IF NOT EXISTS won't add work_category to an existing table.
-    Add it here; idempotent for both fresh and pre-existing DBs."""
-    columns = {row[1] for row in conn.execute("PRAGMA table_info(cases)")}
-    if "work_category" not in columns:
-        conn.execute("ALTER TABLE cases ADD COLUMN work_category TEXT")
+def check_schema_version(conn, db_path=DB_PATH):
+    """The full `cases` schema is declared in CREATE TABLE above; there is no
+    migration ladder. The published DB is downloaded and updated in place each
+    build, so this guards against writing into a DB that predates the declared
+    schema — which would fail confusingly on the missing columns instead.
 
+    DBs built before versioning began carry user_version 0 but are structurally
+    identical to SCHEMA_VERSION 1 (work_category / first_seen / last_seen were
+    added by the ALTER TABLE helpers this replaced). Those are stamped in place
+    rather than rejected. Anything genuinely older is a rebuild, not a migration:
+    the DB is an accumulating archive, so keep a copy before rebuilding."""
+    version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if version == SCHEMA_VERSION:
+        return
+    if version > SCHEMA_VERSION:
+        raise RuntimeError(
+            f"{db_path} is schema v{version}, newer than this code's "
+            f"v{SCHEMA_VERSION}. Update the package."
+        )
 
-def _ensure_seen_columns(conn):
-    """first_seen/last_seen record when each case was present in a feed
-    download. The feed has not deleted anything since collection began
-    (verified 2026-07: every pre-May case is still queryable), so today these
-    stamps are a tripwire: a case whose last_seen stops advancing means the
-    operator has started pruning, and downstream consumers must react. NULL
-    first_seen means "already present before stamping began"."""
     columns = {row[1] for row in conn.execute("PRAGMA table_info(cases)")}
-    for column in ("first_seen", "last_seen"):
-        if column not in columns:
-            conn.execute(f"ALTER TABLE cases ADD COLUMN {column} TEXT")
+    missing = REQUIRED_CASE_COLUMNS - columns
+    if missing:
+        raise RuntimeError(
+            f"{db_path} is schema v{version} and is missing {sorted(missing)}. "
+            f"This code declares v{SCHEMA_VERSION} and does not migrate. Move the "
+            "old DB aside and rebuild from the feed with `uv run uisce-pipeline`."
+        )
+    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
 def load_cases(conn, cases, now=None):
@@ -683,7 +703,7 @@ def backfill(db_path=DB_PATH):
     it's safe to re-run on its own after editing the category rules to
     re-derive against data that's already been downloaded."""
     with sqlite3.connect(db_path) as conn:
-        _ensure_work_category_column(conn)
+        check_schema_version(conn, db_path)
         normalise_legacy_empty_strings(conn)
         trim_titles(conn)
         categorised = backfill_work_category(conn)

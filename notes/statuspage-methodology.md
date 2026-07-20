@@ -21,7 +21,7 @@ Each case maps to one class from `work_category` plus the impact flags, tested i
 
 Only the **outage** class accrues availability downtime. This is deliberate: an F grade should mean people lost water, not that a county ran many investigations. Before this split, `investigation` alone contributed ~8% of accrued hours (4,090 h in May+June 2026 against 27,128 h from burst mains). The `water_outage` feed flag cannot do this job — it is set on 97% of all cases.
 
-Duration inputs come from `inferred_cases.end_duration_seconds`, capped at 14 days. The genuinely long events (40–87-day conservation restrictions) are classed degraded and never accrue, so the cap is a backstop, not the outlier strategy — see the outliers section of [data-quality.md](data-quality.md).
+Interval inputs come from `inferred_cases.notice_to_end_seconds`, capped at 14 days. The genuinely long events (40–87-day conservation restrictions) are classed degraded and never accrue, so the cap is a backstop, not the outlier strategy — see the outliers section of [data-quality.md](data-quality.md).
 
 ## Events, intervals, and edge cases
 
@@ -43,14 +43,34 @@ Rebuilding May and June 2026 at 300 m / 500 m / 1 km affect-radii: county **rank
 
 ## Known limitations
 - Overlapping events in the same area double-count person-hours.
+- The scheduled-end events that accrue disruption time are accruing an *announced* interval, not an observed one. They are kept out of the headline median but not out of the availability percentage, so availability carries an assumption the median does not.
 - `start_date` is the notice publication time, so durations are a floor on true outage length (overnight events are typically posted the next working morning — see [data-quality.md](data-quality.md)).
 - "May be affected" notices count everyone in the radius; the index measures disruption exposure, not confirmed loss of supply.
 - County populations are hardcoded Census 2022 figures in site.py.
-- The current month grades harshly while in progress: open cases accrue to "now" against a part-elapsed denominator, and some feed `status` values are known to be stale.
+- The current month grades harshly while in progress, for three separate reasons: open cases accrue to "now" against a part-elapsed denominator; some feed `status` values are known to be stale; and cases downloaded since the last `uisce-infer` run have no end signal at all, which sends them down the same accrue-to-now branch — 98% of the never-inferred backlog is `status = 'Open'`, so this is concentrated exactly where it does most damage. See [pipeline-dependencies.md](pipeline-dependencies.md).
+- "Open cases" on the page is a right-now snapshot of `status = 'Open'`, attached to the county rather than the selected month, so it does not vary as you page through months (the copy says so). Of 508 open cases on the 2026-07-20 snapshot: 127 are future-dated advance notices of planned works, 20 carry a description that already says "works are now complete" (genuinely stale feed status), 72 more have a passed scheduled end, and 13 are long-lived boil / do-not-consume notices that are correctly still open.
 
-## What the site copy says, deliberately
+## The published time metric is notice → *observed* completion (settled 2026-07-20)
 
-The page presents itself as a tracker of **announced disruptions and time-to-fix**, not of "availability": the headline percentage is labelled "person-time free of announced disruption", and each month shows a median time-to-fix over resolved events (events with a real end signal only, so open cases and unknown ends can't drag the median). This is the claim the data can actually support — see the eval in [end-time-eval.md](end-time-eval.md) for how the LLM-extracted end times behind it are validated.
+The metric is the span from **notice publication** (`cases.start_date`) to the end the notice reports. It is not outage duration, and the naming across code, schema and site copy now says so: the DB column is `notice_to_end_seconds`, the site fields are `median_completion_h` / `completed_n`, and the page reads "median notice → completion".
+
+Two separate honesty problems were fixed together here.
+
+**1. The start is a publication timestamp, not an onset.** Long documented in [data-quality.md](data-quality.md), and resolved there: no better start basis exists in the feed, so the fix is naming rather than modelling. Every figure on the page is a **floor** on true length.
+
+**2. The end was pooling observations with plans.** `end_source` distinguishes an observed completion (`completion_update` — "works are now complete at 10:39am") from a stated schedule (`scheduled_end_*` — a plan that may not have been met). The site was pooling both under "median time to fix ... resolved", which claims observation for all of it. Measured on the 2026-07-20 corpus, restricted to the `outage` severity class that actually feeds the metric:
+
+| end signal | n | median |
+|---|---|---|
+| `completion_update` (observed) | 3,166 | **17.0h** |
+| `scheduled_end_with_time` (a plan) | 894 | **5.4h** |
+| pooled — as previously published | 4,060 | 9.3h |
+
+Scheduled ends were 22% of the metric and dragged the headline from 17.0h to 9.3h — a far larger distortion than the ±2–3h start-side noise that motivated the pv3 discussion. The gap is not purely bias (scheduled ends skew to short planned windows, observed completions to unplanned bursts) but that is exactly why pooling them is wrong: they are different populations answering different questions.
+
+**Resolution:** scheduled ends still **accrue** disruption time and person-hours — a published plan is the best interval available and dropping it would under-count exposure — but they are excluded from the published median and reported separately as "+N scheduled-only". `OBSERVED_END_SOURCES` in `site.py` is the single switch. At event level the split holds every month (observed 7.1/12.6/15.8/10.2h against scheduled 4.8/5.3/4.4/4.3h for Apr–Jul 2026).
+
+See the eval in [end-time-eval.md](end-time-eval.md) for how the LLM-extracted end times behind this are validated.
 
 ## Possible next steps
 

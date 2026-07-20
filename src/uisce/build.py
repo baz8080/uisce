@@ -6,7 +6,12 @@ from zoneinfo import ZoneInfo
 from uisce.config import DB_PATH, JSONL_PATH
 
 DUBLIN = ZoneInfo("Europe/Dublin")
-NO_DURATION_SOURCES = {"not_found", "lifted_immediate"}
+NO_END_SIGNAL_SOURCES = {"not_found", "lifted_immediate"}
+
+# end_source values whose end is *observed* (works reported done) rather than
+# *scheduled* (a plan that may or may not have been met). Only these support a
+# claim about how long something actually took; see notes/statuspage-methodology.md.
+OBSERVED_END_SOURCES = {"completion_update"}
 
 
 def create_table(conn):
@@ -23,13 +28,18 @@ def create_table(conn):
             end_local_date TEXT,
             end_local_time TEXT,
             end_inferred_at TEXT NOT NULL,
-            end_duration_seconds REAL
+            notice_to_end_seconds REAL
         )
     """)
 
 
-def compute_duration_seconds(start_date, end_source, local_date, local_time):
-    if end_source in NO_DURATION_SOURCES or not local_date or not start_date:
+def compute_notice_to_end_seconds(start_date, end_source, local_date, local_time):
+    """Seconds from notice publication (cases.start_date) to the end the notice
+    reports. This is NOT outage duration: the start is when Uisce Éireann
+    published the notice, not when supply was lost, and for the scheduled_*
+    sources the end is a stated plan rather than an observed completion.
+    See notes/data-quality.md."""
+    if end_source in NO_END_SIGNAL_SOURCES or not local_date or not start_date:
         return None
 
     year, month, day = (int(p) for p in local_date.split("-"))
@@ -43,8 +53,8 @@ def compute_duration_seconds(start_date, end_source, local_date, local_time):
     end_utc = end_local.astimezone(timezone.utc)
     start_utc = datetime.fromisoformat(start_date)
 
-    duration = (end_utc - start_utc).total_seconds()
-    return duration if duration >= 0 else None
+    elapsed = (end_utc - start_utc).total_seconds()
+    return elapsed if elapsed >= 0 else None
 
 
 def latest_per_case(records):
@@ -96,7 +106,7 @@ def run():
             r["local_date"],
             r["local_time"],
             r["inferred_at"],
-            compute_duration_seconds(
+            compute_notice_to_end_seconds(
                 first_start_dates[r["case_id"]], r["end_source"], r["local_date"], r["local_time"]
             ),
         )
@@ -112,7 +122,7 @@ def run():
             INSERT OR REPLACE INTO inferred_cases (
                 case_id, end_description_hash, end_input_start_date, end_model,
                 end_prompt_version, end_notes, end_source, end_local_date,
-                end_local_time, end_inferred_at, end_duration_seconds
+                end_local_time, end_inferred_at, notice_to_end_seconds
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             rows,
