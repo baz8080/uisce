@@ -335,10 +335,10 @@ def _create_geocode_cache_table(conn):
     """)
 
 
-def create_db(cases):
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+def create_db(cases, db_path=DB_PATH):
+    db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(db_path) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
 
         _create_geocode_cache_table(conn)
@@ -347,7 +347,6 @@ def create_db(cases):
             CREATE TABLE IF NOT EXISTS cases (
                 id INTEGER PRIMARY KEY,
                 work_type TEXT,
-                work_category TEXT,
                 title TEXT,
                 start_date TEXT,
                 end_date TEXT,
@@ -378,7 +377,7 @@ def create_db(cases):
             )
         """)
 
-        check_schema_version(conn)
+        check_schema_version(conn, db_path)
         load_cases(conn, cases)
 
 

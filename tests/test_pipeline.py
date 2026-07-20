@@ -486,6 +486,32 @@ def test_backfill_runs_standalone_on_existing_db(tmp_path):
     ]
 
 
+def test_create_db_builds_a_fresh_db_from_scratch(tmp_path):
+    """The declared CREATE TABLE must actually execute. CI and most local runs
+    start from a downloaded release DB, so IF NOT EXISTS normally no-ops and a
+    defect in the declaration itself goes unnoticed — a duplicate column name
+    once shipped that way, breaking only the from-scratch path in the README."""
+    db_path = tmp_path / "fresh.db"
+    case = {col: None for col in pipeline.DB_CASE_COLUMNS} | {
+        "id": 1,
+        "title": "Burst Water Main – Cork",
+        "full_lat": 51.9,
+        "full_lon": -8.5,
+        "rounded_lat": 51.9,
+        "rounded_lon": -8.5,
+    }
+
+    # mirrors run(skip_geocode=True): geocode rows first (the cases FK), then the DB
+    skip_geocoding([case], db_path=db_path)
+    pipeline.create_db([case], db_path=db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(cases)")]
+        assert sorted(cols) == sorted(pipeline.REQUIRED_CASE_COLUMNS)
+        assert conn.execute("SELECT COUNT(*) FROM cases").fetchone()[0] == 1
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == pipeline.SCHEMA_VERSION
+
+
 class TestSchemaVersion:
     """The schema is declared once and never migrated; check_schema_version is
     the whole compatibility story, so its three outcomes are pinned here."""
