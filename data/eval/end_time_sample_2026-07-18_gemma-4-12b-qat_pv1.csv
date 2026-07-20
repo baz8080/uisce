@@ -96,7 +96,7 @@ We recommend that you allow 3-4 hours after the estimated restoration time for y
 Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DON00114370. <br><br>LA01
 
 LA01"
-237632,Cork,Burst Water Main - Cork  – Cork,2026-07-03T09:59:00.020000+00:00,gemma-4-12b-qat,1,completion_update,2026-07-06,,correct,,,,,"<b>**Update 9:57am 6/07/2026**<br><br>
+237632,Cork,Burst Water Main - Cork  – Cork,2026-07-03T09:59:00.020000+00:00,gemma-4-12b-qat,1,completion_update,2026-07-06,,incorrect,completion_update,2026-07-06,09:57,"model_local_time was not populated but the text reads 'Update 9:57am 6/07/2026'. [amended 2026-07-19: originally endorsed as correct; the blank time is contradicted by the description, so reclassified incorrect with the time the text supports]","<b>**Update 9:57am 6/07/2026**<br><br>
  
 Works are now complete and supply should have returned to all the affected areas.</b><br><br>
 
@@ -261,8 +261,8 @@ Works are scheduled to take place from 1:15pm until 6pm on 05 May. <br><br>
 We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
 
 Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KER00111343. <br><br>"
-233443,Cork,Burst Water Main - Cork,2026-05-16T14:28:57+00:00,gemma-4-12b-qat,1,completion_update,2026-05-18,20:00,incorrect,,,,"Incorrect end_local_time. The model picked the scheduled end time 20:00 rather than the update time 09:28
-The other model fields are correct ","<b>**Update 9:28am 18/05/2026**<br><br>
+233443,Cork,Burst Water Main - Cork,2026-05-16T14:28:57+00:00,gemma-4-12b-qat,1,completion_update,2026-05-18,20:00,incorrect,completion_update,2026-05-18,09:28,"Incorrect end_local_time. The model picked the scheduled end time 20:00 rather than the update time 09:28
+The other model fields are correct  [amended 2026-07-19: correction transcribed into the label columns; labeller's judgement unchanged]","<b>**Update 9:28am 18/05/2026**<br><br>
 
 Works are now complete and supply should have returned to all the affected areas.</b><br><br>Repairs to a burst water main may cause supply disruptions to Beachwood Drive, Boreenmanna Road and surrounding areas in Cork City. <br><br>
 
@@ -399,9 +399,9 @@ LA01"
 Works are scheduled to take place from 9am until 5pm on 22 June. <br><br>
 We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
 Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WIC00114289. <br><br>LA01"
-238481,Kerry,Water Conservation Restrictions – Kerry,2026-07-11T13:47:07+00:00,gemma-4-12b-qat,1,scheduled_end_with_time,2026-07-12,07:00,incorrect,completion_update,09:37,2026-07-13,"Incorrect model_end_source model_local_time, and model_local_date. The model chose scheduled_end_with_time, but the description has a clear completion text, which ought to have overruled the scheduled text.
+238481,Kerry,Water Conservation Restrictions – Kerry,2026-07-11T13:47:07+00:00,gemma-4-12b-qat,1,scheduled_end_with_time,2026-07-12,07:00,incorrect,completion_update,2026-07-13,09:37,"Incorrect model_end_source model_local_time, and model_local_date. The model chose scheduled_end_with_time, but the description has a clear completion text, which ought to have overruled the scheduled text.
 The model should have selected completion_update. If “Works are now complete…” is higher up in the description than “Works are scheduled” then the completion should supersede scheduled. 
-","<b>**Update 09:37am 13/07/2026**<br><br>
+ [amended 2026-07-19: human_local_date/human_local_time were swapped in the original file; unswapped, judgement unchanged]","<b>**Update 09:37am 13/07/2026**<br><br>
  
 Works are now complete and supply should have returned to all the affected areas.</b><br><br>Water conservation restrictions may cause supply disruptions to Faha, Listry, Ballymount, Aisling and surrounding areas in Co. Kerry. <br><br>
 Works are scheduled to take place from 11pm on 11 July until 7am on 12 July. <br><br>
@@ -536,11 +536,11 @@ A traffic management plan will be in place for the duration of these works.<br><
 We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
 
 Please take note of the following reference number and enter it into the search bar should you wish to return for an update: COR00111501. <br><br>"
-232613,Kilkenny,Water Conservation - Kilkenny,2026-05-05T14:03:46+00:00,gemma-4-12b-qat,1,scheduled_end_date_only,2026-07-31,,incorrect,scheduled_end_with_time,2026-07-31,21:00,"The description text is tricky: “Works are now scheduled to take place daily from 9pm unil 9am, from 5 May until 31 July.”. 
+232613,Kilkenny,Water Conservation - Kilkenny,2026-05-05T14:03:46+00:00,gemma-4-12b-qat,1,scheduled_end_date_only,2026-07-31,,incorrect,scheduled_end_with_time,2026-07-31,09:00,"The description text is tricky: “Works are now scheduled to take place daily from 9pm unil 9am, from 5 May until 31 July.”. 
 
 There’s a typo “unil” which should be until, and then a repeating pattern of time scheduled daily. The correct response is to recognise the end of this sequence and use the date and time there. 
 
-The model picked the end date correctly, but missed the time, and also chose the wrong end source. ","Water conservation restrictions may cause supply disruptions to Clogh, Moneenroe, Ardra, Massford, Coolbaun, Castlecomer and surrounding areas in Co. Kilkenny.<br><br>
+The model picked the end date correctly, but missed the time, and also chose the wrong end source.  [amended 2026-07-19 by the labeller: the corrected time was wrong. The window closes at 9am, so the end is 09:00 on the last date of the range, not the 21:00 window start originally entered]","Water conservation restrictions may cause supply disruptions to Clogh, Moneenroe, Ardra, Massford, Coolbaun, Castlecomer and surrounding areas in Co. Kilkenny.<br><br>
 
 <b>Works are now scheduled to take place daily from 9pm unil 9am, from 5 May until 31 July.</b><br><br>
 

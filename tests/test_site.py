@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from uisce.site import (
     SmallAreaIndex,
+    boil_notice_fate,
     build_site,
     classify,
     grade,
@@ -67,6 +68,59 @@ class TestClassify:
 
     def test_restriction_flags_are_degraded(self):
         assert classify(_case(work_category=None, work_type=None, reduced_pressure=1)) == "degraded"
+
+
+class TestBoilNoticeFate:
+    """The whole boil-notice policy. See notes/boil-notices.md."""
+
+    def _notice(self, **overrides):
+        defaults = {
+            "work_category": "boil_notice_issued",
+            "boil_water_notice": 1,
+            "end_duration_seconds": None,
+            "status": "Open",
+        }
+        return _case(**(defaults | overrides))
+
+    def test_paired_lift_gives_the_real_end(self):
+        lifts = {"Carlow": [("somewhere", _dt("2026-05-04T09:00:00+00:00"))]}
+        outcome, end = boil_notice_fate(self._notice(), lifts, NOW)
+        assert outcome == "paired"
+        assert end == _dt("2026-05-04T09:00:00+00:00")
+
+    def test_recent_unpaired_notice_still_accrues(self):
+        """9 days old at NOW: 'Open' is plausible, so it runs to now."""
+        outcome, end = boil_notice_fate(self._notice(), {}, NOW)
+        assert outcome == "accrue"
+        assert end == NOW
+
+    def test_stale_open_notice_is_excluded_not_accrued(self):
+        """Older than CAP_DAYS with no lift: the feed's 'Open' is not credible.
+
+        Case 221165 sat 'Open' from 2025-11-13 while its own description said it
+        had been lifted; accruing these fabricated ~37 days of quality downtime.
+        """
+        old = self._notice(start_date="2026-01-01T00:00:00+00:00")
+        assert boil_notice_fate(old, {}, NOW) == ("exclude", None)
+
+    def test_stale_notice_with_a_lift_is_still_paired(self):
+        """Exclusion must not beat a real end signal."""
+        old = self._notice(start_date="2026-01-01T00:00:00+00:00")
+        lifts = {"Carlow": [("somewhere", _dt("2026-01-05T00:00:00+00:00"))]}
+        outcome, end = boil_notice_fate(old, lifts, NOW)
+        assert outcome == "paired"
+        assert end == _dt("2026-01-05T00:00:00+00:00")
+
+    def test_closed_notice_without_a_lift_gets_no_end(self):
+        closed = self._notice(status="Closed")
+        assert boil_notice_fate(closed, {}, NOW) == ("closed_no_signal", None)
+
+    def test_lift_before_the_pin_start_clamps_to_start(self):
+        """Multi-pin lifts publish untidily; a negative duration must not result."""
+        lifts = {"Carlow": [("somewhere", _dt("2026-04-30T00:00:00+00:00"))]}
+        outcome, end = boil_notice_fate(self._notice(), lifts, NOW)
+        assert outcome == "paired"
+        assert end == _dt("2026-05-01T00:00:00+00:00")
 
 
 class TestGrade:
