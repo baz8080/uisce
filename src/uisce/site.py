@@ -5,8 +5,11 @@ Per county and calendar month the generator computes:
 - a daily worst-condition status for the statuspage-style day bars, with
   intensity = share of county population affected that day
 - events, deduplicated by reference_num with pin intervals unioned
-- population-weighted supply availability: 100% minus person-outage-seconds
+- population-weighted supply availability: 100% minus person-disruption-seconds
   over county person-seconds, measured across the observed window only
+- a median notice-to-completion time over events whose end was *observed*
+  (an "works are now complete" update), excluding those whose only end signal
+  was a schedule — see the notice_to_end_seconds docstring in build.py
 - an A-F grade from availability, knocked one step by any active
   boil-water / do-not-drink / do-not-consume notice
 
@@ -32,9 +35,15 @@ SITE_HTML = Path(__file__).parent / "site.html"
 # (the ArcGIS source only retains recent notices).
 COLLECTION_START = datetime(2026, 4, 20, tzinfo=timezone.utc)
 
-# Outage durations above this are capped; the genuinely long events
+# Notice-to-end spans above this are capped; the genuinely long events
 # (conservation restrictions) are classed degraded and never accrue anyway.
 CAP_DAYS = 14
+
+# An end signal only supports a claim about how long works actually took when
+# it is an observed completion. Scheduled ends still accrue disruption time
+# (a stated plan is the best interval available) but are kept out of the
+# published median, which would otherwise mix a plan with an observation.
+OBSERVED_END_SOURCES = {"completion_update"}
 
 # A pin is assumed to affect the Small Areas whose centroids lie within
 # AFFECT_RADIUS_KM; if none, the nearest Small Area within FALLBACK_KM.
@@ -264,6 +273,18 @@ class SmallAreaIndex:
         return self._cache[key]
 
 
+def span_stats(observed_h, scheduled_h):
+    """Published notice-to-end figures. `median_completion_h` is the headline and
+    covers observed completions only; the scheduled figures are reported
+    alongside so the split is visible rather than silently pooled."""
+    return {
+        "median_completion_h": round(statistics.median(observed_h), 1) if observed_h else None,
+        "completed_n": len(observed_h),
+        "median_scheduled_h": round(statistics.median(scheduled_h), 1) if scheduled_h else None,
+        "scheduled_n": len(scheduled_h),
+    }
+
+
 def build_site(rows, sa_index, now):
     months = month_list(COLLECTION_START, now)
     cap = timedelta(days=CAP_DAYS)
@@ -277,6 +298,7 @@ def build_site(rows, sa_index, now):
     event_iv = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     event_sas = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
     event_has_end = defaultdict(lambda: defaultdict(lambda: defaultdict(bool)))
+    event_observed_end = defaultdict(lambda: defaultdict(lambda: defaultdict(bool)))
     knock_refs = defaultdict(set)
     open_now = defaultdict(dict)  # county -> ref -> case (dedups multi-pin events)
 
@@ -300,8 +322,10 @@ def build_site(rows, sa_index, now):
                 },
             )
 
-        duration = r["end_duration_seconds"]
-        has_real_end = duration is not None
+        notice_to_end = r["notice_to_end_seconds"]
+        has_real_end = notice_to_end is not None
+        # a paired boil-notice lift is an observed end too; set below
+        observed_end = has_real_end and r["end_source"] in OBSERVED_END_SOURCES
 
         if r["work_category"] == "boil_notice_issued":
             # This class never ends itself; boil_notice_fate owns the whole decision.
@@ -309,7 +333,9 @@ def build_site(rows, sa_index, now):
             if outcome == "exclude":
                 open_now[county].pop(ref, None)
                 continue
+            # a lift is a real, observed event, not a schedule
             has_real_end = outcome == "paired"
+            observed_end = has_real_end
             if end is None:
                 # closed with no lift: token footprint, as for any no-signal case
                 end = start + timedelta(seconds=1)
@@ -323,12 +349,13 @@ def build_site(rows, sa_index, now):
                 # while adding ~nothing to downtime
                 end = start + timedelta(seconds=1)
         else:
-            end = start + min(timedelta(seconds=duration), cap)
+            end = start + min(timedelta(seconds=notice_to_end), cap)
 
         county_sev_iv[county][sev].append((start, end))
         event_iv[county][sev][ref].append((start, end))
         event_sas[county][sev][ref].update(sa_index.affected(r["full_lat"], r["full_lon"]))
         event_has_end[county][sev][ref] |= has_real_end
+        event_observed_end[county][sev][ref] |= observed_end
         if knocks_grade(r):
             knock_refs[county].add(ref)
 
@@ -338,7 +365,10 @@ def build_site(rows, sa_index, now):
         "counties": {},
         "national": {},
     }
-    national_fixes = defaultdict(list)  # ym -> fix durations (hours)
+    # ym -> notice-to-end hours, split by whether the end was observed or merely
+    # scheduled. Only the observed list feeds the published headline.
+    national_observed = defaultdict(list)
+    national_scheduled = defaultdict(list)
 
     for county in sorted(county_sev_iv):
         merged = {sev: merge(county_sev_iv[county][sev]) for sev in SEV_ORDER}
@@ -399,15 +429,22 @@ def build_site(rows, sa_index, now):
                             knock_n += 1
                 counts[sev] = n
 
-            # time-to-fix: full duration of disruption events that started this
-            # month and have a real end signal (open/no-signal events excluded
-            # so they can't drag the median)
-            fixes = [
-                sum((e - s).total_seconds() for s, e in iv) / 3600
-                for ref, iv in events["outage"].items()
-                if event_has_end[county]["outage"][ref] and lo <= iv[0][0] < hi
-            ]
-            national_fixes[ym].extend(fixes)
+            # Notice-to-end span of disruption events that started this month
+            # and carry a real end signal (open/no-signal events excluded so
+            # they can't drag the median). Split by end kind: an observed
+            # completion says how long works took; a scheduled end only says
+            # what was announced, so the two are never pooled.
+            observed_h, scheduled_h = [], []
+            for ref, iv in events["outage"].items():
+                if not (event_has_end[county]["outage"][ref] and lo <= iv[0][0] < hi):
+                    continue
+                hours = sum((e - s).total_seconds() for s, e in iv) / 3600
+                if event_observed_end[county]["outage"][ref]:
+                    observed_h.append(hours)
+                else:
+                    scheduled_h.append(hours)
+            national_observed[ym].extend(observed_h)
+            national_scheduled[ym].extend(scheduled_h)
 
             period_s = (eff_hi - eff_lo).total_seconds()
             availability = 100.0 * (1 - person_s / (cpop * period_s))
@@ -419,17 +456,12 @@ def build_site(rows, sa_index, now):
                 "availability": round(max(availability, 0.0), 3),
                 "grade": grade(availability, knock_n),
                 "events": counts,
-                "median_fix_h": round(statistics.median(fixes), 1) if fixes else None,
-                "fixed_n": len(fixes),
+                **span_stats(observed_h, scheduled_h),
             }
         site["counties"][county] = cdata
 
     for ym in months:
-        fixes = national_fixes[ym]
-        site["national"][ym] = {
-            "median_fix_h": round(statistics.median(fixes), 1) if fixes else None,
-            "fixed_n": len(fixes),
-        }
+        site["national"][ym] = span_stats(national_observed[ym], national_scheduled[ym])
 
     return site
 
@@ -443,7 +475,7 @@ def load_cases(conn):
                c.full_lat, c.full_lon,
                c.boil_water_notice, c.do_not_drink, c.water_restrictions,
                c.reduced_pressure,
-               i.end_duration_seconds
+               i.notice_to_end_seconds, i.end_source
         FROM cases c
         LEFT JOIN inferred_cases i ON i.case_id = c.id
         WHERE c.county IS NOT NULL AND c.start_date IS NOT NULL

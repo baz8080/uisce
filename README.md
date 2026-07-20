@@ -1,6 +1,8 @@
 # uisce
 
-Download, transform, and geocode [Uisce Éireann](https://www.water.ie/) (Irish Water) supply and works notices, and infer real outage durations from the notice text with a local LLM. The result is a single SQLite database, rebuilt weekly by CI and published as a GitHub release, plus a statuspage-style static site with per-county supply availability and A–F grades.
+Download, transform, and geocode [Uisce Éireann](https://www.water.ie/) (Irish Water) supply and works notices, and infer each notice's end time from its text with a local LLM. The result is a single SQLite database, rebuilt weekly by CI and published as a GitHub release, plus a statuspage-style static site with per-county supply availability and A–F grades.
+
+**What the time figures mean.** This project does not measure outage duration and cannot: the feed never records when supply was actually lost. What it measures is the span from **when a notice was published** to **the end that notice reports** (`notice_to_end_seconds`), and the site publishes the subset where that end is an observed "works are now complete" update rather than a schedule. Every figure is a floor on true length. See [notes/data-quality.md](notes/data-quality.md) and [notes/statuspage-methodology.md](notes/statuspage-methodology.md).
 
 ## Just want the data?
 
@@ -14,9 +16,11 @@ Tables:
 
 * `cases` — one row per published notice pin (title, description, dates, status, impact flags, WGS84 coordinates). `work_category` is a slug normalised from the title (`burst_main`, `essential_works`, …); `work_type` (Planned/Unplanned) is taken from the feed but overridden for categories where the label is unambiguous (a burst main is never planned).
 * `geocode_cache` — reverse-geocoded address per rounded coordinate
-* `inferred_cases` — LLM-extracted end-time signal and computed `end_duration_seconds` per case
+* `inferred_cases` — LLM-extracted end-time signal and computed `notice_to_end_seconds` per case
 
 Before leaning on `start_date`/`end_date` or per-case counts, read [notes/data-quality.md](notes/data-quality.md) — several fields don't mean what they appear to mean.
+
+The `cases` schema is declared once, in `create_db`, and stamped into `PRAGMA user_version` (`SCHEMA_VERSION`, currently 1). There is deliberately no migration ladder: the published DB is downloaded and updated in place each build, so `check_schema_version` either recognises a DB as current or refuses it with instructions to rebuild. The DB is an accumulating archive of a feed with no history — take a copy before rebuilding.
 
 ## Running it yourself
 
@@ -58,7 +62,7 @@ Duration inference reads each notice and extracts the end-time signal using a lo
 
 1. Start the LLM server on :1234
 2. `gh release download --clobber --pattern "uisce.db" --dir out/`
-3. `uv run uisce-infer` — appends results to `data/inferred_duration.jsonl` (committed to the repo; only new/changed descriptions are processed)
+3. `uv run uisce-infer` — appends results to `data/inferred_end_times.jsonl` (committed to the repo; only new/changed descriptions are processed)
 4. (Local test only - CI will do this on a schedule) `uv run uisce-build-inferred`
 
 ## Layout

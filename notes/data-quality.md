@@ -10,13 +10,13 @@ These are the raw `STARTDATE`/`ENDDATE` fields from the ArcGIS source feed. Inve
 - **327 cases still marked `Open` already have an `end_date` populated.** If `end_date` reflected real completion, an open case shouldn't have one.
 - **23 cases (0.5%) have `end_date` before `start_date`.** Invalid on its face.
 - **999 more cases (23% of the total) sit within ±60 seconds of *exactly* 1 day**, with smaller clusters at 2, 3, 4, and 7 days. This pattern (excluding the near-zero bucket above) looks like a default/SLA placeholder rather than a genuine measurement — it's too concentrated on round numbers to be coincidental.
-- **Cross-check against `inferred_cases.end_duration_seconds`** (the LLM-derived duration from actually reading the notice text) for the 2,500 cases with a high-confidence `completion_update` signal: only **6.6% agree within even a 1-hour tolerance**. The worst mismatches are off by hundreds of hours, and several land exactly on -30 days, -29 days, 24h, or 0h — the same clamping pattern as above, contradicting what the notice text actually says.
+- **Cross-check against `inferred_cases.notice_to_end_seconds`** (the LLM-derived duration from actually reading the notice text) for the 2,500 cases with a high-confidence `completion_update` signal: only **6.6% agree within even a 1-hour tolerance**. The worst mismatches are off by hundreds of hours, and several land exactly on -30 days, -29 days, 24h, or 0h — the same clamping pattern as above, contradicting what the notice text actually says.
 
 **Conclusion:** treat `cases.end_date` as low-trust for duration purposes by default, not as "usually fine, occasionally wrong." The near-zero and negative-diff cases (~70% of the total) are unambiguous red flags. The remaining round-day-clamped cases (~23%) can't be reliably distinguished from genuine same/next-day resolutions using this field alone — there's no clean rule that separates "really resolved in 24 hours" from "administratively defaulted to +1 day." This is why `inferred_cases` derives duration from the notice text via the LLM rather than from these fields.
 
 ## Known model-output edge cases
 
-While computing `end_duration_seconds` (see `src/uisce/build.py`), a few real edge cases showed up in the actual data:
+While computing `notice_to_end_seconds` (see `src/uisce/build.py`), a few real edge cases showed up in the actual data:
 
 - `lifted_immediate` (29 cases): the prompt spec implies `local_date` should be populated for every `end_source` except `not_found`, but 10 of 29 `lifted_immediate` records have a null `local_date` anyway. Where it *is* populated, it always equals `start_date`'s calendar day. Duration for this `end_source` is stored as `NULL` regardless (an "immediately lifted" report tells you it had already resolved by report time, not how long it actually took — storing `0` would be a fabricated point estimate that could bias aggregates toward zero).
 - `completion_update` can also have a missing `local_time` (100/3,527 cases) — not just `scheduled_end_date_only`. The "missing time → treat as end-of-day (23:59:59)" fallback is keyed off whether `local_time` is actually present, not off `end_source`.
@@ -30,7 +30,7 @@ Further evidence (2026-07 snapshot, 6,758 cases) that `start_date` records when 
 - **Day-of-week clusters mid-week.** Thursday has 1,466 starts vs Sunday's 252 (Mon 981, Tue 1,398, Wed 1,419, Fri 848, Sat 388). Again consistent with staffed publishing, not with when water infrastructure actually fails.
 - This holds even for `work_type = 'Unplanned'` cases, which is the giveaway — planned works clustering in business hours would be expected; emergencies clustering there would not.
 
-Practical consequence: `end_duration_seconds` in `inferred_cases` measures "notice published → works complete", which *understates* the real outage duration for events that happened overnight or at weekends and weren't posted until the next working morning.
+Practical consequence: `notice_to_end_seconds` in `inferred_cases` measures "notice published → works complete", which *understates* the real outage duration for events that happened overnight or at weekends and weren't posted until the next working morning.
 
 ### Sharpened 2026-07-19: the timestamp is machine-generated, and the error is not one-directional
 
@@ -39,6 +39,8 @@ Two refinements from a follow-up pass, prompted by case 234595 (`start_date` 15:
 - **The seconds field settles it.** 97.6% of the 7,887 populated `start_date` values carry non-zero seconds, and minute values are uniformly spread — only ~2% land on `:00`, which is chance (1/60). A human-stated schedule clusters hard on round hours and `:00` minutes. This is a machine timestamp, not a transcribed event time.
 - **There *is* an in-feed alternative signal, contradicting the "no in-feed signal" line above.** 55% of case descriptions (4,352/7,892) state their own start, e.g. "Works are scheduled to take place from 10am until 6pm". Top categories: `essential_works` (892), `burst_main` (753), `mains_repair` (661).
 - **The gap runs both ways.** A first crude probe (time-of-day only, ignoring dates) gave median −0.6h with publication preceding the stated start in 59% of cases. See the section below for the properly dated version, which supersedes it and corrects the interpretation offered here.
+
+**Qualified 2026-07-20: the rule is not universal — some `start_date`s are in the future.** 127 currently-open cases carry a `start_date` up to 27 days *ahead* of the snapshot, which a pure publication timestamp cannot be. They are overwhelmingly planned works (88 Planned, 12 Unplanned) and 98% still carry the non-zero-seconds machine signature. The most likely reading is that these rows take their *date* from a scheduled start while the *time* component is still machine-stamped, rather than the whole field being one thing. This does not disturb the resolved toggle decision below, which rests on unplanned events, but "start_date is a publication timestamp" should be read as a statement about the bulk of the corpus, not every row — anything computing an age or an elapsed time from this field needs to handle negatives.
 
 **Why this matters enough to act on eventually:** median inferred duration is 9.9h (p25 4.1h, p75 23.8h), so start-side noise of ±2–3h is roughly a quarter of the signal — the same order of distortion as the completion-precedence prompt bug fixed in pv2, hitting the same published median-time-to-fix.
 
@@ -69,7 +71,33 @@ So neither population gains. **The toggle is dropped** — not on cherry-picking
 
 **This corrects the earlier bullet above.** The crude time-of-day probe suggested planned works are published in advance and therefore overstate duration; with dates parsed, planned publication sits on top of the stated start and the advance-publication pattern belongs to *unplanned* works instead. The original "floor, not a point estimate" framing survives: publication-based duration remains a lower bound for unplanned events, because onset precedes publication by an amount the feed never records.
 
-**Recommended next step is naming, not modelling.** The metric misleads only because it implicitly claims to be outage duration. Describing it as *time from public notice to restoration* makes it accurate as published, needs no second number, and turns the office-hours clustering into a documented property of a well-named metric rather than a defect in a badly-named one. Cheap, honest, and it forecloses the cherry-picking risk entirely. Not done here — it is a status-site change (`src/uisce/site.py` and its templates), separate from the inference work.
+**Recommended next step is naming, not modelling.** The metric misleads only because it implicitly claims to be outage duration. Describing it as *time from public notice to restoration* makes it accurate as published, needs no second number, and turns the office-hours clustering into a documented property of a well-named metric rather than a defect in a badly-named one. Cheap, honest, and it forecloses the cherry-picking risk entirely.
+
+**Done 2026-07-20.** The column is `notice_to_end_seconds`, the site publishes "median notice → completion", and the footer states the publication-time caveat directly. The rename turned up a second, larger problem in the same metric — observed completions were being pooled with scheduled ends — recorded in [statuspage-methodology.md](statuspage-methodology.md).
+
+## Scheduled vs actual end: the second signal is real and cheap (probed 2026-07-20)
+
+An earlier session concluded that extracting scheduled-vs-actual "probably would not materially change things". **That was answering the wrong question** and is superseded here.
+
+The valuable signal is not which `end_source` a notice has. It is that a *single* `completion_update` description usually carries **two** timestamps: the completion update at the top, and the originally-announced window still sitting underneath. Case 236163 is typical:
+
+> **Update 9am 19/06/2026** Works are now complete … *Works are now scheduled to take place until 3pm on 18 June.*
+
+Completed 9am 19 June against a stated 3pm 18 June — an 18h overrun. **90.3% of `completion_update` descriptions retain their scheduled window** (4,359 of 4,829).
+
+**Why this dimension is worth more than it first appears: it never touches `start_date`.** Both timestamps come from the notice text, so the overrun metric is entirely free of the publication-timestamp problem that limits every other time figure in this project. It is also a *self-referential* benchmark — did Uisce Éireann meet its own stated estimate? — which needs no assumption about onset, no population model, and no external SLA.
+
+A crude regex probe (`until <time> on <date>`, no LLM spend at all) parsed 4,342 cases and gave:
+
+| overrun (actual − scheduled) | p10 | p25 | median | p75 | p90 |
+|---|---|---|---|---|---|
+| hours | −1.9 | 0.0 | **+2.7** | +16.8 | +39.0 |
+
+**69.5% finish late (>15 min over), 8.8% land within 15 minutes of their own estimate, 21.7% finish early.**
+
+**Treat this as a probe, not a result.** Three known weaknesses: the regex takes the *first* `until X on DATE` match, so a stale window can win over a revised one — precisely the completion-precedence bug pv1 had; the year is assumed from the actual end's year (harmless now, wrong across a Dec/Jan boundary); and there is no ground truth, so the p90 of 39h may be partly stale-window artifact rather than real overrun.
+
+**Recommended approach if picked up:** regex first with an LLM fallback for the ~10% that don't match, *not* a widened pv2 prompt. The design note below still applies — pv2 scored 99/99 and 120/120, and widening it risks that for a signal a regex mostly gets for free. Validate with a small labelled round before publishing any overrun figure.
 
 ## Multi-pin events inflate per-case statistics
 
@@ -100,9 +128,9 @@ Every inferred duration above 30 days belongs to `water_conservation` (real 40�
 
 ## Boil notices: no durations, and lifts arrive as new cases
 
-All 23 `boil_notice_issued` cases have NULL `end_duration_seconds` (there is no end signal in an issue notice), so any duration-based view silently drops active boil notices unless open cases accrue start→now. The lift arrives later as a **separate case with a fresh `reference_num`** (e.g. Downings: issued without a reference, lifted as DON00112xxx), so issue→lift pairing must key on county + normalised scheme name from `location` (strip public/water/supply/scheme/regional/pws: "Ardfinnan Regional Public Water Supply" → "ardfinnan"). Multi-pin publication is not chronologically tidy — lifts can be stamped up to ~2 days before their issue pins. On the 2026-07 snapshot only one pair completes (every other lift refers to a pre-collection notice); the open notices for Achill (MAY00116204), Ballymacarbry (WAT00116255) and Ardfinnan (TIP00113432) are good future test cases for the pairing.
+All 23 `boil_notice_issued` cases have NULL `notice_to_end_seconds` (there is no end signal in an issue notice), so any duration-based view silently drops active boil notices unless open cases accrue start→now. The lift arrives later as a **separate case with a fresh `reference_num`** (e.g. Downings: issued without a reference, lifted as DON00112xxx), so issue→lift pairing must key on county + normalised scheme name from `location` (strip public/water/supply/scheme/regional/pws: "Ardfinnan Regional Public Water Supply" → "ardfinnan"). Multi-pin publication is not chronologically tidy — lifts can be stamped up to ~2 days before their issue pins. On the 2026-07 snapshot only one pair completes (every other lift refers to a pre-collection notice); the open notices for Achill (MAY00116204), Ballymacarbry (WAT00116255) and Ardfinnan (TIP00113432) are good future test cases for the pairing.
 
-Related: the duplicate case_ids in `data/inferred_duration.jsonl` (422 cases with >1 record) are re-inferences after a description changed, not cross-case links. The 13 `not_found → lifted_immediate` transitions are the lift-notice cases themselves being correctly reclassified once re-read — `build.py` keeps latest-per-case and stores NULL duration for them; no cross-case pairing exists upstream yet.
+Related: the duplicate case_ids in `data/inferred_end_times.jsonl` (422 cases with >1 record) are re-inferences after a description changed, not cross-case links. The 13 `not_found → lifted_immediate` transitions are the lift-notice cases themselves being correctly reclassified once re-read — `build.py` keeps latest-per-case and stores NULL duration for them; no cross-case pairing exists upstream yet.
 
 ## "We are investigating" notices: reference pairing works, but rescues almost nothing
 
@@ -123,6 +151,15 @@ The 145 unpairable ones are the short variant — "We are investigating reports 
 **Conclusion: exclude, don't pair.** A cross-case join is real work (schema, build step, ordering rules for pins that publish out of sequence — see the boil-notice section) to recover two cases. Worth revisiting only if the feed's publishing behaviour changes such that investigation notices routinely carry references *and* resolving siblings.
 
 Note these already contribute NULL duration, so they do not distort duration aggregates today. The live question is narrower: whether they should still count as *events* in per-county and per-day case counts, where they currently do. That interacts with the false-green-days handling below.
+
+### Re-measured 2026-07-20 under pv2: less of a problem than it looks
+
+Two corrections to the picture above, on the current corpus (463 cases whose description contains "we are investigating"):
+
+- **About half of them do resolve.** 238 carry a `completion_update` and a real interval; only 205 are `not_found`. The pv1-era framing ("203 of 296 `not_found` cases are investigations") counted only the stuck ones and made the class look wholly inert.
+- **They are already excluded from everything that matters.** 423 of the 463 classify as `maintenance` severity (category `investigation`), which never accrues availability downtime and never appears in the supply-disruption event counts. Only 5 land in `outage`. So they do not inflate the published metrics — they show up as blue "works" cells on the day bars and in the total case count, and nothing else.
+
+**Conclusion: leave them.** The remaining cost is cosmetic. Suppressing them would remove a genuine signal (Uisce Éireann did publish something about that area on that day) to fix a problem that measurably isn't distorting any published number. Revisit only if investigations start landing in `outage` in volume.
 
 ## Closed cases with no end signal create false-green days
 
