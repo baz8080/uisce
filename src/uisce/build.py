@@ -75,6 +75,18 @@ def first_start_date_per_case(records):
     return {case_id: record["start_date"] for case_id, record in earliest.items()}
 
 
+def count_never_inferred(conn):
+    """Cases with a description but no inferred_cases row — downloaded since the
+    last uisce-infer run. Almost all are open (they are the newest cases), and
+    open cases with no end signal accrue to "now" on the site, so the backlog
+    lands exactly where it distorts most. See notes/pipeline-dependencies.md."""
+    return conn.execute(
+        "SELECT COUNT(*), COALESCE(SUM(status = 'Open'), 0) FROM cases "
+        "WHERE description IS NOT NULL "
+        "AND id NOT IN (SELECT case_id FROM inferred_cases)"
+    ).fetchone()
+
+
 def check_cases_cover(conn, case_ids):
     known_ids = {row[0] for row in conn.execute("SELECT id FROM cases")}
     missing = sorted(case_ids - known_ids)
@@ -127,5 +139,11 @@ def run():
             """,
             rows,
         )
+        never_inferred, never_inferred_open = count_never_inferred(conn)
 
     print(f"Upserted {len(rows)} rows into inferred_cases")
+    if never_inferred:
+        print(
+            f"{never_inferred} case(s) have no inference yet ({never_inferred_open} open) — "
+            "open ones accrue to now on the site until uisce-infer runs"
+        )
