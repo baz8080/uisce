@@ -38,13 +38,38 @@ Two refinements from a follow-up pass, prompted by case 234595 (`start_date` 15:
 
 - **The seconds field settles it.** 97.6% of the 7,887 populated `start_date` values carry non-zero seconds, and minute values are uniformly spread — only ~2% land on `:00`, which is chance (1/60). A human-stated schedule clusters hard on round hours and `:00` minutes. This is a machine timestamp, not a transcribed event time.
 - **There *is* an in-feed alternative signal, contradicting the "no in-feed signal" line above.** 55% of case descriptions (4,352/7,892) state their own start, e.g. "Works are scheduled to take place from 10am until 6pm". Top categories: `essential_works` (892), `burst_main` (753), `mains_repair` (661).
-- **The gap runs both ways, so "a floor, not a point estimate" is too kind.** Comparing publication time against the description-stated start: median −0.6h, p25 −2.3h, p75 +2.8h, with publication *preceding* the stated start in 59% of cases. Both directions are real but belong to different populations — planned works get published in advance (overstating duration measured from publication), while unplanned overnight bursts get published late (understating). The direction is likely predictable from `work_type`, which is worth checking before any correction is attempted. *Method caveat: crude probe — first regex match only, compares time-of-day and ignores the date, so treat the spread as indicative rather than measured.*
+- **The gap runs both ways.** A first crude probe (time-of-day only, ignoring dates) gave median −0.6h with publication preceding the stated start in 59% of cases. See the section below for the properly dated version, which supersedes it and corrects the interpretation offered here.
 
 **Why this matters enough to act on eventually:** median inferred duration is 9.9h (p25 4.1h, p75 23.8h), so start-side noise of ±2–3h is roughly a quarter of the signal — the same order of distortion as the completion-precedence prompt bug fixed in pv2, hitting the same published median-time-to-fix.
 
 **Parked as a possible pv3, with a caveat that makes it more than an extraction problem.** Neither field records the *observed* start: the description states the plan, `start_date` records publication. So a prompt can at best extract "scheduled start per the notice" — it cannot recover when the works truly began. That makes this a definitional question for the site (does a published duration mean *scheduled* or *observed*?) as much as a modelling one, and the current pipeline is incoherent on it: for the `completion_update` class it pairs a machine publication timestamp with a genuinely observed, human-reported end.
 
 Design notes for whenever this is picked up: keep start extraction out of the end-time prompt — pv2 reached 99/99 on the round-1 dev set and a larger prompt puts that at risk, whereas a separate call keeps the two independently measurable. A start-only eval round is also cheaper on the labeller than widening the existing CSV.
+
+### Resolved 2026-07-20: there is no better start basis in the data — do not build the toggle
+
+The open design question was whether the site should let a reader switch duration between the `start_date` basis and a start inferred from the description. **Measured and answered: no.** The inferred start is not closer to the truth, and for the cases that matter most it is further away.
+
+**The stated time is a works-start, not an outage onset.** Of the phrasings introducing a time in the corpus, 4,275 are "works are scheduled to take place from X" and 2,664 give only an end ("until X"). The text describes when crews are scheduled to work, not when supply was lost.
+
+Publication time versus the stated works-start, parsing the accompanying date properly (positive = published *after* the stated start):
+
+| work_type | n | median | p25 | p75 | published after |
+|---|---|---|---|---|---|
+| Unplanned | 1,512 | −0.8h | −3.2h | −0.3h | 21% |
+| Planned | 2,094 | +0.1h | −2.8h | +4.3h | 51% |
+| (null) | 535 | +0.9h | −1.3h | +4.3h | 55% |
+
+Reading it:
+
+- **For unplanned events the notice is published *before* works start** — 79% of the time, median 0.8h earlier. Case 232064 is typical: burst main published 08:55, works stated to start 10:30, complete 16:30. The real ordering is therefore `outage onset < publication < works start`. Substituting the stated start moves the clock *later*, shortening durations and moving **away** from the true onset. It would make the metric worse precisely where the office-hours artifact bites hardest.
+- **For planned works it changes essentially nothing** (median +0.1h, a 51/49 split). There is no distortion to correct.
+
+So neither population gains. **The toggle is dropped** — not on cherry-picking grounds, though that concern stands for any two-number public control, but because no second number worth showing exists.
+
+**This corrects the earlier bullet above.** The crude time-of-day probe suggested planned works are published in advance and therefore overstate duration; with dates parsed, planned publication sits on top of the stated start and the advance-publication pattern belongs to *unplanned* works instead. The original "floor, not a point estimate" framing survives: publication-based duration remains a lower bound for unplanned events, because onset precedes publication by an amount the feed never records.
+
+**Recommended next step is naming, not modelling.** The metric misleads only because it implicitly claims to be outage duration. Describing it as *time from public notice to restoration* makes it accurate as published, needs no second number, and turns the office-hours clustering into a documented property of a well-named metric rather than a defect in a badly-named one. Cheap, honest, and it forecloses the cherry-picking risk entirely. Not done here — it is a status-site change (`src/uisce/site.py` and its templates), separate from the inference work.
 
 ## Multi-pin events inflate per-case statistics
 
