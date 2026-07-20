@@ -39,7 +39,7 @@ jobs:
           TAG="$(date +%Y-%m-%d)"
           gh release create "$TAG" out/uisce.db \
             --title "$TAG" \
-            --notes "Weekly data refresh" \
+            --notes "Data refresh" \
           || gh release upload "$TAG" out/uisce.db --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
