@@ -119,6 +119,22 @@
   .stats .pct { font-size: 14.5px; }
   .stats b { color: var(--ink); font-weight: 650; }
 
+  /* Narrow screens can't carry name + bar + stats on one line: the fixed 150px
+     and 200px columns alone exceed the viewport, and the county card clips the
+     overflow, so the stats disappear entirely. Drop the bar onto its own line
+     and let name and stats share the first. */
+  @media (max-width: 640px) {
+    .row {
+      grid-template-columns: 1fr auto;
+      grid-template-areas: "name stats" "bar bar";
+      gap: 10px 12px;
+      padding: 12px 14px;
+    }
+    .cname { grid-area: name; min-width: 0; }
+    .stats { grid-area: stats; }
+    .bar { grid-area: bar; }
+  }
+
   .detail { display: none; border-top: 1px solid var(--grid); padding: 12px 16px 14px; font-size: 13.5px; }
   .county.openrow .detail { display: block; }
   .detail .drow { display: flex; gap: 18px; flex-wrap: wrap; color: var(--ink-2); margin-bottom: 8px; }
@@ -195,6 +211,12 @@ function render() {
 
   const isCurrent = today.slice(0, 7) === curMonth;
   const isFirst = curMonth === D.months[0];
+  // Open-case counts are a right-now snapshot of status='Open' — the DB keeps
+  // each case's current status, not a history, so there is no such figure for a
+  // past month and none can be reconstructed (closed-with-no-end-signal cases
+  // leave a 1s footprint, so they'd read as closed on their start day whatever
+  // their real run). Show them only on the month the snapshot belongs to.
+  const isLatest = curMonth === D.months[D.months.length - 1];
   document.getElementById("partialNote").textContent =
     isCurrent ? "Partial month — in progress." :
     isFirst ? "Measured from 20 April 2026, when data collection began." : "";
@@ -218,7 +240,7 @@ function render() {
     <div class="tile"><div class="v">${natFix}</div><div class="k">median notice&nbsp;→&nbsp;completion<br>${nat.completed_n || 0} reported complete${schedNote}</div></div>
     <div class="tile"><div class="v">${personH >= 1e6 ? (personH / 1e6).toFixed(1) + "M" : Math.round(personH).toLocaleString()}</div><div class="k">person-hours of announced disruption</div></div>
     <div class="tile"><div class="v">${quality}</div><div class="k">water-quality notices</div></div>
-    <div class="tile"><div class="v">${openNow}</div><div class="k">open cases right now</div></div>`;
+    ${isLatest ? `<div class="tile"><div class="v">${openNow}</div><div class="k">open cases right now</div></div>` : ""}`;
 
   const nF = worst.filter(w => w[1].grade === "F").length;
   const dot = nF > 8 ? "var(--critical)" : nF > 3 ? "var(--serious)" : nF > 0 ? "var(--warning)" : "var(--good)";
@@ -247,7 +269,7 @@ function render() {
     }).join("");
     // "open" is a right-now snapshot of status='Open', not a property of the
     // selected month — say so, or it reads as "open during July"
-    const openBadge = c.open_total ? `<b>${c.open_total}</b><span>open now</span>` : "";
+    const openBadge = isLatest && c.open_total ? `<b>${c.open_total}</b><span>open now</span>` : "";
     const outWord = m.events.outage === 1 ? "disruption" : "disruptions";
     const detail = `
       <div class="drow">
@@ -258,6 +280,7 @@ function render() {
         <span><b>${m.events.quality}</b> quality notices</span>
         <span><b>${m.clear_days}</b>/${m.days.length} clear days</span>
       </div>
+      ${!isLatest ? "" : `
       ${c.open.length ? `<div class="incident" style="color:var(--muted)">Cases still marked open, as of the latest data — not limited to ${monthLabel(curMonth)}.</div>` : ""}
       ${c.open.length ? c.open.map(o => `
         <div class="incident">
@@ -265,7 +288,7 @@ function render() {
           <span class="t">${o.title}</span>
           <span class="m">${o.loc ? o.loc + " · " : ""}${o.since > today ? "from" : "since"} ${o.since}</span>
         </div>`).join("") : `<div class="incident" style="border-top:none;color:var(--muted)">No open cases right now.</div>`}
-      ${c.open_total > c.open.length ? `<div class="incident" style="color:var(--muted)">…and ${c.open_total - c.open.length} more open cases</div>` : ""}`;
+      ${c.open_total > c.open.length ? `<div class="incident" style="color:var(--muted)">…and ${c.open_total - c.open.length} more open cases</div>` : ""}`}`;
 
     return `<div class="county ${expanded.has(name) ? "openrow" : ""}" id="c-${name}">
       <div class="row" onclick="toggle('${name}')">
