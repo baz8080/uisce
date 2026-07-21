@@ -109,7 +109,7 @@ uv run pytest
 uv run ruff check
 ```
 
-CI lints and tests on every push. The `Build DB` workflow runs the pipeline three times a week (Mon/Wed/Fri) and publishes the refreshed DB as a release.
+CI lints and tests on every push. The `Build DB` workflow runs the pipeline daily and publishes the refreshed DB as a release. The cadence is not just freshness: the gap between builds is the resolution of `cases.closed_at`, and a case that opens and closes within one gap is never observed open at all.
 
 ## Interesting APIs
 

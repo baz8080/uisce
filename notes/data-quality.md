@@ -151,7 +151,7 @@ Consequence: **the feed is a complete archive of cases but a pure snapshot of st
 
 Measured 2026-07-21 by replaying the 10 published snapshots (2026-06-30 → 2026-07-20): of the 2,224 cases that first appeared after the earliest snapshot, **256 (12%) were never seen `Open` in any snapshot** — created and closed inside a single gap between builds. No transition exists for those, so they can neither be replayed nor caught live.
 
-This is a property of the build cadence (cron Mon/Wed/Fri, so ≤3-day gaps plus missed runs), not of the replay: any "closed in month M" figure is a **floor**, systematically missing the shortest-lived cases, in the same way notice-to-completion spans are floors. A daily cron would shrink the gap but never close it. Also note 76% of currently-closed cases (5,798) closed before the first published snapshot and are unrecoverable outright, so the series realistically begins with July 2026.
+This is a property of the build cadence, not of the replay: any "closed in month M" figure is a **floor**, systematically missing the shortest-lived cases, in the same way notice-to-completion spans are floors. The 12% above was measured under the original Mon/Wed/Fri cron (≤3-day gaps plus missed runs); the cron went daily on 2026-07-21 to shrink it, which no amount of frequency can close entirely. **The figure is therefore not comparable across that date** — expect months from August 2026 to carry a smaller undercount than July, and re-measure before reading any month-on-month change in closure counts as real. Also note 76% of currently-closed cases (5,798) closed before the first published snapshot and are unrecoverable outright, so the series realistically begins with July 2026.
 
 ## `water_outage` flag is not a filter
 
