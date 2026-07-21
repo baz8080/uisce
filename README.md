@@ -20,7 +20,26 @@ Tables:
 
 Before leaning on `start_date`/`end_date` or per-case counts, read [notes/data-quality.md](notes/data-quality.md) — several fields don't mean what they appear to mean.
 
-The `cases` schema is declared once, in `create_db`, and stamped into `PRAGMA user_version` (`SCHEMA_VERSION`, currently 1). There is deliberately no migration ladder: the published DB is downloaded and updated in place each build, so `check_schema_version` either recognises a DB as current or refuses it with instructions to rebuild. The DB is an accumulating archive of a feed with no history — take a copy before rebuilding.
+The `cases` schema is declared once, in `create_db`, and stamped into `PRAGMA user_version` (`SCHEMA_VERSION`, currently 2). The published DB is downloaded and updated in place each build, so `check_schema_version` runs every time and carries older DBs forward via `MIGRATIONS`.
+
+Migration is deliberately narrow: **additive nullable columns only**, which SQLite applies without rewriting a row. A DB missing any v1 column is refused with instructions to rebuild rather than migrated. That asymmetry is on purpose — the DB is an accumulating archive of a feed with no history, so a rebuild costs every case the feed no longer serves plus the geocode cache. Take a copy before rebuilding.
+
+`cases.closed_at` (v2) records when a build **first observed** a case stop being `Open`. The feed publishes only current status, so this is the sole record of the transition. Two consequences for anyone querying it:
+
+* It is observation time, not event time — resolution is the build cadence.
+* `NULL` is ambiguous: either still open, or closed before the column existed (every case closed prior to v2). Pair it with `status` rather than reading `NULL` as open.
+* It is a **floor**. Cases created and closed between two builds are never observed open, so no transition exists to record — 12% of newly-appearing cases, measured 2026-07-21. See [notes/data-quality.md](notes/data-quality.md).
+
+History from before v2 can be partially recovered by replaying the published release DBs, each of which is a full snapshot. Run the **Build DB** workflow with `replay_closed_at` ticked — it does the whole thing in one build, after the pipeline has migrated the DB and stamped its own transitions.
+
+The replay recovers the same measurement the live path makes (first build observing the case non-Open), never overwrites an existing stamp, and is idempotent, so it is safe to re-run — worth doing if the DB is ever restored from an older release. It reached 24% of closed cases on 2026-07-21; the rest closed before the earliest published snapshot.
+
+Locally, against a directory of downloaded snapshots named `<release-tag>.db`:
+
+```sh
+uv run uisce-replay-closed-at --snapshots snaps          # dry run
+uv run uisce-replay-closed-at --snapshots snaps --write
+```
 
 ## Running it yourself
 

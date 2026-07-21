@@ -21,6 +21,7 @@ uisce-eval-sample = "uisce.eval_end_time:sample"
 uisce-eval-sample-fresh = "uisce.eval_end_time:sample_fresh"
 uisce-eval-score = "uisce.eval_end_time:score"
 uisce-eval-replay = "uisce.eval_replay:run"
+uisce-replay-closed-at = "uisce.replay_closed_at:run"
 
 [build-system]
 requires = ["hatchling"]
