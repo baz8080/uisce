@@ -34,9 +34,9 @@ COORD_PRECISION = 4  # ~10 meter
 USABLE_CASE_THRESHOLD_FIELDS = ["TITLE", "DESCRIPTION"]
 
 # Stamped into PRAGMA user_version. The `cases` schema is declared once, in
-# create_db; bump this only when that declaration changes, and see
-# check_schema_version for why there is deliberately no migration ladder.
-SCHEMA_VERSION = 1
+# create_db; bump this only when that declaration changes, and add the matching
+# step to MIGRATIONS so DBs already in the wild can be carried forward.
+SCHEMA_VERSION = 2
 
 DB_CASE_COLUMNS = [
     "id",
@@ -66,9 +66,20 @@ DB_CASE_COLUMNS = [
 ]
 
 # Columns not in DB_CASE_COLUMNS (they are derived or stamped, not fed) but
-# still required by the declared schema, so an unstamped older DB can be
-# recognised as structurally v1.
-REQUIRED_CASE_COLUMNS = set(DB_CASE_COLUMNS) | {"work_category", "first_seen", "last_seen"}
+# still required by the declared schema. V1 is the floor: a DB carrying these is
+# structurally sound and can be migrated forward, whatever it is stamped. A DB
+# missing any of them predates the archive and is a rebuild, not a migration.
+V1_CASE_COLUMNS = set(DB_CASE_COLUMNS) | {"work_category", "first_seen", "last_seen"}
+REQUIRED_CASE_COLUMNS = V1_CASE_COLUMNS | {"closed_at"}
+
+# v(n-1) -> v(n), as {version: {column: decl}}. Additive nullable columns only:
+# SQLite adds those without rewriting a single row, which is what keeps the
+# 20MB release DB migratable in place. Anything that would rewrite or drop data
+# does not belong here — that is a rebuild, and rebuilds cost the accumulated
+# archive (cases the feed no longer serves, and the geocode cache).
+MIGRATIONS = {
+    2: {"closed_at": "TEXT"},
+}
 
 FIELD_MAP = {
     "OBJECTID": "id",
@@ -368,6 +379,7 @@ def create_db(cases, db_path=DB_PATH):
                 work_category TEXT,
                 first_seen TEXT,
                 last_seen TEXT,
+                closed_at TEXT,
                 full_lat REAL NOT NULL,
                 full_lon REAL NOT NULL,
                 rounded_lat REAL NOT NULL,
@@ -382,16 +394,19 @@ def create_db(cases, db_path=DB_PATH):
 
 
 def check_schema_version(conn, db_path=DB_PATH):
-    """The full `cases` schema is declared in CREATE TABLE above; there is no
-    migration ladder. The published DB is downloaded and updated in place each
-    build, so this guards against writing into a DB that predates the declared
-    schema — which would fail confusingly on the missing columns instead.
+    """The full `cases` schema is declared in CREATE TABLE above; MIGRATIONS
+    carries DBs already in the wild forward to it. The published DB is
+    downloaded and updated in place each build, so this runs on every build.
+
+    Migration is deliberately narrow — additive nullable columns only (see
+    MIGRATIONS). A DB missing any V1 column predates the archive entirely and is
+    still rejected rather than migrated: that is a rebuild, and rebuilds are not
+    free, since the DB accumulates cases the feed no longer serves plus the
+    geocode cache. Keep a copy before rebuilding.
 
     DBs built before versioning began carry user_version 0 but are structurally
-    identical to SCHEMA_VERSION 1 (work_category / first_seen / last_seen were
-    added by the ALTER TABLE helpers this replaced). Those are stamped in place
-    rather than rejected. Anything genuinely older is a rebuild, not a migration:
-    the DB is an accumulating archive, so keep a copy before rebuilding."""
+    v1 (work_category / first_seen / last_seen were added by the ALTER TABLE
+    helpers this replaced), so they migrate from the v1 floor like any other."""
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     if version == SCHEMA_VERSION:
         return
@@ -402,13 +417,21 @@ def check_schema_version(conn, db_path=DB_PATH):
         )
 
     columns = {row[1] for row in conn.execute("PRAGMA table_info(cases)")}
-    missing = REQUIRED_CASE_COLUMNS - columns
+    missing = V1_CASE_COLUMNS - columns
     if missing:
         raise RuntimeError(
             f"{db_path} is schema v{version} and is missing {sorted(missing)}. "
-            f"This code declares v{SCHEMA_VERSION} and does not migrate. Move the "
-            "old DB aside and rebuild from the feed with `uv run uisce-pipeline`."
+            f"This code declares v{SCHEMA_VERSION} and migrates only from v1. Move "
+            "the old DB aside and rebuild from the feed with `uv run uisce-pipeline`."
         )
+
+    # v0 is structurally v1, so it starts from the same rung. A freshly created
+    # DB already declares every column, so each step no-ops on it — that is why
+    # the guard is per-column rather than per-version.
+    for target in range(max(version, 1) + 1, SCHEMA_VERSION + 1):
+        for column, decl in MIGRATIONS[target].items():
+            if column not in columns:
+                conn.execute(f"ALTER TABLE cases ADD COLUMN {column} {decl}")
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
@@ -425,11 +448,33 @@ def load_cases(conn, cases, now=None):
     ]
 
     # upsert rather than INSERT OR REPLACE so an existing row's first_seen
-    # survives; last_seen advances on every download that includes the case
+    # survives; last_seen advances on every download that includes the case.
+    #
+    # closed_at records when *we first observed* the case stop being Open — the
+    # feed carries only a case's current status, so this is the one chance to
+    # catch the transition before `status` is overwritten. It is observation
+    # time, not event time: resolution is the build cadence, and a case already
+    # Closed on its first sighting never gets one (hence NULL on insert, and
+    # NULL for every row that closed before this column existed). Consequently
+    # NULL is ambiguous — "still open" or "closed unobserved" — so readers must
+    # pair it with status rather than treating NULL as open.
+    #
+    # SQLite evaluates every SET expression against the pre-update row, so
+    # `cases.status` here is the previous status even though `{updates}` also
+    # assigns it. `IS` / `IS NOT` are the null-safe comparisons: some rows carry
+    # a NULL status, and `!= 'Open'` would silently yield NULL for those.
+    closed_at = (
+        "closed_at = CASE"
+        "  WHEN excluded.status IS 'Open' THEN NULL"
+        "  WHEN cases.status IS 'Open' THEN excluded.last_seen"
+        "  ELSE cases.closed_at"
+        " END"
+    )
     cur.executemany(
         f"INSERT INTO cases ({columns}, first_seen, last_seen) "
         f"VALUES ({placeholders}, ?, ?) "
-        f"ON CONFLICT(id) DO UPDATE SET {updates}, last_seen = excluded.last_seen",
+        f"ON CONFLICT(id) DO UPDATE SET {updates}, "
+        f"last_seen = excluded.last_seen, {closed_at}",
         rows,
     )
 
