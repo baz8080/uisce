@@ -2,7 +2,10 @@ name: Build DB
 
 on:
   schedule:
-    - cron: '23 17 * * MON,WED,FRI'
+    # Daily. The gap between builds is the resolution of cases.closed_at, and
+    # any case opening and closing inside one gap is never observed open at all
+    # — see notes/data-quality.md. Daily shrinks that floor; it cannot remove it.
+    - cron: '23 17 * * *'
   workflow_dispatch:
     inputs:
       replay_closed_at:

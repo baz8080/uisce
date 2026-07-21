@@ -10,8 +10,8 @@ series the transitions can be recovered from after the fact.
 The recovered value means exactly what the forward path's does: the first
 snapshot in which we observed the case no longer Open. Both are observation
 time, not event time, so replayed and live rows are the same measurement and
-can share a column. Resolution is the gap between builds (cron is Mon/Wed/Fri,
-so <= 3 days, plus any missed runs).
+can share a column. Resolution is the gap between builds (cron is daily since
+2026-07-21, Mon/Wed/Fri before that, plus any missed runs).
 
 Two limits are inherent and do not shrink with effort:
 
