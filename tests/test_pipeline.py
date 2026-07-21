@@ -544,7 +544,8 @@ class TestSchemaVersion:
         _cases_db(db_path, version=1)
         with sqlite3.connect(db_path) as conn:
             conn.execute(
-                "INSERT INTO cases (id, title, status, first_seen) VALUES (1, 'Burst', 'Closed', 'x')"
+                "INSERT INTO cases (id, title, status, first_seen) "
+                "VALUES (1, 'Burst', 'Closed', 'x')"
             )
         with sqlite3.connect(db_path) as conn:
             pipeline.check_schema_version(conn, db_path)
