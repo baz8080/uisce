@@ -447,22 +447,25 @@ class TestWorkTypeBackfill:
         assert rows == {1: "burst_main", 2: "leak_detection", 3: "mains_flushing", 4: None}
 
 
-def _v1_cases_db(db_path):
-    """A DB carrying the full declared v1 `cases` schema, as create_db writes it."""
+def _cases_db(db_path, version=pipeline.SCHEMA_VERSION):
+    """A DB carrying the declared `cases` schema at `version`, as create_db wrote
+    it at the time. `version=0` is the pre-versioning shape: structurally v1 but
+    unstamped."""
     cols = ", ".join(
         f"{c} TEXT" if c != "id" else "id INTEGER PRIMARY KEY"
         for c in pipeline.DB_CASE_COLUMNS
     )
+    extra = ["work_category TEXT", "first_seen TEXT", "last_seen TEXT"]
+    if version >= 2:
+        extra.append("closed_at TEXT")
     with sqlite3.connect(db_path) as conn:
-        conn.execute(
-            f"CREATE TABLE cases ({cols}, work_category TEXT, first_seen TEXT, last_seen TEXT)"
-        )
-        conn.execute(f"PRAGMA user_version = {pipeline.SCHEMA_VERSION}")
+        conn.execute(f"CREATE TABLE cases ({cols}, {', '.join(extra)})")
+        conn.execute(f"PRAGMA user_version = {version}")
 
 
 def test_backfill_runs_standalone_on_existing_db(tmp_path):
     db_path = tmp_path / "test.db"
-    _v1_cases_db(db_path)
+    _cases_db(db_path)
     with sqlite3.connect(db_path) as conn:
         conn.executemany(
             "INSERT INTO cases (id, work_type, status, title) VALUES (?, ?, ?, ?)",
@@ -513,24 +516,64 @@ def test_create_db_builds_a_fresh_db_from_scratch(tmp_path):
 
 
 class TestSchemaVersion:
-    """The schema is declared once and never migrated; check_schema_version is
-    the whole compatibility story, so its three outcomes are pinned here."""
+    """check_schema_version is the whole compatibility story for a DB that is
+    downloaded and updated in place every build, so each outcome is pinned here:
+    current passes, behind-but-sound migrates, too old and too new both raise."""
 
     def test_stamped_current_version_passes(self, tmp_path):
-        db_path = tmp_path / "v1.db"
-        _v1_cases_db(db_path)
+        db_path = tmp_path / "current.db"
+        _cases_db(db_path)
         with sqlite3.connect(db_path) as conn:
             pipeline.check_schema_version(conn, db_path)  # no raise
 
-    def test_unstamped_but_structurally_current_db_is_stamped_in_place(self, tmp_path):
-        # DBs built before versioning began read as v0 but already carry every
-        # declared column; they are adopted rather than rejected.
-        db_path = tmp_path / "v0.db"
-        _v1_cases_db(db_path)
-        with sqlite3.connect(db_path) as conn:
-            conn.execute("PRAGMA user_version = 0")
+    def test_v1_db_gains_closed_at_and_is_restamped(self, tmp_path):
+        # The live release DB is exactly this: stamped v1, no closed_at.
+        db_path = tmp_path / "v1.db"
+        _cases_db(db_path, version=1)
         with sqlite3.connect(db_path) as conn:
             pipeline.check_schema_version(conn, db_path)
+        with sqlite3.connect(db_path) as conn:
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(cases)")}
+            assert cols == pipeline.REQUIRED_CASE_COLUMNS
+            assert conn.execute("PRAGMA user_version").fetchone()[0] == pipeline.SCHEMA_VERSION
+
+    def test_migration_preserves_existing_rows(self, tmp_path):
+        # The point of migrating rather than rebuilding: an additive ADD COLUMN
+        # must not disturb the archive it is being applied to.
+        db_path = tmp_path / "v1.db"
+        _cases_db(db_path, version=1)
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "INSERT INTO cases (id, title, status, first_seen) "
+                "VALUES (1, 'Burst', 'Closed', 'x')"
+            )
+        with sqlite3.connect(db_path) as conn:
+            pipeline.check_schema_version(conn, db_path)
+            assert conn.execute(
+                "SELECT title, status, first_seen, closed_at FROM cases"
+            ).fetchone() == ("Burst", "Closed", "x", None)
+
+    def test_unstamped_but_structurally_v1_db_is_migrated(self, tmp_path):
+        # DBs built before versioning began read as v0 but carry every v1
+        # column; they migrate from the v1 floor rather than being rejected.
+        db_path = tmp_path / "v0.db"
+        _cases_db(db_path, version=0)
+        with sqlite3.connect(db_path) as conn:
+            pipeline.check_schema_version(conn, db_path)
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(cases)")}
+            assert "closed_at" in cols
+            assert conn.execute("PRAGMA user_version").fetchone()[0] == pipeline.SCHEMA_VERSION
+
+    def test_migration_is_idempotent_on_a_fresh_db(self, tmp_path):
+        # create_db declares every column then calls this with user_version 0,
+        # so the steps must skip columns that are already present rather than
+        # failing on a duplicate ADD COLUMN.
+        db_path = tmp_path / "fresh.db"
+        _cases_db(db_path, version=0)
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("ALTER TABLE cases ADD COLUMN closed_at TEXT")
+        with sqlite3.connect(db_path) as conn:
+            pipeline.check_schema_version(conn, db_path)  # no duplicate-column error
             assert conn.execute("PRAGMA user_version").fetchone()[0] == pipeline.SCHEMA_VERSION
 
     def test_genuinely_older_db_is_rejected_not_migrated(self, tmp_path):
@@ -538,17 +581,21 @@ class TestSchemaVersion:
         with sqlite3.connect(db_path) as conn:
             conn.execute("CREATE TABLE cases (id INTEGER PRIMARY KEY, title TEXT)")
         with sqlite3.connect(db_path) as conn:
-            with pytest.raises(RuntimeError, match="does not migrate"):
+            with pytest.raises(RuntimeError, match="migrates only from v1"):
                 pipeline.check_schema_version(conn, db_path)
 
     def test_newer_db_is_rejected(self, tmp_path):
         db_path = tmp_path / "future.db"
-        _v1_cases_db(db_path)
+        _cases_db(db_path)
         with sqlite3.connect(db_path) as conn:
             conn.execute(f"PRAGMA user_version = {pipeline.SCHEMA_VERSION + 1}")
         with sqlite3.connect(db_path) as conn:
             with pytest.raises(RuntimeError, match="Update the package"):
                 pipeline.check_schema_version(conn, db_path)
+
+    def test_every_declared_version_has_a_migration_step(self):
+        # A bump without a step would silently leave DBs in the wild behind.
+        assert set(pipeline.MIGRATIONS) == set(range(2, pipeline.SCHEMA_VERSION + 1))
 
 
 def test_trim_titles():
@@ -598,7 +645,9 @@ class TestLoadCasesSeenStamps:
         conn = sqlite3.connect(":memory:")
         cols = ", ".join(f"{c} TEXT" if c != "id" else "id INTEGER PRIMARY KEY"
                          for c in pipeline.DB_CASE_COLUMNS)
-        conn.execute(f"CREATE TABLE cases ({cols}, first_seen TEXT, last_seen TEXT)")
+        conn.execute(
+            f"CREATE TABLE cases ({cols}, first_seen TEXT, last_seen TEXT, closed_at TEXT)"
+        )
         return conn
 
     def _record(self, **overrides):
@@ -628,3 +677,70 @@ class TestLoadCasesSeenStamps:
         pipeline.load_cases(conn, [self._record()], now="2026-07-08T00:00:00+00:00")
         stale = conn.execute("SELECT last_seen FROM cases WHERE id = 2").fetchone()
         assert stale == ("2026-07-01T00:00:00+00:00",)
+
+
+class TestLoadCasesClosedAt:
+    """closed_at is the only record of when a case stopped being Open: the feed
+    carries current status only, so the transition is observable exactly once,
+    in the upsert, before `status` is overwritten."""
+
+    _conn = TestLoadCasesSeenStamps._conn
+    _record = TestLoadCasesSeenStamps._record
+
+    def _closed_at(self, conn, case_id=1):
+        return conn.execute(
+            "SELECT closed_at FROM cases WHERE id = ?", (case_id,)
+        ).fetchone()[0]
+
+    def test_open_to_closed_stamps_the_observing_build(self):
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record()], now="2026-07-01T00:00:00+00:00")
+        assert self._closed_at(conn) is None
+        pipeline.load_cases(conn, [self._record(status="Closed")],
+                            now="2026-07-08T00:00:00+00:00")
+        assert self._closed_at(conn) == "2026-07-08T00:00:00+00:00"
+
+    def test_stamp_does_not_advance_on_later_builds(self):
+        # Once observed, the close time is fixed; re-seeing the closed case must
+        # not drag it forward into whatever month the build runs in.
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record()], now="2026-07-01T00:00:00+00:00")
+        pipeline.load_cases(conn, [self._record(status="Closed")],
+                            now="2026-07-08T00:00:00+00:00")
+        pipeline.load_cases(conn, [self._record(status="Closed")],
+                            now="2026-09-20T00:00:00+00:00")
+        assert self._closed_at(conn) == "2026-07-08T00:00:00+00:00"
+
+    def test_case_first_seen_already_closed_gets_no_stamp(self):
+        # We never saw it open, so we cannot claim to know when it closed. This
+        # is why NULL is ambiguous and must be read alongside status.
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record(status="Closed")],
+                            now="2026-07-01T00:00:00+00:00")
+        assert self._closed_at(conn) is None
+
+    def test_null_status_counts_as_closed(self):
+        # A handful of live rows carry a NULL status; `!= 'Open'` would evaluate
+        # to NULL for those and silently skip the stamp, so the SQL uses IS NOT.
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record()], now="2026-07-01T00:00:00+00:00")
+        pipeline.load_cases(conn, [self._record(status=None)],
+                            now="2026-07-08T00:00:00+00:00")
+        assert self._closed_at(conn) == "2026-07-08T00:00:00+00:00"
+
+    def test_reopened_case_clears_the_stamp(self):
+        # Otherwise a stale closed_at would hide a currently-open case from any
+        # "open at end of month" query run over later months.
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record()], now="2026-07-01T00:00:00+00:00")
+        pipeline.load_cases(conn, [self._record(status="Closed")],
+                            now="2026-07-08T00:00:00+00:00")
+        pipeline.load_cases(conn, [self._record(status="Open")],
+                            now="2026-07-15T00:00:00+00:00")
+        assert self._closed_at(conn) is None
+
+    def test_stays_open_leaves_no_stamp(self):
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record()], now="2026-07-01T00:00:00+00:00")
+        pipeline.load_cases(conn, [self._record()], now="2026-07-08T00:00:00+00:00")
+        assert self._closed_at(conn) is None

@@ -139,6 +139,20 @@ The rules are static rather than recomputed each run, to avoid a feedback loop w
 
 Daily case counts jump from ~0 to 100+ per day on exactly 2026-04-20 (one stray case from 2026-04-07). Verified 2026-07-16 against the live feed: this is **not** a rolling retention window — the feed still contains all 876 cases with STARTDATE before 2026-05-01 and all 24 pre-April cases the DB knows, exactly matching the DB, so **nothing has been deleted since collection began**. The feed itself evidently started (or was emptied) around mid-April 2026; the handful of older cases are long-lived carryovers such as active boil notices from 2025. Consequences: weekly snapshots currently miss nothing; "April 2026" is still really ten observed days, so any per-month metric must clip its measurement window to [2026-04-20, now] or early months look artificially healthy — this artifact, not a real deterioration, fully explained an apparent month-on-month decline in the status site's grades before the clip was added. Every boil-notice *lift* currently on file refers to a notice issued before the feed window opened. The pipeline now stamps `first_seen`/`last_seen` on every case as a tripwire: if `last_seen` ever stops advancing for cases still marked open, the operator has started pruning and snapshot frequency needs rethinking.
 
+## The feed carries no modification timestamp — `LASTUPDATE` and `CREATEDATE` are declared but always NULL (probed 2026-07-21)
+
+The layer's field list looks like it solves case history: alongside the fields the pipeline maps, it declares `LASTUPDATE` (Date) and `CREATEDATE` (Date), and the service's `editFieldsInfo` names `EditDate` / `CreationDate` / `Creator` / `Editor`. None of it is usable.
+
+Counted layer-wide against the live service: `LASTUPDATE IS NOT NULL` returns **0** of 8,155 records, and `CREATEDATE IS NOT NULL` returns **0** (for scale, `ENDDATE IS NOT NULL` returns 6,497, so the query itself is sound). The `editFieldsInfo` fields are named in the service metadata but are not exposed as queryable fields on this DeptView. `capabilities` is `Query` alone, `supportsChangeTracking` is absent, and there is no `archivingInfo` — so no change-tracking and no `historicMoment` temporal queries either.
+
+Consequence: **the feed is a complete archive of cases but a pure snapshot of status.** It returns everything (8,155 live vs 8,131 in the DB), yet carries no time dimension whatsoever, so no amount of re-querying recovers when a case changed. `status` transitions are observable only by us, only at build time, which is why `cases.closed_at` is stamped in the upsert and why the published daily release DBs are the only route to history before that column existed (see [`uisce.replay_closed_at`](../src/uisce/replay_closed_at.py)). Do not re-derive this; the fields will keep looking promising.
+
+## `closed_at` is a floor: short-lived cases are never observed open
+
+Measured 2026-07-21 by replaying the 10 published snapshots (2026-06-30 → 2026-07-20): of the 2,224 cases that first appeared after the earliest snapshot, **256 (12%) were never seen `Open` in any snapshot** — created and closed inside a single gap between builds. No transition exists for those, so they can neither be replayed nor caught live.
+
+This is a property of the build cadence (cron Mon/Wed/Fri, so ≤3-day gaps plus missed runs), not of the replay: any "closed in month M" figure is a **floor**, systematically missing the shortest-lived cases, in the same way notice-to-completion spans are floors. A daily cron would shrink the gap but never close it. Also note 76% of currently-closed cases (5,798) closed before the first published snapshot and are unrecoverable outright, so the series realistically begins with July 2026.
+
 ## `water_outage` flag is not a filter
 
 The flag is set on 7,345 of 7,553 cases (97%) — including installations, investigations, and flushing works. Any "which cases actually cut supply" logic has to come from `work_category` + `work_type`, not this flag (the status site's severity classes in [statuspage-methodology.md](statuspage-methodology.md) do exactly that).
