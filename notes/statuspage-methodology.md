@@ -31,6 +31,35 @@ Interval inputs come from `inferred_cases.notice_to_end_seconds`, capped at 14 d
 - Nothing accrues beyond "now" (a scheduled end in the future is not downtime yet) or before **2026-04-20**, when data collection began; earlier days render as "no data" and each month's denominator is the observed window only. Collection start matters a lot: April 2026 originally graded far better than later months purely because its first three weeks were unobserved.
 - Boil-water notices are lifted by separate cases with fresh reference_nums, so issue → lift is paired by county + normalised scheme name from `location` ("Ardfinnan Regional Public Water Supply" → "ardfinnan"), with up to 2 days of publication-order slack. On the July 2026 snapshot only one notice pairs — every other lift on file refers to a notice issued before collection began — but coverage grows with history.
 
+## The county drill-down: county → towns (added 2026-07-25)
+
+Clicking a county opens a per-county view (hash route `#county/<name>`, same single page) which carries the tabular detail that used to expand inline, plus a breakdown of the county into the named places its cases fall in.
+
+**The geography is Census settlements, not the feed's own text.** `cases.location` looks tempting — for Kildare it reads `Leixlip`, `Prosperous`, `Celbridge`, `Newbridge`, `Naas` — but it has 3,866 distinct values nationally and fragments badly: `Newbridge` / `Newbridge,` / `Mount Carmel, Newbridge` are three keys for one town, estate and street names appear as if they were places (`Marlton Park`, `Ashgrove Crescent`, `Wolstan Haven Road`), and it carries no population, so nothing can be weighted by it. The geocode cache is worse: 94% of rows have only `city_district`, which is mostly Electoral Divisions (`Naas Urban ED`) and bridges (`Bond Bridge`).
+
+Instead each pin is placed in the CSO Urban Area (settlement) holding the largest share of its 500 m affected population, via `data/sa_towns.csv` — see [population-data-sources.md](population-data-sources.md) for that join. Names come out canonical (`Kildare`, not `Kildare Town`; `Coill Dubh (Blackwood)`), the fragmented location strings consolidate onto one row, and every town arrives with a Census population.
+
+Four decisions worth recording:
+
+- **One home per pin, by dominant share.** A pin could be split across every settlement its footprint touches, but the median dominant share is **1.00** on the July 2026 corpus — pins essentially never straddle a boundary — so splitting would buy nothing and would stop per-town case counts summing to the county's.
+- **Population attributed to a town is the footprint ∩ town, not the whole footprint.** A pin at the edge of a village would otherwise log person-hours for people who don't live in it, and could drive availability below zero. County figures still take the whole footprint, so town person-hours sum to ≤ the county's, never more.
+- **A settlement in a different county than the case claims is refused** and the case falls to the rural bucket. These are genuine border pins — a Kildare-labelled notice whose footprint centres on Blessington, Co. Wicklow — and re-homing them across a county line would contradict the page they appear on.
+- **No letter grades at town level.** The A–F thresholds are calibrated to the distribution of county-months; against a 500-person denominator an ordinary burst main reads F. Availability *is* published, because that is the figure the drill-down exists to show — a 24-hour event that moves a county of 62,000 by 0.18 points moves the 1,000-person town it happened in by 11. The page says so in as many words.
+
+**Everything outside a settlement is one bucket, "Outside towns" — 40% of cases.** That is not a defect of the geography: most of the network (reservoirs, treatment plants, trunk mains) is between towns rather than in one. Its population is the county Census total minus the county's settlement sums, which over-states it by ~2.5% since the two come from different aggregations. A pin sitting just beyond a village boundary also lands here even where the notice names the village; the page says that too, and each case still shows its own notice location.
+
+**No day bars at town level.** Deliberate: the day arrays are the bulk of the payload, and 623 town breakdowns × months of 31 two-element arrays would multiply `data.js` several times over for a chart nobody would read at that granularity. Counts, person-hours and availability only.
+
+### `closed_at` gives a past month something to say
+
+The site's open-case figures are a right-now snapshot with no month dimension, so a historic month previously had nothing to report beyond its bars (see the known limitation below, and PR #21 which hid those figures on non-latest months for exactly that reason). `cases.closed_at` is the one field that does carry a month for a case that is no longer open, so the county view adds an **"observed to close in <month>"** section, and each town row a resolved count.
+
+Its coverage is partial by construction and the copy says so: NULL for every case that closed before schema v2, and a case that opens and closes inside one build gap is never observed open, so never stamped. Read it as a floor. This is what lets a county with zero open cases still show something true — Carlow, at 0 open on the July 2026 snapshot, reports 8 cases observed closing that month across Rathvilly, Carlow town and the rural bucket.
+
+### Known limitation: the five "city and suburbs" settlements
+
+CSO Urban Areas treats `Dublin city and suburbs` as **one settlement of 1,263,219 people**, so all of Dublin's cases collapse into a single row and the drill-down does nothing there. Cork, Limerick, Galway and Waterford have the same shape at smaller scale. Splitting them needs a sub-geography — Electoral Divisions are on the same ArcGIS server (`CSO_ELECTORAL_DIVISIONS_2022_Genralised_20m_view`, with populations in `SAPS_2022_CSOED3270923.csv`) and would slot into the same centroid-in-polygon step. Not done here; the other 21 counties work as intended.
+
 ## Grades
 
 A–F comes from availability: **A ≥ 99.9%, B ≥ 99.75%, C ≥ 99.45%, D ≥ 99.0%, else F**, and any active boil-water / do-not-drink / do-not-consume notice knocks the grade one step (D and F stay F). Discolouration is shown but never knocks.
@@ -74,4 +103,4 @@ See the eval in [end-time-eval.md](end-time-eval.md) for how the LLM-extracted e
 
 ## Possible next steps
 
-Population served per named supply scheme from the EPA public water supplies register (boil notices name their scheme in `location`); a locality-level component view (statuspage-style groups: county → towns); a prompt tweak for the nightly-works pattern where the model currently extracts date-only ends (see [model-and-runtime-benchmarks.md](model-and-runtime-benchmarks.md) — qwen got `scheduled_end_with_time` right on those 8 cases); GitHub Pages publishing from the weekly Build DB workflow.
+Population served per named supply scheme from the EPA public water supplies register (boil notices name their scheme in `location`); an Electoral-Division split for the five "city and suburbs" settlements, so the Dublin drill-down does something (see the drill-down section above); a prompt tweak for the nightly-works pattern where the model currently extracts date-only ends (see [model-and-runtime-benchmarks.md](model-and-runtime-benchmarks.md) — qwen got `scheduled_end_with_time` right on those 8 cases); GitHub Pages publishing from the weekly Build DB workflow.

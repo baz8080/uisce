@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
 
 from uisce.site import (
+    RURAL,
     SmallAreaIndex,
+    TownLookup,
     boil_notice_fate,
     build_site,
     classify,
@@ -32,6 +34,7 @@ def _case(**overrides):
         "reference_num": "CAR00000001",
         "start_date": "2026-05-01T00:00:00+00:00",
         "location": "Somewhere",
+        "closed_at": None,
         "full_lat": 52.836,
         "full_lon": -6.926,
         "boil_water_notice": 0,
@@ -49,6 +52,10 @@ def _case(**overrides):
 # one Small Area of 1,000 people sitting right on the test pin
 SA_INDEX = SmallAreaIndex([(52.836, -6.926, "SA1", 1000)])
 NOW = datetime(2026, 5, 10, tzinfo=UTC)
+
+# that Small Area is inside a Co. Carlow settlement; the pin therefore lands
+# in the town rather than the rural bucket
+TOWNS = TownLookup([("SA1", "T1", "Testtown", "Carlow")], SA_INDEX.pop)
 
 
 class TestClassify:
@@ -287,3 +294,132 @@ class TestBuildSite:
                       notice_to_end_seconds=10 * 86400.0, status="Open")]
         month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["person_h"] == 24 * 1000  # May 9 -> NOW (May 10) only
+
+    def test_towns_are_absent_without_a_lookup(self):
+        assert build_site([_case()], SA_INDEX, NOW)["counties"]["Carlow"]["towns"] == {}
+
+
+class TestTownLookup:
+    def test_pin_lands_in_the_settlement_holding_most_of_its_population(self):
+        towns = TownLookup(
+            [("SA1", "T1", "Small", "Carlow"), ("SA2", "T2", "Big", "Carlow")],
+            {"SA1": 100, "SA2": 900},
+        )
+        assert towns.dominant({"SA1": 100, "SA2": 900}, "Carlow") == "T2"
+
+    def test_a_footprint_mostly_outside_any_settlement_is_rural(self):
+        towns = TownLookup([("SA1", "T1", "Small", "Carlow")], {"SA1": 100})
+        assert towns.dominant({"SA1": 100, "SA9": 900}, "Carlow") == RURAL
+        assert towns.dominant({}, "Carlow") == RURAL
+
+    def test_a_settlement_in_another_county_is_refused(self):
+        """Border pins: a Kildare-labelled notice centred on Blessington, Co.
+        Wicklow must not appear on the Wicklow page, nor as a Wicklow town on
+        Kildare's."""
+        towns = TownLookup([("SA1", "T1", "Blessington", "Wicklow")], {"SA1": 1000})
+        assert towns.dominant({"SA1": 1000}, "Kildare") == RURAL
+
+    def test_within_keeps_only_the_part_of_a_footprint_inside_the_town(self):
+        towns = TownLookup([("SA1", "T1", "Town", "Carlow")], {"SA1": 100})
+        assert towns.within({"SA1": 100, "SA9": 900}, "T1") == {"SA1": 100}
+        assert towns.within({"SA1": 100, "SA9": 900}, RURAL) == {"SA9": 900}
+
+    def test_rural_population_is_the_county_remainder(self):
+        towns = TownLookup([("SA1", "T1", "Town", "Carlow")], {"SA1": 1000})
+        assert towns.rural_pop("Carlow") == 61968 - 1000
+
+    def test_rural_population_never_goes_to_zero(self):
+        """Town sums are Small-Area based and the county total is a hardcoded
+        Census figure, so the two can in principle cross over."""
+        towns = TownLookup([("SA1", "T1", "Town", "Carlow")], {"SA1": 999_999})
+        assert towns.rural_pop("Carlow") == 1
+
+
+class TestTownBreakdown:
+    def _town(self, rows, code="T1", ym="2026-05", towns=TOWNS):
+        county = build_site(rows, SA_INDEX, NOW, towns)["counties"]["Carlow"]
+        return county["towns"][code]["months"][ym], county["towns"][code]
+
+    def test_town_availability_is_measured_against_the_town_population(self):
+        """The same 24h event that barely dents a county of 62,000 takes a ninth
+        of the person-time of the 1,000-person town it actually happened in.
+        That divergence is the point of the drill-down, not an error."""
+        month, town = self._town([_case()])
+        county = build_site([_case()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert town["pop"] == 1000
+        assert month["person_h"] == county["months"]["2026-05"]["person_h"] == 24 * 1000
+        assert month["availability"] == 88.889
+        assert county["months"]["2026-05"]["availability"] == 99.821
+
+    def test_towns_carry_no_letter_grade(self):
+        month, _ = self._town([_case()])
+        assert "grade" not in month
+
+    def test_a_town_only_appears_in_months_it_had_a_case(self):
+        _, town = self._town([_case()])
+        assert list(town["months"]) == ["2026-05"]
+
+    def test_person_hours_outside_the_town_are_not_attributed_to_it(self):
+        """A pin whose footprint reaches beyond the settlement accrues the whole
+        of it at county level and only the inside part at town level — otherwise
+        a village could log person-hours for people who do not live in it."""
+        sa_index = SmallAreaIndex([(52.836, -6.926, "SA1", 1000), (52.838, -6.926, "SA2", 400)])
+        towns = TownLookup([("SA1", "T1", "Testtown", "Carlow")], sa_index.pop)
+        county = build_site([_case()], sa_index, NOW, towns)["counties"]["Carlow"]
+        assert county["months"]["2026-05"]["person_h"] == 24 * 1400
+        assert county["towns"]["T1"]["months"]["2026-05"]["person_h"] == 24 * 1000
+
+    def test_a_pin_outside_any_settlement_goes_to_the_rural_bucket(self):
+        towns = TownLookup([("SA9", "T1", "Elsewhere", "Carlow")], {"SA9": 500})
+        county = build_site([_case()], SA_INDEX, NOW, towns)["counties"]["Carlow"]
+        assert list(county["towns"]) == [RURAL]
+        assert county["towns"][RURAL]["name"] == "Outside towns"
+        assert county["towns"][RURAL]["rural"] is True
+
+    def test_open_cases_are_grouped_under_their_town(self):
+        _, town = self._town([_case(status="Open")])
+        assert [o["title"] for o in town["open"]] == ["Burst Water Main - Carlow"]
+
+
+class TestResolved:
+    """cases.closed_at is the only field with a month dimension for a case that
+    is no longer open — see PR #21 and notes/data-quality.md."""
+
+    def test_a_closed_case_is_listed_under_the_month_it_was_observed_to_close(self):
+        rows = [_case(status="Closed", closed_at="2026-05-06T04:00:00+00:00")]
+        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert county["resolved"]["2026-05"]["n"] == 1
+        assert county["resolved"]["2026-05"]["cases"][0]["closed"] == "2026-05-06"
+        assert county["towns"]["T1"]["months"]["2026-05"]["resolved_n"] == 1
+
+    def test_a_case_that_closed_before_the_column_existed_is_not_counted(self):
+        """NULL closed_at is ambiguous, so it is reported as nothing rather than
+        guessed at."""
+        rows = [_case(status="Closed", closed_at=None)]
+        assert build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]["resolved"] == {}
+
+    def test_an_open_case_is_never_listed_as_resolved(self):
+        rows = [_case(status="Open", closed_at="2026-05-06T04:00:00+00:00")]
+        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert county["resolved"] == {}
+        assert county["open_total"] == 1
+
+    def test_a_multi_pin_event_resolves_once(self):
+        rows = [
+            _case(id=1, status="Closed", closed_at="2026-05-06T04:00:00+00:00"),
+            _case(id=2, status="Closed", closed_at="2026-05-06T04:00:00+00:00"),
+        ]
+        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert county["resolved"]["2026-05"]["n"] == 1
+
+    def test_the_listed_cases_are_capped_but_the_count_is_not(self):
+        rows = [
+            _case(id=i, reference_num=f"CAR{i}", status="Closed",
+                  closed_at=f"2026-05-{i + 1:02d}T04:00:00+00:00")
+            for i in range(25)
+        ]
+        resolved = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]["resolved"]
+        assert resolved["2026-05"]["n"] == 25
+        assert len(resolved["2026-05"]["cases"]) == 20
+        # newest first, so the cap drops the oldest
+        assert resolved["2026-05"]["cases"][0]["closed"] == "2026-05-25"
