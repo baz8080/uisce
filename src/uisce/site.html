@@ -217,6 +217,12 @@
     table.towns td.name::before { content: none; }
     table.towns td.z { display: none; }
     .tsort { display: block; }
+
+    /* the location + date is nowrap and pushed right, which on a narrow screen
+       runs a long one ("Citywest Business Campus · since 2026-07-22") straight
+       off the page and makes the whole document scroll sideways */
+    .incident { flex-wrap: wrap; }
+    .incident .m { margin-left: 0; white-space: normal; flex-basis: 100%; }
   }
 
   footer { margin-top: 28px; color: var(--muted); font-size: 12.5px; }
