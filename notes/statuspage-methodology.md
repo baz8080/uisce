@@ -68,9 +68,25 @@ CSO Urban Areas treats a city and its suburbs as **one settlement** — `Dublin 
 | Limerick city and suburbs | 102,287 | 82 | 22% |
 | Waterford city and suburbs | 60,079 | 40 | 14% |
 
-Any settlement over **50,000** is therefore broken into the Local Electoral Areas its Small Areas fall in (`SPLIT_ABOVE_POP` in `towns.py`). That threshold currently selects exactly those five — the next largest settlement is Drogheda at 44,135 — but it is a population rule rather than a name match so the CSO renaming them cannot break it. Dublin goes from one row to **40 rows, the largest 8 disruptions**, named the way people name them: Cabra-Glasnevin, Kimmage-Rathmines, Rathfarnham-Templeogue, Dún Laoghaire, Tallaght South, Clondalkin.
+Any settlement over **50,000** is therefore broken into the Local Electoral Areas its Small Areas fall in (`SPLIT_ABOVE_POP` in `towns.py`). That threshold currently selects exactly those five — the next largest settlement is Drogheda at 44,135 — but it is a population rule rather than a name match so the CSO renaming them cannot break it. Dublin goes from one row to **40 rows, the largest 8 disruptions**.
 
-**LEA, not Electoral Division.** EDs give better names for Cork (Bishopstown, Douglas, Blackpool) but there are 90 of them in the Cork City LEAs alone and **211 in Dublin**, heavily letter-suffixed (`Bishopstown A`…`E`) and archaic in the inner city (Arran Quay, Merchants Quay, Rotunda). At ~4 cases per ED the availability figure would be noise, which is exactly what this project tries not to publish. LEA is the granularity at which the statistics still say something: ~26 cases per Dublin row over 22k–75k people. The cost is that Cork's city LEAs are compass quadrants — `Cork City South East` — which nobody says out loud. Accepted rather than fixed; an ED-based naming pass for Cork alone is possible later.
+**LEA, not Electoral Division.** EDs are the obvious alternative and there are 90 of them in the Cork City LEAs alone, **211 in Dublin**, heavily letter-suffixed (`Bishopstown A`…`E`). LEA keeps the row count in proportion to the rest of the site: ~26 cases per Dublin row over 22k–75k people, against ~4 per ED.
+
+### The LEA names are administrative, not vernacular
+
+This is the real cost of the choice and it should not be oversold. LEA names are electoral compounds stitched from the districts a boundary happens to cover. Of Dublin's 28 areas:
+
+- **12 are hyphenated compounds** — `Kimmage-Rathmines`, `Cabra-Glasnevin`, `Rathfarnham-Templeogue`, `Ballymun-Finglas`, `Artane-Whitehall`, `Firhouse-Bohernabreena`, `Killiney-Shankill` … Nobody says these. They pair districts that residents would not group, and in some cases actively would not.
+- **5 are compass-qualified**: `North Inner City`, `Tallaght Central`.
+- **11 are plain place names**: `Clontarf`, `Blackrock`, `Stillorgan`, `Dundrum`, `Lucan`, `Clondalkin`, `Castleknock`, `Dún Laoghaire`.
+
+Cork's are worse — `Cork City South East` and three siblings, pure quadrants.
+
+The compound is ugly but **not wrong**: the polygon genuinely spans both places, so relabelling `Kimmage-Rathmines` as `Rathmines` would file a Kimmage burst under Rathmines. The fix is therefore a finer geography, not a better label — and the vernacular name is not actually lost from the page, because every case in the open and resolved lists carries the notice's own `location` beneath it (`Killinarden, Tallaght`, `Chapelizod`, `Bluebell`). The area row is the statistical unit; the notice location is the human one.
+
+**What the ED route would cost, measured.** Stripping the trailing letter from Dublin's 211 EDs leaves **104 distinct names averaging ~12,100 people** — town-sized, and the names are largely vernacular (Crumlin, Chapelizod, Ballymun, Drumcondra, Rathmines East/West, Cabra East/West). Two caveats found while checking: some are archaic or obscure (Arran Quay, Ballybough, Decies, Drumfinn, Botanic), and the newer suburbs carry their own hyphenated compounds (`Clondalkin-Rowlagh`, `Clondalkin-Cappaghmore`), so EDs do not fully escape the problem either. It also needs a name-merging heuristic — the kind of string munging this project rejected when it declined to key the drill-down on `cases.location`.
+
+One argument against EDs was dropped on inspection: that ~1–2 cases per ED per month is too thin to publish. The settlement layer already publishes single-case rows for villages of 500–1,000 (Carragh, Ballitore), so thinness is the norm for this view rather than a reason to avoid a geography.
 
 **Slivers are pooled, and that is what avoids name collisions.** LEAs are not contained by the settlement — they run out into the surrounding county — so a part is kept only when **30%** of its LEA lies inside (`MIN_PART_SHARE`). Containment is otherwise excellent: 26 of Dublin's 30 parts are ≥91% inside. The leftovers are small (Dublin 0.6% of the city, Cork 2.8%, Galway 2.2%, Limerick 4.3%, Waterford 9.6% — that last being Ferrybank, on the Kilkenny side) and pool into one `Elsewhere in Dublin city` row.
 
@@ -125,4 +141,4 @@ See the eval in [end-time-eval.md](end-time-eval.md) for how the LLM-extracted e
 
 ## Possible next steps
 
-Population served per named supply scheme from the EPA public water supplies register (boil notices name their scheme in `location`); a geography for the rural bucket, which is now the largest row on most county pages (see the limitation above); ED-based names for the Cork city areas, whose LEA names are compass quadrants; a prompt tweak for the nightly-works pattern where the model currently extracts date-only ends (see [model-and-runtime-benchmarks.md](model-and-runtime-benchmarks.md) — qwen got `scheduled_end_with_time` right on those 8 cases); GitHub Pages publishing from the weekly Build DB workflow.
+Population served per named supply scheme from the EPA public water supplies register (boil notices name their scheme in `location`); a geography for the rural bucket, which is now the largest row on most county pages (see the limitation above); an Electoral-Division split for the cities, trading row count for vernacular area names and retiring the hyphenated LEA compounds (costed in the drill-down section above); a prompt tweak for the nightly-works pattern where the model currently extracts date-only ends (see [model-and-runtime-benchmarks.md](model-and-runtime-benchmarks.md) — qwen got `scheduled_end_with_time` right on those 8 cases); GitHub Pages publishing from the weekly Build DB workflow.
