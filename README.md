@@ -94,6 +94,8 @@ Duration inference reads each notice and extracts the end-time signal using a lo
 
 ## Layout
 
+**[notes/how-it-works.md](notes/how-it-works.md) is the orientation map** — the four flows, what each module owns, and where to go to change a given thing. Start there when picking the project back up.
+
 ```
 src/uisce/
   pipeline.py    download, map, geocode, load cases   (uisce-pipeline)
@@ -105,7 +107,7 @@ src/uisce/
   site.html      front end copied into out/site/
   config.py      shared paths, constants, HTTP session
 tests/           pytest suite (no network access needed)
-notes/           data-quality findings and pipeline caveats
+notes/           how it works, data-quality findings, pipeline caveats
 ```
 
 The commands are console entry points declared in `pyproject.toml`; run them from the repo root, since data paths (`out/`, `data/`) are relative.
