@@ -135,16 +135,89 @@
     .bar { grid-area: bar; }
   }
 
-  .detail { display: none; border-top: 1px solid var(--grid); padding: 12px 16px 14px; font-size: 13.5px; }
-  .county.openrow .detail { display: block; }
-  .detail .drow { display: flex; gap: 18px; flex-wrap: wrap; color: var(--ink-2); margin-bottom: 8px; }
-  .detail .drow b { color: var(--ink); }
-  .incident { display: flex; gap: 8px; padding: 5px 0; border-top: 1px dashed var(--grid); align-items: baseline; }
+  .row .chev { color: var(--muted); font-size: 16px; }
+
+  .drow { display: flex; gap: 18px; flex-wrap: wrap; color: var(--ink-2); margin-bottom: 8px; font-size: 13.5px; }
+  .drow b { color: var(--ink); }
+  .incident { display: flex; gap: 8px; padding: 5px 0; border-top: 1px dashed var(--grid); align-items: baseline; font-size: 13.5px; }
   .incident .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; position: relative; top: -1px; }
   .incident .t { color: var(--ink); }
   .incident .m { color: var(--muted); font-size: 12.5px; margin-left: auto; white-space: nowrap; }
   .s-outage { background: var(--critical); } .s-quality { background: var(--serious); }
   .s-degraded { background: var(--warning); } .s-maintenance { background: var(--maint); }
+
+  /* ---- county drill-down ---- */
+  .back {
+    display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px;
+    color: var(--ink-2); font-size: 13.5px; text-decoration: none;
+  }
+  .back:hover { color: var(--ink); }
+  .chead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .chead h2 { font-size: 21px; font-weight: 650; }
+  .chead .pop { color: var(--muted); font-size: 13px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px; margin-bottom: 10px;
+  }
+  .card > h3 {
+    font-size: 14px; font-weight: 650; margin-bottom: 4px;
+    display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  }
+  .card > h3 .n { color: var(--muted); font-weight: 400; font-size: 12.5px; }
+  .note { color: var(--muted); font-size: 12.5px; margin-bottom: 10px; }
+  .bar.tall { height: 40px; }
+
+  .scroll { overflow-x: auto; }
+  table.towns { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  table.towns th, table.towns td { padding: 6px 8px; text-align: right; white-space: nowrap; }
+  table.towns th {
+    font-size: 12px; font-weight: 600; color: var(--ink-2);
+    border-bottom: 1px solid var(--grid); cursor: pointer; user-select: none;
+  }
+  table.towns th:hover { color: var(--ink); }
+  table.towns th.on { color: var(--ink); }
+  table.towns th.on::after { content: " ▾"; }
+  table.towns th:first-child, table.towns td:first-child { text-align: left; padding-left: 0; }
+  table.towns td:last-child, table.towns th:last-child { padding-right: 0; }
+  table.towns tbody tr { border-top: 1px dashed var(--grid); }
+  table.towns tbody tr:first-child { border-top: none; }
+  table.towns td { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+  table.towns td.name { color: var(--ink); font-weight: 600; white-space: normal; }
+  table.towns td.name .tpop { color: var(--muted); font-weight: 400; font-size: 12px; }
+  table.towns td b { color: var(--ink); font-weight: 650; }
+  table.towns tr.rural td.name { color: var(--ink-2); font-weight: 500; font-style: italic; }
+  table.towns td.z { color: var(--muted); }
+  /* the availability cell carries a hairline meter of the disrupted share, so a
+     column of 99.x% values still shows which town actually took the hit */
+  .meter { display: inline-block; width: 42px; height: 5px; border-radius: 3px;
+           background: var(--cell-empty); vertical-align: middle; margin-left: 8px; overflow: hidden; }
+  .meter i { display: block; height: 100%; background: var(--critical); }
+
+  .tgroup { margin-top: 10px; }
+  .tgroup > .tname { font-size: 13px; font-weight: 650; }
+  .tsort { display: none; font: inherit; font-size: 13px; color: var(--ink);
+           background: var(--surface); border: 1px solid var(--border);
+           border-radius: 8px; padding: 5px 8px; margin-bottom: 10px; }
+
+  /* Narrow screens can't carry seven numeric columns, and the two that matter
+     most — person-hours and availability — are the last two, so a horizontal
+     scroll hides exactly the wrong thing. Stack each area into its own block
+     with the figures labelled, and drop the zero rows: an area with no quality
+     notice says more by omitting the line than by printing "Quality 0". */
+  @media (max-width: 640px) {
+    table.towns thead { display: none; }
+    table.towns, table.towns tbody, table.towns tr, table.towns td { display: block; }
+    table.towns tbody tr { padding: 8px 0; }
+    table.towns td {
+      display: flex; justify-content: space-between; align-items: baseline;
+      gap: 12px; padding: 2px 0;
+    }
+    table.towns td::before { content: attr(data-label); color: var(--ink-2); font-size: 12.5px; }
+    table.towns td.name { display: block; padding: 0 0 4px; }
+    table.towns td.name::before { content: none; }
+    table.towns td.z { display: none; }
+    .tsort { display: block; }
+  }
 
   footer { margin-top: 28px; color: var(--muted); font-size: 12.5px; }
   footer p { margin-top: 6px; }
@@ -154,32 +227,29 @@
 <div class="wrap">
   <header>
     <h1>Irish Water Supply Disruptions</h1>
-    <div class="sub">Unofficial tracker of Uisce Éireann supply &amp; works notices — what was announced, where, and how long it ran from notice to reported completion · county-level view</div>
+    <div class="sub">Unofficial tracker of Uisce Éireann supply &amp; works notices — what was announced, where, and how long it ran from notice to reported completion · pick a county for the breakdown by town</div>
   </header>
 
-  <div class="banner" id="banner"></div>
-  <div class="tiles" id="tiles"></div>
+  <div id="overview">
+    <div class="banner" id="banner"></div>
+    <div class="tiles" id="tiles"></div>
 
-  <div class="controls">
-    <div class="months" id="months"></div>
-    <select id="sort">
-      <option value="name">Sort: county name</option>
-      <option value="grade">Sort: worst grade first</option>
-      <option value="events">Sort: most outages first</option>
-    </select>
-    <div class="partial-note" id="partialNote"></div>
+    <div class="controls">
+      <div class="months" id="months"></div>
+      <select id="sort">
+        <option value="name">Sort: county name</option>
+        <option value="grade">Sort: worst grade first</option>
+        <option value="events">Sort: most outages first</option>
+      </select>
+      <div class="partial-note" id="partialNote"></div>
+    </div>
+
+    <div class="legend" id="legend"></div>
+
+    <div id="list"></div>
   </div>
 
-  <div class="legend">
-    <span><i style="background:var(--good)"></i> No announced disruption</span>
-    <span><i style="background:var(--critical)"></i> Supply disruption</span>
-    <span><i style="background:var(--serious)"></i> Water quality notice</span>
-    <span><i style="background:var(--warning)"></i> Restrictions / low pressure</span>
-    <span><i style="background:var(--maint)"></i> Works (planned / non-disruptive)</span>
-    <span><i style="background:var(--critical);opacity:.4"></i><i style="background:var(--critical);opacity:.7"></i><i style="background:var(--critical)"></i> deeper = larger share of county affected (&lt;0.5% / 0.5–2% / &gt;2%)</span>
-  </div>
-
-  <div id="list"></div>
+  <div id="countyview" hidden></div>
 
   <footer>
     <p><b>What this measures:</b> supply disruptions <em>announced</em> by Uisce Éireann — not measured availability at anyone's tap. Every time on this page is measured from <em>when the notice was published</em>, not from when supply was actually lost: publication is the earliest moment the data records, and for unplanned events the disruption had already begun. Treat every figure here as a <em>floor</em> on the true length.</p>
@@ -197,29 +267,72 @@ const SEVLABEL = { outage: "Supply disruption", quality: "Water quality notice",
                    "": "No announced disruption" };
 const MONTH_NAMES = {"01":"January","02":"February","03":"March","04":"April","05":"May","06":"June",
                      "07":"July","08":"August","09":"September","10":"October","11":"November","12":"December"};
-let curMonth = D.months[D.months.length - 1];
+const LATEST = D.months[D.months.length - 1];
+let curMonth = LATEST;
 let sortBy = "name";
-const expanded = new Set();
+let townSort = "impact";
+let county = null;  // null = overview, otherwise the county being drilled into
 const today = new Date().toISOString().slice(0, 10);
 
+const LEGEND = `
+  <span><i style="background:var(--good)"></i> No announced disruption</span>
+  <span><i style="background:var(--critical)"></i> Supply disruption</span>
+  <span><i style="background:var(--serious)"></i> Water quality notice</span>
+  <span><i style="background:var(--warning)"></i> Restrictions / low pressure</span>
+  <span><i style="background:var(--maint)"></i> Works (planned / non-disruptive)</span>
+  <span><i style="background:var(--critical);opacity:.4"></i><i style="background:var(--critical);opacity:.7"></i><i style="background:var(--critical)"></i> deeper = larger share of county affected (&lt;0.5% / 0.5–2% / &gt;2%)</span>`;
+
 function monthLabel(ym) { return MONTH_NAMES[ym.slice(5)] + " " + ym.slice(0, 4); }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+// Open-case figures are a right-now snapshot of status='Open' — the DB keeps
+// each case's current status, not a history, so there is no such figure for a
+// past month and none can be reconstructed. Show them only on the month the
+// snapshot belongs to. `resolved` is the one thing that *does* carry a month,
+// via cases.closed_at, so a past month is not left with nothing to say.
+function isLatest() { return curMonth === LATEST; }
+
+function monthTabs(onclick) {
+  return D.months.map(m =>
+    `<button class="${m === curMonth ? "on" : ""}" onclick="${onclick}('${m}')">${monthLabel(m)}</button>`).join("");
+}
+
+function partialNote() {
+  return curMonth === today.slice(0, 7) ? "Partial month — in progress." :
+    curMonth === D.months[0] ? "Measured from 20 April 2026, when data collection began." : "";
+}
+
+function dayCells(days) {
+  return days.map(([s, pct], i) => {
+    const date = `${curMonth}-${String(i + 1).padStart(2, "0")}`;
+    if (date > today) return `<i class="future" title="${date}: —"></i>`;
+    if (s === "nd") return `<i class="future" title="${date}: no data (before collection began)"></i>`;
+    const intensity = !s ? "" : pct < 0.5 ? "n1" : pct < 2 ? "n2" : "";
+    const label = s ? `${SEVLABEL[s]} — ~${pct < 0.1 ? "<0.1" : pct.toFixed(1)}% of county affected` : SEVLABEL[s];
+    return `<i class="${s} ${intensity}" title="${date}: ${label}"></i>`;
+  }).join("");
+}
+
+function incident(o, when) {
+  return `<div class="incident">
+      <span class="dot s-${o.sev}"></span>
+      <span class="t">${esc(o.title)}</span>
+      <span class="m">${o.loc ? esc(o.loc) + " · " : ""}${when(o)}</span>
+    </div>`;
+}
 
 function render() {
-  // month tabs
-  document.getElementById("months").innerHTML = D.months.map(m =>
-    `<button class="${m === curMonth ? "on" : ""}" onclick="setMonth('${m}')">${monthLabel(m)}</button>`).join("");
+  document.getElementById("overview").hidden = county !== null;
+  document.getElementById("countyview").hidden = county === null;
+  document.getElementById("gen").textContent =
+    "Generated " + D.generated + " from uisce.db · github.com/baz8080/uisce · not affiliated with Uisce Éireann.";
+  county === null ? renderOverview() : renderCounty();
+}
 
-  const isCurrent = today.slice(0, 7) === curMonth;
-  const isFirst = curMonth === D.months[0];
-  // Open-case counts are a right-now snapshot of status='Open' — the DB keeps
-  // each case's current status, not a history, so there is no such figure for a
-  // past month and none can be reconstructed (closed-with-no-end-signal cases
-  // leave a 1s footprint, so they'd read as closed on their start day whatever
-  // their real run). Show them only on the month the snapshot belongs to.
-  const isLatest = curMonth === D.months[D.months.length - 1];
-  document.getElementById("partialNote").textContent =
-    isCurrent ? "Partial month — in progress." :
-    isFirst ? "Measured from 20 April 2026, when data collection began." : "";
+function renderOverview() {
+  document.getElementById("months").innerHTML = monthTabs("setMonth");
+  document.getElementById("partialNote").textContent = partialNote();
+  document.getElementById("legend").innerHTML = LEGEND;
 
   // national tiles
   let ev = 0, personH = 0, quality = 0, openNow = 0, popH = 0, worst = [];
@@ -240,7 +353,7 @@ function render() {
     <div class="tile"><div class="v">${natFix}</div><div class="k">median notice&nbsp;→&nbsp;completion<br>${nat.completed_n || 0} reported complete${schedNote}</div></div>
     <div class="tile"><div class="v">${personH >= 1e6 ? (personH / 1e6).toFixed(1) + "M" : Math.round(personH).toLocaleString()}</div><div class="k">person-hours of announced disruption</div></div>
     <div class="tile"><div class="v">${quality}</div><div class="k">water-quality notices</div></div>
-    ${isLatest ? `<div class="tile"><div class="v">${openNow}</div><div class="k">open cases right now</div></div>` : ""}`;
+    ${isLatest() ? `<div class="tile"><div class="v">${openNow}</div><div class="k">open cases right now</div></div>` : ""}`;
 
   const nF = worst.filter(w => w[1].grade === "F").length;
   const dot = nF > 8 ? "var(--critical)" : nF > 3 ? "var(--serious)" : nF > 0 ? "var(--warning)" : "var(--good)";
@@ -259,19 +372,127 @@ function render() {
 
   document.getElementById("list").innerHTML = names.map(name => {
     const c = D.counties[name], m = c.months[curMonth];
-    const cells = m.days.map(([s, pct], i) => {
-      const date = `${curMonth}-${String(i + 1).padStart(2, "0")}`;
-      if (date > today) return `<i class="future" title="${date}: —"></i>`;
-      if (s === "nd") return `<i class="future" title="${date}: no data (before collection began)"></i>`;
-      const intensity = !s ? "" : pct < 0.5 ? "n1" : pct < 2 ? "n2" : "";
-      const label = s ? `${SEVLABEL[s]} — ~${pct < 0.1 ? "<0.1" : pct.toFixed(1)}% of county affected` : SEVLABEL[s];
-      return `<i class="${s} ${intensity}" title="${date}: ${label}"></i>`;
-    }).join("");
     // "open" is a right-now snapshot of status='Open', not a property of the
     // selected month — say so, or it reads as "open during July"
-    const openBadge = isLatest && c.open_total ? `<b>${c.open_total}</b><span>open now</span>` : "";
+    const openBadge = isLatest() && c.open_total ? `<b>${c.open_total}</b><span>open now</span>` : "";
     const outWord = m.events.outage === 1 ? "disruption" : "disruptions";
-    const detail = `
+    const towns = Object.values(c.towns).filter(t => t.months[curMonth]).length;
+    const hint = towns ? `${towns} ${towns === 1 ? "area" : "areas"} — click for the breakdown` : "click for detail";
+    return `<div class="county">
+      <div class="row" onclick="go('${encodeURIComponent(name)}')" title="${name}: ${hint}">
+        <div class="cname"><span class="gradechip g-${m.grade}">${m.grade}</span>${name}</div>
+        <div class="bar">${dayCells(m.days)}</div>
+        <div class="stats">
+          <div class="counts">
+            <b>${m.events.outage}</b><span>${outWord}</span>${openBadge}
+          </div>
+          <b class="pct">${m.availability.toFixed(2)}%</b>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// ---- county drill-down ----
+
+const TOWN_SORTS = {
+  impact: (a, b) => b[1].person_h - a[1].person_h || b[1].events.outage - a[1].events.outage || b[0].pop - a[0].pop,
+  outages: (a, b) => b[1].events.outage - a[1].events.outage || b[1].person_h - a[1].person_h,
+  avail: (a, b) => a[1].availability - b[1].availability || b[0].pop - a[0].pop,
+  name: (a, b) => a[0].name.localeCompare(b[0].name),
+};
+
+function townRows(c) {
+  const rows = Object.values(c.towns)
+    .filter(t => t.months[curMonth])
+    .map(t => [t, t.months[curMonth]]);
+  rows.sort(TOWN_SORTS[townSort]);
+  if (!rows.length) return `<div class="note">No cases announced anywhere in the county in ${monthLabel(curMonth)}.</div>`;
+
+  const num = (v, label) => `<td class="${v ? "" : "z"}" data-label="${label}">${v ? `<b>${v}</b>` : "0"}</td>`;
+  const body = rows.map(([t, m]) => {
+    // share of the town's person-time lost, as a hairline meter — the numbers
+    // alone all read "99.something" and hide which town actually took the hit
+    const lost = Math.min(100, 100 - m.availability);
+    return `<tr class="${t.rural ? "rural" : ""}">
+      <td class="name">${esc(t.name)}<br><span class="tpop">${t.pop.toLocaleString()} people${t.rural ? ", est." : ""}</span></td>
+      ${num(m.events.outage, "Disruptions")}
+      ${num(m.events.quality, "Quality notices")}
+      ${num(m.events.degraded + m.events.maintenance, "Works")}
+      <td class="${m.person_h ? "" : "z"}" data-label="Person-hours">${m.person_h ? "<b>" + m.person_h.toLocaleString() + "</b>" : "—"}</td>
+      <td data-label="Availability">${m.availability.toFixed(2)}%<span class="meter" title="${lost.toFixed(2)}% of person-time disrupted"><i style="width:${Math.min(100, lost * 5).toFixed(1)}%"></i></span></td>
+      ${isLatest() ? num(t.open.length, "Open now") : ""}
+    </tr>`;
+  }).join("");
+
+  const th = (key, label, title) =>
+    `<th class="${townSort === key ? "on" : ""}" onclick="setTownSort('${key}')" title="${title}">${label}</th>`;
+  // the header cells are the sort control on desktop; stacked rows have no
+  // header, so narrow screens get a select instead
+  const opt = (key, label) => `<option value="${key}"${townSort === key ? " selected" : ""}>Sort: ${label}</option>`;
+  return `<select class="tsort" onchange="setTownSort(this.value)">
+    ${opt("impact", "most person-hours")}${opt("outages", "most disruptions")}
+    ${opt("avail", "worst availability")}${opt("name", "area name")}
+  </select>
+  <div class="scroll"><table class="towns">
+    <thead><tr>
+      ${th("name", "Area", "Sort by name")}
+      ${th("outages", "Disrup&shy;tions", "Supply disruptions — sort by count")}
+      <th title="Boil-water, do-not-drink and discolouration notices">Quality</th>
+      <th title="Restrictions, low pressure, and planned or non-disruptive works">Works</th>
+      ${th("impact", "Person-hours", "People affected × hours disrupted — sort by this")}
+      ${th("avail", "Availability", "Person-time free of disruption, against this area's own population — sort worst first")}
+      ${isLatest() ? '<th title="Cases still marked open right now">Open</th>' : ""}
+    </tr></thead>
+    <tbody>${body}</tbody>
+  </table></div>`;
+}
+
+function openSection(c) {
+  if (!isLatest()) return "";
+  const groups = Object.values(c.towns).filter(t => t.open.length);
+  groups.sort((a, b) => b.open.length - a.open.length || a.name.localeCompare(b.name));
+  const when = o => `${o.since > today ? "from" : "since"} ${o.since}`;
+  return `<div class="card">
+    <h3>Open right now <span class="n">${c.open_total} case${c.open_total === 1 ? "" : "s"}</span></h3>
+    <div class="note">A snapshot of cases the feed still marks open, whatever month you are viewing. Some are advance notices of planned works; a few are notices whose status has gone stale.</div>
+    ${groups.length ? groups.map(t => `<div class="tgroup">
+        <div class="tname">${esc(t.name)}</div>
+        ${t.open.map(o => incident(o, when)).join("")}
+      </div>`).join("")
+      : `<div class="note" style="margin:0">No open cases in ${esc(county)} right now.</div>`}
+  </div>`;
+}
+
+function resolvedSection(c) {
+  const r = c.resolved[curMonth];
+  const shown = r ? r.cases : [];
+  return `<div class="card">
+    <h3>Observed to close in ${monthLabel(curMonth)} <span class="n">${r ? r.n : 0} case${r && r.n === 1 ? "" : "s"}</span></h3>
+    <div class="note">The one figure here that genuinely belongs to a past month. A case is stamped when a build first sees it stop being open, so close times only exist from July 2026 onward, and a case that opens and closes between two builds is never seen open at all — read this as a floor, not a full list.</div>
+    ${shown.length
+      ? shown.map(o => incident(o, o => `opened ${o.since} · closed ${o.closed}`)).join("") +
+        (r.n > shown.length ? `<div class="incident" style="color:var(--muted)">…and ${r.n - shown.length} more</div>` : "")
+      : `<div class="note" style="margin:0">No case was observed to close in ${monthLabel(curMonth)}.</div>`}
+  </div>`;
+}
+
+function renderCounty() {
+  const c = D.counties[county], m = c.months[curMonth];
+  const note = partialNote();
+  document.getElementById("countyview").innerHTML = `
+    <a class="back" href="#" onclick="go(null); return false;">← All counties</a>
+    <div class="chead">
+      <span class="gradechip g-${m.grade}">${m.grade}</span>
+      <h2>${esc(county)}</h2>
+      <span class="pop">${c.pop.toLocaleString()} people · Census 2022</span>
+    </div>
+    <div class="controls">
+      <div class="months">${monthTabs("setMonth")}</div>
+      ${note ? `<div class="partial-note">${note}</div>` : ""}
+    </div>
+
+    <div class="card">
       <div class="drow">
         <span><b>${m.availability.toFixed(2)}%</b> of person-time undisrupted</span>
         <span><b>${m.events.outage}</b> supply disruptions (<b>${m.person_h.toLocaleString()}</b> person-hours)</span>
@@ -280,38 +501,41 @@ function render() {
         <span><b>${m.events.quality}</b> quality notices</span>
         <span><b>${m.clear_days}</b>/${m.days.length} clear days</span>
       </div>
-      ${!isLatest ? "" : `
-      ${c.open.length ? `<div class="incident" style="color:var(--muted)">Cases still marked open, as of the latest data — not limited to ${monthLabel(curMonth)}.</div>` : ""}
-      ${c.open.length ? c.open.map(o => `
-        <div class="incident">
-          <span class="dot s-${o.sev}"></span>
-          <span class="t">${o.title}</span>
-          <span class="m">${o.loc ? o.loc + " · " : ""}${o.since > today ? "from" : "since"} ${o.since}</span>
-        </div>`).join("") : `<div class="incident" style="border-top:none;color:var(--muted)">No open cases right now.</div>`}
-      ${c.open_total > c.open.length ? `<div class="incident" style="color:var(--muted)">…and ${c.open_total - c.open.length} more open cases</div>` : ""}`}`;
+      <div class="bar tall">${dayCells(m.days)}</div>
+      <div class="legend" style="margin:12px 0 0">${LEGEND}</div>
+    </div>
 
-    return `<div class="county ${expanded.has(name) ? "openrow" : ""}" id="c-${name}">
-      <div class="row" onclick="toggle('${name}')">
-        <div class="cname"><span class="gradechip g-${m.grade}">${m.grade}</span>${name}</div>
-        <div class="bar">${cells}</div>
-        <div class="stats">
-          <div class="counts">
-            <b>${m.events.outage}</b><span>${outWord}</span>${openBadge}
-          </div>
-          <b class="pct">${m.availability.toFixed(2)}%</b>
-        </div>
-      </div>
-      <div class="detail">${detail}</div>
-    </div>`;
-  }).join("");
+    <div class="card">
+      <h3>Areas with cases in ${monthLabel(curMonth)}</h3>
+      <div class="note">Each notice pin is placed in the Census 2022 settlement its affected area centres on. Everything else is grouped as <em>Outside towns</em> — most of the water network is between towns rather than in one, and a pin sitting just beyond a village boundary lands here too, even where the notice names the village. Availability is measured against each area's <em>own</em> population, so a burst covering a whole village reads far worse than the same event does in the county figure above; that is what the breakdown is for. No letter grades at this level: the A–F thresholds are calibrated to county-months and would mislead against a village-sized denominator.</div>
+      ${townRows(c)}
+    </div>
 
-  document.getElementById("gen").textContent =
-    "Generated " + D.generated + " from uisce.db · github.com/baz8080/uisce · not affiliated with Uisce Éireann.";
+    ${openSection(c)}
+    ${resolvedSection(c)}`;
+}
+
+// ---- routing ----
+
+function go(name) {
+  // setting the hash fires hashchange, which routes; only a no-op change
+  // (already at the overview) needs routing by hand
+  if (name) location.hash = `#county/${name}`;
+  else if (location.hash) location.hash = "";
+  else route();
+  window.scrollTo(0, 0);
 }
 function setMonth(m) { curMonth = m; render(); }
-function toggle(n) { expanded.has(n) ? expanded.delete(n) : expanded.add(n); render(); }
+function setTownSort(k) { townSort = k; render(); }
+function route() {
+  const match = location.hash.match(/^#county\/([^/]+)$/);
+  const name = match ? decodeURIComponent(match[1]) : null;
+  county = name && D.counties[name] ? name : null;
+  render();
+}
 document.getElementById("sort").addEventListener("change", e => { sortBy = e.target.value; render(); });
-render();
+window.addEventListener("hashchange", route);
+route();
 </script>
 </body>
 </html>

@@ -66,9 +66,11 @@ Two options for working without the paid geocoding step:
 uv run uisce-site
 ```
 
-Reads `out/uisce.db` and writes a fully static site to `out/site/` (serve it with any file server, e.g. `python -m http.server -d out/site`). Per county and month it shows day-by-day status bars, population-weighted supply availability, and an A–F grade — only hard supply outages (bursts, plant/reservoir/pump interruptions, unplanned repairs) count against availability; restrictions, discolouration and non-disruptive works are shown but never accrue downtime.
+Reads `out/uisce.db` and writes a fully static site to `out/site/` (serve it with any file server, e.g. `python -m http.server -d out/site`, or just open `index.html` — it needs no server). Per county and month it shows day-by-day status bars, population-weighted supply availability, and an A–F grade — only hard supply outages (bursts, plant/reservoir/pump interruptions, unplanned repairs) count against availability; restrictions, discolouration and non-disruptive works are shown but never accrue downtime.
 
-The availability weighting uses Census 2022 Small Area populations (`data/sa_pop.csv`, committed; regenerate with `uv run uisce-fetch-sa-pop`). Before reading too much into the numbers, see the notes:
+Clicking a county drills into it (`#county/Kildare`): the same figures per **named town**, plus the cases open right now grouped by town and the cases observed to close that month. Each notice pin is placed in the Census 2022 settlement its affected population centres on, so `Newbridge`, `Mount Carmel, Newbridge` and `Newbridge,` land on one row and each town arrives with a real population; everything outside a settlement — 40% of cases, since most of the network is between towns — is grouped as *Outside towns*. Town availability is measured against the town's own population, which makes it far harsher than the county figure and is the whole point; there are no letter grades at that level, because the A–F thresholds are calibrated to county-months.
+
+The weighting uses Census 2022 Small Area populations (`data/sa_pop.csv`, committed; regenerate with `uv run uisce-fetch-sa-pop`) and the settlement each Small Area falls in (`data/sa_towns.csv`, committed; regenerate with `uv run uisce-fetch-towns`). Before reading too much into the numbers, see the notes:
 
 * [notes/statuspage-methodology.md](notes/statuspage-methodology.md) — every modelling decision and its rationale
 * [notes/water-sla-benchmarks.md](notes/water-sla-benchmarks.md) — Ofwat/CRU service levels and why the grades can't borrow them
@@ -93,6 +95,7 @@ src/uisce/
   build.py       build inferred_cases from the JSONL   (uisce-build-inferred)
   site.py        generate the static status site       (uisce-site)
   sa_pop.py      fetch Census Small Area populations   (uisce-fetch-sa-pop)
+  towns.py       map Small Areas to named settlements  (uisce-fetch-towns)
   site.html      front end copied into out/site/
   config.py      shared paths, constants, HTTP session
 tests/           pytest suite (no network access needed)
