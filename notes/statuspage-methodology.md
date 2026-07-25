@@ -43,18 +43,22 @@ Four decisions worth recording:
 
 - **One home per pin, by dominant share.** A pin could be split across every settlement its footprint touches, but the median dominant share is **1.00** on the July 2026 corpus — pins essentially never straddle a boundary — so splitting would buy nothing and would stop per-town case counts summing to the county's.
 - **Population attributed to a town is the footprint ∩ town, not the whole footprint.** A pin at the edge of a village would otherwise log person-hours for people who don't live in it, and could drive availability below zero. County figures still take the whole footprint, so town person-hours sum to ≤ the county's, never more.
-- **A settlement in a different county than the case claims is refused** and the case falls to the rural bucket. These are genuine border pins — a Kildare-labelled notice whose footprint centres on Blessington, Co. Wicklow — and re-homing them across a county line would contradict the page they appear on.
+- **Only areas in the case's own county are considered.** Border pins are real — a Kildare-labelled notice whose footprint reaches Blessington, Co. Wicklow — and re-homing one across a county line would contradict the page it appears on, so the pin takes the best area that *is* in its county rather than being set aside.
 - **No letter grades at town level.** The A–F thresholds are calibrated to the distribution of county-months; against a 500-person denominator an ordinary burst main reads F. Availability *is* published, because that is the figure the drill-down exists to show — a 24-hour event that moves a county of 62,000 by 0.18 points moves the 1,000-person town it happened in by 11. The page says so in as many words.
 
-**Everything outside a settlement is one bucket, "Outside towns" — 40% of cases.** That is not a defect of the geography: most of the network (reservoirs, treatment plants, trunk mains) is between towns rather than in one. Its population is the county Census total minus the county's settlement sums, which over-states it by ~2.5% since the two come from different aggregations. A pin sitting just beyond a village boundary also lands here even where the notice names the village; the page says that too, and each case still shows its own notice location.
+**About 40% of cases fall outside any settlement** — not a defect of the geography, since most of the network (reservoirs, treatment plants, trunk mains) runs between towns rather than through one. Those are named by their Electoral Division; see the countryside section below.
 
-**No day bars at town level.** Deliberate: the day arrays are the bulk of the payload, and 623 town breakdowns × months of 31 two-element arrays would multiply `data.js` several times over for a chart nobody would read at that granularity. Counts, person-hours and availability only.
+**No day bars at area level.** Deliberate: the day arrays are the bulk of the payload, and 1,767 area breakdowns × months of 31 two-element arrays would multiply `data.js` several times over for a chart nobody would read at that granularity. Counts, person-hours and availability only.
+
+**Payload, and when to change the shape.** `data.js` carries every county, area and month because the page is one file that must work opened straight off disk — `fetch()` fails on `file://`, a `<script>` tag does not. Area-months are ~76% of it, so they are written sparsely: zero severities, zero person-hours and zero resolved counts are all omitted and the reader defaults them, and availability is rounded to the two decimals the page actually renders. Open cases are stored once, on the county, tagged with their area, rather than a second time under each area. Together that took the file from 960 KB to **645 KB** (84 KB gzipped).
+
+That is a constant-factor saving, not a bound: each new month adds roughly **85 KB**, so the file passes 1 MB in about four months. The fix when it matters is to emit one `county/<name>.js` per county and load it with an injected `<script>` tag on navigation — off-disk use survives, the index drops to about 150 KB, and growth stops being the index's problem. Deliberately not done yet; revisit at 1 MB.
 
 ### `closed_at` gives a past month something to say
 
 The site's open-case figures are a right-now snapshot with no month dimension, so a historic month previously had nothing to report beyond its bars (see the known limitation below, and PR #21 which hid those figures on non-latest months for exactly that reason). `cases.closed_at` is the one field that does carry a month for a case that is no longer open, so the county view adds an **"observed to close in <month>"** section, and each town row a resolved count.
 
-Its coverage is partial by construction and the copy says so: NULL for every case that closed before schema v2, and a case that opens and closes inside one build gap is never observed open, so never stamped. Read it as a floor. This is what lets a county with zero open cases still show something true — Carlow, at 0 open on the July 2026 snapshot, reports 8 cases observed closing that month across Rathvilly, Carlow town and the rural bucket.
+Its coverage is partial by construction and the copy says so: NULL for every case that closed before schema v2, and a case that opens and closes inside one build gap is never observed open, so never stamped. Read it as a floor. This is what lets a county with zero open cases still show something true — Carlow, at 0 open on the July 2026 snapshot, reports 8 cases observed closing that month across Rathvilly, Carlow town and the countryside around them.
 
 ### Cities: a settlement over 50,000 is split into Local Electoral Areas
 
@@ -70,7 +74,18 @@ CSO Urban Areas treats a city and its suburbs as **one settlement** — `Dublin 
 
 Any settlement over **50,000** is therefore broken into the Local Electoral Areas its Small Areas fall in (`SPLIT_ABOVE_POP` in `towns.py`). That threshold currently selects exactly those five — the next largest settlement is Drogheda at 44,135 — but it is a population rule rather than a name match so the CSO renaming them cannot break it. Dublin goes from one row to **40 rows, the largest 8 disruptions**.
 
-**LEA, not Electoral Division.** EDs are the obvious alternative and there are 90 of them in the Cork City LEAs alone, **211 in Dublin**, heavily letter-suffixed (`Bishopstown A`…`E`). LEA keeps the row count in proportion to the rest of the site: ~26 cases per Dublin row over 22k–75k people, against ~4 per ED.
+**LEA in the city, ED in the countryside — the rule, stated once.** The drill-down uses *the finest official geography whose names arrive usable*. That selects different layers in different places, which looks arbitrary until you look at the names:
+
+| | EDs involved | letter-suffixed |
+|---|---|---|
+| Urban Small Areas | 1,492 | **242 (16%)** |
+| Rural Small Areas | 2,552 | **0 (0%)** |
+
+City EDs come as `Bishopstown A`…`E` and `Arran Quay A`…`E` — 211 of them in Dublin — so using them means inventing a name-merging heuristic, the same string munging this project refused when it declined to key the drill-down on `cases.location`. Rural EDs need nothing: `Ardmayle`, `Nodstown`, `Ballymackey` arrive clean and are the names locals use. So the city stops at the LEA and the countryside goes all the way to the ED. Row counts follow from that choice; they are not the reason for it.
+
+An earlier draft of this note argued the reverse — that ~4 cases per ED row was too thin for a city — while the rural tier happily publishes rows at 2.9. That was two tiers justified on contradictory grounds, and the thinness half of it had already been withdrawn (the settlement layer publishes single-case rows for villages of 500). The suffixing above is the real distinction and the only one this note now rests on.
+
+**The uniform alternative, consciously rejected.** Grouping the countryside by LEA as well would leave just two geographies and collapse 1,172 rural rows to roughly 200, with familiar names — `Around Cashel` rather than `Around Ardmayle`. It is rejected because a rural LEA is enormous: "Around Cashel" would cover some 300 km² and place a case 20 km away in the wrong parish, which is a worse falsehood than an unfamiliar but correct name. Uniformity is not worth that.
 
 ### The LEA names are administrative, not vernacular
 
@@ -84,9 +99,7 @@ Cork's are worse — `Cork City South East` and three siblings, pure quadrants.
 
 The compound is ugly but **not wrong**: the polygon genuinely spans both places, so relabelling `Kimmage-Rathmines` as `Rathmines` would file a Kimmage burst under Rathmines. The fix is therefore a finer geography, not a better label — and the vernacular name is not actually lost from the page, because every case in the open and resolved lists carries the notice's own `location` beneath it (`Killinarden, Tallaght`, `Chapelizod`, `Bluebell`). The area row is the statistical unit; the notice location is the human one.
 
-**What the ED route would cost, measured.** Stripping the trailing letter from Dublin's 211 EDs leaves **104 distinct names averaging ~12,100 people** — town-sized, and the names are largely vernacular (Crumlin, Chapelizod, Ballymun, Drumcondra, Rathmines East/West, Cabra East/West). Two caveats found while checking: some are archaic or obscure (Arran Quay, Ballybough, Decies, Drumfinn, Botanic), and the newer suburbs carry their own hyphenated compounds (`Clondalkin-Rowlagh`, `Clondalkin-Cappaghmore`), so EDs do not fully escape the problem either. It also needs a name-merging heuristic — the kind of string munging this project rejected when it declined to key the drill-down on `cases.location`.
-
-One argument against EDs was dropped on inspection: that ~1–2 cases per ED per month is too thin to publish. The settlement layer already publishes single-case rows for villages of 500–1,000 (Carragh, Ballitore), so thinness is the norm for this view rather than a reason to avoid a geography.
+**What the ED route would cost, measured.** Stripping the trailing letter from Dublin's 211 EDs leaves **104 distinct names averaging ~12,100 people** — town-sized, and largely vernacular (Crumlin, Chapelizod, Ballymun, Drumcondra, Rathmines East/West, Cabra East/West). Against that: the merging heuristic above, some names that are obscure even locally (Decies, Drumfinn, Botanic), and newer suburbs carrying their own hyphenated compounds (`Clondalkin-Rowlagh`, `Clondalkin-Cappaghmore`), so EDs would not fully escape the compound problem either. Worth revisiting if the compound names prove to be what readers stumble on.
 
 **Slivers are pooled, and that is what avoids name collisions.** LEAs are not contained by the settlement — they run out into the surrounding county — so a part is kept only when **30%** of its LEA lies inside (`MIN_PART_SHARE`). Containment is otherwise excellent: 26 of Dublin's 30 parts are ≥91% inside. The leftovers are small (Dublin 0.6% of the city, Cork 2.8%, Galway 2.2%, Limerick 4.3%, Waterford 9.6% — that last being Ferrybank, on the Kilkenny side) and pool into one `Elsewhere in Dublin city` row.
 
@@ -94,9 +107,19 @@ The threshold is load-bearing beyond tidiness. Four LEA labels collided with an 
 
 Parts keep the *settlement's* county, not the LEA's. Two agglomerations cross a county line — Limerick's reaches into Clare (Shannon LEA), Waterford's into Kilkenny — so a part filed under the neighbouring county would be refused by the cross-county guard above and vanish from both pages.
 
-### Known limitation: the rural bucket is now the largest row in those counties
+### The countryside: "Around <Electoral Division>"
 
-Splitting the cities does not make Cork, Galway, Limerick or Waterford much better, because their biggest row was never the city — it is `Outside towns`, at 334 / 149 / 154 / 142 cases respectively. Dublin was the county the city split actually fixed. Breaking the rural bucket down needs its own decision about geography: rural EDs are townland-named and would produce many very thin rows, while rural LEAs are named after towns and would collide with the settlement rows in a way the 30% rule cannot resolve, since a rural LEA is not a sliver of anything. Left as one bucket for now.
+Splitting the cities fixed Dublin and little else, because outside Dublin the biggest row was never the city — it was the single undifferentiated rural bucket, holding **44% of all cases** and ranking first in **22 of 26 counties** (Longford 80% rural, Tipperary 72%, Roscommon 71%, Kerry 63%).
+
+Every Small Area outside a settlement is therefore grouped with the rest of its Electoral Division's countryside, giving 1,172 named rural areas nationally at ~2.9 cases each, with exact Census populations. Tipperary's bucket of 456 becomes `Around Ardmayle`, `Around Nodstown`, `Around Ballymackey` and 110 others.
+
+**The label is "Around X", not "X".** A rural ED is usually the parish *around* the town it is named after, and that town has its own row on the same page — Kildare alone would otherwise show Celbridge, Leixlip, Maynooth, Kill and Carragh twice. Unlike the city slivers these cannot be pooled away, because a rural ED is not a sliver of anything; it is a real place that happens to share a name. Nearly every county has at least one such pair, so the prefix is doing real work rather than decorating.
+
+Two smaller decisions: EDs are keyed by (county, name), which merges the 50 of 3,368 pairs covering more than one ED record — several of those are parts of one ED split by a boundary, and merging beats emitting two rows a reader cannot tell apart. And no threshold is applied: every area with a case that month gets a row, as for towns. The median county shows 33 rows in a month; Cork, the busiest, shows 104.
+
+### Known limitation: pins outside the county they claim
+
+With every Small Area now belonging to a named area, a pin only fails to place when its whole affected footprint lies in a different county from the one the notice names — the feed's `county` disagreeing with its own coordinates, for about 1.5% of case-months. Those collect in a `Pinned outside the county` row that reports its case counts and nothing else: there is no population to divide by, so publishing an availability there would invent a denominator. Tipperary has the most, at 21 case-months.
 
 ## Grades
 
@@ -141,4 +164,4 @@ See the eval in [end-time-eval.md](end-time-eval.md) for how the LLM-extracted e
 
 ## Possible next steps
 
-Population served per named supply scheme from the EPA public water supplies register (boil notices name their scheme in `location`); a geography for the rural bucket, which is now the largest row on most county pages (see the limitation above); an Electoral-Division split for the cities, trading row count for vernacular area names and retiring the hyphenated LEA compounds (costed in the drill-down section above); a prompt tweak for the nightly-works pattern where the model currently extracts date-only ends (see [model-and-runtime-benchmarks.md](model-and-runtime-benchmarks.md) — qwen got `scheduled_end_with_time` right on those 8 cases); GitHub Pages publishing from the weekly Build DB workflow.
+Population served per named supply scheme from the EPA public water supplies register (boil notices name their scheme in `location`); per-county script files once `data.js` reaches 1 MB (see the payload note above); deriving `COUNTY_POP` from the Small Areas, since it is now the only hardcoded population left in the project and every other figure is exact-from-data — it shifts published county availability, so it wants its own change; folding `sa_pop.csv` and `sa_towns.csv` into one file and one command, both being derived from the same ArcGIS layer; an Electoral-Division split for the cities, trading a name-merging heuristic for vernacular area names and retiring the hyphenated LEA compounds (costed in the drill-down section above); a prompt tweak for the nightly-works pattern where the model currently extracts date-only ends (see [model-and-runtime-benchmarks.md](model-and-runtime-benchmarks.md) — qwen got `scheduled_end_with_time` right on those 8 cases); GitHub Pages publishing from the weekly Build DB workflow.
