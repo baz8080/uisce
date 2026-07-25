@@ -56,9 +56,31 @@ The site's open-case figures are a right-now snapshot with no month dimension, s
 
 Its coverage is partial by construction and the copy says so: NULL for every case that closed before schema v2, and a case that opens and closes inside one build gap is never observed open, so never stamped. Read it as a floor. This is what lets a county with zero open cases still show something true — Carlow, at 0 open on the July 2026 snapshot, reports 8 cases observed closing that month across Rathvilly, Carlow town and the rural bucket.
 
-### Known limitation: the five "city and suburbs" settlements
+### Cities: a settlement over 50,000 is split into Local Electoral Areas
 
-CSO Urban Areas treats `Dublin city and suburbs` as **one settlement of 1,263,219 people**, so all of Dublin's cases collapse into a single row and the drill-down does nothing there. Cork, Limerick, Galway and Waterford have the same shape at smaller scale. Splitting them needs a sub-geography — Electoral Divisions are on the same ArcGIS server (`CSO_ELECTORAL_DIVISIONS_2022_Genralised_20m_view`, with populations in `SAPS_2022_CSOED3270923.csv`) and would slot into the same centroid-in-polygon step. Not done here; the other 21 counties work as intended.
+CSO Urban Areas treats a city and its suburbs as **one settlement** — `Dublin city and suburbs` is a single area of 1,261,884 people holding **83% of Dublin's cases**, so the drill-down did nothing at all there. Measured across the five:
+
+| agglomeration | population | cases | share of the county's |
+|---|---|---|---|
+| Dublin city and suburbs | 1,261,884 | 808 | **83%** |
+| Cork city and suburbs | 222,288 | 257 | 25% |
+| Galway city and suburbs | 85,876 | 124 | 32% |
+| Limerick city and suburbs | 102,287 | 82 | 22% |
+| Waterford city and suburbs | 60,079 | 40 | 14% |
+
+Any settlement over **50,000** is therefore broken into the Local Electoral Areas its Small Areas fall in (`SPLIT_ABOVE_POP` in `towns.py`). That threshold currently selects exactly those five — the next largest settlement is Drogheda at 44,135 — but it is a population rule rather than a name match so the CSO renaming them cannot break it. Dublin goes from one row to **40 rows, the largest 8 disruptions**, named the way people name them: Cabra-Glasnevin, Kimmage-Rathmines, Rathfarnham-Templeogue, Dún Laoghaire, Tallaght South, Clondalkin.
+
+**LEA, not Electoral Division.** EDs give better names for Cork (Bishopstown, Douglas, Blackpool) but there are 90 of them in the Cork City LEAs alone and **211 in Dublin**, heavily letter-suffixed (`Bishopstown A`…`E`) and archaic in the inner city (Arran Quay, Merchants Quay, Rotunda). At ~4 cases per ED the availability figure would be noise, which is exactly what this project tries not to publish. LEA is the granularity at which the statistics still say something: ~26 cases per Dublin row over 22k–75k people. The cost is that Cork's city LEAs are compass quadrants — `Cork City South East` — which nobody says out loud. Accepted rather than fixed; an ED-based naming pass for Cork alone is possible later.
+
+**Slivers are pooled, and that is what avoids name collisions.** LEAs are not contained by the settlement — they run out into the surrounding county — so a part is kept only when **30%** of its LEA lies inside (`MIN_PART_SHARE`). Containment is otherwise excellent: 26 of Dublin's 30 parts are ≥91% inside. The leftovers are small (Dublin 0.6% of the city, Cork 2.8%, Galway 2.2%, Limerick 4.3%, Waterford 9.6% — that last being Ferrybank, on the Kilkenny side) and pool into one `Elsewhere in Dublin city` row.
+
+The threshold is load-bearing beyond tidiness. Four LEA labels collided with an existing settlement row on the same county page — `Swords` in Dublin, `Macroom` / `Carrigaline` / `Cobh` in Cork — and **all four were slivers**, which is structural rather than lucky: an LEA carries a town's name precisely when it is named after a town that is *not* part of the agglomeration, and such an LEA lies mostly outside it. Cork's clipping of the Carrigaline LEA is 942 of its 39,145 people, and unpooled it would have appeared as "Carrigaline" beside the real 18,239-person Carrigaline town row. With the threshold in place, **no county page has two rows with the same name**.
+
+Parts keep the *settlement's* county, not the LEA's. Two agglomerations cross a county line — Limerick's reaches into Clare (Shannon LEA), Waterford's into Kilkenny — so a part filed under the neighbouring county would be refused by the cross-county guard above and vanish from both pages.
+
+### Known limitation: the rural bucket is now the largest row in those counties
+
+Splitting the cities does not make Cork, Galway, Limerick or Waterford much better, because their biggest row was never the city — it is `Outside towns`, at 334 / 149 / 154 / 142 cases respectively. Dublin was the county the city split actually fixed. Breaking the rural bucket down needs its own decision about geography: rural EDs are townland-named and would produce many very thin rows, while rural LEAs are named after towns and would collide with the settlement rows in a way the 30% rule cannot resolve, since a rural LEA is not a sliver of anything. Left as one bucket for now.
 
 ## Grades
 
@@ -103,4 +125,4 @@ See the eval in [end-time-eval.md](end-time-eval.md) for how the LLM-extracted e
 
 ## Possible next steps
 
-Population served per named supply scheme from the EPA public water supplies register (boil notices name their scheme in `location`); an Electoral-Division split for the five "city and suburbs" settlements, so the Dublin drill-down does something (see the drill-down section above); a prompt tweak for the nightly-works pattern where the model currently extracts date-only ends (see [model-and-runtime-benchmarks.md](model-and-runtime-benchmarks.md) — qwen got `scheduled_end_with_time` right on those 8 cases); GitHub Pages publishing from the weekly Build DB workflow.
+Population served per named supply scheme from the EPA public water supplies register (boil notices name their scheme in `location`); a geography for the rural bucket, which is now the largest row on most county pages (see the limitation above); ED-based names for the Cork city areas, whose LEA names are compass quadrants; a prompt tweak for the nightly-works pattern where the model currently extracts date-only ends (see [model-and-runtime-benchmarks.md](model-and-runtime-benchmarks.md) — qwen got `scheduled_end_with_time` right on those 8 cases); GitHub Pages publishing from the weekly Build DB workflow.

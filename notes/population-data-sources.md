@@ -37,6 +37,21 @@ The shortfall is concentrated in small villages, where a single Small Area centr
 
 Populations are deliberately **not** written to `data/sa_towns.csv`. `site.py` sums the Small Areas assigned to a town instead, so town figures and the county availability denominator come from one source and cannot disagree; the published Census figures are fetched purely to check the join.
 
+## Local Electoral Areas — breaking up the cities
+
+A city and its suburbs are a single Census settlement, so five areas are too big to be one drill-down row (Dublin's is 1.26M people). `uisce-fetch-towns` splits any settlement over 50,000 into Local Electoral Areas, from two more datasets in the same pair of shapes:
+
+- **Boundaries.** `https://services-eu1.arcgis.com/BuS9rtTsYEV5C0xh/arcgis/rest/services/CSO_Local_Electoral_Areas_National_Statistical_Boundaries_2022_Generalised_50m_view/FeatureServer/1` — 166 features with `LEA_ID`, `CSO_LEA` (the name, upper-cased) and `COUNTY`. All 166 in one page.
+- **Populations.** SAPS 2022 LEA: https://www.cso.ie/en/media/csoie/census/census2022/SAPS_2022_CSOLEA270923.csv. Join key is `GEOGID` = `LEA_ID`, all 166 matching. **cp1252 with a state-total row**, exactly like the Built-Up Areas file.
+
+**Use the 50 m generalisation, not the 100 m one.** Both exist (`..._Generalised_100m/FeatureServer/0`, 17 MB against 34 MB) and they disagree: under 100 m a handful of Small Area centroids near an internal boundary land on the wrong side, and Rathfarnham-Templeogue comes out holding **101%** of its own LEA population — proof the boundary has moved past a centroid that belongs to a neighbour. The 50 m layer never exceeds 100% anywhere. Correctness wins over the download, which happens once and is discarded.
+
+CSO_LEA arrives upper-cased and `str.title()` is enough to present it: it handles the hyphens (`CABRA-GLASNEVIN` → `Cabra-Glasnevin`) and the fadas (`DÚN LAOGHAIRE` → `Dún Laoghaire`).
+
+### Verification
+
+All 6,244 Small Areas inside a city agglomeration match an LEA — none unclaimed. Containment is close to exact where it matters: 26 of Dublin's 30 LEA parts hold ≥91% of their LEA, and the pooled remainder is 0.6% of Dublin, 2.8% of Cork, 2.2% of Galway, 4.3% of Limerick and 9.6% of Waterford. See the drill-down section of [statuspage-methodology.md](statuspage-methodology.md) for why the 30% keep-threshold matters beyond tidiness.
+
 ## How the lookups are used
 
 A notice pin is assumed to affect the Small Areas whose centroids lie within 500 m (nearest Small Area within 8 km as a rural fallback). Centroids are grid-hashed in 0.01° bins, so the radius query is pure-Python fast — no GIS dependencies. County totals used for the availability denominator are hardcoded Census 2022 figures in site.py.

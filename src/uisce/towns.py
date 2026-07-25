@@ -5,15 +5,18 @@ Assigns every Census 2022 Small Area centroid to the CSO Urban Area
 (guid, town_code, town_name, town_county) — the lookup that lets uisce-site
 drill a county down into named towns.
 
-Two open datasets, joined on the settlement code:
+Four open datasets, joined on their respective area codes:
 
 - CSO Urban Areas 2022 boundaries (Tailte/CSO ArcGIS): name, county, polygon
 - SAPS 2022 Built-Up Areas CSV: population per settlement
+- CSO Local Electoral Area 2022 boundaries, and the SAPS LEA CSV, used only to
+  break up settlements too large to read as one row — see
+  split_large_settlements
 
 Populations are deliberately *not* written out. uisce-site derives a town's
 population by summing the Small Areas assigned to it, so town figures and the
-county denominator come from the same source and cannot disagree. The SAPS file
-is fetched only to verify the geography: a town whose Small-Area sum drifts far
+county denominator come from the same source and cannot disagree. The SAPS files
+are fetched only to verify the geography: a town whose Small-Area sum drifts far
 from its published Census population means the assignment is wrong, and that is
 worth failing loudly on rather than discovering in the site.
 
@@ -32,6 +35,33 @@ URBAN_AREAS_URL = (
     "https://services-eu1.arcgis.com/BuS9rtTsYEV5C0xh/arcgis/rest/services/"
     "Urban_Areas_National_Statistical_Boundaries_2022_Generalised_20m/FeatureServer/5/query"
 )
+LEA_CSV_URL = "https://www.cso.ie/en/media/csoie/census/census2022/SAPS_2022_CSOLEA270923.csv"
+# The 50 m generalisation, not the 100 m one: under 100 m a handful of Small Area
+# centroids near an internal boundary fall on the wrong side, and one Dublin LEA
+# ends up with 101% of its own population. 34 MB, fetched once and discarded.
+LEA_URL = (
+    "https://services-eu1.arcgis.com/BuS9rtTsYEV5C0xh/arcgis/rest/services/"
+    "CSO_Local_Electoral_Areas_National_Statistical_Boundaries_2022_Generalised_50m_view"
+    "/FeatureServer/1/query"
+)
+
+# A settlement this large is an agglomeration rather than a town, and reads
+# uselessly as one row: "Dublin city and suburbs" is a single Census settlement of
+# 1.26M holding 83% of the county's cases. Currently selects exactly the five
+# "city and suburbs" areas — the next largest settlement is Drogheda at 44,135 —
+# but it is expressed as a population rule rather than a name match so it cannot
+# be broken by the CSO renaming them.
+SPLIT_ABOVE_POP = 50_000
+
+# An LEA is kept as its own row only if this much of it lies inside the
+# settlement being split. Below that it is a sliver of a Local Electoral Area
+# that mostly lies elsewhere, and naming a row after it actively misleads: the
+# Cork agglomeration clips 942 people of the 39,145-person Carrigaline LEA, which
+# would otherwise appear as "Carrigaline" beside the real Carrigaline town row.
+# Every name collision observed between a part and an existing settlement row was
+# a sliver, which is not luck — an LEA shares a town's name precisely when it is
+# named after a town that is not part of the agglomeration.
+MIN_PART_SHARE = 0.30
 
 # Latitude bands used to narrow the candidate settlements for a given centroid.
 # 867 polygons against 18,919 points is 16M naive bbox tests; binning by
@@ -56,6 +86,48 @@ def fetch_bua_populations(session):
     response.raise_for_status()
     reader = csv.DictReader(io.StringIO(response.content.decode("cp1252")))
     return {row["GEOGID"]: int(row["T1_1AGETT"]) for row in reader}
+
+
+def fetch_lea_populations(session):
+    """LEA code -> Census 2022 population, from the SAPS Local Electoral Area CSV.
+
+    cp1252 and carrying a state-total row, exactly like the Built-Up Areas file.
+    """
+    response = session.get(LEA_CSV_URL, timeout=120)
+    response.raise_for_status()
+    reader = csv.DictReader(io.StringIO(response.content.decode("cp1252")))
+    return {row["GEOGID"]: int(row["T1_1AGETT"]) for row in reader}
+
+
+def fetch_local_electoral_areas(session):
+    """Yield (code, name, county, rings) for all 166 Local Electoral Areas.
+
+    Names arrive upper-cased (`CABRA-GLASNEVIN`); title() handles the hyphens and
+    the fadas ("DÚN LAOGHAIRE" -> "Dún Laoghaire").
+    """
+    response = session.get(
+        LEA_URL,
+        params={
+            "where": "1=1",
+            "outFields": "LEA_ID,CSO_LEA,COUNTY",
+            "returnGeometry": "true",
+            "outSR": "4326",
+            "f": "json",
+        },
+        timeout=300,
+    )
+    response.raise_for_status()
+    data = response.json()
+    if data.get("exceededTransferLimit"):
+        raise RuntimeError("LEA query was paginated; add resultOffset handling")
+    for feature in data["features"]:
+        attrs = feature["attributes"]
+        yield (
+            attrs["LEA_ID"],
+            attrs["CSO_LEA"].title(),
+            attrs["COUNTY"].title(),
+            feature["geometry"]["rings"],
+        )
 
 
 def fetch_urban_areas(session):
@@ -144,6 +216,84 @@ def assign_small_areas(sa_rows, index):
     return assigned
 
 
+def elsewhere_label(settlement_name):
+    """'Dublin city and suburbs' -> 'Elsewhere in Dublin city'."""
+    return f"Elsewhere in {settlement_name.replace(' and suburbs', '')}"
+
+
+def split_large_settlements(assigned, sa_rows, sa_pop, lea_index, lea_pop):
+    """Re-home the Small Areas of any settlement too large to read as one row.
+
+    The Census treats each city and its suburbs as a single settlement, so
+    "Dublin city and suburbs" is one 1.26M-person area holding 83% of Dublin's
+    cases — a drill-down row that does nothing. Break those settlements into the
+    Local Electoral Areas their Small Areas fall in: 31 areas for Dublin at
+    22k-75k people each, with the names people actually use (Cabra-Glasnevin,
+    Tallaght South, Dún Laoghaire).
+
+    LEAs are not contained by the settlement — they extend into the surrounding
+    county — so a part is kept only when MIN_PART_SHARE of its LEA lies inside.
+    The rest are pooled into one "Elsewhere in ..." row; they are 0.5-3% of each
+    city's population, and folding them is what keeps a 942-person clipping of
+    the Carrigaline LEA from appearing as "Carrigaline".
+
+    Parts keep the *settlement's* county, not the LEA's. Two agglomerations cross
+    a county line — Limerick's reaches into Clare, Waterford's into Kilkenny — and
+    a part filed under the neighbouring county would be refused by the
+    case-county guard in site.py and silently vanish from both pages.
+
+    Returns (assigned, report) where report is one row per split settlement.
+    """
+    coords = {r["guid"]: (float(r["lat"]), float(r["lon"])) for r in sa_rows}
+    settlement_pop = defaultdict(int)
+    for guid, code, _, _ in assigned:
+        settlement_pop[code] += sa_pop[guid]
+    big = {code for code, pop in settlement_pop.items() if pop >= SPLIT_ABOVE_POP}
+    if not big:
+        return assigned, []
+
+    # first pass: find each Small Area's LEA and tally how much of that LEA the
+    # settlement actually contains, since that decides whether it earns a row
+    part_of, inside = {}, defaultdict(int)
+    for guid, code, _, _ in assigned:
+        if code not in big:
+            continue
+        hit = lea_index.town_of(*coords[guid])
+        if hit:
+            part_of[guid] = hit[:2]
+            inside[(code, hit[0])] += sa_pop[guid]
+
+    kept = {
+        key for key, pop in inside.items() if pop >= lea_pop.get(key[1], 0) * MIN_PART_SHARE
+    }
+
+    out, folded = [], defaultdict(int)
+    for guid, code, name, county in assigned:
+        if code not in big:
+            out.append((guid, code, name, county))
+            continue
+        part = part_of.get(guid)
+        if part and (code, part[0]) in kept:
+            out.append((guid, f"{code}-{part[0]}", part[1], county))
+        else:
+            # a sliver of an LEA that lies mostly outside, or (not observed, but
+            # possible) a Small Area no LEA claims
+            out.append((guid, f"{code}-rest", elsewhere_label(name), county))
+            folded[code] += sa_pop[guid]
+
+    report = [
+        (
+            code,
+            sum(1 for key in kept if key[0] == code),
+            sum(1 for key in inside if key[0] == code and key not in kept),
+            folded.get(code, 0),
+            settlement_pop[code],
+        )
+        for code in sorted(big, key=lambda c: -settlement_pop[c])
+    ]
+    return out, report
+
+
 def check_populations(assigned, sa_pop, census_pop, names):
     """Warn for any sizeable town whose Small-Area sum misses its Census population.
 
@@ -188,12 +338,28 @@ def run():
     share = 100 * len(assigned) / len(sa_rows)
     print(f"Small Areas inside a settlement: {len(assigned)} of {len(sa_rows)} ({share:.1f}%)")
 
+    # before the split, while the settlement codes the SAPS figures are keyed on
+    # are still the ones in `assigned`
     summed, suspect = check_populations(assigned, sa_pop, census_pop, names)
     urban = sum(summed.values())
     published = sum(census_pop.get(code, 0) for code, *_ in areas)
     print(f"Urban population covered: {urban:,} of {published:,} published")
     if suspect:
         print(f"WARNING: {len(suspect)} towns over {REPORT_MIN_POP:,} are short on population")
+
+    lea_pop = fetch_lea_populations(session)
+    leas = list(fetch_local_electoral_areas(session))
+    print(f"Local Electoral Areas: {len(leas)}")
+    assigned, report = split_large_settlements(
+        assigned, sa_rows, sa_pop, TownIndex(leas), lea_pop
+    )
+    for code, n_kept, n_folded, folded_pop, total in report:
+        pct = 100 * folded_pop / total
+        print(
+            f"  split {names[code]} ({total:,}) into {n_kept} areas"
+            f" + {n_folded} sliver{'' if n_folded == 1 else 's'}"
+            f" pooled as '{elsewhere_label(names[code])}' ({folded_pop:,}, {pct:.1f}%)"
+        )
 
     with open(SA_TOWNS_PATH, "w", newline="") as f:
         writer = csv.writer(f)
