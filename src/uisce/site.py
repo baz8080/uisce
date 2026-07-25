@@ -13,6 +13,13 @@ Per county and calendar month the generator computes:
 - an A-F grade from availability, knocked one step by any active
   boil-water / do-not-drink / do-not-consume notice
 
+Each county then breaks down into the named Census settlements its cases fall
+in, plus one bucket for everything outside a settlement. A town gets the same
+counts, person-hours and availability as a county, computed with the same
+arithmetic over a narrower population — but no letter grade, because the
+thresholds are calibrated to county-months and a single burst in a village
+would read F while being entirely ordinary.
+
 Methodology, data findings, and the benchmark context behind the grade
 thresholds are documented in notes/statuspage-methodology.md.
 """
@@ -26,8 +33,9 @@ import statistics
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import NamedTuple
 
-from uisce.config import DB_PATH, SA_POP_PATH, SITE_DIR
+from uisce.config import DB_PATH, SA_POP_PATH, SA_TOWNS_PATH, SITE_DIR
 
 SITE_HTML = Path(__file__).parent / "site.html"
 
@@ -49,6 +57,18 @@ OBSERVED_END_SOURCES = {"completion_update"}
 # AFFECT_RADIUS_KM; if none, the nearest Small Area within FALLBACK_KM.
 AFFECT_RADIUS_KM = 0.5
 FALLBACK_KM = 8.0
+
+# Key and label for the county drill-down bucket holding every case that does
+# not fall in a named settlement — 40% of them, since most of Ireland's water
+# infrastructure is not in a town.
+# Every Small Area belongs to a named area — a settlement, a Local Electoral Area
+# of a city, or the countryside of an Electoral Division — so a pin lands in one
+# unless its whole affected footprint lies outside the county the notice names.
+# That happens for ~1.5% of case-months and is a disagreement between the feed's
+# `county` and its own coordinates, not a gap in the geography, so the bucket says
+# so instead of pretending to be a place.
+UNPLACED = "unplaced"
+UNPLACED_LABEL = "Pinned outside the county"
 
 # Census 2022 county populations (approximate; city+county combined).
 COUNTY_POP = {
@@ -248,8 +268,10 @@ class SmallAreaIndex:
     def __init__(self, rows):
         self._bins = defaultdict(list)
         self._cache = {}
+        self.pop = {}
         for lat, lon, guid, pop in rows:
             self._bins[(int(lat / self.BIN), int(lon / self.BIN))].append((lat, lon, guid, pop))
+            self.pop[guid] = pop
 
     @classmethod
     def from_csv(cls, path):
@@ -286,6 +308,77 @@ class SmallAreaIndex:
         return self._cache[key]
 
 
+class TownLookup:
+    """Small Area -> Census settlement, with each settlement's population.
+
+    Built by uisce-fetch-towns (see src/uisce/towns.py): every Small Area whose
+    centroid falls inside a CSO Urban Area 2022 boundary is listed against that
+    settlement. A town's population is the sum of its Small Areas, not the
+    published Census settlement figure, so that town populations and the county
+    availability denominator are derived from one source and cannot disagree.
+    """
+
+    def __init__(self, rows, sa_pop):
+        self.town = {}  # SA guid -> settlement code
+        self.name = {}  # code -> settlement name
+        self.county = {}  # code -> county
+        self.pop = defaultdict(int)  # code -> population
+        for guid, code, name, county in rows:
+            if guid not in sa_pop:
+                continue
+            self.town[guid] = code
+            if code not in self.name:
+                self.name[code] = name
+                self.county[code] = county
+            self.pop[code] += sa_pop[guid]
+
+    @classmethod
+    def from_csv(cls, path, sa_pop):
+        with open(path, newline="") as f:
+            return cls(
+                (
+                    (r["guid"], r["town_code"], r["town_name"], r["town_county"])
+                    for r in csv.DictReader(f)
+                ),
+                sa_pop,
+            )
+
+    def label(self, code):
+        return UNPLACED_LABEL if code == UNPLACED else self.name[code]
+
+    def dominant(self, sas, county):
+        """Area holding the largest share of a pin's affected population, or UNPLACED.
+
+        Pins rarely straddle a boundary — the median dominant share is 1.00 on
+        the July 2026 corpus — so one home per pin costs almost nothing and
+        keeps per-area case counts summing to the county's.
+
+        Only areas in the case's own county are considered. Border pins are real
+        (a Kildare-labelled notice whose footprint reaches Blessington, Co.
+        Wicklow), and re-homing one across a county line would contradict the
+        page it appears on — so the pin goes to the best area that *is* in the
+        county rather than being set aside. UNPLACED is left for the pin whose
+        whole footprint lies in another county.
+        """
+        shares = defaultdict(int)
+        for guid, pop in sas.items():
+            code = self.town.get(guid)
+            if code is not None and self.county[code] == county:
+                shares[code] += pop
+        if not shares:
+            return UNPLACED
+        return max(shares.items(), key=lambda kv: kv[1])[0]
+
+    def within(self, sas, code):
+        """The part of a pin's footprint that lies in one area.
+
+        Attributing the whole footprint would let a village accrue person-hours
+        for people who don't live in it, and could push availability below zero
+        when a pin on its edge reaches most of the next one.
+        """
+        return {guid: pop for guid, pop in sas.items() if self.town.get(guid) == code}
+
+
 def span_stats(observed_h, scheduled_h):
     """Published notice-to-end figures. `median_completion_h` is the headline and
     covers observed completions only; the scheduled figures are reported
@@ -298,80 +391,299 @@ def span_stats(observed_h, scheduled_h):
     }
 
 
-def build_site(rows, sa_index, now):
-    months = month_list(COLLECTION_START, now)
+class Case(NamedTuple):
+    """A case row with its severity class and disruption interval resolved.
+
+    Splitting this out of the accumulation loop is what lets a county and a town
+    share one set of arithmetic: the interval a case contributes is a property of
+    the case alone, not of the geography it is being counted under.
+    """
+
+    row: object
+    sev: str
+    ref: str
+    start: datetime
+    end: datetime
+    sas: dict
+    has_end: bool
+    observed_end: bool
+
+    @property
+    def county(self):
+        return self.row["county"]
+
+    @property
+    def is_open(self):
+        return self.row["status"] == "Open"
+
+
+def resolve_case(r, sa_index, lifts, now):
+    """A Case for one row, or None if it isn't an event at all.
+
+    The interval rules and their rationale are in
+    notes/statuspage-methodology.md; this is the code they describe.
+    """
+    sev = classify(r)
+    if sev is None or r["county"] not in COUNTY_POP:
+        return None
+    start = parse_dt(r["start_date"])
     cap = timedelta(days=CAP_DAYS)
+
+    notice_to_end = r["notice_to_end_seconds"]
+    has_end = notice_to_end is not None
+    # a paired boil-notice lift is an observed end too; set below
+    observed_end = has_end and r["end_source"] in OBSERVED_END_SOURCES
+
+    if r["work_category"] == "boil_notice_issued":
+        # This class never ends itself; boil_notice_fate owns the whole decision.
+        outcome, end = boil_notice_fate(r, lifts, now)
+        if outcome == "exclude":
+            return None
+        # a lift is a real, observed event, not a schedule
+        has_end = outcome == "paired"
+        observed_end = has_end
+        if end is None:
+            # closed with no lift: token footprint, as for any no-signal case
+            end = start + timedelta(seconds=1)
+    elif not has_end:
+        if r["status"] == "Open" and start < now and not ended_by_publication(r):
+            # ongoing with no inferred end: runs from start until now, capped
+            end = min(now, start + cap)
+        else:
+            # closed with no usable end signal, or already over per the
+            # notice's own text: a token 1s footprint so its start day
+            # still colours and it counts as an event, while adding
+            # ~nothing to downtime
+            end = start + timedelta(seconds=1)
+    else:
+        end = start + min(timedelta(seconds=notice_to_end), cap)
+
+    return Case(
+        row=r,
+        sev=sev,
+        ref=r["reference_num"] or f"id:{r['id']}",
+        start=start,
+        end=end,
+        sas=sa_index.affected(r["full_lat"], r["full_lon"]),
+        has_end=has_end,
+        observed_end=observed_end,
+    )
+
+
+class Region:
+    """Interval and population accounting for one grouping of cases.
+
+    A county and a town within it are the same object with a different
+    population attributed to each event: the county gets a pin's whole 500 m
+    footprint, a town only the part of it inside the town (`TownLookup.within`).
+    """
+
+    def __init__(self):
+        self.sev_iv = defaultdict(list)
+        self.iv = defaultdict(lambda: defaultdict(list))
+        self.sas = defaultdict(lambda: defaultdict(dict))
+        self.has_end = defaultdict(lambda: defaultdict(bool))
+        self.observed_end = defaultdict(lambda: defaultdict(bool))
+        self.knock_refs = set()
+        self.open_now = {}  # ref -> case (dedups multi-pin events)
+        self.resolved = {}  # ref -> case, for cases observed to close
+
+    def add(self, case, sas):
+        sev, ref = case.sev, case.ref
+        self.sev_iv[sev].append((case.start, case.end))
+        self.iv[sev][ref].append((case.start, case.end))
+        self.sas[sev][ref].update(sas)
+        self.has_end[sev][ref] |= case.has_end
+        self.observed_end[sev][ref] |= case.observed_end
+        if knocks_grade(case.row):
+            self.knock_refs.add(ref)
+        r = case.row
+        if case.is_open:
+            self.open_now.setdefault(
+                ref,
+                {
+                    "sev": sev,
+                    "title": r["title"],
+                    "loc": r["location"] or "",
+                    "since": r["start_date"][:10],
+                },
+            )
+        elif r["closed_at"]:
+            # closed_at is the first build that saw the case stop being Open —
+            # observation time, resolution the build cadence, and NULL for every
+            # case that closed before the column existed (schema v2). It is the
+            # only field with a month dimension for a case that is no longer
+            # open, which is what lets a past month say anything at all.
+            self.resolved.setdefault(
+                ref,
+                {
+                    "sev": sev,
+                    "title": r["title"],
+                    "loc": r["location"] or "",
+                    "since": r["start_date"][:10],
+                    "closed": r["closed_at"][:10],
+                },
+            )
+
+    def merged(self):
+        return {sev: merge(self.sev_iv[sev]) for sev in SEV_ORDER}
+
+    def events(self):
+        return {
+            sev: {ref: merge(iv) for ref, iv in self.iv[sev].items()} for sev in SEV_ORDER
+        }
+
+    def event_pop(self, cap_pop):
+        return {
+            sev: {ref: min(sum(s.values()), cap_pop) for ref, s in self.sas[sev].items()}
+            for sev in SEV_ORDER
+        }
+
+
+def region_month(region, pop, ym, now):
+    """Counts, person-hours and availability for one region in one month.
+
+    Shared by counties and towns. Day bars and the completion median are county
+    only — see build_site.
+    """
+    lo, hi = month_bounds(ym)
+    # nothing accrues beyond "now" (future scheduled works are not downtime
+    # yet) nor before collection began
+    eff_hi, eff_lo = min(hi, now), max(lo, COLLECTION_START)
+    events, epop = region.events(), region.event_pop(pop)
+
+    counts, person_s, knock_n = {}, 0.0, 0
+    for sev in SEV_ORDER:
+        n = 0
+        for ref, iv in events[sev].items():
+            secs = union_seconds(iv, eff_lo, eff_hi)
+            if secs > 0:
+                n += 1
+                if sev == "outage":
+                    person_s += secs * epop[sev].get(ref, 0)
+                if sev == "quality" and ref in region.knock_refs:
+                    knock_n += 1
+        counts[sev] = n
+
+    period_s = max((eff_hi - eff_lo).total_seconds(), 1.0)
+    availability = 100.0 * (1 - person_s / (pop * period_s))
+    return {
+        "person_h": round(person_s / 3600),
+        "period_h": round(period_s / 3600),
+        "availability": round(max(availability, 0.0), 3),
+        "events": counts,
+        # both for the caller to pop: grading off the rounded, clamped figure
+        # would flip a county sitting a thousandth under a threshold
+        "knock_n": knock_n,
+        "avail_raw": availability,
+    }
+
+
+RESOLVED_SHOWN = 20
+
+
+def resolved_by_month(region, shown=None):
+    """{ym: {"n": count, "cases": [...]}} of events observed to close that month.
+
+    Keyed on `closed_at`, so coverage is partial by construction: it is NULL for
+    every case that closed before schema v2, and a case opened and closed inside
+    one build gap is never seen open and so never stamped. The site says so
+    rather than presenting these as a complete record.
+
+    `shown` caps the listed cases (newest first) while `n` stays the true count —
+    the full lists are a third of the page payload and a reader wants the recent
+    handful, not 200 titles.
+    """
+    by_month = defaultdict(list)
+    for event in region.resolved.values():
+        by_month[event["closed"][:7]].append(event)
+    out = {}
+    for ym, events in by_month.items():
+        events.sort(key=lambda e: e["closed"], reverse=True)
+        out[ym] = {"n": len(events), "cases": events[:shown] if shown else events}
+    return out
+
+
+def town_months(region, pop, months, now, placed=True):
+    """Per-month figures for one area, only for the months it has activity in.
+
+    Every field that is zero, absent or implied is left out, and the reader fills
+    the gaps. These are the bulk of the page — a few thousand area-months against
+    26 counties — and most of them are one disruption and three zeroes, so
+    spelling out the zeroes cost a quarter of the whole payload.
+
+    An unplaced pin has no population to divide by, its footprint being in
+    another county, so it reports counts and nothing derived from a denominator.
+    """
+    resolved = resolved_by_month(region)
+    out = {}
+    for ym in months:
+        stats = region_month(region, pop, ym, now)
+        counts = {sev: n for sev, n in stats["events"].items() if n}
+        if not counts:
+            continue
+        month = {"events": counts}
+        if placed:
+            # two decimals is what the page renders; the third was never read
+            month["availability"] = round(stats["availability"], 2)
+            if stats["person_h"]:
+                month["person_h"] = stats["person_h"]
+        if resolved.get(ym):
+            month["resolved_n"] = resolved[ym]["n"]
+        out[ym] = month
+    return out
+
+
+def county_town_data(regions, towns, county, months, now):
+    """The drill-down for one county: every named area with a case that month.
+
+    No letter grade. The A-F thresholds are calibrated to the distribution of
+    county-months, and an area's population is small enough that one burst main
+    covering the whole of it reads F — which would be true arithmetic and a
+    false comparison. Availability is still published, against the area's own
+    population, because that is the figure the drill-down exists to show.
+    """
+    if towns is None:
+        return {}
+    out = {}
+    for code, region in regions.items():
+        placed = code != UNPLACED
+        by_month = town_months(region, towns.pop[code] or 1, months, now, placed)
+        if not by_month:
+            continue
+        # no open-case list here: each one is already in the county's, tagged with
+        # its area, and holding both copies cost 80 KB to say the same thing twice
+        area = {"name": towns.label(code), "months": by_month}
+        if placed:
+            area["pop"] = towns.pop[code]
+        else:
+            area["unplaced"] = True
+        out[code] = area
+    return out
+
+
+def build_site(rows, sa_index, now, towns=None):
+    months = month_list(COLLECTION_START, now)
 
     lifts = defaultdict(list)
     for r in rows:
         if r["work_category"] == "boil_notice_lifted":
             lifts[r["county"]].append((norm_scheme(r["location"]), parse_dt(r["start_date"])))
 
-    county_sev_iv = defaultdict(lambda: defaultdict(list))
-    event_iv = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-    event_sas = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
-    event_has_end = defaultdict(lambda: defaultdict(lambda: defaultdict(bool)))
-    event_observed_end = defaultdict(lambda: defaultdict(lambda: defaultdict(bool)))
-    knock_refs = defaultdict(set)
-    open_now = defaultdict(dict)  # county -> ref -> case (dedups multi-pin events)
+    counties = defaultdict(Region)
+    county_towns = defaultdict(lambda: defaultdict(Region))
+    area_of = {}  # (county, ref) -> area code, so an open case can name its area
 
     for r in rows:
-        sev = classify(r)
-        if sev is None or r["county"] not in COUNTY_POP:
+        case = resolve_case(r, sa_index, lifts, now)
+        if case is None:
             continue
-        county = r["county"]
-        start = parse_dt(r["start_date"])
-        ref = r["reference_num"] or f"id:{r['id']}"
-
-        if r["status"] == "Open":
-            open_now[county].setdefault(
-                ref,
-                {
-                    "sev": sev,
-                    "title": r["title"],
-                    "loc": r["location"] or "",
-                    "ref": ref,
-                    "since": r["start_date"][:10],
-                },
-            )
-
-        notice_to_end = r["notice_to_end_seconds"]
-        has_real_end = notice_to_end is not None
-        # a paired boil-notice lift is an observed end too; set below
-        observed_end = has_real_end and r["end_source"] in OBSERVED_END_SOURCES
-
-        if r["work_category"] == "boil_notice_issued":
-            # This class never ends itself; boil_notice_fate owns the whole decision.
-            outcome, end = boil_notice_fate(r, lifts, now)
-            if outcome == "exclude":
-                open_now[county].pop(ref, None)
-                continue
-            # a lift is a real, observed event, not a schedule
-            has_real_end = outcome == "paired"
-            observed_end = has_real_end
-            if end is None:
-                # closed with no lift: token footprint, as for any no-signal case
-                end = start + timedelta(seconds=1)
-        elif not has_real_end:
-            if r["status"] == "Open" and start < now and not ended_by_publication(r):
-                # ongoing with no inferred end: runs from start until now, capped
-                end = min(now, start + cap)
-            else:
-                # closed with no usable end signal, or already over per the
-                # notice's own text: a token 1s footprint so its start day
-                # still colours and it counts as an event, while adding
-                # ~nothing to downtime
-                end = start + timedelta(seconds=1)
-        else:
-            end = start + min(timedelta(seconds=notice_to_end), cap)
-
-        county_sev_iv[county][sev].append((start, end))
-        event_iv[county][sev][ref].append((start, end))
-        event_sas[county][sev][ref].update(sa_index.affected(r["full_lat"], r["full_lon"]))
-        event_has_end[county][sev][ref] |= has_real_end
-        event_observed_end[county][sev][ref] |= observed_end
-        if knocks_grade(r):
-            knock_refs[county].add(ref)
+        counties[case.county].add(case, case.sas)
+        if towns is not None:
+            code = towns.dominant(case.sas, case.county)
+            county_towns[case.county][code].add(case, towns.within(case.sas, code))
+            # first pin wins, matching how the event's open entry is recorded
+            area_of.setdefault((case.county, case.ref), code)
 
     site = {
         "generated": now.strftime("%Y-%m-%d %H:%M UTC"),
@@ -384,30 +696,32 @@ def build_site(rows, sa_index, now):
     national_observed = defaultdict(list)
     national_scheduled = defaultdict(list)
 
-    for county in sorted(county_sev_iv):
-        merged = {sev: merge(county_sev_iv[county][sev]) for sev in SEV_ORDER}
-        events = {
-            sev: {ref: merge(iv) for ref, iv in event_iv[county][sev].items()}
-            for sev in SEV_ORDER
-        }
+    for county in sorted(counties):
+        region = counties[county]
+        merged, events = region.merged(), region.events()
         cpop = COUNTY_POP[county]
-        epop = {
-            sev: {ref: min(sum(s.values()), cpop) for ref, s in event_sas[county][sev].items()}
-            for sev in SEV_ORDER
-        }
+        epop = region.event_pop(cpop)
         cdata = {
             "pop": cpop,
             "months": {},
-            "open": sorted(open_now[county].values(), key=lambda o: o["since"], reverse=True)[:8],
-            "open_total": len(open_now[county]),
+            "open": sorted(
+                (
+                    {**case, "area": area_of[(county, ref)]}
+                    if (county, ref) in area_of
+                    else dict(case)
+                    for ref, case in region.open_now.items()
+                ),
+                key=lambda o: o["since"],
+                reverse=True,
+            ),
+            "open_total": len(region.open_now),
+            "towns": county_town_data(county_towns[county], towns, county, months, now),
+            "resolved": resolved_by_month(region, RESOLVED_SHOWN),
         }
 
         for ym in months:
             lo, hi = month_bounds(ym)
             ndays = (hi - lo).days
-            # nothing accrues beyond "now" (future scheduled works are not
-            # downtime yet) nor before collection began
-            eff_hi, eff_lo = min(hi, now), max(lo, COLLECTION_START)
 
             days = []
             for d in range(ndays):
@@ -430,18 +744,8 @@ def build_site(rows, sa_index, now):
                     pct = min(100.0, 100.0 * affected / cpop)
                 days.append([worst, round(pct, 2)])
 
-            counts, person_s, knock_n = {}, 0.0, 0
-            for sev in SEV_ORDER:
-                n = 0
-                for ref, iv in events[sev].items():
-                    secs = union_seconds(iv, eff_lo, eff_hi)
-                    if secs > 0:
-                        n += 1
-                        if sev == "outage":
-                            person_s += secs * epop[sev].get(ref, 0)
-                        if sev == "quality" and ref in knock_refs[county]:
-                            knock_n += 1
-                counts[sev] = n
+            stats = region_month(region, cpop, ym, now)
+            county_grade = grade(stats.pop("avail_raw"), stats.pop("knock_n"))
 
             # Notice-to-end span of disruption events that started this month
             # and carry a real end signal (open/no-signal events excluded so
@@ -450,26 +754,21 @@ def build_site(rows, sa_index, now):
             # what was announced, so the two are never pooled.
             observed_h, scheduled_h = [], []
             for ref, iv in events["outage"].items():
-                if not (event_has_end[county]["outage"][ref] and lo <= iv[0][0] < hi):
+                if not (region.has_end["outage"][ref] and lo <= iv[0][0] < hi):
                     continue
                 hours = sum((e - s).total_seconds() for s, e in iv) / 3600
-                if event_observed_end[county]["outage"][ref]:
+                if region.observed_end["outage"][ref]:
                     observed_h.append(hours)
                 else:
                     scheduled_h.append(hours)
             national_observed[ym].extend(observed_h)
             national_scheduled[ym].extend(scheduled_h)
 
-            period_s = (eff_hi - eff_lo).total_seconds()
-            availability = 100.0 * (1 - person_s / (cpop * period_s))
             cdata["months"][ym] = {
                 "days": days,
                 "clear_days": sum(1 for d in days if d[0] == ""),
-                "person_h": round(person_s / 3600),
-                "period_h": round(period_s / 3600),
-                "availability": round(max(availability, 0.0), 3),
-                "grade": grade(availability, knock_n),
-                "events": counts,
+                "grade": county_grade,
+                **stats,
                 **span_stats(observed_h, scheduled_h),
             }
         site["counties"][county] = cdata
@@ -485,7 +784,7 @@ def load_cases(conn):
     return conn.execute(
         """
         SELECT c.id, c.county, c.work_category, c.work_type, c.status, c.title,
-               c.reference_num, c.start_date, c.location,
+               c.reference_num, c.start_date, c.location, c.closed_at,
                c.full_lat, c.full_lon,
                c.boil_water_notice, c.do_not_drink, c.water_restrictions,
                c.reduced_pressure,
@@ -499,12 +798,17 @@ def load_cases(conn):
 
 def run():
     sa_index = SmallAreaIndex.from_csv(SA_POP_PATH)
+    towns = TownLookup.from_csv(SA_TOWNS_PATH, sa_index.pop)
     with sqlite3.connect(DB_PATH) as conn:
         rows = load_cases(conn)
-    site = build_site(rows, sa_index, datetime.now(timezone.utc))
+    site = build_site(rows, sa_index, datetime.now(timezone.utc), towns)
 
     SITE_DIR.mkdir(parents=True, exist_ok=True)
     (SITE_DIR / "data.js").write_text("window.UISCE_DATA = " + json.dumps(site) + ";")
     shutil.copyfile(SITE_HTML, SITE_DIR / "index.html")
     n_months = len(site["months"])
-    print(f"Wrote {SITE_DIR}/ ({len(site['counties'])} counties, {n_months} months)")
+    n_towns = sum(len(c["towns"]) for c in site["counties"].values())
+    print(
+        f"Wrote {SITE_DIR}/ ({len(site['counties'])} counties, "
+        f"{n_towns} town breakdowns, {n_months} months)"
+    )

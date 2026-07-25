@@ -12,6 +12,7 @@ CASES_RAW_PATH = Path("out/cases.json")
 CASES_MAPPED_PATH = Path("out/cases_mapped.json")
 JSONL_PATH = Path("data/inferred_end_times.jsonl")
 SA_POP_PATH = Path("data/sa_pop.csv")
+SA_TOWNS_PATH = Path("data/sa_towns.csv")
 SITE_DIR = Path("out/site")
 
 DEFAULT_TIMEOUT = 15

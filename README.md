@@ -66,9 +66,17 @@ Two options for working without the paid geocoding step:
 uv run uisce-site
 ```
 
-Reads `out/uisce.db` and writes a fully static site to `out/site/` (serve it with any file server, e.g. `python -m http.server -d out/site`). Per county and month it shows day-by-day status bars, population-weighted supply availability, and an A–F grade — only hard supply outages (bursts, plant/reservoir/pump interruptions, unplanned repairs) count against availability; restrictions, discolouration and non-disruptive works are shown but never accrue downtime.
+Reads `out/uisce.db` and writes a fully static site to `out/site/` (serve it with any file server, e.g. `python -m http.server -d out/site`, or just open `index.html` — it needs no server). Per county and month it shows day-by-day status bars, population-weighted supply availability, and an A–F grade — only hard supply outages (bursts, plant/reservoir/pump interruptions, unplanned repairs) count against availability; restrictions, discolouration and non-disruptive works are shown but never accrue downtime.
 
-The availability weighting uses Census 2022 Small Area populations (`data/sa_pop.csv`, committed; regenerate with `uv run uisce-fetch-sa-pop`). Before reading too much into the numbers, see the notes:
+Clicking a county drills into it (`#county/Kildare`): the same figures per **named area**, plus the cases open right now grouped by area and the cases observed to close that month. Availability there is measured against the area's own population, which makes it far harsher than the county figure and is the whole point; there are no letter grades at that level, because the A–F thresholds are calibrated to county-months.
+
+Every pin lands in one of three kinds of area, all of them Census geography:
+
+* the **settlement** its affected population centres on, so `Newbridge`, `Mount Carmel, Newbridge` and `Newbridge,` collapse onto one row with a real population;
+* a **Local Electoral Area**, where the settlement is too big to read as one row — the Census counts a city and its suburbs as a single settlement, and `Dublin city and suburbs` is one area of 1.26 million that held 83% of Dublin's cases. Splitting the five agglomerations over 50,000 turns Dublin into 40 rows. Be warned that LEA names are electoral compounds rather than the names people use: `Clontarf` and `Dundrum` read naturally, `Kimmage-Rathmines` does not;
+* **`Around <Electoral Division>`** for the ~40% of cases outside any settlement, since most of the network runs between towns rather than through one. The prefix matters: a rural Electoral Division is the parish *around* the town it is named for, and that town has its own row.
+
+The weighting uses Census 2022 Small Area populations (`data/sa_pop.csv`, committed; regenerate with `uv run uisce-fetch-sa-pop`) and the area each Small Area belongs to (`data/sa_towns.csv`, committed; regenerate with `uv run uisce-fetch-towns`). Both come from attributes on the CSO Small Area layer, so the area populations reproduce every published Census settlement figure exactly. Before reading too much into the numbers, see the notes:
 
 * [notes/statuspage-methodology.md](notes/statuspage-methodology.md) — every modelling decision and its rationale
 * [notes/water-sla-benchmarks.md](notes/water-sla-benchmarks.md) — Ofwat/CRU service levels and why the grades can't borrow them
@@ -86,6 +94,8 @@ Duration inference reads each notice and extracts the end-time signal using a lo
 
 ## Layout
 
+**[notes/how-it-works.md](notes/how-it-works.md) is the orientation map** — the four flows, what each module owns, and where to go to change a given thing. Start there when picking the project back up.
+
 ```
 src/uisce/
   pipeline.py    download, map, geocode, load cases   (uisce-pipeline)
@@ -93,10 +103,11 @@ src/uisce/
   build.py       build inferred_cases from the JSONL   (uisce-build-inferred)
   site.py        generate the static status site       (uisce-site)
   sa_pop.py      fetch Census Small Area populations   (uisce-fetch-sa-pop)
+  towns.py       map Small Areas to named areas        (uisce-fetch-towns)
   site.html      front end copied into out/site/
   config.py      shared paths, constants, HTTP session
 tests/           pytest suite (no network access needed)
-notes/           data-quality findings and pipeline caveats
+notes/           how it works, data-quality findings, pipeline caveats
 ```
 
 The commands are console entry points declared in `pyproject.toml`; run them from the repo root, since data paths (`out/`, `data/`) are relative.

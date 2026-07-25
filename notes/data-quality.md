@@ -205,3 +205,11 @@ The exclusion decision stands anyway, for the reason the re-measured section abo
 ## Closed cases with no end signal create false-green days
 
 ~300 `not_found` cases (plus closed unpaired boil notices) have no interval at all, so day-level views show green where a notice demonstrably existed. A same-day outage-then-all-clear is *not* affected — a case with any inferred duration still overlaps its start day — the hole is only the no-signal cases. The status site gives them a token 1-second footprint: the start day colours and the event counts, but no downtime accrues.
+
+## `county` and the pin's own coordinates disagree for ~1.5% of cases (found 2026-07-25)
+
+Building the county drill-down surfaced a small class where `cases.county` and `full_lat`/`full_lon` point at different counties: the notice says Tipperary and the pin sits in Waterford. It only became visible once every Census Small Area belonged to a named area, at which point a pin that still failed to place could only be one whose entire 500 m footprint lay outside the county the notice claims.
+
+About 1.5% of case-months, concentrated in border counties — Tipperary has the most at 21 case-months, Kilkenny 24 across four months.
+
+Which of the two fields is wrong is not established here, and it matters which way you lean: the county drives every county-level figure on the site, while the coordinates drive the affected population. The site keeps the case on the county the feed names, so county totals stay consistent with `cases.county`, and gives it a `Pinned outside the county` row that reports case counts only — with no population to divide by, publishing an availability there would invent a denominator.
