@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from uisce.site import (
-    RURAL,
+    UNPLACED,
     SmallAreaIndex,
     TownLookup,
     boil_notice_fate,
@@ -54,7 +54,7 @@ SA_INDEX = SmallAreaIndex([(52.836, -6.926, "SA1", 1000)])
 NOW = datetime(2026, 5, 10, tzinfo=UTC)
 
 # that Small Area is inside a Co. Carlow settlement; the pin therefore lands
-# in the town rather than the rural bucket
+# in the town rather than the unplaced bucket
 TOWNS = TownLookup([("SA1", "T1", "Testtown", "Carlow")], SA_INDEX.pop)
 
 
@@ -307,32 +307,24 @@ class TestTownLookup:
         )
         assert towns.dominant({"SA1": 100, "SA2": 900}, "Carlow") == "T2"
 
-    def test_a_footprint_mostly_outside_any_settlement_is_rural(self):
+    def test_a_pin_with_no_in_county_footprint_is_unplaced(self):
         towns = TownLookup([("SA1", "T1", "Small", "Carlow")], {"SA1": 100})
-        assert towns.dominant({"SA1": 100, "SA9": 900}, "Carlow") == RURAL
-        assert towns.dominant({}, "Carlow") == RURAL
+        assert towns.dominant({"SA9": 900}, "Carlow") == UNPLACED
+        assert towns.dominant({}, "Carlow") == UNPLACED
 
-    def test_a_settlement_in_another_county_is_refused(self):
-        """Border pins: a Kildare-labelled notice centred on Blessington, Co.
-        Wicklow must not appear on the Wicklow page, nor as a Wicklow town on
-        Kildare's."""
-        towns = TownLookup([("SA1", "T1", "Blessington", "Wicklow")], {"SA1": 1000})
-        assert towns.dominant({"SA1": 1000}, "Kildare") == RURAL
+    def test_the_best_area_in_the_case_s_own_county_wins_over_a_bigger_one_outside(self):
+        """Border pins are real — a Kildare-labelled notice reaching Blessington,
+        Co. Wicklow — but the case belongs to the page its county says it does, so
+        it takes the best Kildare area rather than the larger Wicklow one."""
+        towns = TownLookup(
+            [("SA1", "T1", "Blessington", "Wicklow"), ("SA2", "T2", "Kilcullen", "Kildare")],
+            {"SA1": 1000, "SA2": 100},
+        )
+        assert towns.dominant({"SA1": 1000, "SA2": 100}, "Kildare") == "T2"
 
-    def test_within_keeps_only_the_part_of_a_footprint_inside_the_town(self):
+    def test_within_keeps_only_the_part_of_a_footprint_inside_the_area(self):
         towns = TownLookup([("SA1", "T1", "Town", "Carlow")], {"SA1": 100})
         assert towns.within({"SA1": 100, "SA9": 900}, "T1") == {"SA1": 100}
-        assert towns.within({"SA1": 100, "SA9": 900}, RURAL) == {"SA9": 900}
-
-    def test_rural_population_is_the_county_remainder(self):
-        towns = TownLookup([("SA1", "T1", "Town", "Carlow")], {"SA1": 1000})
-        assert towns.rural_pop("Carlow") == 61968 - 1000
-
-    def test_rural_population_never_goes_to_zero(self):
-        """Town sums are Small-Area based and the county total is a hardcoded
-        Census figure, so the two can in principle cross over."""
-        towns = TownLookup([("SA1", "T1", "Town", "Carlow")], {"SA1": 999_999})
-        assert towns.rural_pop("Carlow") == 1
 
 
 class TestTownBreakdown:
@@ -348,7 +340,7 @@ class TestTownBreakdown:
         county = build_site([_case()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
         assert town["pop"] == 1000
         assert month["person_h"] == county["months"]["2026-05"]["person_h"] == 24 * 1000
-        assert month["availability"] == 88.889
+        assert month["availability"] == 88.89
         assert county["months"]["2026-05"]["availability"] == 99.821
 
     def test_towns_carry_no_letter_grade(self):
@@ -369,16 +361,51 @@ class TestTownBreakdown:
         assert county["months"]["2026-05"]["person_h"] == 24 * 1400
         assert county["towns"]["T1"]["months"]["2026-05"]["person_h"] == 24 * 1000
 
-    def test_a_pin_outside_any_settlement_goes_to_the_rural_bucket(self):
-        towns = TownLookup([("SA9", "T1", "Elsewhere", "Carlow")], {"SA9": 500})
+    def test_a_pin_whose_footprint_is_in_another_county_reports_no_denominator(self):
+        """The feed's county and its own coordinates disagree for ~1.5% of
+        case-months. There is no population to divide by, so the row carries its
+        counts and nothing derived from one — rather than a flattering 100%."""
+        towns = TownLookup([("SA1", "T1", "Over the border", "Wicklow")], {"SA1": 1000})
         county = build_site([_case()], SA_INDEX, NOW, towns)["counties"]["Carlow"]
-        assert list(county["towns"]) == [RURAL]
-        assert county["towns"][RURAL]["name"] == "Outside towns"
-        assert county["towns"][RURAL]["rural"] is True
+        area = county["towns"][UNPLACED]
+        assert area["name"] == "Pinned outside the county"
+        assert area["unplaced"] is True and "pop" not in area
+        month = area["months"]["2026-05"]
+        assert month["events"]["outage"] == 1
+        assert "availability" not in month and "person_h" not in month
 
-    def test_open_cases_are_grouped_under_their_town(self):
-        _, town = self._town([_case(status="Open")])
-        assert [o["title"] for o in town["open"]] == ["Burst Water Main - Carlow"]
+    def test_an_open_case_names_its_area_instead_of_being_listed_twice(self):
+        """The county's list is the only copy; the front end groups it by area."""
+        county = build_site([_case(status="Open")], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert [(o["title"], o["area"]) for o in county["open"]] == [
+            ("Burst Water Main - Carlow", "T1")
+        ]
+        assert "open" not in county["towns"]["T1"]
+
+
+class TestPayload:
+    """The area breakdown is the bulk of the page, so anything zero, absent or
+    implied is left out and the reader fills it in."""
+
+    def test_zero_severities_are_dropped_from_an_area_month(self):
+        month = build_site([_case()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert month["towns"]["T1"]["months"]["2026-05"]["events"] == {"outage": 1}
+        # the county keeps every severity: its row always renders all four
+        assert set(month["months"]["2026-05"]["events"]) == {
+            "outage", "quality", "degraded", "maintenance"
+        }
+
+    def test_a_month_with_no_person_hours_omits_the_field(self):
+        rows = [_case(notice_to_end_seconds=None, status="Closed",
+                      end_source="not_found", end_local_date=None)]
+        month = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        area_month = month["towns"]["T1"]["months"]["2026-05"]
+        assert "person_h" not in area_month
+        assert area_month["availability"] == 100.0
+
+    def test_a_month_with_nothing_resolved_omits_the_count(self):
+        month = build_site([_case()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert "resolved_n" not in month["towns"]["T1"]["months"]["2026-05"]
 
 
 class TestResolved:

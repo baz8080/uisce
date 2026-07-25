@@ -185,7 +185,7 @@
   table.towns td.name { color: var(--ink); font-weight: 600; white-space: normal; }
   table.towns td.name .tpop { color: var(--muted); font-weight: 400; font-size: 12px; }
   table.towns td b { color: var(--ink); font-weight: 650; }
-  table.towns tr.rural td.name { color: var(--ink-2); font-weight: 500; font-style: italic; }
+  table.towns tr.unplaced td.name { color: var(--ink-2); font-weight: 500; font-style: italic; }
   table.towns td.z { color: var(--muted); }
   /* the availability cell carries a hairline meter of the disrupted share, so a
      column of 99.x% values still shows which town actually took the hit */
@@ -401,33 +401,51 @@ function renderOverview() {
 
 // ---- county drill-down ----
 
+// person-hours, availability and population are all null for an unplaced pin, so
+// every comparator reads them through a default that sinks those rows to the end
+const n = (v, absent) => (v == null ? absent : v);
 const TOWN_SORTS = {
-  impact: (a, b) => b[1].person_h - a[1].person_h || b[1].events.outage - a[1].events.outage || b[0].pop - a[0].pop,
-  outages: (a, b) => b[1].events.outage - a[1].events.outage || b[1].person_h - a[1].person_h,
-  avail: (a, b) => a[1].availability - b[1].availability || b[0].pop - a[0].pop,
+  impact: (a, b) => n(b[1].person_h, -1) - n(a[1].person_h, -1) || ev(b[1], "outage") - ev(a[1], "outage") || n(b[0].pop, -1) - n(a[0].pop, -1),
+  outages: (a, b) => ev(b[1], "outage") - ev(a[1], "outage") || n(b[1].person_h, -1) - n(a[1].person_h, -1),
+  avail: (a, b) => n(a[1].availability, 101) - n(b[1].availability, 101) || n(b[0].pop, -1) - n(a[0].pop, -1),
   name: (a, b) => a[0].name.localeCompare(b[0].name),
 };
 
+// Area-months omit everything zero or implied, so read them through defaults.
+function ev(m, sev) { return m.events[sev] || 0; }
+
+function openByArea(c) {
+  const counts = {};
+  for (const o of c.open) counts[o.area] = (counts[o.area] || 0) + 1;
+  return counts;
+}
+
 function townRows(c) {
-  const rows = Object.values(c.towns)
-    .filter(t => t.months[curMonth])
-    .map(t => [t, t.months[curMonth]]);
+  const open = openByArea(c);
+  const rows = Object.entries(c.towns)
+    .filter(([, t]) => t.months[curMonth])
+    .map(([code, t]) => [t, t.months[curMonth], open[code] || 0]);
   rows.sort(TOWN_SORTS[townSort]);
   if (!rows.length) return `<div class="note">No cases announced anywhere in the county in ${monthLabel(curMonth)}.</div>`;
 
   const num = (v, label) => `<td class="${v ? "" : "z"}" data-label="${label}">${v ? `<b>${v}</b>` : "0"}</td>`;
-  const body = rows.map(([t, m]) => {
-    // share of the town's person-time lost, as a hairline meter — the numbers
-    // alone all read "99.something" and hide which town actually took the hit
-    const lost = Math.min(100, 100 - m.availability);
-    return `<tr class="${t.rural ? "rural" : ""}">
-      <td class="name">${esc(t.name)}<br><span class="tpop">${t.pop.toLocaleString()} people${t.rural ? ", est." : ""}</span></td>
-      ${num(m.events.outage, "Disruptions")}
-      ${num(m.events.quality, "Quality notices")}
-      ${num(m.events.degraded + m.events.maintenance, "Works")}
+  const body = rows.map(([t, m, openNow]) => {
+    // share of the area's person-time lost, as a hairline meter — the numbers
+    // alone all read "99.something" and hide which area actually took the hit
+    const lost = m.availability == null ? 0 : Math.min(100, 100 - m.availability);
+    // an unplaced pin's footprint is in another county, so there is no population
+    // to divide by and nothing honest to put in the last two columns
+    const avail = m.availability == null
+      ? '<span class="z">—</span>'
+      : `${m.availability.toFixed(2)}%<span class="meter" title="${lost.toFixed(2)}% of person-time disrupted"><i style="width:${Math.min(100, lost * 5).toFixed(1)}%"></i></span>`;
+    return `<tr class="${t.unplaced ? "unplaced" : ""}">
+      <td class="name">${esc(t.name)}${t.pop == null ? "" : `<br><span class="tpop">${t.pop.toLocaleString()} people</span>`}</td>
+      ${num(ev(m, "outage"), "Disruptions")}
+      ${num(ev(m, "quality"), "Quality notices")}
+      ${num(ev(m, "degraded") + ev(m, "maintenance"), "Works")}
       <td class="${m.person_h ? "" : "z"}" data-label="Person-hours">${m.person_h ? "<b>" + m.person_h.toLocaleString() + "</b>" : "—"}</td>
-      <td data-label="Availability">${m.availability.toFixed(2)}%<span class="meter" title="${lost.toFixed(2)}% of person-time disrupted"><i style="width:${Math.min(100, lost * 5).toFixed(1)}%"></i></span></td>
-      ${isLatest() ? num(t.open.length, "Open now") : ""}
+      <td data-label="Availability">${avail}</td>
+      ${isLatest() ? num(openNow, "Open now") : ""}
     </tr>`;
   }).join("");
 
@@ -456,15 +474,22 @@ function townRows(c) {
 
 function openSection(c) {
   if (!isLatest()) return "";
-  const groups = Object.values(c.towns).filter(t => t.open.length);
-  groups.sort((a, b) => b.open.length - a.open.length || a.name.localeCompare(b.name));
+  // grouped here rather than shipped pre-grouped: the cases are already in
+  // c.open, and a second copy under each area was 80 KB of the same text
+  const groups = new Map();
+  for (const o of c.open) {
+    if (!groups.has(o.area)) groups.set(o.area, []);
+    groups.get(o.area).push(o);
+  }
+  const named = [...groups].map(([code, cases]) => [c.towns[code] ? c.towns[code].name : "—", cases]);
+  named.sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
   const when = o => `${o.since > today ? "from" : "since"} ${o.since}`;
   return `<div class="card">
     <h3>Open right now <span class="n">${c.open_total} case${c.open_total === 1 ? "" : "s"}</span></h3>
     <div class="note">A snapshot of cases the feed still marks open, whatever month you are viewing. Some are advance notices of planned works; a few are notices whose status has gone stale.</div>
-    ${groups.length ? groups.map(t => `<div class="tgroup">
-        <div class="tname">${esc(t.name)}</div>
-        ${t.open.map(o => incident(o, when)).join("")}
+    ${named.length ? named.map(([name, cases]) => `<div class="tgroup">
+        <div class="tname">${esc(name)}</div>
+        ${cases.map(o => incident(o, when)).join("")}
       </div>`).join("")
       : `<div class="note" style="margin:0">No open cases in ${esc(county)} right now.</div>`}
   </div>`;
@@ -513,7 +538,7 @@ function renderCounty() {
 
     <div class="card">
       <h3>Areas with cases in ${monthLabel(curMonth)}</h3>
-      <div class="note">Each notice pin is placed in the Census 2022 settlement its affected area centres on. The Census counts a city and its suburbs as <em>one</em> settlement — Dublin's is a single area of 1.26 million — so any settlement above 50,000 is broken into its Local Electoral Areas instead, and the odd sliver of an area lying mostly outside the city is pooled as <em>Elsewhere in&nbsp;…</em>. Everything outside a settlement is grouped as <em>Outside towns</em>: most of the water network is between towns rather than in one, and a pin sitting just beyond a village boundary lands here too, even where the notice names the village. Availability is measured against each area's <em>own</em> population, so a burst covering a whole village reads far worse than the same event does in the county figure above; that is what the breakdown is for. No letter grades at this level: the A–F thresholds are calibrated to county-months and would mislead against a village-sized denominator.</div>
+      <div class="note">Each notice pin is placed in the Census 2022 area its affected population centres on: the settlement it is in, or — for the roughly 40% of the network that runs between towns rather than through one — the countryside of the surrounding Electoral Division, shown as <em>Around&nbsp;…</em> to keep it distinct from the town of the same name. The Census counts a city and its suburbs as <em>one</em> settlement, Dublin's being a single area of 1.26 million, so any settlement above 50,000 is broken into its Local Electoral Areas instead. Availability is measured against each area's <em>own</em> population, so a burst covering a whole village reads far worse than the same event does in the county figure above; that is what the breakdown is for, and it is why there are no letter grades at this level — the A–F thresholds are calibrated to county-months and would mislead against a village-sized denominator.</div>
       ${townRows(c)}
     </div>
 

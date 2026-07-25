@@ -61,8 +61,14 @@ FALLBACK_KM = 8.0
 # Key and label for the county drill-down bucket holding every case that does
 # not fall in a named settlement — 40% of them, since most of Ireland's water
 # infrastructure is not in a town.
-RURAL = "rural"
-RURAL_LABEL = "Outside towns"
+# Every Small Area belongs to a named area — a settlement, a Local Electoral Area
+# of a city, or the countryside of an Electoral Division — so a pin lands in one
+# unless its whole affected footprint lies outside the county the notice names.
+# That happens for ~1.5% of case-months and is a disagreement between the feed's
+# `county` and its own coordinates, not a gap in the geography, so the bucket says
+# so instead of pretending to be a place.
+UNPLACED = "unplaced"
+UNPLACED_LABEL = "Pinned outside the county"
 
 # Census 2022 county populations (approximate; city+county combined).
 COUNTY_POP = {
@@ -317,7 +323,6 @@ class TownLookup:
         self.name = {}  # code -> settlement name
         self.county = {}  # code -> county
         self.pop = defaultdict(int)  # code -> population
-        self.by_county = defaultdict(list)
         for guid, code, name, county in rows:
             if guid not in sa_pop:
                 continue
@@ -325,7 +330,6 @@ class TownLookup:
             if code not in self.name:
                 self.name[code] = name
                 self.county[code] = county
-                self.by_county[county].append(code)
             self.pop[code] += sa_pop[guid]
 
     @classmethod
@@ -340,51 +344,38 @@ class TownLookup:
             )
 
     def label(self, code):
-        return RURAL_LABEL if code == RURAL else self.name[code]
-
-    def rural_pop(self, county):
-        """County population not accounted for by any of its settlements.
-
-        The county total is the hardcoded Census figure while the town totals are
-        Small-Area sums, which recover 97.5% of the published urban population —
-        so this over-states the rural remainder by a couple of percent.
-        """
-        urban = sum(self.pop[code] for code in self.by_county.get(county, ()))
-        return max(COUNTY_POP.get(county, 0) - urban, 1)
+        return UNPLACED_LABEL if code == UNPLACED else self.name[code]
 
     def dominant(self, sas, county):
-        """Settlement code holding the largest share of a pin's affected
-        population, or RURAL.
+        """Area holding the largest share of a pin's affected population, or UNPLACED.
 
         Pins rarely straddle a boundary — the median dominant share is 1.00 on
         the July 2026 corpus — so one home per pin costs almost nothing and
-        keeps per-town case counts summing to the county's.
+        keeps per-area case counts summing to the county's.
 
-        A settlement in a *different* county than the case claims is refused.
-        Those are genuine border pins (a Kildare-labelled notice whose footprint
-        centres on Blessington, Co. Wicklow); re-homing them across a county
-        boundary would contradict the county page they appear on, so they fall
-        to the rural bucket instead.
+        Only areas in the case's own county are considered. Border pins are real
+        (a Kildare-labelled notice whose footprint reaches Blessington, Co.
+        Wicklow), and re-homing one across a county line would contradict the
+        page it appears on — so the pin goes to the best area that *is* in the
+        county rather than being set aside. UNPLACED is left for the pin whose
+        whole footprint lies in another county.
         """
         shares = defaultdict(int)
         for guid, pop in sas.items():
-            shares[self.town.get(guid, RURAL)] += pop
+            code = self.town.get(guid)
+            if code is not None and self.county[code] == county:
+                shares[code] += pop
         if not shares:
-            return RURAL
-        code = max(shares.items(), key=lambda kv: kv[1])[0]
-        if code == RURAL or self.county[code] != county:
-            return RURAL
-        return code
+            return UNPLACED
+        return max(shares.items(), key=lambda kv: kv[1])[0]
 
     def within(self, sas, code):
-        """The part of a pin's footprint that lies in one settlement.
+        """The part of a pin's footprint that lies in one area.
 
-        Attributing the whole footprint would let a town accrue person-hours for
-        people who don't live in it, and could push availability below zero when
-        a pin on the edge of a village reaches most of the next one.
+        Attributing the whole footprint would let a village accrue person-hours
+        for people who don't live in it, and could push availability below zero
+        when a pin on its edge reaches most of the next one.
         """
-        if code == RURAL:
-            return {guid: pop for guid, pop in sas.items() if guid not in self.town}
         return {guid: pop for guid, pop in sas.items() if self.town.get(guid) == code}
 
 
@@ -613,46 +604,61 @@ def resolved_by_month(region, shown=None):
     return out
 
 
-def town_months(region, pop, months, now):
-    """Per-month figures for one town, only for the months it has activity in."""
+def town_months(region, pop, months, now, placed=True):
+    """Per-month figures for one area, only for the months it has activity in.
+
+    Every field that is zero, absent or implied is left out, and the reader fills
+    the gaps. These are the bulk of the page — a few thousand area-months against
+    26 counties — and most of them are one disruption and three zeroes, so
+    spelling out the zeroes cost a quarter of the whole payload.
+
+    An unplaced pin has no population to divide by, its footprint being in
+    another county, so it reports counts and nothing derived from a denominator.
+    """
     resolved = resolved_by_month(region)
     out = {}
     for ym in months:
         stats = region_month(region, pop, ym, now)
-        for internal in ("knock_n", "avail_raw", "period_h"):
-            stats.pop(internal)
-        if not any(stats["events"].values()):
+        counts = {sev: n for sev, n in stats["events"].items() if n}
+        if not counts:
             continue
-        stats["resolved_n"] = resolved.get(ym, {}).get("n", 0)
-        out[ym] = stats
+        month = {"events": counts}
+        if placed:
+            # two decimals is what the page renders; the third was never read
+            month["availability"] = round(stats["availability"], 2)
+            if stats["person_h"]:
+                month["person_h"] = stats["person_h"]
+        if resolved.get(ym):
+            month["resolved_n"] = resolved[ym]["n"]
+        out[ym] = month
     return out
 
 
 def county_town_data(regions, towns, county, months, now):
-    """The drill-down for one county: every settlement with a case, plus the
-    bucket for cases outside any settlement.
+    """The drill-down for one county: every named area with a case that month.
 
     No letter grade. The A-F thresholds are calibrated to the distribution of
-    county-months, and a town's population is small enough that one burst main
+    county-months, and an area's population is small enough that one burst main
     covering the whole of it reads F — which would be true arithmetic and a
-    false comparison. Availability is still published, against the town's own
+    false comparison. Availability is still published, against the area's own
     population, because that is the figure the drill-down exists to show.
     """
     if towns is None:
         return {}
     out = {}
     for code, region in regions.items():
-        pop = towns.rural_pop(county) if code == RURAL else towns.pop[code]
-        by_month = town_months(region, pop, months, now)
+        placed = code != UNPLACED
+        by_month = town_months(region, towns.pop[code] or 1, months, now, placed)
         if not by_month:
             continue
-        out[code] = {
-            "name": towns.label(code),
-            "pop": pop,
-            "months": by_month,
-            "open": sorted(region.open_now.values(), key=lambda o: o["since"], reverse=True),
-            "rural": code == RURAL,
-        }
+        # no open-case list here: each one is already in the county's, tagged with
+        # its area, and holding both copies cost 80 KB to say the same thing twice
+        area = {"name": towns.label(code), "months": by_month}
+        if placed:
+            area["pop"] = towns.pop[code]
+        else:
+            area["unplaced"] = True
+        out[code] = area
     return out
 
 
@@ -666,6 +672,7 @@ def build_site(rows, sa_index, now, towns=None):
 
     counties = defaultdict(Region)
     county_towns = defaultdict(lambda: defaultdict(Region))
+    area_of = {}  # (county, ref) -> area code, so an open case can name its area
 
     for r in rows:
         case = resolve_case(r, sa_index, lifts, now)
@@ -675,6 +682,8 @@ def build_site(rows, sa_index, now, towns=None):
         if towns is not None:
             code = towns.dominant(case.sas, case.county)
             county_towns[case.county][code].add(case, towns.within(case.sas, code))
+            # first pin wins, matching how the event's open entry is recorded
+            area_of.setdefault((case.county, case.ref), code)
 
     site = {
         "generated": now.strftime("%Y-%m-%d %H:%M UTC"),
@@ -695,7 +704,16 @@ def build_site(rows, sa_index, now, towns=None):
         cdata = {
             "pop": cpop,
             "months": {},
-            "open": sorted(region.open_now.values(), key=lambda o: o["since"], reverse=True),
+            "open": sorted(
+                (
+                    {**case, "area": area_of[(county, ref)]}
+                    if (county, ref) in area_of
+                    else dict(case)
+                    for ref, case in region.open_now.items()
+                ),
+                key=lambda o: o["since"],
+                reverse=True,
+            ),
             "open_total": len(region.open_now),
             "towns": county_town_data(county_towns[county], towns, county, months, now),
             "resolved": resolved_by_month(region, RESOLVED_SHOWN),
