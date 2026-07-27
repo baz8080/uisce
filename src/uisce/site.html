@@ -550,11 +550,12 @@ function renderCounty() {
 // ---- routing ----
 
 function go(name) {
-  // setting the hash fires hashchange, which routes; only a no-op change
-  // (already at the overview) needs routing by hand
-  if (name) location.hash = `#county/${name}`;
-  else if (location.hash) location.hash = "";
-  else route();
+  // Cloudflare Web Analytics' automatic SPA tracking watches the History
+  // API, not hashchange, so a bare hash assignment is invisible to it —
+  // push the new URL so county drill-downs register as page views.
+  const hash = name ? `#county/${name}` : "";
+  if (hash !== location.hash) history.pushState(null, "", hash || location.pathname + location.search);
+  route();
   window.scrollTo(0, 0);
 }
 function setMonth(m) { curMonth = m; render(); }
@@ -567,6 +568,7 @@ function route() {
 }
 document.getElementById("sort").addEventListener("change", e => { sortBy = e.target.value; render(); });
 window.addEventListener("hashchange", route);
+window.addEventListener("popstate", route);
 route();
 </script>
 </body>
