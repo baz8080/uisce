@@ -153,6 +153,16 @@ Measured 2026-07-21 by replaying the 10 published snapshots (2026-06-30 → 2026
 
 This is a property of the build cadence, not of the replay: any "closed in month M" figure is a **floor**, systematically missing the shortest-lived cases, in the same way notice-to-completion spans are floors. The 12% above was measured under the original Mon/Wed/Fri cron (≤3-day gaps plus missed runs); the cron went daily on 2026-07-21 to shrink it, which no amount of frequency can close entirely. **The figure is therefore not comparable across that date** — expect months from August 2026 to carry a smaller undercount than July, and re-measure before reading any month-on-month change in closure counts as real. Also note 76% of currently-closed cases (5,798) closed before the first published snapshot and are unrecoverable outright, so the series realistically begins with July 2026.
 
+### Re-measured 2026-07-31: daily already paid this out, and the floor's true owner is the operator
+
+The 12% figure above is stale, and the paragraph's implied remedy — shrink the gap further — is now closed off. On the 933 cases first seen across the ten daily builds since 2026-07-21, **18 (1.9%) were never observed open**, six of them `investigation` (maintenance severity, feeding no published number).
+
+**The remaining floor is not ours to shrink.** Comparing the observed `Closed` transition against the LLM-inferred actual completion for those cases (n=484): median **+75.7h**, p25 +57.2h, p90 +85.2h, and **97% land more than 24h after the works finished**. Uisce Éireann stamps a case closed roughly three days late, so past a daily cadence the build gap is a small quantisation on top of a much larger administrative lag. This also reframes the 18: they are not fast events narrowly missed but notices posted at or after completion — the negative-span family in the section above — which no cadence can catch open.
+
+**Consequence for the 2026-07-31 move to two builds/day** (added for publication latency, not for this): the second discontinuity in the closure series is roughly an order of magnitude smaller than the first. At most 11 of the 18 were even *published* before the new midday slot, which is a generous upper bound since it assumes each was still `Open` at that moment — so the undercount moves 1.9% → ~1.1% at best. Against a resolved panel carrying a median of 53 events per county-month, that is under half an event, and `resolvedSection` in `site.html` renders one month at a time with no delta or trend, so there is no rendered comparison for it to corrupt. Note it and move on; the 2026-07-21 step is the one that warrants care.
+
+If a closure *series* is ever published (month-over-month counts, or a time-to-close metric keyed on `closed_at`), this stops being a prose caveat and needs the cadence recorded alongside the data so the series can be corrected rather than annotated.
+
 ## `water_outage` flag is not a filter
 
 The flag is set on 7,345 of 7,553 cases (97%) — including installations, investigations, and flushing works. Any "which cases actually cut supply" logic has to come from `work_category` + `work_type`, not this flag (the status site's severity classes in [statuspage-methodology.md](statuspage-methodology.md) do exactly that).

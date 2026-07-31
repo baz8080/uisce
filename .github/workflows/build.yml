@@ -2,9 +2,25 @@ name: Build DB
 
 on:
   schedule:
-    # Daily. The gap between builds is the resolution of cases.closed_at, and
-    # any case opening and closing inside one gap is never observed open at all
-    # — see notes/data-quality.md. Daily shrinks that floor; it cannot remove it.
+    # Twice daily, and the second slot is for publication latency ONLY — it is
+    # not a data-quality measure. Notices publish between 07:00 and 16:00 UTC
+    # (staffed office hours, see notes/data-quality.md), so a second build has
+    # to land inside that window to do anything: measured over 8,135 cases, the
+    # single evening build leaves a mean 7.7h from publication to the site,
+    # a midday build halves that to 3.9h, and an overnight one would have
+    # bought 0.9h. A third build takes 3.9h to 3.5h — not worth the run.
+    #
+    # Do NOT add builds to sharpen cases.closed_at, which is what the previous
+    # version of this comment invited. Measured 2026-07-31: the feed marks a
+    # case Closed a median of 76h after the works actually finished (97% more
+    # than 24h later), so past a daily cadence the resolution floor is Uisce
+    # Éireann's administrative lag, not our build gap — halving the gap moves
+    # nothing a reader can see. On the same measurement the never-observed-open
+    # rate is already down from 12% (the old Mon/Wed/Fri cron) to 1.9%.
+    #
+    # Scheduled runs land ~1h20 after the cron fires, so these hit ~12:45 and
+    # ~18:45 UTC. The 6h spacing is far wider than the 1–3 minute run time.
+    - cron: '20 11 * * *'
     - cron: '23 17 * * *'
   workflow_dispatch:
     inputs:
@@ -20,6 +36,17 @@ permissions:
   contents: write
   pages: write
   id-token: write
+
+# cases.closed_at is a one-shot observation: the feed carries only a case's
+# current status, so a transition seen by a run that never publishes is lost for
+# good. Two overlapping runs both download the same release DB and the later
+# publish silently discards the earlier one's observations. The schedule alone
+# cannot collide (6h apart, 1–3 minute runs) — this guards the real case, a
+# manual dispatch landing on top of a scheduled run. Queue rather than cancel:
+# a cancelled run has already read the feed and would lose the same way.
+concurrency:
+  group: build-db
+  cancel-in-progress: false
 
 jobs:
   build:
