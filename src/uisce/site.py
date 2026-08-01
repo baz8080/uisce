@@ -30,12 +30,12 @@ import math
 import shutil
 import sqlite3
 import statistics
-from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from collections import Counter, defaultdict
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
 
-from uisce.config import DB_PATH, SA_POP_PATH, SA_TOWNS_PATH, SITE_DIR
+from uisce.config import DB_PATH, DUBLIN, SA_POP_PATH, SA_TOWNS_PATH, SITE_DIR
 
 SITE_HTML = Path(__file__).parent / "site.html"
 
@@ -400,22 +400,133 @@ def span_stats(observed_h, scheduled_h):
     }
 
 
+RECURRING = "daily"  # the only recurrence value the extraction may claim
+
+
+def daily_windows(first_date, open_t, close_t, lo, hi):
+    """Every window of a daily local-time series, as UTC pairs clipped to [lo, hi).
+
+    Windows are wall clock: 22:00-07:00 is nine hours of Irish night whatever the
+    UTC offset is that week, so each date is combined with Europe/Dublin and
+    converted individually rather than offsetting the series once. That also makes
+    the clocks-change nights come out right on their own — eight hours in spring,
+    ten in autumn.
+
+    Whether the window crosses midnight comes from the times (close < open), never
+    from the notice's own wording: the feed writes "daily from 10pm until 7am".
+
+    `hi` carries the end of the series, so nothing here re-derives the last date.
+    resolve_case passes the capped end it would otherwise have used, and that
+    instant *is* the last window's close by construction — build.py derives
+    notice_to_end_seconds from local_date + local_time in the same timezone. The
+    14-day cap and a completion update both truncate the series through that one
+    clip rather than through a second code path.
+
+    Returns [] for a degenerate or incoherent series; the caller keeps its single
+    interval, because an empty expansion never means "no disruption".
+    """
+    if close_t == open_t:
+        return []
+    # the window may already be open at `lo` (a notice published mid-series), so
+    # start a day early and let the clip truncate it rather than dropping it
+    day = max(first_date, (lo - timedelta(days=1)).astimezone(DUBLIN).date())
+    overnight = timedelta(days=1 if close_t < open_t else 0)
+
+    windows = []
+    while True:
+        opens = datetime.combine(day, open_t, DUBLIN).astimezone(timezone.utc)
+        if opens >= hi:
+            return windows
+        closes = datetime.combine(day + overnight, close_t, DUBLIN).astimezone(timezone.utc)
+        opens, closes = max(opens, lo), min(closes, hi)
+        if closes > opens:
+            windows.append((opens, closes))
+        day += timedelta(days=1)
+
+
+def _parse_time(value):
+    try:
+        return time.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_date(value):
+    try:
+        return date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def recurring_intervals(row, start, end):
+    """(windows, tag) for a notice claiming a window that repeats over a date range.
+
+    `windows` is None whenever the claim is not honoured, so a refusal is a pure
+    numeric no-op — the caller keeps the single [start, end] interval it would
+    have used anyway. That is what lets the checks below be as suspicious as they
+    are: the cost of disbelieving the model is zero, and the cost of believing a
+    hallucinated recurrence is a county's person-hours quietly falling by half.
+
+    The sharpest check is the cross-check on a scheduled end. The prompt requires
+    the reported end to be the last date *at the window's closing time*, so a
+    notice whose window_close disagrees with its own local_time has contradicted
+    itself, and the field that survives is the one the eval round validates.
+    A completion update has no such check available — its local_time is the
+    completion, not a window close — so those are honoured but reported
+    individually on every build.
+    """
+    if row["end_recurrence"] != RECURRING:
+        return None, "none"
+
+    open_t = _parse_time(row["end_window_open"])
+    close_t = _parse_time(row["end_window_close"])
+    first_date = _parse_date(row["end_window_first_date"])
+    if open_t is None or close_t is None or first_date is None:
+        return None, "refused: window fields missing or unparseable"
+    if open_t == close_t:
+        # a window covering the whole day is a continuous event; say so rather
+        # than inventing touching intervals that merge would rejoin anyway
+        return None, "refused: window covers the whole day"
+
+    observed = row["end_source"] in OBSERVED_END_SOURCES
+    if not observed and _parse_time(row["end_local_time"]) != close_t:
+        return None, (
+            f"refused: close time {row['end_window_close']} "
+            f"!= reported end time {row['end_local_time']}"
+        )
+
+    windows = daily_windows(first_date, open_t, close_t, start, end)
+    if len(windows) < 2:
+        # nearly every notice contains something like "from 9am until 5pm", so a
+        # one-window recurrence is the cheapest false positive to make and the
+        # least valuable to honour — it is just an interval
+        return None, "refused: single window in span"
+    return windows, "expanded_observed" if observed else "expanded"
+
+
 class Case(NamedTuple):
-    """A case row with its severity class and disruption interval resolved.
+    """A case row with its severity class and disruption intervals resolved.
 
     Splitting this out of the accumulation loop is what lets a county and a town
-    share one set of arithmetic: the interval a case contributes is a property of
-    the case alone, not of the geography it is being counted under.
+    share one set of arithmetic: the intervals a case contributes are a property
+    of the case alone, not of the geography it is being counted under.
+
+    `intervals` is a list because a notice can describe a *recurring* window —
+    "daily from 10pm until 7am, from 9 July to 27 July" is eighteen nights of nine
+    hours, not sixteen days of continuous outage. Every other case carries exactly
+    one interval and behaves as it always has. They are sorted and non-overlapping
+    on arrival; nothing downstream re-sorts them.
     """
 
     row: object
     sev: str
     ref: str
-    start: datetime
-    end: datetime
+    start: datetime  # publication, which is also where the intervals are anchored
+    intervals: list
     sas: dict
     has_end: bool
     observed_end: bool
+    rec: str = "none"  # recurrence outcome, for the build report
 
     @property
     def county(self):
@@ -442,6 +553,7 @@ def resolve_case(r, sa_index, lifts, now):
     has_end = notice_to_end is not None
     # a paired boil-notice lift is an observed end too; set below
     observed_end = has_end and r["end_source"] in OBSERVED_END_SOURCES
+    rec = "none"
 
     if r["work_category"] == "boil_notice_issued":
         # This class never ends itself; boil_notice_fate owns the whole decision.
@@ -466,16 +578,28 @@ def resolve_case(r, sa_index, lifts, now):
             end = start + timedelta(seconds=1)
     else:
         end = start + min(timedelta(seconds=notice_to_end), cap)
+        # Recurrence lives strictly under has_end, which keeps it away from the
+        # branches above: a boil notice's end is a paired lift and never its own
+        # text, and the no-signal branches own the 532 cases whose span build.py
+        # nulled because the notice was published after its own works window.
+        windows, rec = recurring_intervals(r, start, end)
+        if windows:
+            return Case(
+                row=r, sev=sev, ref=r["reference_num"] or f"id:{r['id']}", start=start,
+                intervals=windows, sas=sa_index.affected(r["full_lat"], r["full_lon"]),
+                has_end=has_end, observed_end=observed_end, rec=rec,
+            )
 
     return Case(
         row=r,
         sev=sev,
         ref=r["reference_num"] or f"id:{r['id']}",
         start=start,
-        end=end,
+        intervals=[(start, end)],
         sas=sa_index.affected(r["full_lat"], r["full_lon"]),
         has_end=has_end,
         observed_end=observed_end,
+        rec=rec,
     )
 
 
@@ -504,8 +628,8 @@ class Region:
 
     def add(self, case, sas):
         sev, ref = case.sev, case.ref
-        self.sev_iv[sev].append((case.start, case.end))
-        self.iv[sev][ref].append((case.start, case.end))
+        self.sev_iv[sev].extend(case.intervals)
+        self.iv[sev][ref].extend(case.intervals)
         self.sas[sev][ref].update(sas)
         self.has_end[sev][ref] |= case.has_end
         self.observed_end[sev][ref] |= case.observed_end
@@ -736,6 +860,61 @@ def county_town_data(regions, towns, county, months, now):
     return out
 
 
+def recurrence_report(cases):
+    """Lines describing what claimed a recurring window and what was believed.
+
+    Printed on every build, matching backfill_work_category's unmatched-title
+    report: a prompt that starts hallucinating recurrence would otherwise show up
+    only as person-hours quietly falling, and the expanded count moving together
+    with the hour delta is what makes that visible within one build.
+
+    Empty when nothing claimed recurrence, so the test suite stays silent.
+    """
+    if not cases:
+        return []
+    expanded = [c for c in cases if c.rec.startswith("expanded")]
+    covered = sum((e - s).total_seconds() for c in expanded for s, e in c.intervals) / 3600
+    # what the continuous rule would have charged: publication to the capped end,
+    # which is the last window's close — the [(start, end)] the guard falls back to
+    elapsed = sum((c.intervals[-1][1] - c.start).total_seconds() for c in expanded) / 3600
+
+    lines = [f"{len(cases)} notice(s) claim a recurring window:"]
+    if expanded:
+        lines.append(
+            f"  {len(expanded):>4} expanded  {covered:,.0f}h charged "
+            f"where the continuous rule charged {elapsed:,.0f}h"
+        )
+    observed = [c for c in expanded if c.rec == "expanded_observed"]
+    if observed:
+        lines.append(f"  {len(observed):>4} from a completion update (no cross-check — listed):")
+        for c in observed:
+            hours = sum((e - s).total_seconds() for s, e in c.intervals) / 3600
+            lines.append(
+                f"       {c.row['id']} {c.ref}  {c.row['end_window_open']}-"
+                f"{c.row['end_window_close']} from {c.row['end_window_first_date']}, "
+                f"{len(c.intervals)} windows, {hours:.0f}h"
+            )
+    refusals = Counter(c.rec for c in cases if c.rec.startswith("refused"))
+    for reason, n in refusals.most_common():
+        lines.append(f"  {n:>4}x {reason}")
+
+    # An event's coverage is unioned across its pins, so one pin falling back to
+    # the continuous interval re-covers every gap the others carved out — the fix
+    # can land on 17 pins and be undone by the 18th. This is the only place that
+    # shows up.
+    tags = defaultdict(set)
+    for c in cases:
+        tags[(c.county, c.ref)].add(c.rec.startswith("expanded"))
+    mixed = sorted(k for k, v in tags.items() if len(v) > 1)
+    if mixed:
+        lines.append(
+            f"  ⚠ {len(mixed)} event(s) mix expanded and refused pins — "
+            "the union keeps the continuous block:"
+        )
+        lines += [f"       {county} {ref}" for county, ref in mixed]
+    return lines
+
+
 def build_site(rows, sa_index, now, towns=None):
     months = month_list(COLLECTION_START, now)
 
@@ -752,20 +931,27 @@ def build_site(rows, sa_index, now, towns=None):
     # once per county-area — a couple of thousand times — and none of the area
     # regions need any of this.
     event_meta = {}
+    recurrence = []  # (case, tag) for every pin that claimed one, for the report
 
     for r in rows:
         case = resolve_case(r, sa_index, lifts, now)
         if case is None:
             continue
+        if case.rec != "none":
+            recurrence.append(case)
         counties[case.county].add(case, case.sas)
         if case.sev == "outage":
             meta = event_meta.setdefault(
                 (case.county, case.ref),
                 # first pin wins, matching how the event's open entry is recorded
-                {"title": r["title"], "start": r["start_date"][:10],
+                {"title": r["title"], "start": r["start_date"][:10], "first_pub": case.start,
                  "pins": 0, "confirmed": 0, "scheduled": 0},
             )
             meta["pins"] += 1
+            # the earliest publication across the event's pins, which is what
+            # "started this month" means for the completion median. Not
+            # setdefault: rows arrive in id order, not start_date order.
+            meta["first_pub"] = min(meta["first_pub"], case.start)
             if case.observed_end:
                 meta["confirmed"] += 1
             elif case.has_end:
@@ -845,8 +1031,18 @@ def build_site(rows, sa_index, now, towns=None):
             # what was announced, so the two are never pooled.
             observed_h, scheduled_h = [], []
             for ref, iv in events["outage"].items():
-                if not (region.has_end["outage"][ref] and lo <= iv[0][0] < hi):
+                # an empty interval list would not raise here, it would quietly
+                # contribute a 0.0 and drag the published median toward zero
+                if not iv:
                     continue
+                # publication, not iv[0][0]: a recurring event's first *window*
+                # can open in the month after the notice went up, and the median
+                # is over events that started this month
+                if not (region.has_end["outage"][ref]
+                        and lo <= event_meta[(county, ref)]["first_pub"] < hi):
+                    continue
+                # covered hours, not elapsed span — for a recurring event these
+                # differ, and what the works took is the honest reading
                 hours = sum((e - s).total_seconds() for s, e in iv) / 3600
                 if region.observed_end["outage"][ref]:
                     observed_h.append(hours)
@@ -876,6 +1072,7 @@ def build_site(rows, sa_index, now, towns=None):
         for ym in months
         if ym < current
     }
+    site["recurrence_report"] = recurrence_report(recurrence)
 
     return site
 
@@ -889,7 +1086,8 @@ def load_cases(conn):
                c.full_lat, c.full_lon,
                c.boil_water_notice, c.do_not_drink, c.water_restrictions,
                c.reduced_pressure,
-               i.notice_to_end_seconds, i.end_source, i.end_local_date
+               i.notice_to_end_seconds, i.end_source, i.end_local_date, i.end_local_time,
+               i.end_recurrence, i.end_window_open, i.end_window_close, i.end_window_first_date
         FROM cases c
         LEFT JOIN inferred_cases i ON i.case_id = c.id
         WHERE c.county IS NOT NULL AND c.start_date IS NOT NULL
@@ -903,6 +1101,10 @@ def run():
     with sqlite3.connect(DB_PATH) as conn:
         rows = load_cases(conn)
     site = build_site(rows, sa_index, datetime.now(timezone.utc), towns)
+
+    # a diagnostic for the build log, not for the page
+    for line in site.pop("recurrence_report"):
+        print(line)
 
     SITE_DIR.mkdir(parents=True, exist_ok=True)
     (SITE_DIR / "data.js").write_text("window.UISCE_DATA = " + json.dumps(site) + ";")

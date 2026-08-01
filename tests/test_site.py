@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 
 from uisce.site import (
     UNPLACED,
@@ -7,12 +7,15 @@ from uisce.site import (
     boil_notice_fate,
     build_site,
     classify,
+    daily_windows,
     grade,
     merge,
     month_bounds,
     month_list,
     norm_scheme,
     paired_lift,
+    recurrence_report,
+    resolve_case,
     union_seconds,
 )
 
@@ -44,6 +47,12 @@ def _case(**overrides):
         "notice_to_end_seconds": 86400.0,
         "end_source": "completion_update",
         "end_local_date": "2026-05-02",
+        "end_local_time": "00:00",
+        # prompt v3; NULL on every v2 record, which reads as "not recurring"
+        "end_recurrence": None,
+        "end_window_open": None,
+        "end_window_close": None,
+        "end_window_first_date": None,
     }
     base.update(overrides)
     return base
@@ -565,3 +574,270 @@ class TestTopEvents:
         top = build_site([_case()], SA_INDEX, AFTER_MAY)["top"]["2026-05"]
         assert len(top) == 1
         assert "area" not in top[0]
+
+
+class TestDailyWindows:
+    """The pure clock function behind a recurring window.
+
+    A notice reading "daily from 10pm until 7am, from 9 July to 27 July" is
+    eighteen nights of nine hours. Charged as one continuous block it was 385.2
+    hours, which made a single Donegal event 9.9% of July 2026's national
+    person-hours and the top row of the national ranking.
+    """
+
+    def _hours(self, windows):
+        return sum((e - s).total_seconds() for s, e in windows) / 3600
+
+    def test_a_nightly_window_expands_to_one_interval_per_night(self):
+        windows = daily_windows(
+            date(2026, 7, 9), time(22, 0), time(7, 0),
+            _dt("2026-07-09T00:00:00+00:00"), _dt("2026-07-27T06:00:00+00:00"),
+        )
+        assert len(windows) == 18
+        assert self._hours(windows) == 162.0
+
+    def test_the_midnight_crossing_comes_from_the_times_not_the_wording(self):
+        """The feed calls a 10pm-7am window "daily". A rule that trusted that word
+        would produce a negative-length window; the times say it themselves."""
+        windows = daily_windows(
+            date(2026, 5, 1), time(22, 0), time(7, 0),
+            _dt("2026-05-01T00:00:00+00:00"), _dt("2026-05-04T06:00:00+00:00"),
+        )
+        assert self._hours(windows) == 27.0  # 3 nights x 9h, not 3 x 15h
+        assert all(e > s for s, e in windows)
+
+    def test_a_same_day_window_closes_on_its_own_date(self):
+        """The overnight offset must not leak into a window that doesn't cross."""
+        windows = daily_windows(
+            date(2026, 5, 4), time(8, 0), time(17, 0),
+            _dt("2026-05-04T00:00:00+00:00"), _dt("2026-05-08T16:00:00+00:00"),
+        )
+        assert len(windows) == 5
+        assert self._hours(windows) == 45.0
+        assert windows[-1][1] == _dt("2026-05-08T16:00:00+00:00")
+
+    def test_a_window_covering_the_whole_day_expands_to_nothing(self):
+        """24h a day *is* continuous. Expanding would produce touching intervals
+        that merge rejoins anyway, so the caller keeps its single interval."""
+        assert daily_windows(
+            date(2026, 5, 1), time(9, 0), time(9, 0),
+            _dt("2026-05-01T00:00:00+00:00"), _dt("2026-05-05T08:00:00+00:00"),
+        ) == []
+
+    def test_the_night_the_clocks_go_forward_is_an_hour_shorter(self):
+        """These are wall-clock times: 10pm Irish is a different UTC instant either
+        side of a transition, so the series is converted per date, not offset once."""
+        windows = daily_windows(
+            date(2027, 3, 27), time(22, 0), time(7, 0),
+            _dt("2027-03-27T00:00:00+00:00"), _dt("2027-03-28T06:00:00+00:00"),
+        )
+        assert self._hours(windows) == 8.0
+
+    def test_the_night_the_clocks_go_back_is_an_hour_longer(self):
+        windows = daily_windows(
+            date(2026, 10, 24), time(22, 0), time(7, 0),
+            _dt("2026-10-24T00:00:00+00:00"), _dt("2026-10-25T07:00:00+00:00"),
+        )
+        assert self._hours(windows) == 10.0
+
+    def test_a_window_already_open_at_publication_is_clipped_not_dropped(self):
+        """A notice published mid-series must keep the remainder of the window it
+        was published inside — hence seeding the loop a day early."""
+        windows = daily_windows(
+            date(2026, 5, 1), time(22, 0), time(7, 0),
+            _dt("2026-05-02T02:00:00+00:00"), _dt("2026-05-04T06:00:00+00:00"),
+        )
+        assert windows[0] == (_dt("2026-05-02T02:00:00+00:00"), _dt("2026-05-02T06:00:00+00:00"))
+
+    def test_a_series_starting_after_the_span_ends_expands_to_nothing(self):
+        assert daily_windows(
+            date(2026, 9, 1), time(22, 0), time(7, 0),
+            _dt("2026-05-01T00:00:00+00:00"), _dt("2026-05-04T06:00:00+00:00"),
+        ) == []
+
+
+def _recurring(**overrides):
+    """The DON00115765 shape: nightly 22:00-07:00 published as one notice.
+
+    Published 1 May 09:00Z, running until 8 May 07:00 local (06:00Z) — a 165h
+    span that covers 63h across 7 nights.
+    """
+    base = {
+        "start_date": "2026-05-01T09:00:00+00:00",
+        "end_source": "scheduled_end_with_time",
+        "end_local_date": "2026-05-08",
+        "end_local_time": "07:00",
+        "end_recurrence": "daily",
+        "end_window_open": "22:00",
+        "end_window_close": "07:00",
+        "end_window_first_date": "2026-05-01",
+        "notice_to_end_seconds": 165 * 3600.0,
+    }
+    return _case(**(base | overrides))
+
+
+class TestRecurrenceGuard:
+    """What resolve_case believes. A refusal is a numeric no-op — it keeps the
+    single interval it would have used anyway — which is what lets these checks
+    be as suspicious as they are."""
+
+    def _resolve(self, row):
+        return resolve_case(row, SA_INDEX, {}, NOW)
+
+    def test_a_notice_claiming_no_recurrence_keeps_its_single_interval(self):
+        """The no-op proof for the 9,000-odd rows that are not recurring."""
+        case = self._resolve(_case())
+        assert case.rec == "none"
+        assert len(case.intervals) == 1
+
+    def test_a_recurring_notice_expands(self):
+        case = self._resolve(_recurring())
+        assert case.rec == "expanded"
+        assert len(case.intervals) == 7
+
+    def test_a_close_time_contradicting_the_reported_end_is_refused(self):
+        """The prompt requires the reported end to be the last date *at the
+        window's closing time*, so a disagreement is the model contradicting
+        itself — and the field that survives is the one the eval round validates."""
+        case = self._resolve(_recurring(end_local_time="12:02"))
+        assert case.rec.startswith("refused")
+        assert len(case.intervals) == 1
+
+    def test_a_completion_update_expands_without_the_cross_check(self):
+        """Its local_time is the completion, not a window close, so the
+        cross-check is unavailable. Refusing them would drop the recurring inputs
+        to the completion median — and, because coverage is unioned per event, one
+        refused pin re-covers every gap the others carved out."""
+        case = self._resolve(_recurring(end_source="completion_update", end_local_time="12:02"))
+        assert case.rec == "expanded_observed"
+        assert len(case.intervals) > 1
+
+    def test_a_single_window_claim_falls_back_to_one_interval(self):
+        """Nearly every notice contains something like "from 9am until 5pm", so a
+        one-window recurrence is the cheapest false positive to make."""
+        case = self._resolve(_recurring(
+            end_local_date="2026-05-02", notice_to_end_seconds=21 * 3600.0,
+            end_window_first_date="2026-05-01",
+        ))
+        assert case.rec == "refused: single window in span"
+        assert len(case.intervals) == 1
+
+    def test_an_unrecognised_recurrence_value_is_refused(self):
+        """Fails closed, so a future prompt can widen the vocabulary without
+        silently changing the arithmetic first."""
+        case = self._resolve(_recurring(end_recurrence="weekdays"))
+        assert case.rec == "none"
+        assert len(case.intervals) == 1
+
+    def test_unparseable_window_fields_are_refused(self):
+        case = self._resolve(_recurring(end_window_open="10pm"))
+        assert case.rec.startswith("refused")
+        assert len(case.intervals) == 1
+
+    def test_a_boil_notice_never_expands_even_when_a_window_is_claimed(self):
+        """boil_notice_fate owns that class outright: its end is a paired lift,
+        never its own text."""
+        case = self._resolve(_recurring(
+            work_category="boil_notice_issued", boil_water_notice=1, status="Open",
+        ))
+        assert case.rec == "none"
+        assert len(case.intervals) == 1
+
+    def test_recurrence_is_ignored_when_the_span_was_nulled(self):
+        """The 532 cases whose notice was published after its own works window
+        keep their token footprint; a new field must not reopen them."""
+        case = self._resolve(_recurring(notice_to_end_seconds=None, status="Closed"))
+        assert case.rec == "none"
+        assert case.intervals == [(_dt("2026-05-01T09:00:00+00:00"),
+                                   _dt("2026-05-01T09:00:01+00:00"))]
+
+
+class TestRecurringIntervals:
+    """End to end: what a recurring window costs, and what it still shows."""
+
+    def test_a_nightly_series_charges_covered_hours_not_the_elapsed_span(self):
+        month = build_site([_recurring()], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["person_h"] == 63 * 1000  # 7 nights x 9h, not the 165h span
+
+    def test_every_night_of_a_series_still_colours_its_day_bar(self):
+        """The fix must reduce the price, not the visibility — a reader looking at
+        the county should still see the disruption on every day it ran."""
+        days = build_site([_recurring()], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert [d[0] for d in days["days"][:8]] == ["outage"] * 8
+
+    def test_pins_with_different_series_ends_union_to_the_longest(self):
+        rows = [
+            _recurring(id=1),
+            _recurring(id=2, end_local_date="2026-05-06", notice_to_end_seconds=117 * 3600.0),
+        ]
+        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["events"]["outage"] == 1
+        assert month["person_h"] == 63 * 1000
+
+    def test_one_unexpanded_pin_restores_the_continuous_block(self):
+        """Coverage is unioned per event but expansion is decided per pin, so a
+        single refusal re-covers every gap the others carved out. This is the
+        failure mode that would make the fix look like it worked while doing
+        nothing, and it is why the build report calls out mixed events."""
+        rows = [_recurring(id=1), _recurring(id=2, end_local_time="12:02")]
+        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["person_h"] > 150 * 1000
+
+    def test_a_long_series_still_accrues_at_most_fourteen_days_of_presence(self):
+        """CAP_DAYS is the backstop against a schedule running for months; it must
+        survive interval-by-interval, not just on the collapsed span."""
+        rows = [_recurring(
+            start_date="2026-05-01T00:00:00+00:00", end_local_date="2026-06-30",
+            end_window_open="12:00", end_window_close="18:00", end_local_time="18:00",
+            notice_to_end_seconds=1458 * 3600.0,
+        )]
+        case = resolve_case(rows[0], SA_INDEX, {}, NOW)
+        assert len(case.intervals) == 14
+        assert case.intervals[-1][1] <= _dt("2026-05-15T00:00:00+00:00")
+
+    def test_the_completion_median_reports_covered_hours(self):
+        month = build_site(
+            [_recurring(end_source="completion_update", end_local_time="12:02")],
+            SA_INDEX, NOW,
+        )["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["median_completion_h"] == 63.0
+
+    def test_a_recurring_event_is_credited_to_the_month_it_was_published(self):
+        """iv[0][0] is the first *window*, which can open in the month after the
+        notice went up — the median is over events that started this month."""
+        rows = [_recurring(
+            start_date="2026-05-31T09:00:00+00:00", end_source="completion_update",
+            end_window_first_date="2026-06-01", end_local_date="2026-06-05",
+            end_local_time="07:00", notice_to_end_seconds=118 * 3600.0,
+        )]
+        site = build_site(rows, SA_INDEX, datetime(2026, 7, 1, tzinfo=UTC))
+        months = site["counties"]["Carlow"]["months"]
+        assert months["2026-05"]["completed_n"] == 1
+        assert months["2026-06"]["completed_n"] == 0
+
+
+class TestRecurrenceReport:
+    """Printed on every build, matching backfill_work_category's unmatched-title
+    report: a prompt that starts hallucinating recurrence would otherwise show up
+    only as person-hours quietly falling."""
+
+    def _cases(self, rows):
+        return [c for c in (resolve_case(r, SA_INDEX, {}, NOW) for r in rows) if c.rec != "none"]
+
+    def test_nothing_claiming_recurrence_prints_nothing(self):
+        assert recurrence_report(self._cases([_case()])) == []
+
+    def test_an_expanded_series_reports_covered_against_continuous_hours(self):
+        report = "\n".join(recurrence_report(self._cases([_recurring()])))
+        assert "1 expanded" in report
+        assert "63h charged where the continuous rule charged 165h" in report
+
+    def test_a_refusal_is_reported_with_its_reason(self):
+        report = "\n".join(recurrence_report(self._cases([_recurring(end_local_time="12:02")])))
+        assert "refused: close time 07:00 != reported end time 12:02" in report
+
+    def test_an_event_mixing_expanded_and_refused_pins_is_flagged(self):
+        cases = self._cases([_recurring(id=1), _recurring(id=2, end_local_time="12:02")])
+        report = "\n".join(recurrence_report(cases))
+        assert "mix expanded and refused pins" in report
+        assert "Carlow CAR00000001" in report

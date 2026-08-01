@@ -117,6 +117,10 @@ def test_build_record_shape():
         "end_source": "completion_update",
         "local_date": "2026-04-28",
         "local_time": "16:13",
+        "recurrence": "none",
+        "window_open": None,
+        "window_close": None,
+        "window_first_date": None,
     }
     record = build_record(
         7, "desc text", "2026-04-28T00:00:00+00:00", result, inferred_at="2026-05-01T00:00:00+00:00"
@@ -132,8 +136,22 @@ def test_build_record_shape():
         "end_source": "completion_update",
         "local_date": "2026-04-28",
         "local_time": "16:13",
+        "recurrence": "none",
+        "window_open": None,
+        "window_close": None,
+        "window_first_date": None,
         "inferred_at": "2026-05-01T00:00:00+00:00",
     }
+
+
+def test_a_model_reply_missing_the_window_fields_still_builds_a_record():
+    """The v3 fields are read with .get(), so a reply that omits them — an older
+    model, a truncated response — yields NULLs rather than crashing the run. NULL
+    recurrence reads as "not recurring" and the case behaves as it always did."""
+    record = build_record(7, "desc", "2026-04-28T00:00:00+00:00", {"end_source": "not_found"})
+
+    assert record["recurrence"] is None
+    assert record["window_open"] is None
 
 
 class TestParseResponse:

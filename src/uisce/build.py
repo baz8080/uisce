@@ -1,11 +1,9 @@
 import json
 import sqlite3
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 
-from uisce.config import DB_PATH, JSONL_PATH
+from uisce.config import DB_PATH, DUBLIN, JSONL_PATH
 
-DUBLIN = ZoneInfo("Europe/Dublin")
 NO_END_SIGNAL_SOURCES = {"not_found", "lifted_immediate"}
 
 # end_source values whose end is *observed* (works reported done) rather than
@@ -28,7 +26,15 @@ def create_table(conn):
             end_local_date TEXT,
             end_local_time TEXT,
             end_inferred_at TEXT NOT NULL,
-            notice_to_end_seconds REAL
+            notice_to_end_seconds REAL,
+            -- prompt v3: a notice describing a window that repeats over a date
+            -- range ("daily from 10pm until 7am, from 9 July to 27 July") is not
+            -- one continuous outage. NULL on every v2 record, which reads as
+            -- "not recurring" and leaves the case behaving exactly as before.
+            end_recurrence TEXT,
+            end_window_open TEXT,
+            end_window_close TEXT,
+            end_window_first_date TEXT
         )
     """)
 
@@ -121,6 +127,14 @@ def run():
             compute_notice_to_end_seconds(
                 first_start_dates[r["case_id"]], r["end_source"], r["local_date"], r["local_time"]
             ),
+            # .get(), not [], because a resumable v3 corpus run leaves this file
+            # holding a mix of v2 and v3 records for a long time and latest_per_case
+            # returns either. A v2 record must project as NULLs, not a KeyError —
+            # that is what keeps the site correct mid-migration.
+            r.get("recurrence"),
+            r.get("window_open"),
+            r.get("window_close"),
+            r.get("window_first_date"),
         )
         for r in latest
     ]
@@ -134,8 +148,9 @@ def run():
             INSERT OR REPLACE INTO inferred_cases (
                 case_id, end_description_hash, end_input_start_date, end_model,
                 end_prompt_version, end_notes, end_source, end_local_date,
-                end_local_time, end_inferred_at, notice_to_end_seconds
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                end_local_time, end_inferred_at, notice_to_end_seconds,
+                end_recurrence, end_window_open, end_window_close, end_window_first_date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             rows,
         )

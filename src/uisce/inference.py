@@ -8,7 +8,7 @@ from uisce.config import DB_PATH, JSONL_PATH, make_session
 
 MODEL_URL = "http://localhost:1234/v1/chat/completions"
 MODEL_NAME = "gemma-4-12b-qat"
-PROMPT_VERSION = 2
+PROMPT_VERSION = 3
 LLM_TIMEOUT = 120  # local model; long descriptions can take well over 15s
 
 # might also need {%- set enable_thinking = false %} in system prompt for LM studio
@@ -44,6 +44,22 @@ across a date range. The end of the event is the LAST date in the range, at the 
 such as "unil" for "until", and for ranges written as "between 9 July and 27 July". Use only dates
 that actually appear in the text.
 
+When you find a recurring window, ALSO report the window itself: set recurrence to "daily", and
+report window_open, window_close and window_first_date. Do not change how you report local_date and
+local_time — they still mean the LAST date at the window's closing time, exactly as above. The window
+fields are extra information, not a replacement.
+- window_open: the time of day the window opens, "HH:MM" 24-hour. "10pm" is "22:00".
+- window_close: the time of day it closes, "HH:MM". "7am" is "07:00".
+- window_first_date: the FIRST date of the range, "YYYY-MM-DD".
+Report recurrence as "daily" whenever the window repeats over a range of dates, whatever word the
+notice uses for it — "daily", "nightly", "each night" are all "daily" here. A window that opens at
+10pm and closes at 7am simply runs overnight; you do not need to say so, because window_close being
+earlier than window_open already says it.
+Set recurrence to "none" when the notice describes a single continuous period rather than a repeating
+one, and leave the three window fields null. A notice that just says "works will take place from 9am
+on 3 June until 5pm on 4 June" is one continuous period, not a recurrence: there is no repetition,
+only a start and an end. If you are unsure, answer "none".
+
 Read dates carefully. A day may be written with one digit or two ("3/05/2026" and "03/05/2026" are
 the same date), and a time of day sits nearby in the same block. A single-digit day does not mean the
 time is missing. If the block gives a time, report it.
@@ -75,26 +91,40 @@ Fields:
 - end_source: one of the five values above.
 - local_date: "YYYY-MM-DD", or null only when end_source is "not_found".
 - local_time: "HH:MM" in 24-hour Ireland local time, or null when only a date was found or nothing was found.
+- recurrence: "daily" if the notice describes a time window repeating over a range of dates, otherwise "none".
+- window_open: "HH:MM" the repeating window's opening time, or null when recurrence is "none".
+- window_close: "HH:MM" the repeating window's closing time, or null when recurrence is "none".
+- window_first_date: "YYYY-MM-DD" the first date of the range, or null when recurrence is "none".
+
+Every one of these seven fields must be present in the object every time. Use null, not omission.
 
 Do not include inferred_end or confidence. Those are computed later in Python.
 
 Example (completion update, "Works are now complete at 4:13pm on 28/04/2026"):
-{"notes":"Newest update block states works complete at 4:13pm on 28/04/2026. Completion update takes priority, so end_source is completion_update.","end_source":"completion_update","local_date":"2026-04-28","local_time":"16:13"}
+{"notes":"Newest update block states works complete at 4:13pm on 28/04/2026. Completion update takes priority, so end_source is completion_update. No repeating window.","end_source":"completion_update","local_date":"2026-04-28","local_time":"16:13","recurrence":"none","window_open":null,"window_close":null,"window_first_date":null}
 
 Example (completion update above a longer scheduled notice — the completion still wins):
 Text: "Update 9:37am 13/07/2026: Works are now complete. ... Original notice: Works are scheduled to finish at 7:00am on 12/07/2026."
-{"notes":"A completion phrase appears in the update block at the top: works complete at 9:37am on 13/07/2026. The scheduled 7:00am 12/07/2026 end below it is stale original text, so it is ignored.","end_source":"completion_update","local_date":"2026-07-13","local_time":"09:37"}
+{"notes":"A completion phrase appears in the update block at the top: works complete at 9:37am on 13/07/2026. The scheduled 7:00am 12/07/2026 end below it is stale original text, so it is ignored. No repeating window.","end_source":"completion_update","local_date":"2026-07-13","local_time":"09:37","recurrence":"none","window_open":null,"window_close":null,"window_first_date":null}
 
 Example (recurring nightly window):
 Text: "Works are scheduled to take place nightly from 10pm until 8am from 08 July until 17 August."
-{"notes":"No completion phrase. A repeating nightly window from 10pm to 8am runs until 17 August, so the event ends on the last date of the range at the window's closing time of 8am.","end_source":"scheduled_end_with_time","local_date":"2026-08-17","local_time":"08:00"}
+{"notes":"No completion phrase. A repeating nightly window from 10pm to 8am runs until 17 August, so the event ends on the last date of the range at the window's closing time of 8am. The window repeats, so recurrence is daily, opening 22:00 and closing 08:00 from 08 July.","end_source":"scheduled_end_with_time","local_date":"2026-08-17","local_time":"08:00","recurrence":"daily","window_open":"22:00","window_close":"08:00","window_first_date":"2026-07-08"}
+
+Example (recurring window the notice calls "daily" even though it runs overnight):
+Text: "Works are now scheduled to take place daily from 10pm until 7am, from 9 July to 27 July."
+{"notes":"No completion phrase. A window from 10pm to 7am repeats over 9 to 27 July. The notice says daily but the window closes earlier in the clock than it opens, so it runs overnight; recurrence is daily either way. The event ends on 27 July at the closing time of 7am.","end_source":"scheduled_end_with_time","local_date":"2026-07-27","local_time":"07:00","recurrence":"daily","window_open":"22:00","window_close":"07:00","window_first_date":"2026-07-09"}
+
+Example (one continuous period, NOT a recurrence):
+Text: "Works will take place from 9am on 3 June until 5pm on 4 June."
+{"notes":"No completion phrase. This is a single continuous period with one start and one end, not a window repeating over a range, so recurrence is none. The end is 5pm on 4 June.","end_source":"scheduled_end_with_time","local_date":"2026-06-04","local_time":"17:00","recurrence":"none","window_open":null,"window_close":null,"window_first_date":null}
 
 Example (single-digit day, time still present):
 Text: "Update 9:17am 2/06/2026: Works are now complete."
-{"notes":"Completion phrase with time 9:17am on 2/06/2026. The single-digit day is still a valid date and the time is present.","end_source":"completion_update","local_date":"2026-06-02","local_time":"09:17"}
+{"notes":"Completion phrase with time 9:17am on 2/06/2026. The single-digit day is still a valid date and the time is present. No repeating window.","end_source":"completion_update","local_date":"2026-06-02","local_time":"09:17","recurrence":"none","window_open":null,"window_close":null,"window_first_date":null}
 
 Example (nothing found):
-{"notes":"No completion phrase and no scheduled end time or date in any block.","end_source":"not_found","local_date":null,"local_time":null}
+{"notes":"No completion phrase and no scheduled end time or date in any block. No repeating window.","end_source":"not_found","local_date":null,"local_time":null,"recurrence":"none","window_open":null,"window_close":null,"window_first_date":null}
 """ # noqa: E501
 
 
@@ -173,6 +203,12 @@ def build_record(case_id, description, start_date, result, inferred_at=None):
         "end_source": result.get("end_source"),
         "local_date": result.get("local_date"),
         "local_time": result.get("local_time"),
+        # v3: the repeating window, when the notice describes one. build.py reads
+        # these with .get() so a v2 record still projects cleanly.
+        "recurrence": result.get("recurrence"),
+        "window_open": result.get("window_open"),
+        "window_close": result.get("window_close"),
+        "window_first_date": result.get("window_first_date"),
         "inferred_at": inferred_at or datetime.now(timezone.utc).isoformat(),
     }
 

@@ -143,11 +143,23 @@ Three decisions worth recording:
 
 **The end badge counts notices, not events.** `Region.observed_end` is OR'd across an event's pins, which is what the monthly median wants (does this event carry *an* end signal?) but is wrong for a per-event verdict: July's largest event, `DON00115765`, has 18 pins of which exactly **one** reported a completion and 17 only stated a schedule. Badging that "completion confirmed" would present a plan as a measurement, which is the failure this whole site is organised against. The payload therefore carries `pins` / `confirmed` / `scheduled` and the page says "partly confirmed — 1 of 18 notices reported complete".
 
+### Recurring windows cover hours, not days (added 2026-08-01)
+
+A notice reading *"daily from 10pm until 7am, from 9 July to 27 July"* is 18 nights of nine hours, not 16 days of continuous outage. Prompt v3 extracts the window itself (`recurrence`, `window_open`, `window_close`, `window_first_date`) and `resolve_case` expands it into one interval per night, so a `Case` now carries a *list* of intervals. Everything downstream already unioned and clipped lists, so only `Region.add` changed.
+
+Three consequences worth stating:
+
+**`median_completion_h` is covered hours.** For a single-block event that is also its elapsed span, so nothing moved for the other 99%. For a recurring event the two now differ sharply — 144h of works inside a 385h presence — and the covered figure is the one published, because "how long did the works take" is the question the metric name asks. The site copy says so.
+
+**Expansion is decided per notice; coverage is unioned per event.** One pin falling back to the continuous interval re-covers every gap the other seventeen carved out, so the fix can land on 17 of 18 pins and change nothing. Every build prints the notices that claimed a window, what was believed, and — the line that earns its keep — any event whose pins disagree.
+
+**The guard refuses by default.** A refusal is a numeric no-op, so the checks are deliberately suspicious: the recurrence value must be exactly `daily`, all three window fields must parse, open must differ from close, the series must produce at least two windows, and for a *scheduled* end the window's closing time must match the reported end time — the prompt requires them to be the same, so a disagreement is the model contradicting itself. Completion updates have no such cross-check available (their `local_time` is the completion, not a window close), so they are honoured and listed individually in the build report.
+
 The ranking is by raw person-hours, not per-capita, and it ranks events rather than counties deliberately. A county ranking adds nothing: by raw person-hours it is a population ranking, and per-capita it is arithmetically identical to the availability column already on the overview (Donegal's 22,156 person-hours per 1,000 residents in July *is* its 97.022%).
 
 ## Known limitations
 - Overlapping events in the same area double-count person-hours.
-- The 14-day cap applies to each *notice*, not each event, so an event published as several staggered notices can span longer than 14 days — July's largest ran 385h (16 days) across 18 pins. The page copy says so.
+- The 14-day cap applies to each *notice*, not each event, so an event published as several staggered notices can span longer than 14 days — July's largest ran 385h (16 days) across 18 pins published over three days. The page copy says so. With recurring windows expanded (below) that event covers 144h inside the same 16-day presence.
 - The scheduled-end events that accrue disruption time are accruing an *announced* interval, not an observed one. They are kept out of the headline median but not out of the availability percentage, so availability carries an assumption the median does not.
 - `start_date` is the notice publication time, so durations are a floor on true outage length (overnight events are typically posted the next working morning — see [data-quality.md](data-quality.md)).
 - "May be affected" notices count everyone in the radius; the index measures disruption exposure, not confirmed loss of supply.

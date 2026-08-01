@@ -190,6 +190,27 @@ specific minority class are the question.
 - **The skip-logic trap is fixed** (old item 4). `get_last_hash_by_case_id` now returns `(description_hash, prompt_version)` per case and `get_cases_needing_inference` compares both, so a version bump re-infers the corpus; `uisce-infer` also gained `--force` and `--limit`. Verified against the live DB: pv2 flags all 7,552 cases where pv1 flagged 0. Records written before this change carry no `prompt_version` and read as `None`, so they re-infer too.
 - **`uisce-eval-replay` added** (`src/uisce/eval_replay.py`) for step 2 below. Ground truth per row is the human correction on `incorrect` rows and the endorsed model fields on `correct` rows; `unsure` rows are dropped; times compare at minute precision because some human labels carry seconds. Scoring logic is unit-tested without the model.
 
+### pv3 adds the recurring window itself (2026-08-01)
+
+v2 already recognised a repeating window and reported the last date at its closing time,
+correctly. What it could not do is say *what the window was*, so `site.py` had no choice but
+to charge the whole range as one continuous outage — 385h for eighteen 10pm–7am nights on
+`DON00115765`, which made one event 9.9% of July's national person-hours. See the recurring
+windows section of [data-quality.md](data-quality.md).
+
+v3 adds four fields — `recurrence`, `window_open`, `window_close`, `window_first_date` — and
+**deliberately leaves `local_date` and `local_time` meaning exactly what they meant in v2**.
+That is what lets `uisce-eval-replay` validate v3 against the pv2 round with no new labelling:
+the three fields it scores are unchanged, so a drop from 120/120 means the new fields have
+disturbed the old ones. Run that before spending five hours on a corpus run.
+
+The window fields are **outside the eval loop** — `FIELDNAMES` carries only the end-time
+triple, so no round labels them. Until one does, their only validation is the close-time
+cross-check in `recurring_intervals` (a scheduled end whose window close disagrees with its
+own reported end time is disbelieved) and the per-build recurrence report. That is the honest
+reason the guard refuses by default: believing a hallucinated recurrence silently halves a
+county's person-hours, and disbelieving a real one costs nothing but the status quo.
+
 ### Validated 2026-07-19 — the prompt is settled, `PROMPT_VERSION` stays at 2
 
 Step 1 is done: the replay above shows pv2 beating pv1 on every class that feeds a duration,
