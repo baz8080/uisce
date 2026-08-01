@@ -4,6 +4,7 @@ import os
 import re
 import sqlite3
 import time
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -508,7 +509,12 @@ CATEGORY_RULES = (
     CategoryRule(
         "essential_works",
         "Planned",
-        ("essential works", "essential maintenance works"),
+        (
+            "essential works",
+            "essential maintenance works",
+            "essential maintrnance works",  # the feed's own typo, twice
+            "maintenance works",
+        ),
     ),
     CategoryRule(
         "leak_detection",
@@ -518,7 +524,7 @@ CATEGORY_RULES = (
     CategoryRule(
         "mains_flushing",
         "Planned",
-        ("mains flushing",),
+        ("mains flushing", "main flushing"),
     ),
     CategoryRule(
         "boil_notice_issued",
@@ -538,7 +544,16 @@ CATEGORY_RULES = (
     CategoryRule(
         "valve_repair",
         "Unplanned",
-        ("valve repair works", "valve repair", "valve replacement works"),
+        (
+            "valve repair works",
+            "valve repair",
+            "valve replacement works",
+            "valve replacement",
+            # a failure is nearer pump_failure in spirit, but this rule already
+            # forces Unplanned and is in REPAIR_CATS, so classify() agrees either
+            # way — one fewer slug to maintain
+            "valve failure",
+        ),
     ),
     CategoryRule(
         "water_conservation",
@@ -548,6 +563,11 @@ CATEGORY_RULES = (
             "water conservation",
             "water conservation/restrictions",
             "water conservation works",
+            # the singular spellings are the common ones in the feed and were
+            # missing, so 19 restriction notices carried no slug and accrued as
+            # hard outages — see notes/data-quality.md
+            "water conservation/restriction",
+            "water conservation restriction",
         ),
     ),
     CategoryRule(
@@ -563,12 +583,12 @@ CATEGORY_RULES = (
     CategoryRule(
         "meter_installation",
         "Planned",
-        ("meter installation works",),
+        ("meter installation works", "meter installation", "meter exchange works"),
     ),
     CategoryRule(
         "new_connection",
         "Planned",
-        ("new connection works", "new connections"),
+        ("new connection works", "new connections", "mains tie-in"),
     ),
     CategoryRule(
         "pump_station_interruption",
@@ -593,7 +613,7 @@ CATEGORY_RULES = (
     CategoryRule(
         "discolouration",
         "Unplanned",
-        ("discolouration",),
+        ("discolouration", "discoloration"),  # the feed uses both spellings
     ),
     CategoryRule(
         "low_pressure",
@@ -613,7 +633,7 @@ CATEGORY_RULES = (
     CategoryRule(
         "mains_rehabilitation",
         "Planned",
-        ("mains rehabilitation works",),
+        ("mains rehabilitation works", "mains rehabilitation"),
     ),
     CategoryRule(
         "reservoir_interruption",
@@ -621,16 +641,46 @@ CATEGORY_RULES = (
         ("reservoir interruption",),
     ),
     CategoryRule(
+        # deliberately not reservoir_interruption: the feed's title grammar
+        # reserves "Interruption" for lost supply, so cleaning and upgrade works
+        # on a reservoir are works, and must not accrue downtime
+        "reservoir_works",
+        None,
+        ("reservoir works", "reservoir cleaning", "reservoir upgrade works"),
+    ),
+    CategoryRule(
         "water_treatment_plant_interruption",
         "Unplanned",  # "interruption" family; 58/1 in the feed
-        ("water treatment plant interruption",),
+        ("water treatment plant interruption", "a water treatment plant interruption"),
+    ),
+    CategoryRule(
+        # likewise: an upgrade is not an interruption, and must not land in
+        # HARD_CATS by sharing a slug with one
+        "water_treatment_plant_upgrade",
+        "Planned",
+        ("water treatment plant upgrade",),
+    ),
+    CategoryRule(
+        # the lift is good news, like boil_notice_lifted; site.py ignores both.
+        # The "notice" spelling must be listed before consumption_notice_issued
+        # can claim it: one case was stored as an *issued* do-not-consume notice,
+        # inverting its meaning and knocking a grade off Cork.
+        "consumption_notice_lifted",
+        "Unplanned",
+        ("lifting of do not consume", "lifting of do not consume notice"),
     ),
     # slug-only: the category is clear but planned vs unplanned genuinely isn't,
     # so work_type is left as the feed reported it
     CategoryRule(
         "mains_repair",
         None,
-        ("mains repair works", "mains repair", "mains repair work", "mains repairs works"),
+        (
+            "mains repair works",
+            "mains repair",
+            "mains repair work",
+            "mains repairs works",
+            "main repair works",
+        ),
     ),
     CategoryRule(
         "power_outage",
@@ -678,10 +728,35 @@ def trim_titles(conn):
     conn.execute("UPDATE cases SET title = trim(title) WHERE title != trim(title)")
 
 
+def unmatched_categories(conn):
+    """Counter of title prefixes no CategoryRule claims, commonest first.
+
+    A slug the rule table misses is not a cosmetic gap: an unmatched title gets
+    work_category = NULL, which classify() reads as "not a disruption" and so
+    silently drops from the metrics. The feed invents spellings constantly
+    ("Water Conservation/Restriction" alongside "...Restrictions", "Discoloration"
+    alongside "Discolouration"), so this is a standing condition, not a one-off
+    cleanup — printing it on every backfill is what makes the next one visible.
+    """
+    counts = Counter(
+        prefix
+        for (title,) in conn.execute("SELECT title FROM cases")
+        if classify_category(title) is None and (prefix := _title_category(title))
+    )
+    return counts
+
+
+UNMATCHED_SHOWN = 15
+
+
 def backfill_work_category(conn):
     """Derive work_category from the title for every case matching a known
     CategoryRule. Pure normalisation of an existing column, so it lives in
-    cases rather than inferred_cases."""
+    cases rather than inferred_cases.
+
+    Only ever sets a slug, never clears one, so rule changes must be additive —
+    the same discipline MIGRATIONS documents. Renaming a slug leaves stale
+    values behind and needs its own migration."""
     rows = conn.execute("SELECT id, title FROM cases").fetchall()
     updates = [
         (rule.slug, case_id)
@@ -689,6 +764,12 @@ def backfill_work_category(conn):
         if (rule := classify_category(title))
     ]
     conn.executemany("UPDATE cases SET work_category = ? WHERE id = ?", updates)
+
+    unmatched = unmatched_categories(conn)
+    if unmatched:
+        print(f"{sum(unmatched.values())} cases with no category rule:")
+        for prefix, n in unmatched.most_common(UNMATCHED_SHOWN):
+            print(f"  {n:>4}x {prefix}")
     return len(updates)
 
 

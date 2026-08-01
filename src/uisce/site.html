@@ -167,6 +167,38 @@
   .note { color: var(--muted); font-size: 12.5px; margin-bottom: 10px; }
   .bar.tall { height: 40px; }
 
+  .toplink {
+    display: inline-block; margin-bottom: 14px; font-size: 13.5px;
+    color: var(--ink-2); text-decoration: none;
+    border-bottom: 1px solid var(--border); padding-bottom: 2px;
+  }
+  .toplink:hover { color: var(--ink); }
+  .lede { font-size: 14.5px; line-height: 1.5; margin-bottom: 14px; }
+  .lede b { font-weight: 650; }
+  .toprow {
+    display: grid; grid-template-columns: 28px 1fr auto; gap: 12px;
+    align-items: baseline; padding: 11px 0; border-top: 1px solid var(--border);
+  }
+  .toprow:first-of-type { border-top: 0; }
+  .toprow .rank { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
+  .toprow .t { font-size: 14.5px; font-weight: 600; }
+  .toprow .m { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .toprow .m a { color: inherit; }
+  .toprow .ph { text-align: right; font-weight: 650; font-size: 15px; white-space: nowrap; }
+  .toprow .ph span { display: block; color: var(--muted); font-weight: 400; font-size: 11.5px; }
+  .badge {
+    display: inline-block; margin-top: 5px; padding: 1px 7px; border-radius: 999px;
+    font-size: 11.5px; border: 1px solid;
+  }
+  .badge.confirmed { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+  .badge.partial { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, transparent); }
+  .badge.sched { color: var(--muted); border-color: var(--border); }
+  @media (max-width: 480px) {
+    .toprow { grid-template-columns: 22px 1fr; }
+    .toprow .ph { grid-column: 2; text-align: left; margin-top: 4px; }
+    .toprow .ph span { display: inline; margin-left: 5px; }
+  }
+
   .scroll { overflow-x: auto; }
   table.towns { border-collapse: collapse; width: 100%; font-size: 13.5px; }
   table.towns th, table.towns td { padding: 6px 8px; text-align: right; white-space: nowrap; }
@@ -240,6 +272,7 @@
   <div id="overview">
     <div class="banner" id="banner"></div>
     <div class="tiles" id="tiles"></div>
+    <div id="topLink"></div>
 
     <div class="controls">
       <div class="months" id="months"></div>
@@ -257,11 +290,12 @@
   </div>
 
   <div id="countyview" hidden></div>
+  <div id="topview" hidden></div>
 
   <footer>
     <p><b>What this measures:</b> supply disruptions <em>announced</em> by Uisce Éireann — not measured availability at anyone's tap. Every time on this page is measured from <em>when the notice was published</em>, not from when supply was actually lost: publication is the earliest moment the data records, and for unplanned events the disruption had already begun. Treat every figure here as a <em>floor</em> on the true length.</p>
     <p><b>Median time to completion</b> is the span from notice publication to a stated &ldquo;works are now complete&rdquo; update, over disruption events that carry one. Events whose only end signal was a <em>scheduled</em> finish are counted separately and shown as &ldquo;scheduled&rdquo;: a published plan is not evidence the works ended then, so the two are never pooled into a single headline. End times are read from the notice text by an LLM (see the <a href="https://github.com/baz8080/uisce/blob/main/notes/end-time-eval.md" style="color:inherit">accuracy evaluation</a>); no time on this page is a measurement taken in the field.</p>
-    <p>Each notice pin is assumed to affect the Census 2022 Small Areas whose centres lie within 500&nbsp;m (CSO SAPS populations); the headline percentage is the population-weighted share of person-time not covered by an announced supply disruption. Only hard disruptions count against it: bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages, and unplanned repair works. Investigations, leak detection, hydrant works and installations are shown as works but never count; restrictions, low pressure and discolouration are shown but never count. Grades: A ≥ 99.9%, B ≥ 99.75%, C ≥ 99.45%, D ≥ 99.0%, else F; an active boil-water / do-not-drink / do-not-consume notice knocks one grade (discolouration does not). County <em>rankings</em> are robust to the 500&nbsp;m assumption; the letter grades are calibrated to it. Closed cases with no usable end signal still mark their start day and event counts, but add no disruption time. Full methodology: <a href="https://github.com/baz8080/uisce/blob/main/notes/statuspage-methodology.md" style="color:inherit">notes/statuspage-methodology.md</a>.</p>
+    <p>Each notice pin is assumed to affect the Census 2022 Small Areas whose centres lie within 500&nbsp;m (CSO SAPS populations); the headline percentage is the population-weighted share of person-time not covered by an announced supply disruption. Only hard disruptions count against it: bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages, and unplanned repair works. Investigations, leak detection, hydrant works and installations are shown as works but never count; restrictions, low pressure and discolouration are shown but never count. Grades: A ≥ 99.9%, B ≥ 99.75%, C ≥ 99.45%, D ≥ 99.0%, else F; an active boil-water / do-not-drink / do-not-consume notice knocks one grade (discolouration does not). County <em>rankings</em> are robust to the 500&nbsp;m assumption; the letter grades are calibrated to it. The <a href="#top" onclick="go('#top'); return false;" style="color:inherit">ten largest disruptions</a> of each finished month rank the same hard disruptions as individual events, with person-hours clipped to the month so they sum against the county figures; a notice reported &ldquo;confirmed&rdquo; there is one carrying a completion update, and since an event is often published as several notices with different end signals, the count of confirmed notices is shown rather than a single verdict. Closed cases with no usable end signal still mark their start day and event counts, but add no disruption time. Full methodology: <a href="https://github.com/baz8080/uisce/blob/main/notes/statuspage-methodology.md" style="color:inherit">notes/statuspage-methodology.md</a>.</p>
     <p id="gen"></p>
   </footer>
 </div>
@@ -278,7 +312,11 @@ const LATEST = D.months[D.months.length - 1];
 let curMonth = LATEST;
 let sortBy = "name";
 let townSort = "impact";
-let county = null;  // null = overview, otherwise the county being drilled into
+let county = null;  // the county being drilled into, when view === "county"
+let view = "overview";
+const VIEW_EL = { overview: "overview", county: "countyview", top: "topview" };
+// months with a finished top ten; the in-progress month has none (see top_events)
+const TOP_MONTHS = Object.keys(D.top || {});
 const today = new Date().toISOString().slice(0, 10);
 
 const LEGEND = `
@@ -299,9 +337,11 @@ function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&l
 // via cases.closed_at, so a past month is not left with nothing to say.
 function isLatest() { return curMonth === LATEST; }
 
-function monthTabs(onclick) {
-  return D.months.map(m =>
-    `<button class="${m === curMonth ? "on" : ""}" onclick="${onclick}('${m}')">${monthLabel(m)}</button>`).join("");
+// `current` is the month actually on screen, which is curMonth everywhere except
+// the top ten, whose month list omits the in-progress month curMonth defaults to
+function monthTabs(onclick, months, current) {
+  return (months || D.months).map(m =>
+    `<button class="${m === (current || curMonth) ? "on" : ""}" onclick="${onclick}('${m}')">${monthLabel(m)}</button>`).join("");
 }
 
 function partialNote() {
@@ -328,12 +368,15 @@ function incident(o, when) {
     </div>`;
 }
 
+const RENDER = { overview: renderOverview, county: renderCounty, top: renderTop };
+
 function render() {
-  document.getElementById("overview").hidden = county !== null;
-  document.getElementById("countyview").hidden = county === null;
+  for (const [name, id] of Object.entries(VIEW_EL)) {
+    document.getElementById(id).hidden = name !== view;
+  }
   document.getElementById("gen").textContent =
     "Generated " + D.generated + " from uisce.db · github.com/baz8080/uisce · not affiliated with Uisce Éireann.";
-  county === null ? renderOverview() : renderCounty();
+  RENDER[view]();
 }
 
 function renderOverview() {
@@ -362,6 +405,13 @@ function renderOverview() {
     <div class="tile"><div class="v">${quality}</div><div class="k">water-quality notices</div></div>
     ${isLatest() ? `<div class="tile"><div class="v">${openNow}</div><div class="k">open cases right now</div></div>` : ""}`;
 
+  // the top ten is a finished-month list, so on the in-progress month this
+  // deliberately points at a different month than the one on screen
+  const topYm = TOP_MONTHS.length ? topMonth() : null;
+  document.getElementById("topLink").innerHTML = topYm
+    ? `<a class="toplink" href="#top" onclick="go('#top'); return false;">The ten largest disruptions of ${monthLabel(topYm)} →</a>`
+    : "";
+
   const nF = worst.filter(w => w[1].grade === "F").length;
   const dot = nF > 8 ? "var(--critical)" : nF > 3 ? "var(--serious)" : nF > 0 ? "var(--warning)" : "var(--good)";
   document.getElementById("banner").innerHTML =
@@ -386,7 +436,7 @@ function renderOverview() {
     const towns = Object.values(c.towns).filter(t => t.months[curMonth]).length;
     const hint = towns ? `${towns} ${towns === 1 ? "area" : "areas"} — click for the breakdown` : "click for detail";
     return `<div class="county">
-      <div class="row" onclick="go('${encodeURIComponent(name)}')" title="${name}: ${hint}">
+      <div class="row" onclick="goCounty('${encodeURIComponent(name)}')" title="${name}: ${hint}">
         <div class="cname"><span class="gradechip g-${m.grade}">${m.grade}</span>${name}</div>
         <div class="bar">${dayCells(m.days)}</div>
         <div class="stats">
@@ -513,7 +563,7 @@ function renderCounty() {
   const c = D.counties[county], m = c.months[curMonth];
   const note = partialNote();
   document.getElementById("countyview").innerHTML = `
-    <a class="back" href="#" onclick="go(null); return false;">← All counties</a>
+    <a class="back" href="#" onclick="go(''); return false;">← All counties</a>
     <div class="chead">
       <span class="gradechip g-${m.grade}">${m.grade}</span>
       <h2>${esc(county)}</h2>
@@ -547,23 +597,86 @@ function renderCounty() {
     ${resolvedSection(c)}`;
 }
 
+// ---- the national top ten ----
+
+function fmtPersonH(h) {
+  return h >= 1e6 ? (h / 1e6).toFixed(1) + "M" : Math.round(h).toLocaleString();
+}
+
+// An event is one reference_num, published as anywhere from 1 to 18 map pins.
+// Each pin carries its own end signal, so "was this confirmed complete?" is a
+// count, not a boolean — and saying "confirmed" off a single pin out of 18 would
+// present a schedule as a measurement, which is the one thing this page must not do.
+function endBadge(r) {
+  if (r.confirmed && !r.scheduled) return `<span class="badge confirmed">completion confirmed</span>`;
+  if (r.confirmed) return `<span class="badge partial">partly confirmed — ${r.confirmed} of ${r.pins} notices reported complete</span>`;
+  if (r.scheduled) return `<span class="badge sched">scheduled end only — no completion reported</span>`;
+  return `<span class="badge sched">no end signal — capped at 14 days</span>`;
+}
+
+function topMonth() {
+  // curMonth is shared with the other views and defaults to the in-progress
+  // month, which by construction has no top ten — fall back to the newest
+  // month that has one rather than rendering nothing
+  return D.top[curMonth] ? curMonth : TOP_MONTHS[TOP_MONTHS.length - 1];
+}
+
+function renderTop() {
+  const ym = topMonth();
+  const rows = D.top[ym];
+  const national = Object.values(D.counties)
+    .reduce((sum, c) => sum + (c.months[ym] ? c.months[ym].person_h : 0), 0);
+  const share = national ? Math.round(100 * rows.reduce((s, r) => s + r.person_h, 0) / national) : 0;
+  const startedNote = ym === D.months[0] ? " Measured from 20 April 2026, when data collection began." : "";
+
+  document.getElementById("topview").innerHTML = `
+    <a class="back" href="#" onclick="go(''); return false;">← All counties</a>
+    <div class="chead"><h2>The ten largest disruptions</h2>
+      <span class="pop">${monthLabel(ym)} · by person-hours</span></div>
+    <div class="controls">${monthTabs("setMonth", TOP_MONTHS, ym)}</div>
+    <div class="card">
+      <p class="lede">These ten events account for <b>${share}%</b> of every person-hour of announced
+        supply disruption in ${monthLabel(ym)}, out of ${national ? fmtPersonH(national) : 0} nationally.${startedNote}</p>
+      <div class="note">Only hard supply disruptions are ranked — bursts, reservoir, treatment-plant and
+        pump-station interruptions, and unplanned repairs. Restrictions, low pressure and quality notices
+        are shown elsewhere on the site but never accrue person-hours. People affected is modelled from
+        Census Small Areas within 500&nbsp;m of each pin, and every span is measured from when the notice
+        was <em>published</em>, so treat these as floors. Each notice is capped at 14 days, so an event
+        published as several staggered notices can span longer than that.</div>
+      ${rows.map((r, i) => `<div class="toprow">
+        <div class="rank">${i + 1}</div>
+        <div>
+          <div class="t">${esc(r.title)}</div>
+          <div class="m">${r.area ? esc(r.area) + " · " : ""}<a href="#county/${encodeURIComponent(r.county)}"
+            onclick="goCounty('${encodeURIComponent(r.county)}'); return false;">Co. ${esc(r.county)}</a>
+            · ${r.hours}h · ~${r.people.toLocaleString()} people · from ${r.start}</div>
+          ${endBadge(r)}
+        </div>
+        <div class="ph">${fmtPersonH(r.person_h)}<span>person-hours</span></div>
+      </div>`).join("")}
+    </div>`;
+}
+
 // ---- routing ----
 
-function go(name) {
+function go(hash) {
   // Cloudflare Web Analytics' automatic SPA tracking watches the History
   // API, not hashchange, so a bare hash assignment is invisible to it —
-  // push the new URL so county drill-downs register as page views.
-  const hash = name ? `#county/${name}` : "";
+  // push the new URL so drill-downs register as page views.
   if (hash !== location.hash) history.pushState(null, "", hash || location.pathname + location.search);
   route();
   window.scrollTo(0, 0);
 }
+function goCounty(name) { go("#county/" + encodeURIComponent(name)); }
 function setMonth(m) { curMonth = m; render(); }
 function setTownSort(k) { townSort = k; render(); }
 function route() {
   const match = location.hash.match(/^#county\/([^/]+)$/);
   const name = match ? decodeURIComponent(match[1]) : null;
   county = name && D.counties[name] ? name : null;
+  // an unknown county, or #top on a build with no complete month yet, falls
+  // back to the overview rather than rendering an empty view
+  view = county ? "county" : location.hash === "#top" && TOP_MONTHS.length ? "top" : "overview";
   render();
 }
 document.getElementById("sort").addEventListener("change", e => { sortBy = e.target.value; render(); });

@@ -78,6 +78,20 @@ class TestClassify:
     def test_restriction_flags_are_degraded(self):
         assert classify(_case(work_category=None, work_type=None, reduced_pressure=1)) == "degraded"
 
+    def test_a_lifted_do_not_consume_notice_is_not_an_event(self):
+        # the lift is good news, like boil_notice_lifted. One of these was stored
+        # as an *issued* do-not-consume notice, inverting its meaning and knocking
+        # a grade off Cork.
+        assert classify(_case(work_category="consumption_notice_lifted")) is None
+
+    def test_an_unclassifiable_title_does_not_accrue_as_an_outage(self):
+        # NULL work_category used to group with the unplanned repairs and accrue
+        # full supply downtime, so every spelling the rule table missed — a bare
+        # reference number, a title of literally "unknown" — invented a national
+        # outage. Nothing is evidenced by an unparseable title, so nothing accrues.
+        assert classify(_case(work_category=None, work_type=None)) == "maintenance"
+        assert classify(_case(work_category=None, work_type="Unplanned")) == "maintenance"
+
 
 class TestBoilNoticeFate:
     """The whole boil-notice policy. See notes/boil-notices.md."""
@@ -450,3 +464,104 @@ class TestResolved:
         assert len(resolved["2026-05"]["cases"]) == 20
         # newest first, so the cap drops the oldest
         assert resolved["2026-05"]["cases"][0]["closed"] == "2026-05-25"
+
+
+# May is in progress under NOW, and the top ten is a finished-month list, so
+# these need a clock that has left May behind
+AFTER_MAY = datetime(2026, 6, 15, tzinfo=UTC)
+
+
+class TestTopEvents:
+    """The largest individual disruptions nationally. Nothing else on the site
+    ranks a single event — person-hours exist per county and per area only."""
+
+    def test_events_rank_by_person_hours_across_counties(self):
+        rows = [
+            # Carlow: 1,000 people for 24h; Kildare: 1,000 people for 48h
+            _case(id=1, reference_num="CAR1"),
+            _case(id=2, reference_num="KIL1", county="Kildare",
+                  notice_to_end_seconds=48 * 3600, end_local_date="2026-05-03"),
+        ]
+        top = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)["top"]["2026-05"]
+        assert [r["county"] for r in top] == ["Kildare", "Carlow"]
+        assert [r["person_h"] for r in top] == [48 * 1000, 24 * 1000]
+        assert [r["hours"] for r in top] == [48.0, 24.0]
+        assert top[0]["people"] == 1000
+
+    def test_the_in_progress_month_is_excluded(self):
+        # the whole scope decision: an open event accruing toward the 14-day cap
+        # would reshuffle the list between builds
+        rows = [_case()]
+        assert "2026-05" not in build_site(rows, SA_INDEX, NOW, TOWNS)["top"]
+        assert "2026-05" in build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)["top"]
+
+    def test_the_list_is_capped_at_ten(self):
+        rows = [
+            _case(id=i, reference_num=f"CAR{i}", notice_to_end_seconds=(i + 1) * 3600,
+                  end_local_date="2026-05-03")
+            for i in range(15)
+        ]
+        top = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)["top"]["2026-05"]
+        assert len(top) == 10
+        # largest first, so the cap drops the shortest five
+        assert top[0]["hours"] == 15.0
+        assert top[-1]["hours"] == 6.0
+
+    def test_only_supply_disruptions_are_ranked(self):
+        # pins the classification fix to the page: a restriction notice ran at #9
+        # nationally in July 2026 purely because its title spelling was missing
+        # from the rule table
+        rows = [
+            _case(id=1, reference_num="CAR1", work_category="water_conservation",
+                  notice_to_end_seconds=200 * 3600, end_local_date="2026-05-09"),
+            _case(id=2, reference_num="CAR2", work_category="investigation",
+                  notice_to_end_seconds=200 * 3600, end_local_date="2026-05-09"),
+            _case(id=3, reference_num="CAR3"),
+        ]
+        top = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)["top"]["2026-05"]
+        assert [r["ref"] for r in top] == ["CAR3"]
+
+    def test_a_multi_pin_event_is_one_row(self):
+        rows = [_case(id=1), _case(id=2, full_lat=52.837)]
+        top = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)["top"]["2026-05"]
+        assert len(top) == 1
+        assert top[0]["pins"] == 2
+
+    def test_the_badge_counts_pins_not_events(self):
+        """Region.observed_end is OR'd across an event's pins, so it would call
+        this an observed completion; 3 of its 4 notices only stated a plan."""
+        rows = [_case(id=1)] + [
+            _case(id=i, end_source="scheduled_end_with_time") for i in (2, 3, 4)
+        ]
+        row = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)["top"]["2026-05"][0]
+        assert (row["pins"], row["confirmed"], row["scheduled"]) == (4, 1, 3)
+
+    def test_an_event_spanning_two_months_is_split_at_the_boundary(self):
+        # 48h from 31 May 12:00: 12h in May, 36h in June
+        rows = [_case(start_date="2026-05-31T12:00:00+00:00",
+                      notice_to_end_seconds=48 * 3600, end_local_date="2026-06-02")]
+        site = build_site(rows, SA_INDEX, datetime(2026, 7, 5, tzinfo=UTC), TOWNS)
+        assert site["top"]["2026-05"][0]["person_h"] == 12 * 1000
+        assert site["top"]["2026-06"][0]["person_h"] == 36 * 1000
+        # and each half matches what the county reports for that month
+        months = site["counties"]["Carlow"]["months"]
+        assert site["top"]["2026-05"][0]["person_h"] == months["2026-05"]["person_h"]
+        assert site["top"]["2026-06"][0]["person_h"] == months["2026-06"]["person_h"]
+
+    def test_a_row_names_the_area_holding_most_of_the_footprint(self):
+        # two Small Areas in different settlements; the larger one names the row,
+        # even though the first pin sits in the smaller
+        sa = SmallAreaIndex([(52.836, -6.926, "SA1", 100), (52.837, -6.926, "SA2", 900)])
+        towns = TownLookup(
+            [("SA1", "T1", "Smallville", "Carlow"), ("SA2", "T2", "Bigtown", "Carlow")],
+            sa.pop,
+        )
+        rows = [_case(id=1, full_lat=52.836), _case(id=2, full_lat=52.837)]
+        top = build_site(rows, sa, AFTER_MAY, towns)["top"]["2026-05"]
+        assert top[0]["area"] == "Bigtown"
+
+    def test_the_ranking_works_without_a_town_lookup(self):
+        # every TestBuildSite case calls build_site this way
+        top = build_site([_case()], SA_INDEX, AFTER_MAY)["top"]["2026-05"]
+        assert len(top) == 1
+        assert "area" not in top[0]

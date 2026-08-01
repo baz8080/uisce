@@ -131,8 +131,23 @@ The thresholds are calibrated to the observed distribution of county-months (p10
 
 Rebuilding May and June 2026 at 300 m / 500 m / 1 km affect-radii: county **rankings** by availability are robust (Spearman rank correlation vs the 500 m baseline: 0.93/0.91 at 300 m, 0.90/0.86 at 1 km), but absolute **grades** are not — 48 of 52 county-months change letter somewhere across the range, because affected population scales roughly with radius², shifting everyone against the fixed thresholds together. Read the letters as calibrated to the 500 m assumption; read the ordering of counties as real. (A percentile-based grading would be radius-invariant, at the cost of losing fixed meaning across months.)
 
+## The national top ten (added 2026-08-01)
+
+`#top` ranks the ten largest **individual** disruptions nationally in a month, by person-hours. Nothing else on the site does: person-hours are computed per county and per area, so a reader who wants to know what actually happened in July gets 26 county rows rather than the burst that caused them. The distribution justifies the page — in July 2026 the ten largest events were **21.9%** of every person-hour lost nationally, and one Donegal reservoir interruption was 9% on its own.
+
+Three decisions worth recording:
+
+**Person-hours are clipped to the month**, using the same bounds `region_month` uses, rather than attributing a whole event to the month it started in. That keeps the ranking summable against the county figures already published — the "these ten are a fifth of July" headline is only true under clipping — at the cost that `person_h` is not exactly the two displayed figures multiplied (`hours` is rounded to 1dp for the payload; `person_h` comes from the unrounded span, because matching the county totals matters more).
+
+**Complete months only.** The in-progress month reshuffles between builds as open events accrue toward the 14-day cap and then resolve, so a "largest disruptions of this month" list would contradict itself twice a day. The front end shares `curMonth` with the other views but falls back to the newest complete month, since `curMonth` defaults to the in-progress one.
+
+**The end badge counts notices, not events.** `Region.observed_end` is OR'd across an event's pins, which is what the monthly median wants (does this event carry *an* end signal?) but is wrong for a per-event verdict: July's largest event, `DON00115765`, has 18 pins of which exactly **one** reported a completion and 17 only stated a schedule. Badging that "completion confirmed" would present a plan as a measurement, which is the failure this whole site is organised against. The payload therefore carries `pins` / `confirmed` / `scheduled` and the page says "partly confirmed — 1 of 18 notices reported complete".
+
+The ranking is by raw person-hours, not per-capita, and it ranks events rather than counties deliberately. A county ranking adds nothing: by raw person-hours it is a population ranking, and per-capita it is arithmetically identical to the availability column already on the overview (Donegal's 22,156 person-hours per 1,000 residents in July *is* its 97.022%).
+
 ## Known limitations
 - Overlapping events in the same area double-count person-hours.
+- The 14-day cap applies to each *notice*, not each event, so an event published as several staggered notices can span longer than 14 days — July's largest ran 385h (16 days) across 18 pins. The page copy says so.
 - The scheduled-end events that accrue disruption time are accruing an *announced* interval, not an observed one. They are kept out of the headline median but not out of the availability percentage, so availability carries an assumption the median does not.
 - `start_date` is the notice publication time, so durations are a floor on true outage length (overnight events are typically posted the next working morning — see [data-quality.md](data-quality.md)).
 - "May be affected" notices count everyone in the radius; the index measures disruption exposure, not confirmed loss of supply.

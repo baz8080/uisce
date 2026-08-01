@@ -86,7 +86,7 @@ SEV_ORDER = ["outage", "quality", "degraded", "maintenance"]
 
 QUALITY_CATS = {"boil_notice_issued", "consumption_notice_issued", "discolouration"}
 DEGRADED_CATS = {"water_conservation", "low_pressure"}
-IGNORE_CATS = {"boil_notice_lifted"}  # the lift is good news, not an event
+IGNORE_CATS = {"boil_notice_lifted", "consumption_notice_lifted"}  # a lift is good news
 
 # Boil notices are the weakest class in the dataset: only 1 of 23 has a real end
 # (see boil_notice_fate and notes/boil-notices.md). Setting this to True drops the
@@ -101,8 +101,17 @@ HARD_CATS = {
     "pump_station_interruption", "pump_failure", "power_outage",
 }
 # Emergency repair works: supply is normally shut off while they run, so they
-# accrue unless the feed says they were planned. NULL categories group here.
-REPAIR_CATS = {"mains_repair", "valve_repair", "pump_repair", None}
+# accrue unless the feed says they were planned.
+#
+# NULL categories deliberately do NOT group here. A title classify_category
+# cannot place — "unknown", a bare reference number — evidences nothing, and
+# counting it as a national supply outage fabricates downtime in the way
+# ended_by_publication and boil_notice_fate exist to prevent. It also made the
+# rule table fail loudly in the wrong direction: an unrecognised spelling of
+# "Water Conservation/Restriction" accrued as a hard outage until someone
+# noticed. Unmatched titles now fall through to maintenance and are printed by
+# every backfill instead (see backfill_work_category).
+REPAIR_CATS = {"mains_repair", "valve_repair", "pump_repair"}
 
 # Only health-relevant quality notices knock a grade; discolouration shows
 # but doesn't knock.
@@ -482,6 +491,11 @@ class Region:
         self.sev_iv = defaultdict(list)
         self.iv = defaultdict(lambda: defaultdict(list))
         self.sas = defaultdict(lambda: defaultdict(dict))
+        # both are OR'd across an event's pins, which is what the monthly median
+        # wants (does this event carry *an* end signal at all?) but not what a
+        # per-event badge wants: DON00115765 has 18 pins of which 1 reported a
+        # completion, and the OR would call the whole thing observed. The top-ten
+        # page counts pins instead — see event_meta in build_site.
         self.has_end = defaultdict(lambda: defaultdict(bool))
         self.observed_end = defaultdict(lambda: defaultdict(bool))
         self.knock_refs = set()
@@ -604,6 +618,66 @@ def resolved_by_month(region, shown=None):
     return out
 
 
+TOP_EVENTS_SHOWN = 10
+
+
+def top_events(counties, event_meta, towns, ym, now, shown=TOP_EVENTS_SHOWN):
+    """The largest individual supply disruptions nationally in one month.
+
+    Nothing else on the site ranks a single event: person-hours are computed per
+    county and per area, and a reader who wants to know what actually happened in
+    July gets 26 county rows instead of the burst that caused them. In July 2026
+    the ten largest events were 21% of every person-hour lost nationally, one of
+    them 9% on its own, so the distribution is worth a page.
+
+    Person-hours are clipped to the month with the same bounds region_month uses,
+    not attributed whole to the month an event started, which keeps the ranking
+    summable against the county figures already published — "these ten are a fifth
+    of July" is only true under clipping. person_h comes from the unrounded span
+    for that reason, so multiplying the two displayed figures reproduces it to
+    within the rounding of `hours`, not exactly.
+
+    Keyed by (county, ref), not ref: 15 reference numbers span two counties, and
+    event_pop caps each half against its own county's population, so they are
+    genuinely separate accruals and two rows is the honest rendering.
+    """
+    lo, hi = month_bounds(ym)
+    eff_hi, eff_lo = min(hi, now), max(lo, COLLECTION_START)
+
+    rows = []
+    for county, region in counties.items():
+        events, epop = region.events()["outage"], region.event_pop(COUNTY_POP[county])
+        for ref, iv in events.items():
+            secs = union_seconds(iv, eff_lo, eff_hi)
+            people = epop["outage"].get(ref, 0)
+            if secs <= 0 or people <= 0:
+                continue
+            meta = event_meta[(county, ref)]
+            row = {
+                "ref": ref,
+                "county": county,
+                "title": meta["title"],
+                "person_h": round(secs * people / 3600),
+                "hours": round(secs / 3600, 1),
+                "people": people,
+                "start": meta["start"],
+                "pins": meta["pins"],
+                "confirmed": meta["confirmed"],
+                "scheduled": meta["scheduled"],
+            }
+            if towns is not None:
+                # dominant over the event's *unioned* footprint, unlike area_of's
+                # first-pin-wins — for an 18-pin event that is a better answer and
+                # costs one line
+                row["area"] = towns.label(
+                    towns.dominant(region.sas["outage"].get(ref, {}), county)
+                )
+            rows.append(row)
+
+    rows.sort(key=lambda r: r["person_h"], reverse=True)
+    return rows[:shown]
+
+
 def town_months(region, pop, months, now, placed=True):
     """Per-month figures for one area, only for the months it has activity in.
 
@@ -673,12 +747,29 @@ def build_site(rows, sa_index, now, towns=None):
     counties = defaultdict(Region)
     county_towns = defaultdict(lambda: defaultdict(Region))
     area_of = {}  # (county, ref) -> area code, so an open case can name its area
+    # (county, ref) -> title, start, and how each of the event's pins signalled
+    # its end. Kept out of Region, which is instantiated once per county *and*
+    # once per county-area — a couple of thousand times — and none of the area
+    # regions need any of this.
+    event_meta = {}
 
     for r in rows:
         case = resolve_case(r, sa_index, lifts, now)
         if case is None:
             continue
         counties[case.county].add(case, case.sas)
+        if case.sev == "outage":
+            meta = event_meta.setdefault(
+                (case.county, case.ref),
+                # first pin wins, matching how the event's open entry is recorded
+                {"title": r["title"], "start": r["start_date"][:10],
+                 "pins": 0, "confirmed": 0, "scheduled": 0},
+            )
+            meta["pins"] += 1
+            if case.observed_end:
+                meta["confirmed"] += 1
+            elif case.has_end:
+                meta["scheduled"] += 1
         if towns is not None:
             code = towns.dominant(case.sas, case.county)
             county_towns[case.county][code].add(case, towns.within(case.sas, code))
@@ -775,6 +866,16 @@ def build_site(rows, sa_index, now, towns=None):
 
     for ym in months:
         site["national"][ym] = span_stats(national_observed[ym], national_scheduled[ym])
+
+    # Complete months only. The in-progress month reshuffles between builds as
+    # open events accrue toward the 14-day cap and then resolve, so a "largest
+    # disruptions of this month" list would contradict itself twice a day.
+    current = now.strftime("%Y-%m")
+    site["top"] = {
+        ym: top_events(counties, event_meta, towns, ym, now)
+        for ym in months
+        if ym < current
+    }
 
     return site
 
