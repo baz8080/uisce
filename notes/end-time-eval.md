@@ -162,6 +162,48 @@ window closes 1 August 09:00, a date absent from the text), but no round-1 case 
   deliberate exception to the never-overwrite rule, taken because the file is the measuring
   instrument for every future prompt and the defects cost ~4 points on any version.
 
+### 2026-08-01 — pv3 replay (the gate before the v3 corpus run)
+
+pv3 adds four window fields and **leaves `local_date` and `local_time` meaning exactly what
+they meant in pv2**, which is the whole reason replay can validate it with no new labelling:
+the three fields the harness scores are unchanged, so any drop is the new fields disturbing
+the old ones. Both rounds were replayed before committing five hours to a corpus run.
+
+| round | draw | pv1 | pv2 | **pv3** |
+|---|---|---|---|---|
+| round 1 (N=114) | stratified | 81/114 = 71.1% | 99/114 = 86.8% | **99/114 = 86.8%** |
+| round 1, excl. `lifted_immediate` | | 81/99 = 81.8% | 99/99 = 100% | **99/99 = 100%** |
+| round 2 (N=120) | uniform, unseen | — | 120/120 = 100% | **120/120 = 100%** |
+
+**pv3 is indistinguishable from pv2 on both rounds** — identical totals, identical per-class
+splits, zero parse errors across 234 replayed rows. That is the result the gate wanted: seven
+output fields do not degrade the four that already worked. It is *not* evidence that pv3 is
+better, and the 86.8% is not comparable to round 1's 71.9% headline (different scoring; see
+the pv2 replay section above). The 15 misses are the same `lifted_immediate` convention rows,
+excluded from site metrics by the 2026-07-18 decision.
+
+**Round 1 is also the only labelled data touching recurring windows** — 8 rows, against 1 in
+round 2. pv1 got all 8 wrong (backlog item 2); pv2 fixed them; pv3 holds all 8, including the
+two where pv1 had the *date* wrong (238075 said 17 July for a 27 July range; 238256 said 13
+July for 17 July). Between them they cover the variants that matter: `until`/`between … and`
+ranges, the feed's `unil` typo, a half-hour close (05:30), a non-crossing daytime window
+(09:00–18:00), and windows the notice calls "daily" while they run 10pm–7am.
+
+That last point is what the window fields rest on. The human-corrected `local_time` on all
+eight rows *is* the window's closing time — 09:00, 08:00, 18:00, 07:00, 07:00, 07:00, 08:00,
+05:30 — and pv3 reproduces each exactly. So the cross-check in `recurring_intervals`
+(a scheduled end whose `window_close` disagrees with its own `local_time` is disbelieved) is
+validated against eight labelled cases rather than against a reading of the prompt. The window
+fields themselves are still unlabelled; this validates their premise, not their values.
+
+One case worth remembering: **238256, "daily from 10pm until 7am until 17 July", states no
+first date**. `window_first_date` has nothing to extract, so the guard refuses and the case
+keeps its continuous interval — the safe direction, and a reminder that expansion is
+opportunistic rather than universal.
+
+Replay CSVs: `..._pv1_replay_gemma-4-12b-qat_pv3.csv` and `..._pv2_replay_gemma-4-12b-qat_pv3.csv`
+in `data/eval/`.
+
 ## Sampling a fresh round without re-inferring the corpus
 
 `uisce-eval-sample` draws from `inferred_cases`, so a round showing a new prompt's behaviour
@@ -225,6 +267,19 @@ Round 2 came in at 120/120 (see Results). The gate we set before spending four h
 inference was passed, and the corpus run followed: all 8,130 inferred cases now carry
 `end_prompt_version = 2`. `PROMPT_VERSION` stays at 2: the prompt was never edited during
 validation. Nothing in this workflow is pending.
+
+### Superseded by pv3 — corpus run 2026-08-01
+
+The two sections above describe the pv2 end state and are kept as the record of it. pv3 does
+not revisit any of it: the end-time triple is unchanged and replayed identically on both
+rounds (see the pv3 replay entry in Results). What pv3 adds is the recurring *window*, which
+pv2 could recognise but had no field to report — see the recurring-windows section of
+[data-quality.md](data-quality.md) for why that mattered enough to spend a second corpus run on.
+
+Neither round labels the window fields, so no accuracy claim exists for them. Their guard is
+the close-time cross-check and the per-build recurrence report. **The next labelling round
+should stratify on `recurrence`**, which needs a `FIELDNAMES` extension and a quota key —
+until then the four new fields are outside the eval loop by construction, not by oversight.
 
 <details>
 <summary>Original handoff for round 2 (completed 2026-07-19)</summary>
