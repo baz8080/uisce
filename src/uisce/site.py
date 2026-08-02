@@ -27,6 +27,7 @@ thresholds are documented in notes/statuspage-methodology.md.
 import csv
 import json
 import math
+import re
 import shutil
 import sqlite3
 import statistics
@@ -487,6 +488,45 @@ def case_ref(row):
     return row["reference_num"] or f"id:{row['id']}"
 
 
+# The wording the feed uses for a window repeating over a range of dates.
+RECURRENCE_TEXT = re.compile(
+    r"\b(daily|nightly|each night|every night|each day|overnight (?:from|between))\b", re.I
+)
+
+
+def describes_recurrence(description):
+    """Whether a notice's own text announces a repeating window."""
+    return bool(RECURRENCE_TEXT.search(re.sub(r"<[^>]+>", " ", description or "")))
+
+
+def recurring_events(rows, windows):
+    """Event keys whose notices describe a window repeating over a date range.
+
+    Two signals, because neither alone is enough and they fail in opposite
+    directions. The extraction misses a window whenever the notice also carries a
+    completion update — it is told a completion takes priority over a scheduled
+    end and applies that to the window fields too — which is 33 events, including
+    every one of the eight a human review found charged as a continuous outage.
+    The text misses the enumerated form, "from 10am until 6pm on 5 May, 6 May and
+    7 May", which names its days instead of saying "daily", and which the model
+    reads correctly.
+
+    Detection is all the severity rule needs, and detection is the easy half: the
+    window *values* are what needed a language model. So classification no longer
+    waits on a corpus re-run to be right.
+
+    Known residual: one notice reading "until 6pm on 9 May until 9pm 13 May" — two
+    "until"s and no "from", garbled at source — is read as a repeating 18:00-21:00
+    window by the model and is not recurring. Reviewed and recorded rather than
+    parsed around; see data/eval/recurrence_review_2026-08-02.csv.
+    """
+    keys = set(windows)
+    for row in rows:
+        if describes_recurrence(row["description"]):
+            keys.add((row["county"], case_ref(row)))
+    return keys
+
+
 def event_windows(rows):
     """{(county, ref): (open, close, first_date)} for events any pin gave a window.
 
@@ -610,11 +650,15 @@ class Case(NamedTuple):
         return self.row["status"] == "Open"
 
 
-def resolve_case(r, sa_index, lifts, now, shared_window=None):
+def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None):
     """A Case for one row, or None if it isn't an event at all.
 
     `shared_window` is the recurring window this row's *event* reported, used
     when this particular notice reported none of its own — see event_windows.
+    `recurring` is whether the event announces a repeating window by either
+    signal (see recurring_events); it decides severity, while shared_window
+    decides the intervals. Left None, it falls back to this row's own fields,
+    which is enough for a single-notice caller.
 
     The interval rules and their rationale are in
     notes/statuspage-methodology.md; this is the code they describe.
@@ -623,7 +667,9 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None):
     # completion update reports no window, and classifying it on its own field
     # would leave one outage pin inside a restriction event, whose interval the
     # per-reference union would then charge in full.
-    recurring = shared_window is not None or r["end_recurrence"] == RECURRING
+    if recurring is None:
+        recurring = (shared_window is not None or r["end_recurrence"] == RECURRING
+                     or describes_recurrence(r["description"]))
     sev = classify(r, recurring)
     if sev is None or r["county"] not in COUNTY_POP:
         return None
@@ -1056,9 +1102,11 @@ def build_site(rows, sa_index, now, towns=None):
     # that made no claim, since those are what re-cover an expanded event's gaps
     pin_tags = defaultdict(list)
     shared = event_windows(rows)
+    recurring = recurring_events(rows, shared)
 
     for r in rows:
-        case = resolve_case(r, sa_index, lifts, now, shared.get((r["county"], case_ref(r))))
+        key = (r["county"], case_ref(r))
+        case = resolve_case(r, sa_index, lifts, now, shared.get(key), key in recurring)
         if case is None:
             continue
         pin_tags[(case.county, case.ref)].append(case.rec)
@@ -1220,6 +1268,9 @@ def load_cases(conn):
         """
         SELECT c.id, c.county, c.work_category, c.work_type, c.status, c.title,
                c.reference_num, c.start_date, c.location, c.closed_at,
+               -- read only by describes_recurrence, which is why the severity
+               -- rule no longer depends on the model having extracted a window
+               c.description,
                c.full_lat, c.full_lon,
                c.boil_water_notice, c.do_not_drink, c.water_restrictions,
                c.reduced_pressure,

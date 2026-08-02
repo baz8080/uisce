@@ -8,6 +8,7 @@ from uisce.site import (
     build_site,
     classify,
     daily_windows,
+    describes_recurrence,
     event_windows,
     grade,
     merge,
@@ -16,6 +17,7 @@ from uisce.site import (
     norm_scheme,
     paired_lift,
     recurrence_report,
+    recurring_events,
     resolve_case,
     union_seconds,
 )
@@ -38,6 +40,9 @@ def _case(**overrides):
         "reference_num": "CAR00000001",
         "start_date": "2026-05-01T00:00:00+00:00",
         "location": "Somewhere",
+        # read only by describes_recurrence; the default says nothing about a
+        # repeating window, so a case is non-recurring unless a test says so
+        "description": "Works may cause supply disruptions to Somewhere, Co. Carlow.",
         "closed_at": None,
         "full_lat": 52.836,
         "full_lon": -6.926,
@@ -1088,3 +1093,44 @@ class TestEventNaming:
         for case in county["open"]:
             assert case["area"] in homes
             assert case["area"] in county["towns"]
+
+
+class TestDescribesRecurrence:
+    """Detection, which is the easy half — the window *values* are what needed a
+    language model. Keying severity off this is why classification no longer
+    waits on a corpus re-run to be right."""
+
+    def test_matches_the_wordings_the_feed_uses(self):
+        for text in ("works nightly from 10pm", "daily from 9pm until 9am",
+                     "each night from 11pm", "overnight from 10pm until 7am"):
+            assert describes_recurrence(text), text
+
+    def test_does_not_match_a_single_continuous_period(self):
+        assert not describes_recurrence("Works will take place from 9am on 3 June until 5pm.")
+
+    def test_sees_through_markup(self):
+        assert describes_recurrence("<p>Works take place<br>nightly from 10pm</p>")
+
+    def test_an_absent_description_is_not_recurring(self):
+        assert not describes_recurrence(None)
+
+    def test_the_two_signals_are_combined_not_substituted(self):
+        """They fail in opposite directions: the extraction misses a window when
+        the notice also carries a completion update, and the text misses the
+        enumerated form that names its days instead of saying "daily"."""
+        text_only = _case(id=1, reference_num="CAR1",
+                          description="Works take place nightly from 10pm until 7am.")
+        model_only = _case(id=2, reference_num="CAR2", end_recurrence="daily",
+                           description="from 10am until 6pm on 5 and 6 May",
+                           end_window_open="10:00", end_window_close="18:00",
+                           end_window_first_date="2026-05-05")
+        rows = [text_only, model_only]
+        keys = recurring_events(rows, event_windows(rows))
+        assert ("Carlow", "CAR1") in keys
+        assert ("Carlow", "CAR2") in keys
+
+    def test_a_recurring_text_downgrades_even_with_no_extracted_window(self):
+        """The eight events a human review found charged as continuous outages:
+        every one is a completion notice whose window the model suppressed."""
+        row = _case(description="Works are scheduled nightly from 11pm until 7am, 5 to 15 June.")
+        assert resolve_case(row, SA_INDEX, {}, NOW).sev == "degraded"

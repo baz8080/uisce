@@ -35,6 +35,7 @@ from uisce.site import (
     SmallAreaIndex,
     case_ref,
     classify,
+    describes_recurrence,
     event_windows,
     load_cases,
     merge,
@@ -42,19 +43,13 @@ from uisce.site import (
     month_list,
     norm_scheme,
     parse_dt,
+    recurring_events,
     resolve_case,
     union_seconds,
 )
 
 REVIEW_DIR = Path("data/eval")
 REVIEW_GLOB = "recurrence_review*.csv"
-
-# The wording the feed uses for a window that repeats over a range of dates. Used
-# only to flag rows for a human, never to decide anything, so it is tuned for
-# recall — a false flag costs one row of reading.
-RECURRENCE_TEXT = re.compile(
-    r"\b(daily|nightly|each night|every night|each day|overnight (?:from|between))\b", re.I
-)
 
 FIELDNAMES = [
     "case_id", "reference_num", "county", "title", "pins", "effect", "person_h",
@@ -80,11 +75,12 @@ def consequential(db_path=DB_PATH, now=None):
         if r["work_category"] == "boil_notice_lifted":
             lifts[r["county"]].append((norm_scheme(r["location"]), parse_dt(r["start_date"])))
     shared = event_windows(rows)
+    recurring = recurring_events(rows, shared)
 
     events = defaultdict(lambda: {"iv": [], "sas": {}, "ids": [], "window": None})
     for r in rows:
         key = (r["county"], case_ref(r))
-        case = resolve_case(r, sa_index, lifts, now, shared.get(key))
+        case = resolve_case(r, sa_index, lifts, now, shared.get(key), key in recurring)
         if case is None:
             continue
         event = events[key]
@@ -99,7 +95,7 @@ def consequential(db_path=DB_PATH, now=None):
         # window in the notice that announced it and not in the one that
         # reported completion, and either is enough to want a human to look
         text = plain(descriptions.get(r["id"]))
-        event["says_recurring"] = event.get("says_recurring") or bool(RECURRENCE_TEXT.search(text))
+        event["says_recurring"] = event.get("says_recurring") or describes_recurrence(text)
         if len(text) > len(event.get("text") or ""):
             event["text"] = text
         if r["end_recurrence"] == RECURRING:
@@ -142,6 +138,21 @@ def consequential(db_path=DB_PATH, now=None):
     return out
 
 
+def unique_review_path(day, directory=REVIEW_DIR):
+    """A path that does not exist yet, suffixing _r2, _r3 on repeat runs.
+
+    A review file is hand-labelled, so overwriting one silently destroys work
+    that cannot be regenerated. Re-running on the same day is the normal case —
+    you fix a rule and want to see what moved — so it has to be safe.
+    """
+    path = directory / f"recurrence_review_{day}.csv"
+    n = 1
+    while path.exists():
+        n += 1
+        path = directory / f"recurrence_review_{day}_r{n}.csv"
+    return path
+
+
 def review(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, default=None)
@@ -149,7 +160,7 @@ def review(argv=None):
 
     records = consequential()
     day = datetime.now(timezone.utc).date().isoformat()
-    path = args.out or REVIEW_DIR / f"recurrence_review_{day}.csv"
+    path = args.out or unique_review_path(day)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
