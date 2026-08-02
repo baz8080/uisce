@@ -821,6 +821,13 @@ class TestRecurrenceReport:
     report: a prompt that starts hallucinating recurrence would otherwise show up
     only as person-hours quietly falling."""
 
+    def _report(self, rows):
+        cases = [resolve_case(r, SA_INDEX, {}, NOW) for r in rows]
+        pin_tags = {}
+        for c in cases:
+            pin_tags.setdefault((c.county, c.ref), []).append(c.rec)
+        return recurrence_report([c for c in cases if c.rec != "none"], pin_tags)
+
     def _cases(self, rows):
         return [c for c in (resolve_case(r, SA_INDEX, {}, NOW) for r in rows) if c.rec != "none"]
 
@@ -837,7 +844,23 @@ class TestRecurrenceReport:
         assert "refused: close time 07:00 != reported end time 12:02" in report
 
     def test_an_event_mixing_expanded_and_refused_pins_is_flagged(self):
-        cases = self._cases([_recurring(id=1), _recurring(id=2, end_local_time="12:02")])
-        report = "\n".join(recurrence_report(cases))
-        assert "mix expanded and refused pins" in report
-        assert "Carlow CAR00000001" in report
+        rows = [_recurring(id=1), _recurring(id=2, end_local_time="12:02")]
+        report = "\n".join(self._report(rows))
+        assert "mix expanded and unexpanded pins" in report
+        assert "Carlow CAR00000001  1/2 pins expanded" in report
+
+    def test_a_pin_that_claimed_no_window_at_all_still_flags_the_event(self):
+        """The failure this report exists to catch, and the one it originally
+        missed. DON00115765 published 17 notices describing a nightly window and
+        one completion update describing none; the completion pin's continuous
+        interval re-covered every gap the other seventeen carved out, and a check
+        that looked only at pins *with* a claim could not see it. Its rec tag is
+        "none", exactly like a burst main's, so it has to be counted per event."""
+        rows = [_recurring(id=1), _case(id=2, end_source="completion_update")]
+        report = "\n".join(self._report(rows))
+        assert "mix expanded and unexpanded pins" in report
+        assert "1/2 pins expanded (1x none)" in report
+
+    def test_an_event_whose_pins_all_expand_is_not_flagged(self):
+        report = "\n".join(self._report([_recurring(id=1), _recurring(id=2)]))
+        assert "mix expanded" not in report

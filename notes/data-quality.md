@@ -153,11 +153,27 @@ Net effect on the July 2026 figures: national person-hours 27,505,846 → 26,898
 
 The extraction was never at fault. The v2 prompt already had a "Recurring windows" section instructing the model to report the last date at the window's closing time, and it did so correctly — `end_notes` on all 18 pins of `DON00115765` reads *"The text describes a recurring nightly…"*. The loss was in the **representation**: a single end instant cannot express a repeating schedule, and `notice_to_end_seconds` is by construction the span from publication to that instant.
 
-The distortion is small in count and large in effect, because the affected notices are the *longest* ones (median charged span 167h, max 2,826h) and person-hours are span × population. Measured on the 2026-07-31 snapshot: 6 outage-class events accounted for **9.9% of July's national person-hours**, and one of them — `DON00115765`, 18 nights of 10pm–7am — was 2.54M person-hours on its own: 9.9% nationally, 69% of Donegal, and the top row of the national ranking. Expanded, it covers **144h instead of 385.2h** and drops to 949,824 person-hours. Donegal's July goes 3,700,792 → 2,118,941 and 97.023% → 98.295%; national July 26,898,291 → 25,395,647.
+The distortion is small in count and large in effect, because the affected notices are the *longest* ones (median charged span 167h, max 2,826h) and person-hours are span × population. Measured on the 2026-07-31 snapshot: 6 outage-class events accounted for **9.9% of July's national person-hours**, and one of them — `DON00115765`, 18 nights of 10pm–7am — was 2.54M person-hours on its own: 9.9% nationally, 69% of Donegal, and the top row of the national ranking.
 
-That last figure matters more than the one event. `notes/statuspage-methodology.md` tells readers the letter grades are calibrated to assumptions but county *ordering* is real. Donegal led the per-capita table at 22,156 person-hours per 1,000 residents against Waterford's 11,690 — nearly double. Corrected it lands around 12,700, level with Waterford rather than clear of it. The ordering claim is what this fixes.
+### What the v3 corpus run actually delivered (2026-08-02)
 
-Two things keep it honest. Only 81 of the 147 are `water_conservation`, which is degraded and never accrued anyway, so the exposure is concentrated in the 28 `reservoir_interruption` notices. And expansion is decided per notice while coverage is unioned per event, so a single refused pin restores the continuous block for the whole event — every build prints which events have pins that disagree.
+Less than the projection, and the gap is the interesting part. 97 notices claimed a window and 96 expanded, cutting 19,800 charged hours to 8,179. But the effect on published figures is modest:
+
+| | before v3 | after v3 | projected |
+|---|---|---|---|
+| national July person-hours | 26,898,291 | 26,780,519 (−0.4%) | 25,395,647 (−5.9%) |
+| Donegal July | 3,700,792 | 3,504,101 (−5.3%) | 2,118,941 |
+| `DON00115765` | 2,540,854 @ 385.2h | 2,334,984 @ 354.0h | 949,824 @ 144.0h |
+
+Two reasons, and only the second is a defect:
+
+**Most recurring notices never accrued anyway.** 81 of the 147 candidates are `water_conservation`, which is degraded and contributes no person-hours, so most of the 11,621 saved hours were never being charged. The projection was computed from the flagship alone and over-generalised.
+
+**A completion-update pin blocks its own event.** The model reports `recurrence: "none"` on a notice whose text says the works are complete — defensible in isolation, since there is no forward schedule left to describe. But expansion is decided per notice while coverage is unioned per `reference_num`, so that one pin's continuous interval re-covers every gap its siblings carved out. `DON00115765` has 17 pins expanded and one completion pin that did not, and the event kept 354h of its 385.2h. Three events nationally are in this state (`DON00115765` 17/18, `MAY00111222` 1/2, `OFF00116072` 1/2), and in all three the blocking pin is a `completion_update`.
+
+The consequence is that the county-ordering claim this was meant to correct **still stands uncorrected**: Donegal remains at 20,972 person-hours per 1,000 residents against Clare's 9,588, still more than double. Unblocking the flagship would take it to roughly 12,700 and level the table, so the fix is worth completing — the window is a property of the *event*, not of each notice, and the natural repair is to let pins of one `reference_num` share a window that any of them reported, truncated at each pin's own end.
+
+The per-build report names these events explicitly. It did not at first: the check only inspected pins that had *claimed* a window, so a pin claiming nothing — exactly the pin doing the damage — was invisible to it. Fixed, with a test for a pin whose outcome is indistinguishable from a burst main's.
 
 ## The feed began (or was purged) around 2026-04-20 — earlier months are unobservable
 

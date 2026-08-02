@@ -149,9 +149,9 @@ A notice reading *"daily from 10pm until 7am, from 9 July to 27 July"* is 18 nig
 
 Three consequences worth stating:
 
-**`median_completion_h` is covered hours.** For a single-block event that is also its elapsed span, so nothing moved for the other 99%. For a recurring event the two now differ sharply — 144h of works inside a 385h presence — and the covered figure is the one published, because "how long did the works take" is the question the metric name asks. The site copy says so.
+**`median_completion_h` is covered hours.** For a single-block event that is also its elapsed span, so nothing moved for the other 99%. For a recurring event the two now differ sharply — a night's works inside a fortnight's presence — and the covered figure is the one published, because "how long did the works take" is the question the metric name asks. The site copy says so.
 
-**Expansion is decided per notice; coverage is unioned per event.** One pin falling back to the continuous interval re-covers every gap the other seventeen carved out, so the fix can land on 17 of 18 pins and change nothing. Every build prints the notices that claimed a window, what was believed, and — the line that earns its keep — any event whose pins disagree.
+**Expansion is decided per notice; coverage is unioned per event.** One pin falling back to the continuous interval re-covers every gap the others carved out, so the fix can land on 17 of 18 pins and barely move the number. This is not hypothetical: it is what happened to `DON00115765` on the first v3 run, because the model reports no window on a notice whose text says the works are complete. Every build prints the notices that claimed a window, what was believed, and — the line that earns its keep — any event whose pins disagree. Sharing a window across the pins of one `reference_num` is the open follow-up; see [data-quality.md](data-quality.md).
 
 **The guard refuses by default.** A refusal is a numeric no-op, so the checks are deliberately suspicious: the recurrence value must be exactly `daily`, all three window fields must parse, open must differ from close, the series must produce at least two windows, and for a *scheduled* end the window's closing time must match the reported end time — the prompt requires them to be the same, so a disagreement is the model contradicting itself. Completion updates have no such cross-check available (their `local_time` is the completion, not a window close), so they are honoured and listed individually in the build report.
 
@@ -159,7 +159,7 @@ The ranking is by raw person-hours, not per-capita, and it ranks events rather t
 
 ## Known limitations
 - Overlapping events in the same area double-count person-hours.
-- The 14-day cap applies to each *notice*, not each event, so an event published as several staggered notices can span longer than 14 days — July's largest ran 385h (16 days) across 18 pins published over three days. The page copy says so. With recurring windows expanded (below) that event covers 144h inside the same 16-day presence.
+- The 14-day cap applies to each *notice*, not each event, so an event published as several staggered notices can span longer than 14 days — July's largest ran 385h (16 days) across 18 pins published over three days. The page copy says so.
 - The scheduled-end events that accrue disruption time are accruing an *announced* interval, not an observed one. They are kept out of the headline median but not out of the availability percentage, so availability carries an assumption the median does not.
 - `start_date` is the notice publication time, so durations are a floor on true outage length (overnight events are typically posted the next working morning — see [data-quality.md](data-quality.md)).
 - "May be affected" notices count everyone in the radius; the index measures disruption exposure, not confirmed loss of supply.

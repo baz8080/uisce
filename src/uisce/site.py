@@ -860,13 +860,21 @@ def county_town_data(regions, towns, county, months, now):
     return out
 
 
-def recurrence_report(cases):
+def recurrence_report(cases, pin_tags=None):
     """Lines describing what claimed a recurring window and what was believed.
 
     Printed on every build, matching backfill_work_category's unmatched-title
     report: a prompt that starts hallucinating recurrence would otherwise show up
     only as person-hours quietly falling, and the expanded count moving together
     with the hour delta is what makes that visible within one build.
+
+    `pin_tags` maps (county, ref) to the outcome of *every* pin, including the
+    ones that never claimed a window. It has to, because the event this report
+    exists to catch is precisely one where a pin claimed nothing: DON00115765
+    published 17 notices describing a nightly window and one completion update
+    that described no window at all, and the completion pin's continuous interval
+    re-covered every gap the other seventeen carved out. A check that looked only
+    at pins with a claim could not see the pin doing the damage.
 
     Empty when nothing claimed recurrence, so the test suite stays silent.
     """
@@ -901,17 +909,22 @@ def recurrence_report(cases):
     # An event's coverage is unioned across its pins, so one pin falling back to
     # the continuous interval re-covers every gap the others carved out — the fix
     # can land on 17 pins and be undone by the 18th. This is the only place that
-    # shows up.
-    tags = defaultdict(set)
-    for c in cases:
-        tags[(c.county, c.ref)].add(c.rec.startswith("expanded"))
-    mixed = sorted(k for k, v in tags.items() if len(v) > 1)
+    # shows up, and it must count pins that made no claim at all.
+    mixed = sorted(
+        (key, tags) for key, tags in (pin_tags or {}).items()
+        if any(t.startswith("expanded") for t in tags)
+        and not all(t.startswith("expanded") for t in tags)
+    )
     if mixed:
         lines.append(
-            f"  ⚠ {len(mixed)} event(s) mix expanded and refused pins — "
+            f"  ⚠ {len(mixed)} event(s) mix expanded and unexpanded pins — "
             "the union keeps the continuous block:"
         )
-        lines += [f"       {county} {ref}" for county, ref in mixed]
+        for (county, ref), tags in mixed:
+            n = sum(1 for t in tags if t.startswith("expanded"))
+            others = Counter(t for t in tags if not t.startswith("expanded"))
+            why = ", ".join(f"{v}x {k}" for k, v in others.most_common())
+            lines.append(f"       {county} {ref}  {n}/{len(tags)} pins expanded ({why})")
     return lines
 
 
@@ -931,12 +944,16 @@ def build_site(rows, sa_index, now, towns=None):
     # once per county-area — a couple of thousand times — and none of the area
     # regions need any of this.
     event_meta = {}
-    recurrence = []  # (case, tag) for every pin that claimed one, for the report
+    recurrence = []  # every pin that claimed a window, for the report's detail lines
+    # every pin's outcome, claimed or not — the mixed-event check needs the ones
+    # that made no claim, since those are what re-cover an expanded event's gaps
+    pin_tags = defaultdict(list)
 
     for r in rows:
         case = resolve_case(r, sa_index, lifts, now)
         if case is None:
             continue
+        pin_tags[(case.county, case.ref)].append(case.rec)
         if case.rec != "none":
             recurrence.append(case)
         counties[case.county].add(case, case.sas)
@@ -1072,7 +1089,7 @@ def build_site(rows, sa_index, now, towns=None):
         for ym in months
         if ym < current
     }
-    site["recurrence_report"] = recurrence_report(recurrence)
+    site["recurrence_report"] = recurrence_report(recurrence, pin_tags)
 
     return site
 
