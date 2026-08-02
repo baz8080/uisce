@@ -1,22 +1,10 @@
 import csv
 
-from uisce.eval_recurrence import FIELDNAMES, RECURRENCE_TEXT, plain, score
+from uisce.eval_recurrence import FIELDNAMES, plain, score, unique_review_path
 
 
-class TestRecurrenceText:
-    """Tuned for recall: this only flags a row for a human, never decides
-    anything, so a false flag costs one row of reading and a miss costs a
-    wrong figure staying on the site."""
-
-    def test_matches_the_wordings_the_feed_uses(self):
-        for text in ("works nightly from 10pm", "daily from 9pm until 9am",
-                     "each night from 11pm", "overnight from 10pm until 7am"):
-            assert RECURRENCE_TEXT.search(text), text
-
-    def test_does_not_match_a_single_continuous_period(self):
-        assert not RECURRENCE_TEXT.search("Works will take place from 9am on 3 June until 5pm.")
-
-    def test_plain_strips_markup_and_collapses_whitespace(self):
+class TestPlain:
+    def test_strips_markup_and_collapses_whitespace(self):
         assert plain("<p>Works  are<br><br>complete</p>") == "Works are complete"
         assert plain(None) == ""
 
@@ -62,3 +50,24 @@ class TestScore:
         out = capsys.readouterr().out
         assert "1 of 2 row(s) reviewed" in out
         assert "1 row(s) left, 750 person-hours unreviewed" in out
+
+
+class TestUniqueReviewPath:
+    """A review file is hand-labelled, so overwriting one destroys work that
+    cannot be regenerated — and re-running on the same day, after fixing a rule
+    to see what moved, is the normal case rather than the exception."""
+
+    def test_first_run_uses_the_plain_name(self, tmp_path):
+        got = unique_review_path("2026-08-02", tmp_path).name
+        assert got == "recurrence_review_2026-08-02.csv"
+
+    def test_a_second_run_the_same_day_does_not_overwrite(self, tmp_path):
+        (tmp_path / "recurrence_review_2026-08-02.csv").write_text("labelled")
+        got = unique_review_path("2026-08-02", tmp_path).name
+        assert got == "recurrence_review_2026-08-02_r2.csv"
+
+    def test_it_keeps_counting(self, tmp_path):
+        for name in ("recurrence_review_2026-08-02.csv", "recurrence_review_2026-08-02_r2.csv"):
+            (tmp_path / name).write_text("labelled")
+        got = unique_review_path("2026-08-02", tmp_path).name
+        assert got == "recurrence_review_2026-08-02_r3.csv"

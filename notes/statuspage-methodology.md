@@ -123,9 +123,48 @@ With every Small Area now belonging to a named area, a pin only fails to place w
 
 ## Grades
 
-A–F comes from availability: **A ≥ 99.9%, B ≥ 99.75%, C ≥ 99.45%, D ≥ 99.0%, else F**, and any active boil-water / do-not-drink / do-not-consume notice knocks the grade one step (D and F stay F). Discolouration is shown but never knocks.
+A–F comes from availability: **A ≥ 99.9%, B ≥ 99.75%, C ≥ 99.45%, D ≥ 99.0%, else F** — supply availability and nothing else.
 
-The thresholds are calibrated to the observed distribution of county-months (p10 ≈ 98.9%, median ≈ 99.6%, p90 ≈ 99.87% on the July 2026 snapshot) — they are honest relative to this dataset, not imported from a regulator. [water-sla-benchmarks.md](water-sla-benchmarks.md) explains why Ofwat/CRU numbers (~99.99%+ availability equivalents) cannot be borrowed: they count measured minutes without water at the tap for ≥3-hour interruptions, whereas this index counts whole published-notice durations across an assumed 500 m population, including "may be affected" notices. The intent is to keep these thresholds fixed so months stay comparable, and revisit after a full year of seasons.
+### The health notice was unbundled from the grade (2026-08-02)
+
+An active boil-water / do-not-drink / do-not-consume notice used to knock the letter one step (D and F staying F). It is now published as a marker *beside* the grade instead, driven by `health_n` in the month payload.
+
+It was measured before it was removed. Across 78 settled county-months the knock set the published letter for 8, and it was drastically out of scale with everything else on the page:
+
+| county | month | grade | notice reached | for | it would have cost | the band it crossed |
+|---|---|---|---|---|---|---|
+| Cork | Jul | D→F | 142 | 336h | 0.011pp | 0.45pp |
+| Dublin | Jul | C→D | 5,374 | 24h | 0.012pp | 0.45pp |
+| Donegal | Jul | D→F | 204 | 7h | 0.001pp | 0.45pp |
+| Kildare | Jul | D→F | 359 | 2h | 0.000pp | 0.45pp |
+| Monaghan | Jul | B→C | 190 | <1h | 0.000pp | 0.30pp |
+
+"It would have cost" is what the notice would take off availability if it accrued like an outage. The median ratio to the band it crossed was **0.01** — the knock was about a hundred times the harm it represented on the site's own arithmetic, and it was uniform: 190 people for under an hour cost exactly what 5,374 people for a day cost.
+
+That is not an argument that a boil notice is unimportant. It is an argument that its importance is not measured in person-hours, and so should not be expressed by moving a person-hours score. The two questions — how much water was there, and was it safe to drink — are independent, and one letter cannot answer both. By the time it was removed the knock was the *only* reason for Donegal's July F, which a reader comparing it with a genuine F could not see.
+
+Unbundling also recovered information the knock was destroying. A knock cannot move an F, so a county already at F showed nothing: **Tipperary's July had three active health notices and displayed no sign of any of them.** The marker shows on 10 county-months where the knock affected 8.
+
+Grade mix across the 78 settled county-months, before and after: A2 B16 C31 D19 F10 → **A2 B17 C34 D18 F7**.
+
+Discolouration is a quality event but never raises the marker — it is not a health-relevant notice.
+
+The thresholds are calibrated to the observed distribution of county-months (p10 ≈ 98.9%, median ≈ 99.6%, p90 ≈ 99.87% on the July 2026 snapshot) — they are honest relative to this dataset, not imported from a regulator.
+
+**Checked against the recalibration question, 2026-08-02, and left alone.** Four definitional changes in two days — the classification leak, recurring windows, cross-pin window sharing, and treating a repeating window as a restriction — took July's national person-hours from 27,563,068 to 24,324,401, a fall of 11.8%. That looked like grounds to re-derive the cutoffs. It was not. Rebuilding the pre-change code against pre-change data and comparing 78 settled county-months (May–July):
+
+| | p10 | p25 | median | p75 | p90 |
+|---|---|---|---|---|---|
+| before | 98.890 | 99.313 | 99.568 | 99.745 | 99.820 |
+| after | 99.064 | 99.333 | 99.576 | 99.748 | 99.820 |
+
+Every cut sits at the percentile it always did — A at 97%, B at 76%, C at 33→32%, D at 10→9% — and **exactly one county-month changed letter** (Waterford, May, D→C). The grade mix went A2 B16 C30 D20 F10 to A2 B16 C31 D19 F10.
+
+The lesson is that the national total and the grading distribution are not the same measurement and do not move together. The total is population-weighted and dominated by a handful of large events, so stripping 2.6M person-hours out of Donegal moves one county-month a long way while leaving the median of 78 where it was. A change big enough to reshape the headline can be invisible to the cutoffs, and re-deriving them on that evidence would have been fitting to noise — and would have broken the comparability the fixed thresholds exist to provide.
+
+What did move was how much work the quality knock was doing: 7 of 78 county-months published worse than their availability alone before the four changes, 8 after — and Donegal's July F had become the knock alone, its availability having risen from 97.015% to 99.153%. That is what prompted unbundling the knock from the grade entirely, above; the figures in this section predate that and describe the last state in which the knock existed.
+
+[water-sla-benchmarks.md](water-sla-benchmarks.md) explains why Ofwat/CRU numbers (~99.99%+ availability equivalents) cannot be borrowed: they count measured minutes without water at the tap for ≥3-hour interruptions, whereas this index counts whole published-notice durations across an assumed 500 m population, including "may be affected" notices. The intent is to keep these thresholds fixed so months stay comparable, and revisit after a full year of seasons.
 
 ## Radius sensitivity (checked 2026-07-16)
 
