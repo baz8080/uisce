@@ -269,21 +269,33 @@ def union_seconds(intervals, lo, hi):
     return total
 
 
-def grade(availability, knock_events):
-    """A-F from population-weighted availability (see notes for calibration)."""
+def grade(availability):
+    """A-F from population-weighted availability (see notes for calibration).
+
+    Availability and nothing else. An active boil-water or do-not-drink notice
+    used to knock the letter one step, which conflated two things the page is
+    better off saying separately: the letter now means supply availability, and a
+    health notice is published beside it as its own marker (`health_n`).
+
+    The knock was measured before it was removed. Across 78 settled county-months
+    it set the published letter for 8, and it was wildly out of scale with
+    everything else on the page — the median knocking notice would have cost
+    0.003 points of availability had it accrued like an outage, against the 0.45
+    points of the letter band it crossed, a factor of about a hundred. That is
+    not an argument that a boil notice is unimportant; it is an argument that its
+    importance is not measured in person-hours, and so should not be expressed by
+    moving a person-hours score. Donegal's July F was by then the knock alone,
+    which a reader comparing it to a genuine F could not see.
+    """
     if availability >= 99.9:
-        g = "A"
-    elif availability >= 99.75:
-        g = "B"
-    elif availability >= 99.45:
-        g = "C"
-    elif availability >= 99.0:
-        g = "D"
-    else:
-        g = "F"
-    if knock_events:
-        g = "F" if g in ("D", "F") else chr(ord(g) + 1)
-    return g
+        return "A"
+    if availability >= 99.75:
+        return "B"
+    if availability >= 99.45:
+        return "C"
+    if availability >= 99.0:
+        return "D"
+    return "F"
 
 
 class SmallAreaIndex:
@@ -817,7 +829,7 @@ def region_month(region, pop, ym, now):
     eff_hi, eff_lo = min(hi, now), max(lo, COLLECTION_START)
     events, epop = region.events(), region.event_pop(pop)
 
-    counts, person_s, knock_n = {}, 0.0, 0
+    counts, person_s, health_n = {}, 0.0, 0
     for sev in SEV_ORDER:
         n = 0
         for ref, iv in events[sev].items():
@@ -826,8 +838,10 @@ def region_month(region, pop, ym, now):
                 n += 1
                 if sev == "outage":
                     person_s += secs * epop[sev].get(ref, 0)
+                # health-relevant quality notices — boil water, do not drink, do
+                # not consume. Published beside the grade rather than inside it.
                 if sev == "quality" and ref in region.knock_refs:
-                    knock_n += 1
+                    health_n += 1
         counts[sev] = n
 
     period_s = max((eff_hi - eff_lo).total_seconds(), 1.0)
@@ -837,9 +851,11 @@ def region_month(region, pop, ym, now):
         "period_h": round(period_s / 3600),
         "availability": round(max(availability, 0.0), 3),
         "events": counts,
-        # both for the caller to pop: grading off the rounded, clamped figure
-        # would flip a county sitting a thousandth under a threshold
-        "knock_n": knock_n,
+        # active health notices, published beside the grade rather than folded
+        # into it — see grade()
+        "health_n": health_n,
+        # for the caller to pop: grading off the rounded, clamped figure would
+        # flip a county sitting a thousandth under a threshold
         "avail_raw": availability,
     }
 
@@ -1207,7 +1223,7 @@ def build_site(rows, sa_index, now, towns=None):
                 days.append([worst, round(pct, 2)])
 
             stats = region_month(region, cpop, ym, now)
-            county_grade = grade(stats.pop("avail_raw"), stats.pop("knock_n"))
+            county_grade = grade(stats.pop("avail_raw"))
 
             # Notice-to-end span of disruption events that started this month
             # and carry a real end signal (open/no-signal events excluded so

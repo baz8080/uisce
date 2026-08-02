@@ -188,15 +188,20 @@ class TestBoilNoticeFate:
 
 class TestGrade:
     def test_thresholds(self):
-        assert grade(99.95, 0) == "A"
-        assert grade(99.8, 0) == "B"
-        assert grade(99.5, 0) == "C"
-        assert grade(99.2, 0) == "D"
-        assert grade(98.0, 0) == "F"
+        assert grade(99.95) == "A"
+        assert grade(99.8) == "B"
+        assert grade(99.5) == "C"
+        assert grade(99.2) == "D"
+        assert grade(98.0) == "F"
 
-    def test_quality_notice_knocks_one_step_and_d_goes_to_f(self):
-        assert grade(99.95, 1) == "B"
-        assert grade(99.2, 1) == "F"
+    def test_the_grade_depends_on_availability_alone(self):
+        """A health notice used to knock the letter one step. It was measured
+        before it was removed: across 78 settled county-months it set the
+        published letter for 8, and the median knocking notice would have cost
+        0.003 points of availability had it accrued, against the 0.45 of the band
+        it crossed — about a hundred times out of scale with everything else on
+        the page. It is published beside the grade now; see TestHealthNotices."""
+        assert grade(99.95) == grade(99.91) == "A"
 
 
 class TestIntervals:
@@ -312,7 +317,7 @@ class TestBuildSite:
             month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
             assert month["person_h"] == 9 * 24 * 1000  # May 1 -> NOW, uncapped
 
-    def test_open_boil_notice_closed_by_paired_lift_and_knocks_grade(self):
+    def test_open_boil_notice_is_closed_by_its_paired_lift(self):
         issue = _case(
             work_category="boil_notice_issued",
             boil_water_notice=1,
@@ -335,7 +340,9 @@ class TestBuildSite:
         # interval closed at the lift, not running to "now"
         assert month["days"][1][0] == "quality"  # May 2: active
         assert month["days"][4][0] == ""  # May 5: lifted
-        assert month["grade"] == "B"  # would be A on availability alone
+        # the notice is reported beside the grade, not inside it
+        assert month["grade"] == "A"
+        assert month["health_n"] == 1
 
     def test_days_before_collection_start_are_no_data(self):
         site = build_site([_case()], SA_INDEX, NOW)
@@ -1134,3 +1141,50 @@ class TestDescribesRecurrence:
         every one is a completion notice whose window the model suppressed."""
         row = _case(description="Works are scheduled nightly from 11pm until 7am, 5 to 15 June.")
         assert resolve_case(row, SA_INDEX, {}, NOW).sev == "degraded"
+
+
+class TestHealthNotices:
+    """Boil-water, do-not-drink and do-not-consume notices are published beside
+    the grade rather than folded into it. Whether the water is safe to drink is a
+    different question from how much of it there was, and one letter cannot
+    answer both — a notice reaching 200 people used to make a county read
+    identically to one that lost supply county-wide."""
+
+    def _notice(self, **overrides):
+        return _case(work_category="boil_notice_issued", boil_water_notice=1, status="Open",
+                     notice_to_end_seconds=None, end_source="not_found", end_local_date=None,
+                     **overrides)
+
+    def test_a_health_notice_is_counted_without_touching_the_grade(self):
+        site = build_site([self._notice()], SA_INDEX, NOW)
+        month = site["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["health_n"] == 1
+        assert month["grade"] == "A"  # no outage, so availability is untouched
+        assert month["events"]["quality"] == 1
+
+    def test_a_county_with_no_health_notice_reports_zero(self):
+        month = build_site([_case()], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["health_n"] == 0
+
+    def test_discolouration_is_a_quality_event_but_not_a_health_notice(self):
+        """It shows as a quality event and always did; it never knocked, and it
+        does not raise the marker either."""
+        rows = [_case(work_category="discolouration", boil_water_notice=0)]
+        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["events"]["quality"] == 1
+        assert month["health_n"] == 0
+
+    def test_a_do_not_drink_flag_raises_it_whatever_the_category(self):
+        rows = [_case(work_category="burst_main", do_not_drink=1)]
+        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["health_n"] == 1
+
+    def test_an_outage_still_grades_on_availability_with_a_notice_present(self):
+        """The two are independent: the letter moves on person-hours, the marker
+        on whether a health notice is active."""
+        rows = [_case(id=1, reference_num="CAR1", notice_to_end_seconds=300 * 3600.0,
+                      end_local_date="2026-05-13"),
+                self._notice(id=2, reference_num="CAR2")]
+        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["grade"] == "F"       # driven by the outage alone
+        assert month["health_n"] == 1

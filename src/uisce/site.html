@@ -85,6 +85,16 @@
   .g-A { background: var(--good); } .g-B { background: color-mix(in srgb, var(--good) 60%, var(--warning)); }
   .g-C { background: var(--warning); color: #1a1a19 !important; }
   .g-D { background: var(--serious); } .g-F { background: var(--critical); }
+  /* an active health notice sits beside the letter, not inside it: the grade
+     measures supply availability, and whether the water is safe to drink is a
+     different question that a letter cannot answer */
+  .healthmark {
+    flex: none; display: inline-grid; place-items: center;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--serious); color: #fff; font-size: 12px; font-weight: 700;
+    cursor: help;
+  }
+  .chead .healthmark { width: 24px; height: 24px; font-size: 13.5px; }
   .bar { display: flex; gap: 2px; height: 28px; }
   .bar i { flex: 1; border-radius: 2px; background: var(--good); min-width: 3px; }
   .bar i.outage { background: var(--critical); }
@@ -295,7 +305,7 @@
   <footer>
     <p><b>What this measures:</b> supply disruptions <em>announced</em> by Uisce Éireann — not measured availability at anyone's tap. Every time on this page is measured from <em>when the notice was published</em>, not from when supply was actually lost: publication is the earliest moment the data records, and for unplanned events the disruption had already begun. Treat every figure here as a <em>floor</em> on the true length.</p>
     <p><b>Median time to completion</b> is the time from notice publication to a stated &ldquo;works are now complete&rdquo; update, over disruption events that carry one. Where a notice describes works repeating over a range of nights or days &mdash; &ldquo;daily from 10pm until 7am, from 9 to 27 July&rdquo; &mdash; only the hours inside those windows are counted, here and in the person-hour figures, so such an event reads as the hours the works took rather than the days they spanned. Events whose only end signal was a <em>scheduled</em> finish are counted separately and shown as &ldquo;scheduled&rdquo;: a published plan is not evidence the works ended then, so the two are never pooled into a single headline. End times are read from the notice text by an LLM (see the <a href="https://github.com/baz8080/uisce/blob/main/notes/end-time-eval.md" style="color:inherit">accuracy evaluation</a>); no time on this page is a measurement taken in the field.</p>
-    <p>Each notice pin is assumed to affect the Census 2022 Small Areas whose centres lie within 500&nbsp;m (CSO SAPS populations); the headline percentage is the population-weighted share of person-time not covered by an announced supply disruption. Only hard disruptions count against it: bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages, and unplanned repair works. Investigations, leak detection, hydrant works and installations are shown as works but never count; restrictions, low pressure and discolouration are shown but never count. A notice announcing a window that <em>repeats</em> over a range of dates — &ldquo;nightly from 10pm until 7am, from 9 to 27 July&rdquo; — is treated as a restriction whatever its title says, because the same supply zone is published sometimes as a conservation restriction and sometimes as an interruption, and the two describe the same thing. Grades: A ≥ 99.9%, B ≥ 99.75%, C ≥ 99.45%, D ≥ 99.0%, else F; an active boil-water / do-not-drink / do-not-consume notice knocks one grade (discolouration does not). County <em>rankings</em> are robust to the 500&nbsp;m assumption; the letter grades are calibrated to it. The <a href="#top" onclick="go('#top'); return false;" style="color:inherit">ten largest disruptions</a> of each finished month rank the same hard disruptions as individual events, with person-hours clipped to the month so they sum against the county figures; a notice reported &ldquo;confirmed&rdquo; there is one carrying a completion update, and since an event is often published as several notices with different end signals, the count of confirmed notices is shown rather than a single verdict. Closed cases with no usable end signal still mark their start day and event counts, but add no disruption time. Full methodology: <a href="https://github.com/baz8080/uisce/blob/main/notes/statuspage-methodology.md" style="color:inherit">notes/statuspage-methodology.md</a>.</p>
+    <p>Each notice pin is assumed to affect the Census 2022 Small Areas whose centres lie within 500&nbsp;m (CSO SAPS populations); the headline percentage is the population-weighted share of person-time not covered by an announced supply disruption. Only hard disruptions count against it: bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages, and unplanned repair works. Investigations, leak detection, hydrant works and installations are shown as works but never count; restrictions, low pressure and discolouration are shown but never count. A notice announcing a window that <em>repeats</em> over a range of dates — &ldquo;nightly from 10pm until 7am, from 9 to 27 July&rdquo; — is treated as a restriction whatever its title says, because the same supply zone is published sometimes as a conservation restriction and sometimes as an interruption, and the two describe the same thing. Grades: A ≥ 99.9%, B ≥ 99.75%, C ≥ 99.45%, D ≥ 99.0%, else F &mdash; supply availability and nothing else. An active boil-water / do-not-drink / do-not-consume notice is shown as a marker <em>beside</em> the grade rather than folded into it: whether the water is safe to drink is a different question from how much of it there was, and a letter cannot answer both. Until 2 August 2026 such a notice knocked the grade one step; that made a county with a notice affecting 200 people indistinguishable from one that lost supply county-wide. County <em>rankings</em> are robust to the 500&nbsp;m assumption; the letter grades are calibrated to it. The <a href="#top" onclick="go('#top'); return false;" style="color:inherit">ten largest disruptions</a> of each finished month rank the same hard disruptions as individual events, with person-hours clipped to the month so they sum against the county figures; a notice reported &ldquo;confirmed&rdquo; there is one carrying a completion update, and since an event is often published as several notices with different end signals, the count of confirmed notices is shown rather than a single verdict. Closed cases with no usable end signal still mark their start day and event counts, but add no disruption time. Full methodology: <a href="https://github.com/baz8080/uisce/blob/main/notes/statuspage-methodology.md" style="color:inherit">notes/statuspage-methodology.md</a>.</p>
     <p id="gen"></p>
   </footer>
 </div>
@@ -325,7 +335,21 @@ const LEGEND = `
   <span><i style="background:var(--serious)"></i> Water quality notice</span>
   <span><i style="background:var(--warning)"></i> Restrictions / low pressure</span>
   <span><i style="background:var(--maint)"></i> Works (planned / non-disruptive)</span>
-  <span><i style="background:var(--critical);opacity:.4"></i><i style="background:var(--critical);opacity:.7"></i><i style="background:var(--critical)"></i> deeper = larger share of county affected (&lt;0.5% / 0.5–2% / &gt;2%)</span>`;
+  <span><i style="background:var(--critical);opacity:.4"></i><i style="background:var(--critical);opacity:.7"></i><i style="background:var(--critical)"></i> deeper = larger share of county affected (&lt;0.5% / 0.5–2% / &gt;2%)</span>
+  <span><span class="healthmark" style="width:15px;height:15px;font-size:10px">!</span> beside a grade: an active boil-water or do-not-drink notice</span>`;
+
+// The grade is availability alone. An active boil-water / do-not-drink /
+// do-not-consume notice is shown next to it rather than folded into it, so a
+// county graded D with unsafe water reads as exactly that, instead of as an F
+// indistinguishable from a county that lost supply.
+function healthMark(m) {
+  const n = m.health_n || 0;
+  if (!n) return "";
+  const what = n === 1 ? "An active" : `${n} active`;
+  const notice = n === 1 ? "notice" : "notices";
+  return `<span class="healthmark" title="${what} boil-water, do-not-drink or do-not-consume ${notice}${
+    ""} — the water may not be safe to drink. Separate from the grade, which measures supply availability.">!</span>`;
+}
 
 function monthLabel(ym) { return MONTH_NAMES[ym.slice(5)] + " " + ym.slice(0, 4); }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
@@ -437,7 +461,7 @@ function renderOverview() {
     const hint = towns ? `${towns} ${towns === 1 ? "area" : "areas"} — click for the breakdown` : "click for detail";
     return `<div class="county">
       <div class="row" onclick="goCounty('${encodeURIComponent(name)}')" title="${name}: ${hint}">
-        <div class="cname"><span class="gradechip g-${m.grade}">${m.grade}</span>${name}</div>
+        <div class="cname"><span class="gradechip g-${m.grade}">${m.grade}</span>${healthMark(m)}${name}</div>
         <div class="bar">${dayCells(m.days)}</div>
         <div class="stats">
           <div class="counts">
@@ -565,7 +589,7 @@ function renderCounty() {
   document.getElementById("countyview").innerHTML = `
     <a class="back" href="#" onclick="go(''); return false;">← All counties</a>
     <div class="chead">
-      <span class="gradechip g-${m.grade}">${m.grade}</span>
+      <span class="gradechip g-${m.grade}">${m.grade}</span>${healthMark(m)}
       <h2>${esc(county)}</h2>
       <span class="pop">${c.pop.toLocaleString()} people · Census 2022</span>
     </div>

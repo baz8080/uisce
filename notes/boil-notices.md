@@ -29,7 +29,7 @@ Before 2026-07-18 an unpaired open notice accrued from its start until now, capp
 
 221165 is also the one case where `end_source = lifted_immediate` leaks past the lift exclusion, because that exclusion keys on `work_category` (derived from the **title**), and this record is titled "Boil Water Notice - Tipperary", not "Lifting of…". It is a notice record whose description was overwritten in place with lift text — a third publishing pattern, distinct from the two below.
 
-Accruing those stale notices fabricated roughly 37 merged days of quality time across Cork, Donegal, Mayo, Tipperary and Waterford. Because `quality` doesn't accrue availability downtime (only `outage` does), the damage landed on **grades, day colouring, `clear_days` and open counts** rather than the availability percentage. Removing it moved Cork 2026-05 from F to D and Donegal 2026-04 from C to B — those grades were being knocked by notices resolved months earlier.
+Accruing those stale notices fabricated roughly 37 merged days of quality time across Cork, Donegal, Mayo, Tipperary and Waterford. Because `quality` doesn't accrue availability downtime (only `outage` does), the damage landed on **grades, day colouring, `clear_days` and open counts** rather than the availability percentage. Removing it moved Cork 2026-05 from F to D and Donegal 2026-04 from C to B — those grades were being knocked by notices resolved months earlier. (The grade knock was itself removed on 2026-08-02: a health notice is now published as a marker beside the grade rather than moving it. See [statuspage-methodology.md](statuspage-methodology.md). Stale notices still matter here — they colour days, inflate open counts and would raise the marker — so nothing in this note's policy changes.)
 
 ## The policy
 
