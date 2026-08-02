@@ -125,7 +125,20 @@ With every Small Area now belonging to a named area, a pin only fails to place w
 
 A–F comes from availability: **A ≥ 99.9%, B ≥ 99.75%, C ≥ 99.45%, D ≥ 99.0%, else F**, and any active boil-water / do-not-drink / do-not-consume notice knocks the grade one step (D and F stay F). Discolouration is shown but never knocks.
 
-The thresholds are calibrated to the observed distribution of county-months (p10 ≈ 98.9%, median ≈ 99.6%, p90 ≈ 99.87% on the July 2026 snapshot) — they are honest relative to this dataset, not imported from a regulator. [water-sla-benchmarks.md](water-sla-benchmarks.md) explains why Ofwat/CRU numbers (~99.99%+ availability equivalents) cannot be borrowed: they count measured minutes without water at the tap for ≥3-hour interruptions, whereas this index counts whole published-notice durations across an assumed 500 m population, including "may be affected" notices. The intent is to keep these thresholds fixed so months stay comparable, and revisit after a full year of seasons.
+The thresholds are calibrated to the observed distribution of county-months (p10 ≈ 98.9%, median ≈ 99.6%, p90 ≈ 99.87% on the July 2026 snapshot) — they are honest relative to this dataset, not imported from a regulator.
+
+**Checked against the recalibration question, 2026-08-02, and left alone.** Four definitional changes in two days — the classification leak, recurring windows, cross-pin window sharing, and treating a repeating window as a restriction — took July's national person-hours from 27,563,068 to 24,324,401, a fall of 11.8%. That looked like grounds to re-derive the cutoffs. It was not. Rebuilding the pre-change code against pre-change data and comparing 78 settled county-months (May–July):
+
+| | p10 | p25 | median | p75 | p90 |
+|---|---|---|---|---|---|
+| before | 98.890 | 99.313 | 99.568 | 99.745 | 99.820 |
+| after | 99.064 | 99.333 | 99.576 | 99.748 | 99.820 |
+
+Every cut sits at the percentile it always did — A at 97%, B at 76%, C at 33→32%, D at 10→9% — and **exactly one county-month changed letter** (Waterford, May, D→C). The grade mix went A2 B16 C30 D20 F10 to A2 B16 C31 D19 F10.
+
+The lesson is that the national total and the grading distribution are not the same measurement and do not move together. The total is population-weighted and dominated by a handful of large events, so stripping 2.6M person-hours out of Donegal moves one county-month a long way while leaving the median of 78 where it was. A change big enough to reshape the headline can be invisible to the cutoffs, and re-deriving them on that evidence would have been fitting to noise — and would have broken the comparability the fixed thresholds exist to provide.
+
+What did move slightly is how much work the quality knock does: 7 of 78 county-months published worse than their availability alone before, 8 after. Donegal in July is the one to know about — it was F on availability (97.015%), and is now a D on availability (99.153%) knocked to F by an active boil-water notice. Same letter, different reason. [water-sla-benchmarks.md](water-sla-benchmarks.md) explains why Ofwat/CRU numbers (~99.99%+ availability equivalents) cannot be borrowed: they count measured minutes without water at the tap for ≥3-hour interruptions, whereas this index counts whole published-notice durations across an assumed 500 m population, including "may be affected" notices. The intent is to keep these thresholds fixed so months stay comparable, and revisit after a full year of seasons.
 
 ## Radius sensitivity (checked 2026-07-16)
 
