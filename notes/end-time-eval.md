@@ -196,6 +196,23 @@ eight rows *is* the window's closing time — 09:00, 08:00, 18:00, 07:00, 07:00,
 validated against eight labelled cases rather than against a reading of the prompt. The window
 fields themselves are still unlabelled; this validates their premise, not their values.
 
+**The prompt now has a size budget, and v3 spent most of it.** pv2's prompt was 6,255 chars;
+v3 is 9,746 — about 875 extra input tokens on every one of ~7,700 calls, which is also most of
+why per-call time went 2.4s to 5.41s and the corpus run took 11 hours rather than 5.
+
+At LM Studio's default 4,096-token context that pushed the longest notices over the edge. The
+corpus run failed 29 cases and the separation was almost perfectly by length: every failure
+had a description of 4,216 chars or more, against a corpus median of 600, and only 4 of the
+9,154 successes were that long. Worst case is ~2,440 prompt tokens + ~1,270 description = 3,720
+in, leaving ~380 for an output whose first field is a reasoning string — hence two failure
+kinds, 19 HTTP 400s (input alone overflows) and 10 unterminated-JSON parse errors (input fits,
+output is cut). **Raised to 8,192 and the 29 re-ran clean**; the corpus is now uniformly pv3.
+
+They changed nothing that matters — 26 came back `not_found` and 23 were boil notices, whose
+end is a paired lift rather than their own text, so July's figures and the national top ten are
+byte-identical either way. The lesson is for the next prompt change: check the longest
+descriptions against the context before starting a corpus run, not after.
+
 One case worth remembering: **238256, "daily from 10pm until 7am until 17 July", states no
 first date**. `window_first_date` has nothing to extract, so the guard refuses and the case
 keeps its continuous interval — the safe direction, and a reminder that expansion is
