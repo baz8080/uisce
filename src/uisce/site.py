@@ -120,8 +120,26 @@ KNOCK_CATS = {"boil_notice_issued", "consumption_notice_issued"}
 SCHEME_NOISE = {"public", "water", "supply", "scheme", "regional", "pws", "the"}
 
 
-def classify(row):
-    """Severity class for a case row, or None if it isn't an event."""
+def classify(row, recurring=False):
+    """Severity class for a case row, or None if it isn't an event.
+
+    `recurring` says the *event* announced a window repeating over a date range —
+    "nightly from 10pm until 7am, from 9 to 27 July". A scheduled, repeating,
+    announced overnight window is demand management rather than a failure, and it
+    is treated as a restriction whatever the title on it says.
+
+    That rule exists because the title alone was deciding it, and Uisce uses two
+    titles for one situation. The same Donegal supply zone — Lifford, Rossgier —
+    was published as "Water Conservation" on 30 April, which accrued nothing, and
+    as "Reservoir Interruption" on 23 June and 9 July, which accrued 949,824
+    person-hours and became the largest single figure on the site. Same villages,
+    same 10pm-7am window, near-identical wording. Whichever way that pair is
+    resolved they have to be resolved alike; this takes the conservative side,
+    consistent with restrictions never having counted here.
+
+    It downgrades an outage and nothing else: a nightly leak-detection round is
+    still maintenance, not a restriction.
+    """
     cat = row["work_category"]
     if cat in IGNORE_CATS:
         return None
@@ -131,10 +149,8 @@ def classify(row):
         return "quality"
     if cat in DEGRADED_CATS or row["water_restrictions"] or row["reduced_pressure"]:
         return "degraded"
-    if cat in HARD_CATS:
-        return "outage"
-    if cat in REPAIR_CATS and row["work_type"] != "Planned":
-        return "outage"
+    if cat in HARD_CATS or (cat in REPAIR_CATS and row["work_type"] != "Planned"):
+        return "degraded" if recurring else "outage"
     # planned works, and non-disruptive activity regardless of work_type
     return "maintenance"
 
@@ -603,7 +619,12 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None):
     The interval rules and their rationale are in
     notes/statuspage-methodology.md; this is the code they describe.
     """
-    sev = classify(r)
+    # Recurrence is a property of the event, not the notice: the pin carrying the
+    # completion update reports no window, and classifying it on its own field
+    # would leave one outage pin inside a restriction event, whose interval the
+    # per-reference union would then charge in full.
+    recurring = shared_window is not None or r["end_recurrence"] == RECURRING
+    sev = classify(r, recurring)
     if sev is None or r["county"] not in COUNTY_POP:
         return None
     start = parse_dt(r["start_date"])

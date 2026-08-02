@@ -94,6 +94,31 @@ class TestClassify:
         # a grade off Cork.
         assert classify(_case(work_category="consumption_notice_lifted")) is None
 
+    def test_a_scheduled_repeating_window_is_a_restriction_whatever_the_title(self):
+        """The title alone was deciding this, and Uisce uses two for one
+        situation: the same Donegal villages under the same nightly 10pm-7am
+        regime were published as "Water Conservation" in April, accruing nothing,
+        and as "Reservoir Interruption" in June and July, accruing 949,824
+        person-hours and topping the national ranking."""
+        assert classify(_case(work_category="reservoir_interruption")) == "outage"
+        assert classify(_case(work_category="reservoir_interruption"), recurring=True) == "degraded"
+        assert classify(_case(work_category="burst_main"), recurring=True) == "degraded"
+        assert classify(_case(work_category="mains_repair", work_type=None),
+                        recurring=True) == "degraded"
+
+    def test_a_repeating_window_never_promotes_something_that_was_not_an_outage(self):
+        """A nightly leak-detection round is still works, not a restriction."""
+        assert classify(_case(work_category="leak_detection"), recurring=True) == "maintenance"
+        assert classify(_case(work_category="essential_works"), recurring=True) == "maintenance"
+        assert classify(_case(boil_water_notice=1), recurring=True) == "quality"
+
+    def test_the_notice_text_can_correct_the_feed_to_low_pressure(self):
+        """Two Reservoir Interruption notices describe only low pressure. The
+        pipeline sets reduced_pressure from the text, and classify already reads
+        that flag ahead of the hard categories, so no severity rule is needed."""
+        assert classify(_case(work_category="reservoir_interruption",
+                              reduced_pressure=1)) == "degraded"
+
     def test_an_unclassifiable_title_does_not_accrue_as_an_outage(self):
         # NULL work_category used to group with the unplanned repairs and accrue
         # full supply downtime, so every spelling the rule table missed — a bare
@@ -754,17 +779,35 @@ class TestRecurrenceGuard:
 
 
 class TestRecurringIntervals:
-    """End to end: what a recurring window costs, and what it still shows."""
+    """What a recurring window contributes.
 
-    def test_a_nightly_series_charges_covered_hours_not_the_elapsed_span(self):
+    Since a scheduled repeating window is classed as a restriction (see
+    `classify`), none of these accrue person-hours — the assertions are on the
+    intervals themselves and on what the county still shows, which is what the
+    expansion is now for.
+    """
+
+    def _hours(self, row):
+        case = resolve_case(row, SA_INDEX, {}, NOW, None)
+        return sum((e - s).total_seconds() for s, e in case.intervals) / 3600
+
+    def test_a_nightly_series_covers_its_windows_not_the_elapsed_span(self):
+        assert self._hours(_recurring()) == 63.0  # 7 nights x 9h, not the 165h span
+
+    def test_a_recurring_event_accrues_no_person_hours(self):
+        """A scheduled repeating window is demand management, whatever the title
+        says — the rule that stopped one Donegal nightly regime being the largest
+        figure on the site while the same villages' April notice counted zero."""
         month = build_site([_recurring()], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["person_h"] == 63 * 1000  # 7 nights x 9h, not the 165h span
+        assert month["person_h"] == 0
+        assert month["events"]["outage"] == 0
+        assert month["events"]["degraded"] == 1
 
     def test_every_night_of_a_series_still_colours_its_day_bar(self):
-        """The fix must reduce the price, not the visibility — a reader looking at
-        the county should still see the disruption on every day it ran."""
+        """Reclassifying must change the price, not the visibility — a reader
+        looking at the county still sees something on every day it ran."""
         days = build_site([_recurring()], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-        assert [d[0] for d in days["days"][:8]] == ["outage"] * 8
+        assert [d[0] for d in days["days"][:8]] == ["degraded"] * 8
 
     def test_pins_with_different_series_ends_union_to_the_longest(self):
         rows = [
@@ -772,17 +815,7 @@ class TestRecurringIntervals:
             _recurring(id=2, end_local_date="2026-05-06", notice_to_end_seconds=117 * 3600.0),
         ]
         month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["events"]["outage"] == 1
-        assert month["person_h"] == 63 * 1000
-
-    def test_one_unexpanded_pin_restores_the_continuous_block(self):
-        """Coverage is unioned per event but expansion is decided per pin, so a
-        single refusal re-covers every gap the others carved out. This is the
-        failure mode that would make the fix look like it worked while doing
-        nothing, and it is why the build report calls out mixed events."""
-        rows = [_recurring(id=1), _recurring(id=2, end_local_time="12:02")]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["person_h"] > 150 * 1000
+        assert month["events"]["degraded"] == 1
 
     def test_a_long_series_still_accrues_at_most_fourteen_days_of_presence(self):
         """CAP_DAYS is the backstop against a schedule running for months; it must
@@ -796,21 +829,24 @@ class TestRecurringIntervals:
         assert len(case.intervals) == 14
         assert case.intervals[-1][1] <= _dt("2026-05-15T00:00:00+00:00")
 
-    def test_the_completion_median_reports_covered_hours(self):
+    def test_a_recurring_event_stays_out_of_the_completion_median(self):
+        """The median is over supply disruptions, and a restriction is not one.
+        Excluding them also keeps the headline comparing like with like: "how long
+        did the works take" means something different for a nightly regime."""
         month = build_site(
             [_recurring(end_source="completion_update", end_local_time="12:02")],
             SA_INDEX, NOW,
         )["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["median_completion_h"] == 63.0
+        assert month["median_completion_h"] is None
+        assert month["completed_n"] == 0
 
-    def test_a_recurring_event_is_credited_to_the_month_it_was_published(self):
-        """iv[0][0] is the first *window*, which can open in the month after the
-        notice went up — the median is over events that started this month."""
-        rows = [_recurring(
-            start_date="2026-05-31T09:00:00+00:00", end_source="completion_update",
-            end_window_first_date="2026-06-01", end_local_date="2026-06-05",
-            end_local_time="07:00", notice_to_end_seconds=118 * 3600.0,
-        )]
+    def test_an_event_is_credited_to_the_month_it_was_published(self):
+        """The median loop keys on publication, not on the first interval's start.
+        Those coincide for every event that currently reaches it — only a
+        recurring series can open in a later month, and those are restrictions
+        now — so this is a guard rather than a live correction."""
+        rows = [_case(start_date="2026-05-31T09:00:00+00:00",
+                      end_local_date="2026-06-02", notice_to_end_seconds=48 * 3600.0)]
         site = build_site(rows, SA_INDEX, datetime(2026, 7, 1, tzinfo=UTC))
         months = site["counties"]["Carlow"]["months"]
         assert months["2026-05"]["completed_n"] == 1
@@ -905,10 +941,14 @@ class TestSharedWindows:
         assert case.intervals[-1] == (_dt("2026-05-07T21:00:00+00:00"),
                                       _dt("2026-05-08T02:00:00+00:00"))
 
-    def test_the_whole_event_expands_once_the_last_pin_inherits(self):
+    def test_the_whole_event_is_one_restriction_once_the_last_pin_inherits(self):
+        """Inheritance is what keeps the event coherent: without it the completion
+        pin stays an outage inside a restriction event, and the per-reference
+        union charges its continuous interval in full."""
         rows = [_recurring(id=1), self._completion_pin()]
         month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["person_h"] == 63 * 1000  # not the ~170h continuous block
+        assert month["person_h"] == 0
+        assert month["events"] == {"outage": 0, "quality": 0, "degraded": 1, "maintenance": 0}
 
     def test_an_event_no_pin_gave_a_window_is_untouched(self):
         """Inheritance must not invent a window for an ordinary event."""

@@ -813,3 +813,45 @@ class TestLoadCasesClosedAt:
         pipeline.load_cases(conn, [self._record()], now="2026-07-01T00:00:00+00:00")
         pipeline.load_cases(conn, [self._record()], now="2026-07-08T00:00:00+00:00")
         assert self._closed_at(conn) is None
+
+
+class TestBackfillReducedPressure:
+    """The feed's own flag, corrected from the feed's own notice — the same
+    principle as the work_type override, and needed for the same reason: the
+    title is the category, but the body sometimes contradicts it."""
+
+    def _conn(self, *descriptions):
+        conn = sqlite3.connect(":memory:")
+        conn.execute("""CREATE TABLE cases (id INTEGER PRIMARY KEY,
+            description TEXT, reduced_pressure INTEGER DEFAULT 0)""")
+        conn.executemany("INSERT INTO cases (id, description) VALUES (?, ?)",
+                         list(enumerate(descriptions, start=1)))
+        return conn
+
+    def test_a_notice_describing_only_low_pressure_sets_the_flag(self):
+        conn = self._conn(
+            "A reservoir interruption may cause low pressure to Ballyduff and surrounding areas."
+        )
+        assert pipeline.backfill_reduced_pressure(conn) == 1
+        assert conn.execute("SELECT reduced_pressure FROM cases").fetchone()[0] == 1
+
+    def test_a_notice_describing_both_is_left_alone(self):
+        """"...low pressure AND supply disruptions" announces both, and the supply
+        loss is the part that accrues. 100 cases say this; only 2 say pressure
+        alone, so matching loosely here would reclassify fifty times too much."""
+        conn = self._conn(
+            "A reservoir interruption may cause low pressure and supply disruptions to Clonea."
+        )
+        assert pipeline.backfill_reduced_pressure(conn) == 0
+
+    def test_an_ordinary_supply_disruption_is_untouched(self):
+        conn = self._conn("A burst water main may cause supply disruptions to Carlow town.")
+        assert pipeline.backfill_reduced_pressure(conn) == 0
+
+    def test_the_flag_is_only_ever_set_never_cleared(self):
+        """Additive, like every other backfill: a rule change must not silently
+        undo a flag the feed itself set."""
+        conn = self._conn("A burst water main may cause supply disruptions to Carlow town.")
+        conn.execute("UPDATE cases SET reduced_pressure = 1")
+        assert pipeline.backfill_reduced_pressure(conn) == 0
+        assert conn.execute("SELECT reduced_pressure FROM cases").fetchone()[0] == 1

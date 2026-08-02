@@ -788,6 +788,37 @@ def backfill_work_type(conn):
     return len(updates)
 
 
+# "may cause low pressure to Ballyduff and surrounding areas" — the notice
+# describes reduced pressure and no loss of supply. The far commoner
+# "...low pressure AND supply disruptions to..." (100 cases) is deliberately not
+# matched: those announce both, and the supply loss is the part that accrues.
+_PRESSURE_ONLY = re.compile(r"may cause (?:severe )?low pressure to\b", re.I)
+
+
+def backfill_reduced_pressure(conn):
+    """Set the reduced_pressure flag where the notice text says so and the feed
+    did not. Returns the number of rows changed.
+
+    Same principle as the work_type override above: the feed's own field is
+    corrected from its own notice, where the notice is unambiguous. Two cases on
+    the 2026-08 snapshot, both titled "Reservoir Interruption" and so classified
+    as hard supply outages, while their text describes only low pressure — the
+    title is the category, but here the body contradicts it.
+
+    Only ever sets the flag, never clears it, matching the additive discipline of
+    every other backfill. site.classify already reads reduced_pressure ahead of
+    the hard categories, so no severity rule changes.
+    """
+    rows = conn.execute(
+        "SELECT id, description FROM cases WHERE description IS NOT NULL AND NOT reduced_pressure"
+    ).fetchall()
+    updates = [
+        (case_id,) for case_id, description in rows if _PRESSURE_ONLY.search(description)
+    ]
+    conn.executemany("UPDATE cases SET reduced_pressure = 1 WHERE id = ?", updates)
+    return len(updates)
+
+
 def backfill_county(cases):
     with sqlite3.connect(DB_PATH) as conn:
         for case in cases:
@@ -823,8 +854,8 @@ def skip_geocoding(cases, db_path=DB_PATH):
 
 
 def backfill(db_path=DB_PATH):
-    """Re-derive the computed columns (trimmed title, work_category, work_type)
-    on an existing DB. Pure DB work — no download, mapping, or geocoding — so
+    """Re-derive the computed columns (trimmed title, work_category, work_type,
+    reduced_pressure) on an existing DB. Pure DB work — no download, mapping, or geocoding — so
     it's safe to re-run on its own after editing the category rules to
     re-derive against data that's already been downloaded."""
     with sqlite3.connect(db_path) as conn:
@@ -833,8 +864,14 @@ def backfill(db_path=DB_PATH):
         trim_titles(conn)
         categorised = backfill_work_category(conn)
         overridden = backfill_work_type(conn)
+        pressure = backfill_reduced_pressure(conn)
     print(f"Set work_category for {categorised} cases from title categories")
     print(f"Overrode work_type for {overridden} cases from title categories")
+    if pressure:
+        print(
+            f"Set reduced_pressure for {pressure} case(s) whose text describes "
+            "pressure, not supply loss"
+        )
 
 
 def run(skip_geocode=False):
