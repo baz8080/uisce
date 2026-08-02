@@ -966,3 +966,85 @@ class TestSharedWindows:
         assert "mix expanded" not in report
         assert "inherit one from a sibling pin" in report
         assert "22:00-07:00 from 2026-05-01" in report
+
+
+class TestEventNaming:
+    """One event, one area name, decided over its whole footprint.
+
+    The open list and the national top ten used to name an event by different
+    rules — first pin published versus largest share of the footprint — so a
+    six-pin burst could read "Allenwood" in one place and "Prosperous" in the
+    other, of the same event on the same page.
+    """
+
+    # two pins 7 km apart. Each has a home area of its own, and both reach into a
+    # third that is bigger in total than either — the shape that decides whether
+    # naming is done per pin or over the event.
+    SA = SmallAreaIndex([
+        (52.836, -6.926, "SA1", 100),   # pin A's home
+        (52.8362, -6.926, "SA2", 60),   # shared
+        (52.900, -6.926, "SA3", 90),    # pin B's home
+        (52.9002, -6.926, "SA4", 60),   # shared, same area as SA2
+    ])
+    TOWNS = TownLookup([
+        ("SA1", "X", "Exton", "Carlow"),
+        ("SA2", "Y", "Wyeville", "Carlow"),
+        ("SA3", "Z", "Zedbury", "Carlow"),
+        ("SA4", "Y", "Wyeville", "Carlow"),
+    ], SA.pop)
+
+    def _pins(self, **overrides):
+        # id 1 is published first and homes to Zedbury (90); id 2 homes to Exton
+        # (100). So first-pin-wins and largest-share disagree, which is the point.
+        return [_case(id=1, full_lat=52.900, **overrides),
+                _case(id=2, full_lat=52.836, **overrides)]
+
+    def test_an_event_is_named_over_its_whole_footprint_not_its_first_pin(self):
+        site = build_site(self._pins(), self.SA, datetime(2026, 6, 15, tzinfo=UTC), self.TOWNS)
+        # the first pin published would have said Zedbury; Exton holds more of
+        # the event's footprint, and that is what a reader is shown
+        assert [r["area"] for r in site["top"]["2026-05"]] == ["Exton"]
+
+    def test_the_open_list_and_the_top_ten_agree_on_the_area(self):
+        """The whole point of the change: both read the same decision."""
+        now = datetime(2026, 6, 15, tzinfo=UTC)
+        rows = self._pins(status="Open", notice_to_end_seconds=None,
+                          end_source="not_found", end_local_date=None)
+        site = build_site(rows, self.SA, now, self.TOWNS)
+        county = site["counties"]["Carlow"]
+        open_area = {c["area"] for c in county["open"]}
+        top_area = {r["area"] for r in site["top"]["2026-05"]}
+        assert len(open_area) == 1
+        assert {self.TOWNS.label(code) for code in open_area} == top_area
+
+    def test_the_name_is_restricted_to_areas_the_pins_were_homed_to(self):
+        """Shares are summed per area, so Wyeville — reached by both pins but the
+        home of neither — out-totals Exton and Zedbury across the union. Naming
+        the event Wyeville would produce a code absent from the county breakdown,
+        which the page renders as a blank heading and drops from the area table's
+        open counts."""
+        assert self.TOWNS.dominant(
+            {"SA1": 100, "SA2": 60, "SA3": 90, "SA4": 60}, "Carlow"
+        ) == "Y"
+        assert self.TOWNS.dominant(
+            {"SA1": 100, "SA2": 60, "SA3": 90, "SA4": 60}, "Carlow", {"X", "Z"}
+        ) == "X"
+
+    def test_an_event_is_never_named_after_an_area_no_pin_was_homed_to(self):
+        """The invariant the restriction buys, stated exactly.
+
+        It is *not* "every open case resolves in the county breakdown" — four
+        real cases already fail that for an unrelated reason, being advance
+        notices dated far enough ahead that their footprint lands in no listed
+        month, so their area gets no breakdown entry. What this guarantees is
+        narrower: naming cannot invent an area that no pin of the event chose.
+        """
+        now = datetime(2026, 6, 15, tzinfo=UTC)
+        rows = self._pins(status="Open", notice_to_end_seconds=None,
+                          end_source="not_found", end_local_date=None)
+        county = build_site(rows, self.SA, now, self.TOWNS)["counties"]["Carlow"]
+        homes = {self.TOWNS.dominant(self.SA.affected(r["full_lat"], r["full_lon"]), "Carlow")
+                 for r in rows}
+        for case in county["open"]:
+            assert case["area"] in homes
+            assert case["area"] in county["towns"]

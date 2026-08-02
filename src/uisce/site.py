@@ -355,8 +355,8 @@ class TownLookup:
     def label(self, code):
         return UNPLACED_LABEL if code == UNPLACED else self.name[code]
 
-    def dominant(self, sas, county):
-        """Area holding the largest share of a pin's affected population, or UNPLACED.
+    def dominant(self, sas, county, allowed=None):
+        """Area holding the largest share of an affected population, or UNPLACED.
 
         Pins rarely straddle a boundary — the median dominant share is 1.00 on
         the July 2026 corpus — so one home per pin costs almost nothing and
@@ -368,12 +368,23 @@ class TownLookup:
         page it appears on — so the pin goes to the best area that *is* in the
         county rather than being set aside. UNPLACED is left for the pin whose
         whole footprint lies in another county.
+
+        `allowed` restricts the answer to a set of codes. Naming a whole *event*
+        needs it: shares are summed per area, so a secondary area common to
+        several pins can out-total every pin's own winner and produce a code no
+        pin ever registered in the county breakdown — which the page renders as
+        a blank heading and silently drops from the area table's open counts.
+        No event in the corpus does that today; passing the pins' own codes makes
+        it unrepresentable rather than unlikely.
         """
         shares = defaultdict(int)
         for guid, pop in sas.items():
             code = self.town.get(guid)
-            if code is not None and self.county[code] == county:
-                shares[code] += pop
+            if code is None or self.county[code] != county:
+                continue
+            if allowed is not None and code not in allowed:
+                continue
+            shares[code] += pop
         if not shares:
             return UNPLACED
         return max(shares.items(), key=lambda kv: kv[1])[0]
@@ -794,7 +805,7 @@ def resolved_by_month(region, shown=None):
 TOP_EVENTS_SHOWN = 10
 
 
-def top_events(counties, event_meta, towns, ym, now, shown=TOP_EVENTS_SHOWN):
+def top_events(counties, event_meta, towns, area_of, ym, now, shown=TOP_EVENTS_SHOWN):
     """The largest individual supply disruptions nationally in one month.
 
     Nothing else on the site ranks a single event: person-hours are computed per
@@ -838,13 +849,10 @@ def top_events(counties, event_meta, towns, ym, now, shown=TOP_EVENTS_SHOWN):
                 "confirmed": meta["confirmed"],
                 "scheduled": meta["scheduled"],
             }
-            if towns is not None:
-                # dominant over the event's *unioned* footprint, unlike area_of's
-                # first-pin-wins — for an 18-pin event that is a better answer and
-                # costs one line
-                row["area"] = towns.label(
-                    towns.dominant(region.sas["outage"].get(ref, {}), county)
-                )
+            if towns is not None and (county, ref) in area_of:
+                # the same name the county's open list uses — one event, one area,
+                # decided once in build_site over the event's whole footprint
+                row["area"] = towns.label(area_of[(county, ref)])
             rows.append(row)
 
     rows.sort(key=lambda r: r["person_h"], reverse=True)
@@ -1013,7 +1021,10 @@ def build_site(rows, sa_index, now, towns=None):
 
     counties = defaultdict(Region)
     county_towns = defaultdict(lambda: defaultdict(Region))
-    area_of = {}  # (county, ref) -> area code, so an open case can name its area
+    # (county, ref) -> the event's whole footprint and the areas its pins were
+    # homed to, so the event can be named once, after the loop, from all of it
+    event_sas = defaultdict(dict)
+    event_codes = defaultdict(set)
     # (county, ref) -> title, start, and how each of the event's pins signalled
     # its end. Kept out of Region, which is instantiated once per county *and*
     # once per county-area — a couple of thousand times — and none of the area
@@ -1050,10 +1061,22 @@ def build_site(rows, sa_index, now, towns=None):
             elif case.has_end:
                 meta["scheduled"] += 1
         if towns is not None:
+            # the breakdown still homes each pin individually, with `within`
+            # clipping its footprint, so an area only accrues its own people
             code = towns.dominant(case.sas, case.county)
             county_towns[case.county][code].add(case, towns.within(case.sas, code))
-            # first pin wins, matching how the event's open entry is recorded
-            area_of.setdefault((case.county, case.ref), code)
+            event_sas[(case.county, case.ref)].update(case.sas)
+            event_codes[(case.county, case.ref)].add(code)
+
+    # One name per event, decided on its whole footprint rather than on whichever
+    # pin the feed happened to publish first. A 6-pin burst spread across two
+    # settlements was being labelled from one pin and ranked from another, so the
+    # same event could read "Allenwood" in the open list and "Prosperous" in the
+    # national top ten. Restricted to codes the pins were homed to — see dominant.
+    area_of = {
+        key: towns.dominant(sas, key[0], event_codes[key])
+        for key, sas in event_sas.items()
+    }
 
     site = {
         "generated": now.strftime("%Y-%m-%d %H:%M UTC"),
@@ -1161,7 +1184,7 @@ def build_site(rows, sa_index, now, towns=None):
     # disruptions of this month" list would contradict itself twice a day.
     current = now.strftime("%Y-%m")
     site["top"] = {
-        ym: top_events(counties, event_meta, towns, ym, now)
+        ym: top_events(counties, event_meta, towns, area_of, ym, now)
         for ym in months
         if ym < current
     }
