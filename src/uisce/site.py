@@ -35,7 +35,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
 
-from uisce.config import DB_PATH, DUBLIN, SA_POP_PATH, SA_TOWNS_PATH, SITE_DIR
+from uisce.config import DB_PATH, DUBLIN, RECURRING, SA_POP_PATH, SA_TOWNS_PATH, SITE_DIR
 
 SITE_HTML = Path(__file__).parent / "site.html"
 
@@ -398,9 +398,6 @@ def span_stats(observed_h, scheduled_h):
         "median_scheduled_h": round(statistics.median(scheduled_h), 1) if scheduled_h else None,
         "scheduled_n": len(scheduled_h),
     }
-
-
-RECURRING = "daily"  # the only recurrence value the extraction may claim
 
 
 def daily_windows(first_date, open_t, close_t, lo, hi):

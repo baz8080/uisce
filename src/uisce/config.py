@@ -13,6 +13,10 @@ from urllib3.util.retry import Retry
 # site.py importing it from build.py would invert the pipeline's direction.
 DUBLIN = ZoneInfo("Europe/Dublin")
 
+# The only recurrence value the extraction may claim. Shared vocabulary between
+# build.py (which projects and lints it) and site.py (which expands it).
+RECURRING = "daily"
+
 DB_PATH = Path("out/uisce.db")
 CASES_RAW_PATH = Path("out/cases.json")
 CASES_MAPPED_PATH = Path("out/cases_mapped.json")

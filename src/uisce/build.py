@@ -1,8 +1,9 @@
 import json
+import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 
-from uisce.config import DB_PATH, DUBLIN, JSONL_PATH
+from uisce.config import DB_PATH, DUBLIN, JSONL_PATH, RECURRING
 
 NO_END_SIGNAL_SOURCES = {"not_found", "lifted_immediate"}
 
@@ -61,6 +62,100 @@ def compute_notice_to_end_seconds(start_date, end_source, local_date, local_time
 
     elapsed = (end_utc - start_utc).total_seconds()
     return elapsed if elapsed >= 0 else None
+
+
+MONTHS = ("January", "February", "March", "April", "May", "June",
+          "July", "August", "September", "October", "November", "December")
+
+
+def time_forms(value):
+    """Ways a notice might write a time of day, given "HH:MM".
+
+    "22:00" -> {"22:00", "10pm", "10 pm", "10.00pm", ...}. Deliberately generous:
+    a spelling this misses reads as a value the text does not contain, so the
+    cost of a gap here is a false alarm, not a missed one.
+    """
+    t = time.fromisoformat(value)
+    hour12 = t.hour % 12 or 12
+    meridiem = "am" if t.hour < 12 else "pm"
+    forms = {f"{t.hour:02d}:{t.minute:02d}", f"{t.hour}:{t.minute:02d}"}
+    if t.minute:
+        stem = [f"{hour12}:{t.minute:02d}", f"{hour12}.{t.minute:02d}"]
+    else:
+        stem = [f"{hour12}", f"{hour12}:00", f"{hour12}.00"]
+    forms |= {f"{s}{sep}{meridiem}" for s in stem for sep in ("", " ")}
+    return forms
+
+
+def date_forms(value):
+    """Ways a notice might write a date, given "YYYY-MM-DD"."""
+    d = date.fromisoformat(value)
+    month = MONTHS[d.month - 1]
+    suffix = "th" if 4 <= d.day % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(d.day % 10, "th")
+    return {
+        f"{d.day} {month}", f"{d.day:02d} {month}", f"{d.day} {month[:3]}",
+        f"{d.day}{suffix} {month}", f"{d.day}{suffix} of {month}",
+        f"{d.day}/{d.month:02d}", f"{d.day:02d}/{d.month:02d}",
+        f"{d.day}/{d.month}", f"{d.day}-{d.month:02d}", f"{d.day:02d}-{d.month:02d}",
+    }
+
+
+def _plain(html):
+    return " ".join(re.sub(r"<[^>]+>", " ", html or "").split()).lower()
+
+
+def _quoted(forms, text):
+    return any(f.lower() in text for f in forms)
+
+
+def unquotable_windows(conn):
+    """(flagged, inert) recurring windows whose values are not in the notice text.
+
+    The window fields have a property the end-time answer does not: every value
+    should be quotable from the description the model read. That makes them
+    checkable with no labelled data at all — a reported "22:00" that appears
+    nowhere in the text was invented, whatever else it might be.
+
+    This is the only standing check on those fields. No eval round labels them,
+    so a prompt that began hallucinating windows would otherwise surface only as
+    person-hours quietly falling.
+
+    An absent *first date* is treated separately and counted as `inert` rather
+    than flagged. The model fills that gap with the publication date when a
+    notice says only "nightly from 8pm until 10am until 5 August", and
+    site.daily_windows clamps the series start to publication anyway, so such a
+    value cannot move a single figure. Reporting it as suspicious every build
+    would train the reader to ignore the check.
+    """
+    rows = conn.execute(
+        """
+        SELECT c.id, c.description, c.start_date,
+               i.end_window_open, i.end_window_close, i.end_window_first_date
+        FROM cases c JOIN inferred_cases i ON i.case_id = c.id
+        WHERE i.end_recurrence = ? AND i.end_window_open IS NOT NULL
+        """,
+        (RECURRING,),
+    ).fetchall()
+
+    flagged, inert = [], 0
+    for case_id, description, start_date, open_t, close_t, first_date in rows:
+        text = _plain(description)
+        missing = [
+            f"{label} {value}"
+            for label, value in (("open", open_t), ("close", close_t))
+            if not _quoted(time_forms(value), text)
+        ]
+        if first_date and not _quoted(date_forms(first_date), text):
+            if first_date <= (start_date or "")[:10]:
+                inert += 1
+            else:
+                missing.append(f"first date {first_date}")
+        if missing:
+            flagged.append((case_id, missing))
+    return flagged, inert
+
+
+UNQUOTABLE_SHOWN = 15
 
 
 def latest_per_case(records):
@@ -155,8 +250,18 @@ def run():
             rows,
         )
         never_inferred, never_inferred_open = count_never_inferred(conn)
+        unquotable, inferred_first_dates = unquotable_windows(conn)
 
     print(f"Upserted {len(rows)} rows into inferred_cases")
+    if unquotable:
+        print(f"{len(unquotable)} recurring window(s) with a value not in the notice's own text:")
+        for case_id, missing in unquotable[:UNQUOTABLE_SHOWN]:
+            print(f"  {case_id}  {', '.join(missing)}")
+    if inferred_first_dates:
+        print(
+            f"{inferred_first_dates} recurring window(s) took the publication date as their "
+            "first date, the text giving none — clamped there anyway, so no figure moves"
+        )
     if never_inferred:
         print(
             f"{never_inferred} case(s) have no inference yet ({never_inferred_open} open) — "

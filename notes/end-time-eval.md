@@ -264,11 +264,35 @@ the three fields it scores are unchanged, so a drop from 120/120 means the new f
 disturbed the old ones. Run that before spending five hours on a corpus run.
 
 The window fields are **outside the eval loop** — `FIELDNAMES` carries only the end-time
-triple, so no round labels them. Until one does, their only validation is the close-time
-cross-check in `recurring_intervals` (a scheduled end whose window close disagrees with its
-own reported end time is disbelieved) and the per-build recurrence report. That is the honest
-reason the guard refuses by default: believing a hallucinated recurrence silently halves a
-county's person-hours, and disbelieving a real one costs nothing but the status quo.
+triple, so no round labels them. That is the honest reason the guard refuses by default:
+believing a hallucinated recurrence silently halves a county's person-hours, and disbelieving
+a real one costs nothing but the status quo.
+
+Three checks stand in for a labelled round, and between them they cover more than the phrase
+"unvalidated" suggests:
+
+1. **The close-time cross-check** in `recurring_intervals` — a scheduled end whose window close
+   disagrees with its own reported end time is disbelieved. Validated against 8 labelled
+   round-1 rows where the human-corrected `local_time` *is* the window's closing time.
+2. **`unquotable_windows` in `build.py`** — every window value should be quotable from the
+   description the model read, so a reported "22:00" appearing nowhere in the text was
+   invented. This needs no labelled data at all and runs on every build. On the v3 corpus:
+   **89 of 97 fully quotable, 0 flagged**, and the 8 exceptions are one Tipperary event whose
+   text gives no first date at all ("nightly from 8pm until 10am until 5 August"), where the
+   model substitutes the publication date — counted separately as inert, because
+   `daily_windows` clamps the series start to publication anyway and the value cannot move a
+   figure.
+3. **The per-build recurrence report** in `site.py` — expanded and refused counts, the
+   before/after hour totals, and any event whose pins disagree.
+
+What none of them measure is **recall**: a window the model missed entirely. That is now the
+failure mode that costs money, since the guard already makes false positives cheap to refuse,
+and it is what a labelled round should target. The pool is small and known — 56 notices whose
+description matches the recurrence pattern but which the model called `none`, of which 39 are
+`water_conservation` (degraded, a miss costs nothing) and roughly 9 are outage-class. 55 of the
+56 are `completion_update`, the pattern cross-pin inheritance already rescues wherever a
+sibling claimed a window. So the high-value round is those ~9 plus a sample of the 97 claimed,
+not all 153.
 
 ### Validated 2026-07-19 — the prompt is settled, `PROMPT_VERSION` stays at 2
 
