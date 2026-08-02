@@ -2,10 +2,20 @@
 matching how the scripts have always been run (from the repo root)."""
 
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+# Notices state wall-clock Irish local times. Both build.py (turning a reported
+# end into a UTC instant) and site.py (expanding a recurring window) need it, and
+# site.py importing it from build.py would invert the pipeline's direction.
+DUBLIN = ZoneInfo("Europe/Dublin")
+
+# The only recurrence value the extraction may claim. Shared vocabulary between
+# build.py (which projects and lints it) and site.py (which expands it).
+RECURRING = "daily"
 
 DB_PATH = Path("out/uisce.db")
 CASES_RAW_PATH = Path("out/cases.json")

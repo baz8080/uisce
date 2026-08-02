@@ -358,6 +358,48 @@ class TestCategoryClassification:
         assert wtp.slug == "water_treatment_plant_interruption"
         assert wtp.work_type == "Unplanned"
 
+    def test_near_miss_spellings_map_to_their_slug(self):
+        """The feed invents variants constantly, and a title no rule claims gets
+        no slug at all — which used to mean it accrued as a hard supply outage.
+        Every spelling here is one the feed actually published."""
+        wtp = "water_treatment_plant_interruption"
+        for title, slug in (
+            ("Water Conservation/Restriction – Waterford", "water_conservation"),
+            ("Water Conservation Restriction - Kerry", "water_conservation"),
+            ("Discoloration", "discolouration"),
+            ("Essential Maintrnance Works - Kerry", "essential_works"),
+            ("Maintenance Works - Meath", "essential_works"),
+            ("A Water Treatment Plant Interruption - Mayo", wtp),
+            ("Main Repair Works – Roscommon", "mains_repair"),
+            ("Main Flushing - Galway", "mains_flushing"),
+            ("Valve Failure - Dublin", "valve_repair"),
+            ("Valve Replacement - Dublin", "valve_repair"),
+            ("Mains Rehabilitation - Louth", "mains_rehabilitation"),
+            ("Meter Installation - Dublin", "meter_installation"),
+            ("Meter Exchange Works - Wicklow", "meter_installation"),
+            ("Mains Tie-In - Cork", "new_connection"),
+        ):
+            assert classify_category(title).slug == slug, title
+
+    def test_works_on_a_reservoir_are_not_a_reservoir_interruption(self):
+        """The feed reserves "Interruption" for lost supply, so cleaning and
+        upgrade works must not share a slug with it — reservoir_interruption and
+        water_treatment_plant_interruption are both in HARD_CATS."""
+        for title in ("Reservoir Cleaning - Louth", "Reservoir Works - Cork",
+                      "Reservoir Upgrade Works - Kerry"):
+            assert classify_category(title).slug == "reservoir_works", title
+        assert classify_category("Reservoir Interruption – Cork").slug == "reservoir_interruption"
+        upgrade = classify_category("Water Treatment Plant Upgrade – Clare")
+        assert upgrade.slug == "water_treatment_plant_upgrade"
+
+    def test_a_do_not_consume_lift_is_not_an_issued_notice(self):
+        """Both spellings must reach the lift. One case was stored as an issued
+        do-not-consume notice, which is the opposite claim and knocks a grade."""
+        for title in ("Lifting of Do Not Consume - Cork",
+                      "Lifting of Do Not Consume Notice - Cork"):
+            assert classify_category(title).slug == "consumption_notice_lifted", title
+        assert classify_category("Do Not Consume – Cork").slug == "consumption_notice_issued"
+
     def test_new_category_work_types(self):
         assert classify_category("Water Conservation – Mayo").work_type == "Unplanned"
         assert classify_category("Hydrant Repair Works – Cork").work_type == "Unplanned"
@@ -372,7 +414,9 @@ class TestCategoryClassification:
         assert classify_category("  Mains Flushing – Kerry  ").slug == "mains_flushing"  # padded
 
     def test_returns_none_for_unknown_or_empty(self):
-        assert classify_category("Meter Exchange Works – Cork") is None
+        # the real survivors: a title the feed never filled in, and a bare
+        # reference number. Neither carries recoverable category information.
+        assert classify_category("KER00113058") is None
         assert classify_category("Something Novel – Kerry") is None
         assert classify_category("unknown") is None
         assert classify_category(None) is None
@@ -445,6 +489,31 @@ class TestWorkTypeBackfill:
         assert count == 3
         rows = dict(conn.execute("SELECT id, work_category FROM cases"))
         assert rows == {1: "burst_main", 2: "leak_detection", 3: "mains_flushing", 4: None}
+
+    def test_unmatched_titles_are_reported_so_the_next_one_is_noticed(self):
+        """A missing variant is silent by construction: the case gets no slug,
+        and classify() then reads it as "not a disruption" and drops it from the
+        metrics. The feed keeps inventing spellings, so this is a standing
+        condition and every backfill prints what it could not place."""
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            "CREATE TABLE cases (id INTEGER PRIMARY KEY, title TEXT, work_category TEXT)"
+        )
+        conn.executemany(
+            "INSERT INTO cases VALUES (?, ?, ?)",
+            [
+                (1, "Burst Water Main – Cork", None),
+                (2, "Something Novel – Kerry", None),
+                (3, "Something Novel – Mayo", None),
+                (4, "unknown", None),
+            ],
+        )
+
+        unmatched = pipeline.unmatched_categories(conn)
+
+        assert unmatched.most_common(1) == [("something novel", 2)]
+        assert unmatched["unknown"] == 1
+        assert "burst water main" not in unmatched
 
 
 def _cases_db(db_path, version=pipeline.SCHEMA_VERSION):

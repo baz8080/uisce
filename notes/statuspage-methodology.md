@@ -131,8 +131,37 @@ The thresholds are calibrated to the observed distribution of county-months (p10
 
 Rebuilding May and June 2026 at 300 m / 500 m / 1 km affect-radii: county **rankings** by availability are robust (Spearman rank correlation vs the 500 m baseline: 0.93/0.91 at 300 m, 0.90/0.86 at 1 km), but absolute **grades** are not — 48 of 52 county-months change letter somewhere across the range, because affected population scales roughly with radius², shifting everyone against the fixed thresholds together. Read the letters as calibrated to the 500 m assumption; read the ordering of counties as real. (A percentile-based grading would be radius-invariant, at the cost of losing fixed meaning across months.)
 
+## The national top ten (added 2026-08-01)
+
+`#top` ranks the ten largest **individual** disruptions nationally in a month, by person-hours. Nothing else on the site does: person-hours are computed per county and per area, so a reader who wants to know what actually happened in July gets 26 county rows rather than the burst that caused them. The distribution justifies the page — in July 2026 the ten largest events were **21.9%** of every person-hour lost nationally, and one Donegal reservoir interruption was 9% on its own.
+
+Three decisions worth recording:
+
+**Person-hours are clipped to the month**, using the same bounds `region_month` uses, rather than attributing a whole event to the month it started in. That keeps the ranking summable against the county figures already published — the "these ten are a fifth of July" headline is only true under clipping — at the cost that `person_h` is not exactly the two displayed figures multiplied (`hours` is rounded to 1dp for the payload; `person_h` comes from the unrounded span, because matching the county totals matters more).
+
+**Complete months only.** The in-progress month reshuffles between builds as open events accrue toward the 14-day cap and then resolve, so a "largest disruptions of this month" list would contradict itself twice a day. The front end shares `curMonth` with the other views but falls back to the newest complete month, since `curMonth` defaults to the in-progress one.
+
+**The end badge counts notices, not events.** `Region.observed_end` is OR'd across an event's pins, which is what the monthly median wants (does this event carry *an* end signal?) but is wrong for a per-event verdict: July's largest event, `DON00115765`, has 18 pins of which exactly **one** reported a completion and 17 only stated a schedule. Badging that "completion confirmed" would present a plan as a measurement, which is the failure this whole site is organised against. The payload therefore carries `pins` / `confirmed` / `scheduled` and the page says "partly confirmed — 1 of 18 notices reported complete".
+
+### Recurring windows cover hours, not days (added 2026-08-01)
+
+A notice reading *"daily from 10pm until 7am, from 9 July to 27 July"* is 18 nights of nine hours, not 16 days of continuous outage. Prompt v3 extracts the window itself (`recurrence`, `window_open`, `window_close`, `window_first_date`) and `resolve_case` expands it into one interval per night, so a `Case` now carries a *list* of intervals. Everything downstream already unioned and clipped lists, so only `Region.add` changed.
+
+Three consequences worth stating:
+
+**`median_completion_h` is covered hours.** For a single-block event that is also its elapsed span, so nothing moved for the other 99%. For a recurring event the two now differ sharply — a night's works inside a fortnight's presence — and the covered figure is the one published, because "how long did the works take" is the question the metric name asks. The site copy says so.
+
+**Expansion is decided per notice; coverage is unioned per event.** One pin falling back to the continuous interval re-covers every gap the others carved out, so the fix can land on 17 of 18 pins and barely move the number. This is not hypothetical — it is what happened to `DON00115765` on the first v3 run, because the model reports no window on a notice whose text says the works are complete.
+
+So a window is treated as a property of the **works**, not of the notice: `event_windows` lends the window any pin of a `reference_num` reported to the pins that reported none. The borrowed series is still clipped to the borrowing pin's own start and end, which is what makes this a reading rather than a guess — the completion pin takes the schedule and then stops at the moment it says the works stopped. Inherited windows face the same cross-check as claimed ones and are listed individually on every build, being the least-evidenced expansions here. Where pins disagree the commonest window wins, ties broken deterministically. Every build also prints any event whose pins still disagree, which is the line that catches a fix landing on 17 pins and being undone by the 18th.
+
+**The guard refuses by default.** A refusal is a numeric no-op, so the checks are deliberately suspicious: the recurrence value must be exactly `daily`, all three window fields must parse, open must differ from close, the series must produce at least two windows, and for a *scheduled* end the window's closing time must match the reported end time — the prompt requires them to be the same, so a disagreement is the model contradicting itself. Completion updates have no such cross-check available (their `local_time` is the completion, not a window close), so they are honoured and listed individually in the build report.
+
+The ranking is by raw person-hours, not per-capita, and it ranks events rather than counties deliberately. A county ranking adds nothing: by raw person-hours it is a population ranking, and per-capita it is arithmetically identical to the availability column already on the overview (Donegal's 22,156 person-hours per 1,000 residents in July *is* its 97.022%).
+
 ## Known limitations
 - Overlapping events in the same area double-count person-hours.
+- The 14-day cap applies to each *notice*, not each event, so an event published as several staggered notices can span longer than 14 days — July's largest ran 385h (16 days) across 18 pins published over three days. The page copy says so.
 - The scheduled-end events that accrue disruption time are accruing an *announced* interval, not an observed one. They are kept out of the headline median but not out of the availability percentage, so availability carries an assumption the median does not.
 - `start_date` is the notice publication time, so durations are a floor on true outage length (overnight events are typically posted the next working morning — see [data-quality.md](data-quality.md)).
 - "May be affected" notices count everyone in the radius; the index measures disruption exposure, not confirmed loss of supply.

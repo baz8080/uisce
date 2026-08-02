@@ -30,12 +30,12 @@ import math
 import shutil
 import sqlite3
 import statistics
-from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from collections import Counter, defaultdict
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
 
-from uisce.config import DB_PATH, SA_POP_PATH, SA_TOWNS_PATH, SITE_DIR
+from uisce.config import DB_PATH, DUBLIN, RECURRING, SA_POP_PATH, SA_TOWNS_PATH, SITE_DIR
 
 SITE_HTML = Path(__file__).parent / "site.html"
 
@@ -86,7 +86,7 @@ SEV_ORDER = ["outage", "quality", "degraded", "maintenance"]
 
 QUALITY_CATS = {"boil_notice_issued", "consumption_notice_issued", "discolouration"}
 DEGRADED_CATS = {"water_conservation", "low_pressure"}
-IGNORE_CATS = {"boil_notice_lifted"}  # the lift is good news, not an event
+IGNORE_CATS = {"boil_notice_lifted", "consumption_notice_lifted"}  # a lift is good news
 
 # Boil notices are the weakest class in the dataset: only 1 of 23 has a real end
 # (see boil_notice_fate and notes/boil-notices.md). Setting this to True drops the
@@ -101,8 +101,17 @@ HARD_CATS = {
     "pump_station_interruption", "pump_failure", "power_outage",
 }
 # Emergency repair works: supply is normally shut off while they run, so they
-# accrue unless the feed says they were planned. NULL categories group here.
-REPAIR_CATS = {"mains_repair", "valve_repair", "pump_repair", None}
+# accrue unless the feed says they were planned.
+#
+# NULL categories deliberately do NOT group here. A title classify_category
+# cannot place — "unknown", a bare reference number — evidences nothing, and
+# counting it as a national supply outage fabricates downtime in the way
+# ended_by_publication and boil_notice_fate exist to prevent. It also made the
+# rule table fail loudly in the wrong direction: an unrecognised spelling of
+# "Water Conservation/Restriction" accrued as a hard outage until someone
+# noticed. Unmatched titles now fall through to maintenance and are printed by
+# every backfill instead (see backfill_work_category).
+REPAIR_CATS = {"mains_repair", "valve_repair", "pump_repair"}
 
 # Only health-relevant quality notices knock a grade; discolouration shows
 # but doesn't knock.
@@ -391,22 +400,179 @@ def span_stats(observed_h, scheduled_h):
     }
 
 
+def daily_windows(first_date, open_t, close_t, lo, hi):
+    """Every window of a daily local-time series, as UTC pairs clipped to [lo, hi).
+
+    Windows are wall clock: 22:00-07:00 is nine hours of Irish night whatever the
+    UTC offset is that week, so each date is combined with Europe/Dublin and
+    converted individually rather than offsetting the series once. That also makes
+    the clocks-change nights come out right on their own — eight hours in spring,
+    ten in autumn.
+
+    Whether the window crosses midnight comes from the times (close < open), never
+    from the notice's own wording: the feed writes "daily from 10pm until 7am".
+
+    `hi` carries the end of the series, so nothing here re-derives the last date.
+    resolve_case passes the capped end it would otherwise have used, and that
+    instant *is* the last window's close by construction — build.py derives
+    notice_to_end_seconds from local_date + local_time in the same timezone. The
+    14-day cap and a completion update both truncate the series through that one
+    clip rather than through a second code path.
+
+    Returns [] for a degenerate or incoherent series; the caller keeps its single
+    interval, because an empty expansion never means "no disruption".
+    """
+    if close_t == open_t:
+        return []
+    # the window may already be open at `lo` (a notice published mid-series), so
+    # start a day early and let the clip truncate it rather than dropping it
+    day = max(first_date, (lo - timedelta(days=1)).astimezone(DUBLIN).date())
+    overnight = timedelta(days=1 if close_t < open_t else 0)
+
+    windows = []
+    while True:
+        opens = datetime.combine(day, open_t, DUBLIN).astimezone(timezone.utc)
+        if opens >= hi:
+            return windows
+        closes = datetime.combine(day + overnight, close_t, DUBLIN).astimezone(timezone.utc)
+        opens, closes = max(opens, lo), min(closes, hi)
+        if closes > opens:
+            windows.append((opens, closes))
+        day += timedelta(days=1)
+
+
+def _parse_time(value):
+    try:
+        return time.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_date(value):
+    try:
+        return date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def case_ref(row):
+    """The key that groups a multi-pin publication into one event."""
+    return row["reference_num"] or f"id:{row['id']}"
+
+
+def event_windows(rows):
+    """{(county, ref): (open, close, first_date)} for events any pin gave a window.
+
+    A repeating window is a property of the *works*, not of the notice that
+    happens to describe them. Uisce publishes one event as many pins over several
+    days, and the pin carrying the completion update reports no window at all —
+    reasonably, since a finished job has no forward schedule left to state. But
+    coverage is unioned per reference_num, so that one pin's continuous interval
+    re-covers every gap its siblings carved out: on the first v3 run
+    DON00115765 had 17 of 18 pins expanded and still kept 354h of its 385h.
+
+    So a pin with no window of its own borrows one its siblings reported. It is
+    still clipped to that pin's own start and end, which is what makes this safe
+    rather than a guess — the completion pin inherits the schedule and then stops
+    at the moment it says the works stopped.
+
+    Where pins disagree the commonest window wins, ties broken by sorting so a
+    rebuild is reproducible. No event in the corpus currently disagrees; the rule
+    exists so that one does not resolve itself differently build to build.
+    """
+    claims = defaultdict(list)
+    for r in rows:
+        if r["end_recurrence"] == RECURRING:
+            claims[(r["county"], case_ref(r))].append(
+                (r["end_window_open"], r["end_window_close"], r["end_window_first_date"])
+            )
+    return {
+        key: max(sorted(set(windows)), key=windows.count)
+        for key, windows in claims.items()
+    }
+
+
+def recurring_intervals(row, start, end, shared=None):
+    """(windows, tag) for a notice claiming a window that repeats over a date range.
+
+    `windows` is None whenever the claim is not honoured, so a refusal is a pure
+    numeric no-op — the caller keeps the single [start, end] interval it would
+    have used anyway. That is what lets the checks below be as suspicious as they
+    are: the cost of disbelieving the model is zero, and the cost of believing a
+    hallucinated recurrence is a county's person-hours quietly falling by half.
+
+    The sharpest check is the cross-check on a scheduled end. The prompt requires
+    the reported end to be the last date *at the window's closing time*, so a
+    notice whose window_close disagrees with its own local_time has contradicted
+    itself, and the field that survives is the one the eval round validates.
+    A completion update has no such check available — its local_time is the
+    completion, not a window close — so those are honoured but reported
+    individually on every build.
+    """
+    claimed = row["end_recurrence"] == RECURRING
+    if claimed:
+        window = (row["end_window_open"], row["end_window_close"], row["end_window_first_date"])
+    elif shared is not None:
+        # borrowed from a sibling pin of the same event — see event_windows
+        window = shared
+    else:
+        return None, "none"
+
+    open_t, close_t, first_date = (
+        _parse_time(window[0]), _parse_time(window[1]), _parse_date(window[2])
+    )
+    if open_t is None or close_t is None or first_date is None:
+        return None, "refused: window fields missing or unparseable"
+    if open_t == close_t:
+        # a window covering the whole day is a continuous event; say so rather
+        # than inventing touching intervals that merge would rejoin anyway
+        return None, "refused: window covers the whole day"
+
+    # An inherited window faces the same cross-check as a claimed one: if a
+    # sibling's closing time disagrees with this pin's own scheduled end, the two
+    # notices are describing different things and the borrowed window is refused.
+    observed = row["end_source"] in OBSERVED_END_SOURCES
+    if not observed and _parse_time(row["end_local_time"]) != close_t:
+        return None, (
+            f"refused: close time {window[1]} != reported end time {row['end_local_time']}"
+        )
+
+    windows = daily_windows(first_date, open_t, close_t, start, end)
+    if len(windows) < 2:
+        # nearly every notice contains something like "from 9am until 5pm", so a
+        # one-window recurrence is the cheapest false positive to make and the
+        # least valuable to honour — it is just an interval
+        return None, "refused: single window in span"
+    if not claimed:
+        # every tag starts with "expanded" so the mixed-event check counts an
+        # inherited pin as expanded, which it is
+        return windows, "expanded_inherited"
+    return windows, "expanded_observed" if observed else "expanded"
+
+
 class Case(NamedTuple):
-    """A case row with its severity class and disruption interval resolved.
+    """A case row with its severity class and disruption intervals resolved.
 
     Splitting this out of the accumulation loop is what lets a county and a town
-    share one set of arithmetic: the interval a case contributes is a property of
-    the case alone, not of the geography it is being counted under.
+    share one set of arithmetic: the intervals a case contributes are a property
+    of the case alone, not of the geography it is being counted under.
+
+    `intervals` is a list because a notice can describe a *recurring* window —
+    "daily from 10pm until 7am, from 9 July to 27 July" is eighteen nights of nine
+    hours, not sixteen days of continuous outage. Every other case carries exactly
+    one interval and behaves as it always has. They are sorted and non-overlapping
+    on arrival; nothing downstream re-sorts them.
     """
 
     row: object
     sev: str
     ref: str
-    start: datetime
-    end: datetime
+    start: datetime  # publication, which is also where the intervals are anchored
+    intervals: list
     sas: dict
     has_end: bool
     observed_end: bool
+    rec: str = "none"  # recurrence outcome, for the build report
 
     @property
     def county(self):
@@ -417,8 +583,11 @@ class Case(NamedTuple):
         return self.row["status"] == "Open"
 
 
-def resolve_case(r, sa_index, lifts, now):
+def resolve_case(r, sa_index, lifts, now, shared_window=None):
     """A Case for one row, or None if it isn't an event at all.
+
+    `shared_window` is the recurring window this row's *event* reported, used
+    when this particular notice reported none of its own — see event_windows.
 
     The interval rules and their rationale are in
     notes/statuspage-methodology.md; this is the code they describe.
@@ -433,6 +602,7 @@ def resolve_case(r, sa_index, lifts, now):
     has_end = notice_to_end is not None
     # a paired boil-notice lift is an observed end too; set below
     observed_end = has_end and r["end_source"] in OBSERVED_END_SOURCES
+    rec = "none"
 
     if r["work_category"] == "boil_notice_issued":
         # This class never ends itself; boil_notice_fate owns the whole decision.
@@ -457,16 +627,28 @@ def resolve_case(r, sa_index, lifts, now):
             end = start + timedelta(seconds=1)
     else:
         end = start + min(timedelta(seconds=notice_to_end), cap)
+        # Recurrence lives strictly under has_end, which keeps it away from the
+        # branches above: a boil notice's end is a paired lift and never its own
+        # text, and the no-signal branches own the 532 cases whose span build.py
+        # nulled because the notice was published after its own works window.
+        windows, rec = recurring_intervals(r, start, end, shared_window)
+        if windows:
+            return Case(
+                row=r, sev=sev, ref=case_ref(r), start=start,
+                intervals=windows, sas=sa_index.affected(r["full_lat"], r["full_lon"]),
+                has_end=has_end, observed_end=observed_end, rec=rec,
+            )
 
     return Case(
         row=r,
         sev=sev,
-        ref=r["reference_num"] or f"id:{r['id']}",
+        ref=case_ref(r),
         start=start,
-        end=end,
+        intervals=[(start, end)],
         sas=sa_index.affected(r["full_lat"], r["full_lon"]),
         has_end=has_end,
         observed_end=observed_end,
+        rec=rec,
     )
 
 
@@ -482,6 +664,11 @@ class Region:
         self.sev_iv = defaultdict(list)
         self.iv = defaultdict(lambda: defaultdict(list))
         self.sas = defaultdict(lambda: defaultdict(dict))
+        # both are OR'd across an event's pins, which is what the monthly median
+        # wants (does this event carry *an* end signal at all?) but not what a
+        # per-event badge wants: DON00115765 has 18 pins of which 1 reported a
+        # completion, and the OR would call the whole thing observed. The top-ten
+        # page counts pins instead — see event_meta in build_site.
         self.has_end = defaultdict(lambda: defaultdict(bool))
         self.observed_end = defaultdict(lambda: defaultdict(bool))
         self.knock_refs = set()
@@ -490,8 +677,8 @@ class Region:
 
     def add(self, case, sas):
         sev, ref = case.sev, case.ref
-        self.sev_iv[sev].append((case.start, case.end))
-        self.iv[sev][ref].append((case.start, case.end))
+        self.sev_iv[sev].extend(case.intervals)
+        self.iv[sev][ref].extend(case.intervals)
         self.sas[sev][ref].update(sas)
         self.has_end[sev][ref] |= case.has_end
         self.observed_end[sev][ref] |= case.observed_end
@@ -604,6 +791,66 @@ def resolved_by_month(region, shown=None):
     return out
 
 
+TOP_EVENTS_SHOWN = 10
+
+
+def top_events(counties, event_meta, towns, ym, now, shown=TOP_EVENTS_SHOWN):
+    """The largest individual supply disruptions nationally in one month.
+
+    Nothing else on the site ranks a single event: person-hours are computed per
+    county and per area, and a reader who wants to know what actually happened in
+    July gets 26 county rows instead of the burst that caused them. In July 2026
+    the ten largest events were 21% of every person-hour lost nationally, one of
+    them 9% on its own, so the distribution is worth a page.
+
+    Person-hours are clipped to the month with the same bounds region_month uses,
+    not attributed whole to the month an event started, which keeps the ranking
+    summable against the county figures already published — "these ten are a fifth
+    of July" is only true under clipping. person_h comes from the unrounded span
+    for that reason, so multiplying the two displayed figures reproduces it to
+    within the rounding of `hours`, not exactly.
+
+    Keyed by (county, ref), not ref: 15 reference numbers span two counties, and
+    event_pop caps each half against its own county's population, so they are
+    genuinely separate accruals and two rows is the honest rendering.
+    """
+    lo, hi = month_bounds(ym)
+    eff_hi, eff_lo = min(hi, now), max(lo, COLLECTION_START)
+
+    rows = []
+    for county, region in counties.items():
+        events, epop = region.events()["outage"], region.event_pop(COUNTY_POP[county])
+        for ref, iv in events.items():
+            secs = union_seconds(iv, eff_lo, eff_hi)
+            people = epop["outage"].get(ref, 0)
+            if secs <= 0 or people <= 0:
+                continue
+            meta = event_meta[(county, ref)]
+            row = {
+                "ref": ref,
+                "county": county,
+                "title": meta["title"],
+                "person_h": round(secs * people / 3600),
+                "hours": round(secs / 3600, 1),
+                "people": people,
+                "start": meta["start"],
+                "pins": meta["pins"],
+                "confirmed": meta["confirmed"],
+                "scheduled": meta["scheduled"],
+            }
+            if towns is not None:
+                # dominant over the event's *unioned* footprint, unlike area_of's
+                # first-pin-wins — for an 18-pin event that is a better answer and
+                # costs one line
+                row["area"] = towns.label(
+                    towns.dominant(region.sas["outage"].get(ref, {}), county)
+                )
+            rows.append(row)
+
+    rows.sort(key=lambda r: r["person_h"], reverse=True)
+    return rows[:shown]
+
+
 def town_months(region, pop, months, now, placed=True):
     """Per-month figures for one area, only for the months it has activity in.
 
@@ -662,6 +909,100 @@ def county_town_data(regions, towns, county, months, now):
     return out
 
 
+def _window_label(case):
+    """"22:00-07:00 from 2026-07-09" — the window a case actually expanded on.
+
+    Read back off the intervals rather than the row, because an inherited window
+    is not in the row's own columns. Safe for any series the guard let through:
+    it requires two windows, so only the first interval's start and the last
+    one's end can be clipped, leaving intervals[1][0] and intervals[0][1] as true
+    window edges.
+    """
+    opens = case.intervals[1][0].astimezone(DUBLIN)
+    closes = case.intervals[0][1].astimezone(DUBLIN)
+    first = case.intervals[0][0].astimezone(DUBLIN).date()
+    return f"{opens:%H:%M}-{closes:%H:%M} from {first}"
+
+
+def recurrence_report(cases, pin_tags=None):
+    """Lines describing what claimed a recurring window and what was believed.
+
+    Printed on every build, matching backfill_work_category's unmatched-title
+    report: a prompt that starts hallucinating recurrence would otherwise show up
+    only as person-hours quietly falling, and the expanded count moving together
+    with the hour delta is what makes that visible within one build.
+
+    `pin_tags` maps (county, ref) to the outcome of *every* pin, including the
+    ones that never claimed a window. It has to, because the event this report
+    exists to catch is precisely one where a pin claimed nothing: DON00115765
+    published 17 notices describing a nightly window and one completion update
+    that described no window at all, and the completion pin's continuous interval
+    re-covered every gap the other seventeen carved out. A check that looked only
+    at pins with a claim could not see the pin doing the damage.
+
+    Empty when nothing claimed recurrence, so the test suite stays silent.
+    """
+    if not cases:
+        return []
+    expanded = [c for c in cases if c.rec.startswith("expanded")]
+    covered = sum((e - s).total_seconds() for c in expanded for s, e in c.intervals) / 3600
+    # what the continuous rule would have charged: publication to the capped end,
+    # which is the last window's close — the [(start, end)] the guard falls back to
+    elapsed = sum((c.intervals[-1][1] - c.start).total_seconds() for c in expanded) / 3600
+
+    inherited = sum(1 for c in cases if c.rec == "expanded_inherited")
+    claimed = len(cases) - inherited
+    lines = [
+        f"{claimed} notice(s) claim a recurring window"
+        + (f", {inherited} inherit one from a sibling pin:" if inherited else ":")
+    ]
+    if expanded:
+        lines.append(
+            f"  {len(expanded):>4} expanded  {covered:,.0f}h charged "
+            f"where the continuous rule charged {elapsed:,.0f}h"
+        )
+    # The two tiers with no cross-check behind them, listed case by case because
+    # they are the least-evidenced expansions on the site and few enough to read:
+    # a completion update states no window close to check against, and an
+    # inherited window was never stated by the notice it is applied to.
+    for tag, why in (("expanded_observed", "from a completion update (no cross-check)"),
+                     ("expanded_inherited", "using a window inherited from a sibling pin")):
+        tier = [c for c in expanded if c.rec == tag]
+        if not tier:
+            continue
+        lines.append(f"  {len(tier):>4} {why} — listed:")
+        for c in tier:
+            hours = sum((e - s).total_seconds() for s, e in c.intervals) / 3600
+            lines.append(
+                f"       {c.row['id']} {c.ref}  {_window_label(c)}, "
+                f"{len(c.intervals)} windows, {hours:.0f}h"
+            )
+    refusals = Counter(c.rec for c in cases if c.rec.startswith("refused"))
+    for reason, n in refusals.most_common():
+        lines.append(f"  {n:>4}x {reason}")
+
+    # An event's coverage is unioned across its pins, so one pin falling back to
+    # the continuous interval re-covers every gap the others carved out — the fix
+    # can land on 17 pins and be undone by the 18th. This is the only place that
+    # shows up, and it must count pins that made no claim at all.
+    mixed = sorted(
+        (key, tags) for key, tags in (pin_tags or {}).items()
+        if any(t.startswith("expanded") for t in tags)
+        and not all(t.startswith("expanded") for t in tags)
+    )
+    if mixed:
+        lines.append(
+            f"  ⚠ {len(mixed)} event(s) mix expanded and unexpanded pins — "
+            "the union keeps the continuous block:"
+        )
+        for (county, ref), tags in mixed:
+            n = sum(1 for t in tags if t.startswith("expanded"))
+            others = Counter(t for t in tags if not t.startswith("expanded"))
+            why = ", ".join(f"{v}x {k}" for k, v in others.most_common())
+            lines.append(f"       {county} {ref}  {n}/{len(tags)} pins expanded ({why})")
+    return lines
+
+
 def build_site(rows, sa_index, now, towns=None):
     months = month_list(COLLECTION_START, now)
 
@@ -673,12 +1014,41 @@ def build_site(rows, sa_index, now, towns=None):
     counties = defaultdict(Region)
     county_towns = defaultdict(lambda: defaultdict(Region))
     area_of = {}  # (county, ref) -> area code, so an open case can name its area
+    # (county, ref) -> title, start, and how each of the event's pins signalled
+    # its end. Kept out of Region, which is instantiated once per county *and*
+    # once per county-area — a couple of thousand times — and none of the area
+    # regions need any of this.
+    event_meta = {}
+    recurrence = []  # every pin that claimed a window, for the report's detail lines
+    # every pin's outcome, claimed or not — the mixed-event check needs the ones
+    # that made no claim, since those are what re-cover an expanded event's gaps
+    pin_tags = defaultdict(list)
+    shared = event_windows(rows)
 
     for r in rows:
-        case = resolve_case(r, sa_index, lifts, now)
+        case = resolve_case(r, sa_index, lifts, now, shared.get((r["county"], case_ref(r))))
         if case is None:
             continue
+        pin_tags[(case.county, case.ref)].append(case.rec)
+        if case.rec != "none":
+            recurrence.append(case)
         counties[case.county].add(case, case.sas)
+        if case.sev == "outage":
+            meta = event_meta.setdefault(
+                (case.county, case.ref),
+                # first pin wins, matching how the event's open entry is recorded
+                {"title": r["title"], "start": r["start_date"][:10], "first_pub": case.start,
+                 "pins": 0, "confirmed": 0, "scheduled": 0},
+            )
+            meta["pins"] += 1
+            # the earliest publication across the event's pins, which is what
+            # "started this month" means for the completion median. Not
+            # setdefault: rows arrive in id order, not start_date order.
+            meta["first_pub"] = min(meta["first_pub"], case.start)
+            if case.observed_end:
+                meta["confirmed"] += 1
+            elif case.has_end:
+                meta["scheduled"] += 1
         if towns is not None:
             code = towns.dominant(case.sas, case.county)
             county_towns[case.county][code].add(case, towns.within(case.sas, code))
@@ -754,8 +1124,18 @@ def build_site(rows, sa_index, now, towns=None):
             # what was announced, so the two are never pooled.
             observed_h, scheduled_h = [], []
             for ref, iv in events["outage"].items():
-                if not (region.has_end["outage"][ref] and lo <= iv[0][0] < hi):
+                # an empty interval list would not raise here, it would quietly
+                # contribute a 0.0 and drag the published median toward zero
+                if not iv:
                     continue
+                # publication, not iv[0][0]: a recurring event's first *window*
+                # can open in the month after the notice went up, and the median
+                # is over events that started this month
+                if not (region.has_end["outage"][ref]
+                        and lo <= event_meta[(county, ref)]["first_pub"] < hi):
+                    continue
+                # covered hours, not elapsed span — for a recurring event these
+                # differ, and what the works took is the honest reading
                 hours = sum((e - s).total_seconds() for s, e in iv) / 3600
                 if region.observed_end["outage"][ref]:
                     observed_h.append(hours)
@@ -776,6 +1156,17 @@ def build_site(rows, sa_index, now, towns=None):
     for ym in months:
         site["national"][ym] = span_stats(national_observed[ym], national_scheduled[ym])
 
+    # Complete months only. The in-progress month reshuffles between builds as
+    # open events accrue toward the 14-day cap and then resolve, so a "largest
+    # disruptions of this month" list would contradict itself twice a day.
+    current = now.strftime("%Y-%m")
+    site["top"] = {
+        ym: top_events(counties, event_meta, towns, ym, now)
+        for ym in months
+        if ym < current
+    }
+    site["recurrence_report"] = recurrence_report(recurrence, pin_tags)
+
     return site
 
 
@@ -788,7 +1179,8 @@ def load_cases(conn):
                c.full_lat, c.full_lon,
                c.boil_water_notice, c.do_not_drink, c.water_restrictions,
                c.reduced_pressure,
-               i.notice_to_end_seconds, i.end_source, i.end_local_date
+               i.notice_to_end_seconds, i.end_source, i.end_local_date, i.end_local_time,
+               i.end_recurrence, i.end_window_open, i.end_window_close, i.end_window_first_date
         FROM cases c
         LEFT JOIN inferred_cases i ON i.case_id = c.id
         WHERE c.county IS NOT NULL AND c.start_date IS NOT NULL
@@ -802,6 +1194,10 @@ def run():
     with sqlite3.connect(DB_PATH) as conn:
         rows = load_cases(conn)
     site = build_site(rows, sa_index, datetime.now(timezone.utc), towns)
+
+    # a diagnostic for the build log, not for the page
+    for line in site.pop("recurrence_report"):
+        print(line)
 
     SITE_DIR.mkdir(parents=True, exist_ok=True)
     (SITE_DIR / "data.js").write_text("window.UISCE_DATA = " + json.dumps(site) + ";")

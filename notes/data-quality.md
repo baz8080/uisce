@@ -135,6 +135,47 @@ Each rule's `work_type` policy is one of:
 
 The rules are static rather than recomputed each run, to avoid a feedback loop where overridden values feed the next run's purity statistics — revisit the `work_type` policies manually if the feed's labelling behaviour changes.
 
+### A missing variant was silently inventing supply outages (found 2026-08-01)
+
+A title no rule claims gets a NULL `work_category`, and NULL used to sit in `REPAIR_CATS` in `site.py` — so any spelling the table missed was classified as an **unplanned repair, i.e. a hard supply outage**, and accrued full person-hours. The failure was invisible because the affected cases still appeared on the site; they just appeared as the wrong thing.
+
+66 cases across 46 distinct titles were unmatched on the 2026-07-31 snapshot. Almost every one was a near-miss on a slug that already existed: `Water Conservation/Restriction` against the rule's plural `.../Restrictions` (19 cases — the largest group, and *restrictions are degraded, they accrue nothing*), the US spelling `Discoloration`, the feed's own typo `Essential Maintrnance Works`, singular `Main Repair Works` / `Main Flushing`, a stray leading article in `A Water Treatment Plant Interruption`, and bare `Valve Failure` / `Valve Replacement` / `Meter Installation` / `Mains Rehabilitation`. Three genuinely new slugs were added — `reservoir_works` (cleaning and upgrades, which must *not* share `reservoir_interruption`'s place in `HARD_CATS`), `water_treatment_plant_upgrade`, and `consumption_notice_lifted`.
+
+The last of those exposed a second, sharper bug: `Lifting of Do Not Consume Notice - Cork` was stored as `consumption_notice_issued` — a lift recorded as the notice being *issued*, the opposite claim, and one that knocks a grade. It was a stale value from an earlier rule set, surviving because `backfill_work_category` only ever sets a slug and never clears one. That is fine for additive rule changes and is why the table must only ever grow; a rename needs its own migration.
+
+Two changes stop this recurring. NULL no longer groups with the repairs — an unparseable title now falls through to `maintenance` and accrues nothing, on the grounds that a title of literally `"unknown"` evidences nothing and a fail-loud default fabricates downtime. And `backfill_work_category` prints every unmatched title prefix with a count on each run, so a new spelling is visible in the build log within one cycle. That guard found `Lifting of Do Not Consume Notice` on its very first run.
+
+Net effect on the July 2026 figures: national person-hours 27,505,846 → 26,898,291 (**−2.2%**), of which −1.9% is the slug fixes and −0.3% the NULL default. Eleven cases remain unmatched and correctly so: eight titled `unknown`, one bare reference number, one `Gorteen, Mullingar`, one `Supply Re-direction`.
+
+## Recurring windows were charged as continuous outages (found 2026-08-01)
+
+147 of 9,183 notices (1.6%) describe a window that *repeats* over a date range — "Works are now scheduled to take place daily from 10pm until 7am, from 9 July to 27 July". Until prompt v3 the pipeline had nowhere to put that, so it charged the whole range as one continuous block.
+
+The extraction was never at fault. The v2 prompt already had a "Recurring windows" section instructing the model to report the last date at the window's closing time, and it did so correctly — `end_notes` on all 18 pins of `DON00115765` reads *"The text describes a recurring nightly…"*. The loss was in the **representation**: a single end instant cannot express a repeating schedule, and `notice_to_end_seconds` is by construction the span from publication to that instant.
+
+The distortion is small in count and large in effect, because the affected notices are the *longest* ones (median charged span 167h, max 2,826h) and person-hours are span × population. Measured on the 2026-07-31 snapshot: 6 outage-class events accounted for **9.9% of July's national person-hours**, and one of them — `DON00115765`, 18 nights of 10pm–7am — was 2.54M person-hours on its own: 9.9% nationally, 69% of Donegal, and the top row of the national ranking.
+
+### What the v3 corpus run delivered (2026-08-02)
+
+97 notices claimed a window, 3 more inherited one, and 99 expanded — cutting 20,448 charged hours to 8,418.
+
+| | before v3 | first run | after window sharing |
+|---|---|---|---|
+| national July person-hours | 26,898,291 | 26,780,519 (−0.4%) | **25,395,359 (−5.6%)** |
+| Donegal July | 3,700,792 / 97.023% | 3,504,101 / 97.181% | **2,118,941 / 98.295%** |
+| `DON00115765` | 2,540,854 @ 385.2h | 2,334,984 @ 354.0h | **949,824 @ 144.0h** |
+| Donegal per-capita | 22,156 h/1k | 20,972 h/1k | **12,682 h/1k** |
+
+The middle column is why the sharing step exists, and it is the more instructive number.
+
+**The first run barely moved anything, for two separate reasons.** Most recurring notices never accrued in the first place — 81 of the 147 candidates are `water_conservation`, which is degraded — so most of the saved hours were hours nobody was charged for. And more seriously, **a completion-update pin blocked its own event**: the model reports `recurrence: "none"` on a notice whose text says the works are complete, which is defensible in isolation since there is no forward schedule left to state. But expansion is decided per notice while coverage is unioned per `reference_num`, so that one pin's continuous interval re-covered every gap its seventeen siblings had carved out, and `DON00115765` kept 354h of its 385.2h. Three events nationally were stuck this way, and the blocking pin was a `completion_update` in all three.
+
+**The repair is that a window belongs to the works, not to the notice.** `event_windows` collects the window any pin of a `reference_num` reported and lends it to pins that reported none; the borrowed series is still clipped to the borrowing pin's own start and end, so the completion pin takes the schedule and then stops at the moment it says the works stopped. Inherited windows face the same cross-check as claimed ones, are refused on the same terms, and are listed case by case on every build — they are the least-evidenced expansions the site makes. Where pins disagree the commonest window wins, ties broken by sorting; no event in the corpus currently disagrees, and the rule exists so that one cannot resolve itself differently between builds.
+
+That closes the county-ordering problem this started from. Donegal was 22,156 person-hours per 1,000 residents against Clare's 9,588 — more than double, on the strength of one notice's missing field. It is now 12,682 against 9,588, the same order as its neighbours, which is what `notes/statuspage-methodology.md` promises readers county ordering means.
+
+The per-build report names any event whose pins still disagree. It did not at first: the check only inspected pins that had *claimed* a window, so a pin claiming nothing — exactly the pin doing the damage, and tagged indistinguishably from a burst main — was invisible to it. Fixed, with a test for that pin.
+
 ## The feed began (or was purged) around 2026-04-20 — earlier months are unobservable
 
 Daily case counts jump from ~0 to 100+ per day on exactly 2026-04-20 (one stray case from 2026-04-07). Verified 2026-07-16 against the live feed: this is **not** a rolling retention window — the feed still contains all 876 cases with STARTDATE before 2026-05-01 and all 24 pre-April cases the DB knows, exactly matching the DB, so **nothing has been deleted since collection began**. The feed itself evidently started (or was emptied) around mid-April 2026; the handful of older cases are long-lived carryovers such as active boil notices from 2025. Consequences: weekly snapshots currently miss nothing; "April 2026" is still really ten observed days, so any per-month metric must clip its measurement window to [2026-04-20, now] or early months look artificially healthy — this artifact, not a real deterioration, fully explained an apparent month-on-month decline in the status site's grades before the clip was added. Every boil-notice *lift* currently on file refers to a notice issued before the feed window opened. The pipeline now stamps `first_seen`/`last_seen` on every case as a tripwire: if `last_seen` ever stops advancing for cases still marked open, the operator has started pruning and snapshot frequency needs rethinking.

@@ -162,6 +162,65 @@ window closes 1 August 09:00, a date absent from the text), but no round-1 case 
   deliberate exception to the never-overwrite rule, taken because the file is the measuring
   instrument for every future prompt and the defects cost ~4 points on any version.
 
+### 2026-08-01 — pv3 replay (the gate before the v3 corpus run)
+
+pv3 adds four window fields and **leaves `local_date` and `local_time` meaning exactly what
+they meant in pv2**, which is the whole reason replay can validate it with no new labelling:
+the three fields the harness scores are unchanged, so any drop is the new fields disturbing
+the old ones. Both rounds were replayed before committing five hours to a corpus run.
+
+| round | draw | pv1 | pv2 | **pv3** |
+|---|---|---|---|---|
+| round 1 (N=114) | stratified | 81/114 = 71.1% | 99/114 = 86.8% | **99/114 = 86.8%** |
+| round 1, excl. `lifted_immediate` | | 81/99 = 81.8% | 99/99 = 100% | **99/99 = 100%** |
+| round 2 (N=120) | uniform, unseen | — | 120/120 = 100% | **120/120 = 100%** |
+
+**pv3 is indistinguishable from pv2 on both rounds** — identical totals, identical per-class
+splits, zero parse errors across 234 replayed rows. That is the result the gate wanted: seven
+output fields do not degrade the four that already worked. It is *not* evidence that pv3 is
+better, and the 86.8% is not comparable to round 1's 71.9% headline (different scoring; see
+the pv2 replay section above). The 15 misses are the same `lifted_immediate` convention rows,
+excluded from site metrics by the 2026-07-18 decision.
+
+**Round 1 is also the only labelled data touching recurring windows** — 8 rows, against 1 in
+round 2. pv1 got all 8 wrong (backlog item 2); pv2 fixed them; pv3 holds all 8, including the
+two where pv1 had the *date* wrong (238075 said 17 July for a 27 July range; 238256 said 13
+July for 17 July). Between them they cover the variants that matter: `until`/`between … and`
+ranges, the feed's `unil` typo, a half-hour close (05:30), a non-crossing daytime window
+(09:00–18:00), and windows the notice calls "daily" while they run 10pm–7am.
+
+That last point is what the window fields rest on. The human-corrected `local_time` on all
+eight rows *is* the window's closing time — 09:00, 08:00, 18:00, 07:00, 07:00, 07:00, 08:00,
+05:30 — and pv3 reproduces each exactly. So the cross-check in `recurring_intervals`
+(a scheduled end whose `window_close` disagrees with its own `local_time` is disbelieved) is
+validated against eight labelled cases rather than against a reading of the prompt. The window
+fields themselves are still unlabelled; this validates their premise, not their values.
+
+**The prompt now has a size budget, and v3 spent most of it.** pv2's prompt was 6,255 chars;
+v3 is 9,746 — about 875 extra input tokens on every one of ~7,700 calls, which is also most of
+why per-call time went 2.4s to 5.41s and the corpus run took 11 hours rather than 5.
+
+At LM Studio's default 4,096-token context that pushed the longest notices over the edge. The
+corpus run failed 29 cases and the separation was almost perfectly by length: every failure
+had a description of 4,216 chars or more, against a corpus median of 600, and only 4 of the
+9,154 successes were that long. Worst case is ~2,440 prompt tokens + ~1,270 description = 3,720
+in, leaving ~380 for an output whose first field is a reasoning string — hence two failure
+kinds, 19 HTTP 400s (input alone overflows) and 10 unterminated-JSON parse errors (input fits,
+output is cut). **Raised to 8,192 and the 29 re-ran clean**; the corpus is now uniformly pv3.
+
+They changed nothing that matters — 26 came back `not_found` and 23 were boil notices, whose
+end is a paired lift rather than their own text, so July's figures and the national top ten are
+byte-identical either way. The lesson is for the next prompt change: check the longest
+descriptions against the context before starting a corpus run, not after.
+
+One case worth remembering: **238256, "daily from 10pm until 7am until 17 July", states no
+first date**. `window_first_date` has nothing to extract, so the guard refuses and the case
+keeps its continuous interval — the safe direction, and a reminder that expansion is
+opportunistic rather than universal.
+
+Replay CSVs: `..._pv1_replay_gemma-4-12b-qat_pv3.csv` and `..._pv2_replay_gemma-4-12b-qat_pv3.csv`
+in `data/eval/`.
+
 ## Sampling a fresh round without re-inferring the corpus
 
 `uisce-eval-sample` draws from `inferred_cases`, so a round showing a new prompt's behaviour
@@ -190,6 +249,51 @@ specific minority class are the question.
 - **The skip-logic trap is fixed** (old item 4). `get_last_hash_by_case_id` now returns `(description_hash, prompt_version)` per case and `get_cases_needing_inference` compares both, so a version bump re-infers the corpus; `uisce-infer` also gained `--force` and `--limit`. Verified against the live DB: pv2 flags all 7,552 cases where pv1 flagged 0. Records written before this change carry no `prompt_version` and read as `None`, so they re-infer too.
 - **`uisce-eval-replay` added** (`src/uisce/eval_replay.py`) for step 2 below. Ground truth per row is the human correction on `incorrect` rows and the endorsed model fields on `correct` rows; `unsure` rows are dropped; times compare at minute precision because some human labels carry seconds. Scoring logic is unit-tested without the model.
 
+### pv3 adds the recurring window itself (2026-08-01)
+
+v2 already recognised a repeating window and reported the last date at its closing time,
+correctly. What it could not do is say *what the window was*, so `site.py` had no choice but
+to charge the whole range as one continuous outage — 385h for eighteen 10pm–7am nights on
+`DON00115765`, which made one event 9.9% of July's national person-hours. See the recurring
+windows section of [data-quality.md](data-quality.md).
+
+v3 adds four fields — `recurrence`, `window_open`, `window_close`, `window_first_date` — and
+**deliberately leaves `local_date` and `local_time` meaning exactly what they meant in v2**.
+That is what lets `uisce-eval-replay` validate v3 against the pv2 round with no new labelling:
+the three fields it scores are unchanged, so a drop from 120/120 means the new fields have
+disturbed the old ones. Run that before spending five hours on a corpus run.
+
+The window fields are **outside the eval loop** — `FIELDNAMES` carries only the end-time
+triple, so no round labels them. That is the honest reason the guard refuses by default:
+believing a hallucinated recurrence silently halves a county's person-hours, and disbelieving
+a real one costs nothing but the status quo.
+
+Three checks stand in for a labelled round, and between them they cover more than the phrase
+"unvalidated" suggests:
+
+1. **The close-time cross-check** in `recurring_intervals` — a scheduled end whose window close
+   disagrees with its own reported end time is disbelieved. Validated against 8 labelled
+   round-1 rows where the human-corrected `local_time` *is* the window's closing time.
+2. **`unquotable_windows` in `build.py`** — every window value should be quotable from the
+   description the model read, so a reported "22:00" appearing nowhere in the text was
+   invented. This needs no labelled data at all and runs on every build. On the v3 corpus:
+   **89 of 97 fully quotable, 0 flagged**, and the 8 exceptions are one Tipperary event whose
+   text gives no first date at all ("nightly from 8pm until 10am until 5 August"), where the
+   model substitutes the publication date — counted separately as inert, because
+   `daily_windows` clamps the series start to publication anyway and the value cannot move a
+   figure.
+3. **The per-build recurrence report** in `site.py` — expanded and refused counts, the
+   before/after hour totals, and any event whose pins disagree.
+
+What none of them measure is **recall**: a window the model missed entirely. That is now the
+failure mode that costs money, since the guard already makes false positives cheap to refuse,
+and it is what a labelled round should target. The pool is small and known — 56 notices whose
+description matches the recurrence pattern but which the model called `none`, of which 39 are
+`water_conservation` (degraded, a miss costs nothing) and roughly 9 are outage-class. 55 of the
+56 are `completion_update`, the pattern cross-pin inheritance already rescues wherever a
+sibling claimed a window. So the high-value round is those ~9 plus a sample of the 97 claimed,
+not all 153.
+
 ### Validated 2026-07-19 — the prompt is settled, `PROMPT_VERSION` stays at 2
 
 Step 1 is done: the replay above shows pv2 beating pv1 on every class that feeds a duration,
@@ -204,6 +308,19 @@ Round 2 came in at 120/120 (see Results). The gate we set before spending four h
 inference was passed, and the corpus run followed: all 8,130 inferred cases now carry
 `end_prompt_version = 2`. `PROMPT_VERSION` stays at 2: the prompt was never edited during
 validation. Nothing in this workflow is pending.
+
+### Superseded by pv3 — corpus run 2026-08-01
+
+The two sections above describe the pv2 end state and are kept as the record of it. pv3 does
+not revisit any of it: the end-time triple is unchanged and replayed identically on both
+rounds (see the pv3 replay entry in Results). What pv3 adds is the recurring *window*, which
+pv2 could recognise but had no field to report — see the recurring-windows section of
+[data-quality.md](data-quality.md) for why that mattered enough to spend a second corpus run on.
+
+Neither round labels the window fields, so no accuracy claim exists for them. Their guard is
+the close-time cross-check and the per-build recurrence report. **The next labelling round
+should stratify on `recurrence`**, which needs a `FIELDNAMES` extension and a quota key —
+until then the four new fields are outside the eval loop by construction, not by oversight.
 
 <details>
 <summary>Original handoff for round 2 (completed 2026-07-19)</summary>
