@@ -458,7 +458,44 @@ def _parse_date(value):
         return None
 
 
-def recurring_intervals(row, start, end):
+def case_ref(row):
+    """The key that groups a multi-pin publication into one event."""
+    return row["reference_num"] or f"id:{row['id']}"
+
+
+def event_windows(rows):
+    """{(county, ref): (open, close, first_date)} for events any pin gave a window.
+
+    A repeating window is a property of the *works*, not of the notice that
+    happens to describe them. Uisce publishes one event as many pins over several
+    days, and the pin carrying the completion update reports no window at all —
+    reasonably, since a finished job has no forward schedule left to state. But
+    coverage is unioned per reference_num, so that one pin's continuous interval
+    re-covers every gap its siblings carved out: on the first v3 run
+    DON00115765 had 17 of 18 pins expanded and still kept 354h of its 385h.
+
+    So a pin with no window of its own borrows one its siblings reported. It is
+    still clipped to that pin's own start and end, which is what makes this safe
+    rather than a guess — the completion pin inherits the schedule and then stops
+    at the moment it says the works stopped.
+
+    Where pins disagree the commonest window wins, ties broken by sorting so a
+    rebuild is reproducible. No event in the corpus currently disagrees; the rule
+    exists so that one does not resolve itself differently build to build.
+    """
+    claims = defaultdict(list)
+    for r in rows:
+        if r["end_recurrence"] == RECURRING:
+            claims[(r["county"], case_ref(r))].append(
+                (r["end_window_open"], r["end_window_close"], r["end_window_first_date"])
+            )
+    return {
+        key: max(sorted(set(windows)), key=windows.count)
+        for key, windows in claims.items()
+    }
+
+
+def recurring_intervals(row, start, end, shared=None):
     """(windows, tag) for a notice claiming a window that repeats over a date range.
 
     `windows` is None whenever the claim is not honoured, so a refusal is a pure
@@ -475,12 +512,18 @@ def recurring_intervals(row, start, end):
     completion, not a window close — so those are honoured but reported
     individually on every build.
     """
-    if row["end_recurrence"] != RECURRING:
+    claimed = row["end_recurrence"] == RECURRING
+    if claimed:
+        window = (row["end_window_open"], row["end_window_close"], row["end_window_first_date"])
+    elif shared is not None:
+        # borrowed from a sibling pin of the same event — see event_windows
+        window = shared
+    else:
         return None, "none"
 
-    open_t = _parse_time(row["end_window_open"])
-    close_t = _parse_time(row["end_window_close"])
-    first_date = _parse_date(row["end_window_first_date"])
+    open_t, close_t, first_date = (
+        _parse_time(window[0]), _parse_time(window[1]), _parse_date(window[2])
+    )
     if open_t is None or close_t is None or first_date is None:
         return None, "refused: window fields missing or unparseable"
     if open_t == close_t:
@@ -488,11 +531,13 @@ def recurring_intervals(row, start, end):
         # than inventing touching intervals that merge would rejoin anyway
         return None, "refused: window covers the whole day"
 
+    # An inherited window faces the same cross-check as a claimed one: if a
+    # sibling's closing time disagrees with this pin's own scheduled end, the two
+    # notices are describing different things and the borrowed window is refused.
     observed = row["end_source"] in OBSERVED_END_SOURCES
     if not observed and _parse_time(row["end_local_time"]) != close_t:
         return None, (
-            f"refused: close time {row['end_window_close']} "
-            f"!= reported end time {row['end_local_time']}"
+            f"refused: close time {window[1]} != reported end time {row['end_local_time']}"
         )
 
     windows = daily_windows(first_date, open_t, close_t, start, end)
@@ -501,6 +546,10 @@ def recurring_intervals(row, start, end):
         # one-window recurrence is the cheapest false positive to make and the
         # least valuable to honour — it is just an interval
         return None, "refused: single window in span"
+    if not claimed:
+        # every tag starts with "expanded" so the mixed-event check counts an
+        # inherited pin as expanded, which it is
+        return windows, "expanded_inherited"
     return windows, "expanded_observed" if observed else "expanded"
 
 
@@ -537,8 +586,11 @@ class Case(NamedTuple):
         return self.row["status"] == "Open"
 
 
-def resolve_case(r, sa_index, lifts, now):
+def resolve_case(r, sa_index, lifts, now, shared_window=None):
     """A Case for one row, or None if it isn't an event at all.
+
+    `shared_window` is the recurring window this row's *event* reported, used
+    when this particular notice reported none of its own — see event_windows.
 
     The interval rules and their rationale are in
     notes/statuspage-methodology.md; this is the code they describe.
@@ -582,10 +634,10 @@ def resolve_case(r, sa_index, lifts, now):
         # branches above: a boil notice's end is a paired lift and never its own
         # text, and the no-signal branches own the 532 cases whose span build.py
         # nulled because the notice was published after its own works window.
-        windows, rec = recurring_intervals(r, start, end)
+        windows, rec = recurring_intervals(r, start, end, shared_window)
         if windows:
             return Case(
-                row=r, sev=sev, ref=r["reference_num"] or f"id:{r['id']}", start=start,
+                row=r, sev=sev, ref=case_ref(r), start=start,
                 intervals=windows, sas=sa_index.affected(r["full_lat"], r["full_lon"]),
                 has_end=has_end, observed_end=observed_end, rec=rec,
             )
@@ -593,7 +645,7 @@ def resolve_case(r, sa_index, lifts, now):
     return Case(
         row=r,
         sev=sev,
-        ref=r["reference_num"] or f"id:{r['id']}",
+        ref=case_ref(r),
         start=start,
         intervals=[(start, end)],
         sas=sa_index.affected(r["full_lat"], r["full_lon"]),
@@ -860,6 +912,21 @@ def county_town_data(regions, towns, county, months, now):
     return out
 
 
+def _window_label(case):
+    """"22:00-07:00 from 2026-07-09" — the window a case actually expanded on.
+
+    Read back off the intervals rather than the row, because an inherited window
+    is not in the row's own columns. Safe for any series the guard let through:
+    it requires two windows, so only the first interval's start and the last
+    one's end can be clipped, leaving intervals[1][0] and intervals[0][1] as true
+    window edges.
+    """
+    opens = case.intervals[1][0].astimezone(DUBLIN)
+    closes = case.intervals[0][1].astimezone(DUBLIN)
+    first = case.intervals[0][0].astimezone(DUBLIN).date()
+    return f"{opens:%H:%M}-{closes:%H:%M} from {first}"
+
+
 def recurrence_report(cases, pin_tags=None):
     """Lines describing what claimed a recurring window and what was believed.
 
@@ -886,20 +953,31 @@ def recurrence_report(cases, pin_tags=None):
     # which is the last window's close — the [(start, end)] the guard falls back to
     elapsed = sum((c.intervals[-1][1] - c.start).total_seconds() for c in expanded) / 3600
 
-    lines = [f"{len(cases)} notice(s) claim a recurring window:"]
+    inherited = sum(1 for c in cases if c.rec == "expanded_inherited")
+    claimed = len(cases) - inherited
+    lines = [
+        f"{claimed} notice(s) claim a recurring window"
+        + (f", {inherited} inherit one from a sibling pin:" if inherited else ":")
+    ]
     if expanded:
         lines.append(
             f"  {len(expanded):>4} expanded  {covered:,.0f}h charged "
             f"where the continuous rule charged {elapsed:,.0f}h"
         )
-    observed = [c for c in expanded if c.rec == "expanded_observed"]
-    if observed:
-        lines.append(f"  {len(observed):>4} from a completion update (no cross-check — listed):")
-        for c in observed:
+    # The two tiers with no cross-check behind them, listed case by case because
+    # they are the least-evidenced expansions on the site and few enough to read:
+    # a completion update states no window close to check against, and an
+    # inherited window was never stated by the notice it is applied to.
+    for tag, why in (("expanded_observed", "from a completion update (no cross-check)"),
+                     ("expanded_inherited", "using a window inherited from a sibling pin")):
+        tier = [c for c in expanded if c.rec == tag]
+        if not tier:
+            continue
+        lines.append(f"  {len(tier):>4} {why} — listed:")
+        for c in tier:
             hours = sum((e - s).total_seconds() for s, e in c.intervals) / 3600
             lines.append(
-                f"       {c.row['id']} {c.ref}  {c.row['end_window_open']}-"
-                f"{c.row['end_window_close']} from {c.row['end_window_first_date']}, "
+                f"       {c.row['id']} {c.ref}  {_window_label(c)}, "
                 f"{len(c.intervals)} windows, {hours:.0f}h"
             )
     refusals = Counter(c.rec for c in cases if c.rec.startswith("refused"))
@@ -948,9 +1026,10 @@ def build_site(rows, sa_index, now, towns=None):
     # every pin's outcome, claimed or not — the mixed-event check needs the ones
     # that made no claim, since those are what re-cover an expanded event's gaps
     pin_tags = defaultdict(list)
+    shared = event_windows(rows)
 
     for r in rows:
-        case = resolve_case(r, sa_index, lifts, now)
+        case = resolve_case(r, sa_index, lifts, now, shared.get((r["county"], case_ref(r))))
         if case is None:
             continue
         pin_tags[(case.county, case.ref)].append(case.rec)

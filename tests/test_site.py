@@ -8,6 +8,7 @@ from uisce.site import (
     build_site,
     classify,
     daily_windows,
+    event_windows,
     grade,
     merge,
     month_bounds,
@@ -864,3 +865,104 @@ class TestRecurrenceReport:
     def test_an_event_whose_pins_all_expand_is_not_flagged(self):
         report = "\n".join(self._report([_recurring(id=1), _recurring(id=2)]))
         assert "mix expanded" not in report
+
+
+class TestSharedWindows:
+    """A repeating window belongs to the works, not to the notice describing them.
+
+    Uisce publishes one event as many pins over several days, and the pin
+    carrying the completion update reports no window — reasonably, since a
+    finished job has no forward schedule. But coverage is unioned per
+    reference_num, so that pin's continuous interval re-covers every gap its
+    siblings carved out: DON00115765 had 17 of 18 pins expanded on the first v3
+    run and still kept 354h of its 385h.
+    """
+
+    def _completion_pin(self, **overrides):
+        """A pin of the same event reporting a completion and no window.
+
+        Published 1 May 00:00Z, complete 8 May 03:00 local = 02:00Z — deliberately
+        *inside* the 22:00-07:00 night window, so the inherited series has to be
+        truncated mid-window at the completion rather than run to 07:00.
+        """
+        return _case(id=2, end_source="completion_update", end_local_date="2026-05-08",
+                     end_local_time="03:00", notice_to_end_seconds=170 * 3600.0, **overrides)
+
+    def test_a_pin_with_no_window_inherits_one_from_its_sibling(self):
+        rows = [_recurring(id=1), self._completion_pin()]
+        shared = event_windows(rows)
+        case = resolve_case(rows[1], SA_INDEX, {}, NOW, shared[("Carlow", "CAR00000001")])
+        assert case.rec == "expanded_inherited"
+        assert len(case.intervals) > 1
+
+    def test_the_inherited_window_still_stops_at_the_pin_s_own_end(self):
+        """This is what makes borrowing safe rather than a guess: the completion
+        pin takes the schedule and then stops when it says the works stopped."""
+        rows = [_recurring(id=1), self._completion_pin()]
+        shared = event_windows(rows)
+        case = resolve_case(rows[1], SA_INDEX, {}, NOW, shared[("Carlow", "CAR00000001")])
+        # the final night is cut at the completion instant, not run to its 07:00 close
+        assert case.intervals[-1] == (_dt("2026-05-07T21:00:00+00:00"),
+                                      _dt("2026-05-08T02:00:00+00:00"))
+
+    def test_the_whole_event_expands_once_the_last_pin_inherits(self):
+        rows = [_recurring(id=1), self._completion_pin()]
+        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["person_h"] == 63 * 1000  # not the ~170h continuous block
+
+    def test_an_event_no_pin_gave_a_window_is_untouched(self):
+        """Inheritance must not invent a window for an ordinary event."""
+        rows = [_case(id=1), _case(id=2)]
+        assert event_windows(rows) == {}
+        case = resolve_case(rows[0], SA_INDEX, {}, NOW, None)
+        assert case.rec == "none"
+        assert len(case.intervals) == 1
+
+    def test_a_window_is_not_shared_across_different_events(self):
+        rows = [_recurring(id=1), _case(id=2, reference_num="CAR00000002")]
+        shared = event_windows(rows)
+        assert ("Carlow", "CAR00000002") not in shared
+
+    def test_an_inherited_window_faces_the_same_cross_check(self):
+        """If a sibling's closing time disagrees with this pin's own scheduled
+        end, the two notices describe different things and the loan is refused."""
+        rows = [_recurring(id=1), _case(id=2, end_source="scheduled_end_with_time",
+                                        end_local_time="15:00", end_local_date="2026-05-08",
+                                        notice_to_end_seconds=170 * 3600.0)]
+        shared = event_windows(rows)
+        case = resolve_case(rows[1], SA_INDEX, {}, NOW, shared[("Carlow", "CAR00000001")])
+        assert case.rec.startswith("refused")
+        assert len(case.intervals) == 1
+
+    def test_a_pin_with_no_end_signal_never_inherits(self):
+        """Recurrence lives under has_end. An open case accruing to now must keep
+        that behaviour whatever its siblings reported."""
+        rows = [_recurring(id=1), _case(id=2, status="Open", notice_to_end_seconds=None,
+                                        end_source="not_found", end_local_date=None)]
+        shared = event_windows(rows)
+        case = resolve_case(rows[1], SA_INDEX, {}, NOW, shared[("Carlow", "CAR00000001")])
+        assert case.rec == "none"
+        assert len(case.intervals) == 1
+
+    def test_the_commonest_window_wins_when_pins_disagree(self):
+        """No event in the corpus disagrees today; the rule exists so that one
+        does not resolve itself differently from build to build."""
+        rows = [
+            _recurring(id=1), _recurring(id=2),
+            _recurring(id=3, end_window_open="20:00", end_window_close="06:00",
+                       end_local_time="06:00"),
+        ]
+        assert event_windows(rows)[("Carlow", "CAR00000001")] == ("22:00", "07:00", "2026-05-01")
+
+    def test_an_inherited_pin_counts_as_expanded_in_the_report(self):
+        """Its tag has to start with "expanded" or the mixed-event check would
+        flag the very event inheritance just repaired."""
+        rows = [_recurring(id=1), self._completion_pin()]
+        shared = event_windows(rows)
+        cases = [resolve_case(r, SA_INDEX, {}, NOW, shared.get(("Carlow", "CAR00000001")))
+                 for r in rows]
+        tags = {("Carlow", "CAR00000001"): [c.rec for c in cases]}
+        report = "\n".join(recurrence_report([c for c in cases if c.rec != "none"], tags))
+        assert "mix expanded" not in report
+        assert "inherit one from a sibling pin" in report
+        assert "22:00-07:00 from 2026-05-01" in report

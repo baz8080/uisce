@@ -155,25 +155,26 @@ The extraction was never at fault. The v2 prompt already had a "Recurring window
 
 The distortion is small in count and large in effect, because the affected notices are the *longest* ones (median charged span 167h, max 2,826h) and person-hours are span × population. Measured on the 2026-07-31 snapshot: 6 outage-class events accounted for **9.9% of July's national person-hours**, and one of them — `DON00115765`, 18 nights of 10pm–7am — was 2.54M person-hours on its own: 9.9% nationally, 69% of Donegal, and the top row of the national ranking.
 
-### What the v3 corpus run actually delivered (2026-08-02)
+### What the v3 corpus run delivered (2026-08-02)
 
-Less than the projection, and the gap is the interesting part. 97 notices claimed a window and 96 expanded, cutting 19,800 charged hours to 8,179. But the effect on published figures is modest:
+97 notices claimed a window, 3 more inherited one, and 99 expanded — cutting 20,448 charged hours to 8,418.
 
-| | before v3 | after v3 | projected |
+| | before v3 | first run | after window sharing |
 |---|---|---|---|
-| national July person-hours | 26,898,291 | 26,780,519 (−0.4%) | 25,395,647 (−5.9%) |
-| Donegal July | 3,700,792 | 3,504,101 (−5.3%) | 2,118,941 |
-| `DON00115765` | 2,540,854 @ 385.2h | 2,334,984 @ 354.0h | 949,824 @ 144.0h |
+| national July person-hours | 26,898,291 | 26,780,519 (−0.4%) | **25,395,359 (−5.6%)** |
+| Donegal July | 3,700,792 / 97.023% | 3,504,101 / 97.181% | **2,118,941 / 98.295%** |
+| `DON00115765` | 2,540,854 @ 385.2h | 2,334,984 @ 354.0h | **949,824 @ 144.0h** |
+| Donegal per-capita | 22,156 h/1k | 20,972 h/1k | **12,682 h/1k** |
 
-Two reasons, and only the second is a defect:
+The middle column is why the sharing step exists, and it is the more instructive number.
 
-**Most recurring notices never accrued anyway.** 81 of the 147 candidates are `water_conservation`, which is degraded and contributes no person-hours, so most of the 11,621 saved hours were never being charged. The projection was computed from the flagship alone and over-generalised.
+**The first run barely moved anything, for two separate reasons.** Most recurring notices never accrued in the first place — 81 of the 147 candidates are `water_conservation`, which is degraded — so most of the saved hours were hours nobody was charged for. And more seriously, **a completion-update pin blocked its own event**: the model reports `recurrence: "none"` on a notice whose text says the works are complete, which is defensible in isolation since there is no forward schedule left to state. But expansion is decided per notice while coverage is unioned per `reference_num`, so that one pin's continuous interval re-covered every gap its seventeen siblings had carved out, and `DON00115765` kept 354h of its 385.2h. Three events nationally were stuck this way, and the blocking pin was a `completion_update` in all three.
 
-**A completion-update pin blocks its own event.** The model reports `recurrence: "none"` on a notice whose text says the works are complete — defensible in isolation, since there is no forward schedule left to describe. But expansion is decided per notice while coverage is unioned per `reference_num`, so that one pin's continuous interval re-covers every gap its siblings carved out. `DON00115765` has 17 pins expanded and one completion pin that did not, and the event kept 354h of its 385.2h. Three events nationally are in this state (`DON00115765` 17/18, `MAY00111222` 1/2, `OFF00116072` 1/2), and in all three the blocking pin is a `completion_update`.
+**The repair is that a window belongs to the works, not to the notice.** `event_windows` collects the window any pin of a `reference_num` reported and lends it to pins that reported none; the borrowed series is still clipped to the borrowing pin's own start and end, so the completion pin takes the schedule and then stops at the moment it says the works stopped. Inherited windows face the same cross-check as claimed ones, are refused on the same terms, and are listed case by case on every build — they are the least-evidenced expansions the site makes. Where pins disagree the commonest window wins, ties broken by sorting; no event in the corpus currently disagrees, and the rule exists so that one cannot resolve itself differently between builds.
 
-The consequence is that the county-ordering claim this was meant to correct **still stands uncorrected**: Donegal remains at 20,972 person-hours per 1,000 residents against Clare's 9,588, still more than double. Unblocking the flagship would take it to roughly 12,700 and level the table, so the fix is worth completing — the window is a property of the *event*, not of each notice, and the natural repair is to let pins of one `reference_num` share a window that any of them reported, truncated at each pin's own end.
+That closes the county-ordering problem this started from. Donegal was 22,156 person-hours per 1,000 residents against Clare's 9,588 — more than double, on the strength of one notice's missing field. It is now 12,682 against 9,588, the same order as its neighbours, which is what `notes/statuspage-methodology.md` promises readers county ordering means.
 
-The per-build report names these events explicitly. It did not at first: the check only inspected pins that had *claimed* a window, so a pin claiming nothing — exactly the pin doing the damage — was invisible to it. Fixed, with a test for a pin whose outcome is indistinguishable from a burst main's.
+The per-build report names any event whose pins still disagree. It did not at first: the check only inspected pins that had *claimed* a window, so a pin claiming nothing — exactly the pin doing the damage, and tagged indistinguishably from a burst main — was invisible to it. Fixed, with a test for that pin.
 
 ## The feed began (or was purged) around 2026-04-20 — earlier months are unobservable
 
