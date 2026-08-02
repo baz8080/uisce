@@ -143,6 +143,28 @@ Three decisions worth recording:
 
 **The end badge counts notices, not events.** `Region.observed_end` is OR'd across an event's pins, which is what the monthly median wants (does this event carry *an* end signal?) but is wrong for a per-event verdict: July's largest event, `DON00115765`, has 18 pins of which exactly **one** reported a completion and 17 only stated a schedule. Badging that "completion confirmed" would present a plan as a measurement, which is the failure this whole site is organised against. The payload therefore carries `pins` / `confirmed` / `scheduled` and the page says "partly confirmed — 1 of 18 notices reported complete".
 
+### A scheduled repeating window is a restriction, not an outage (added 2026-08-02)
+
+The severity classes are keyed to the notice's title, and **Uisce uses two titles for one situation**. The same Donegal supply zone — Lifford, Rossgier — under the same nightly 10pm–7am regime was published as:
+
+| date | reference | title | class | accrued |
+|---|---|---|---|---|
+| 30 Apr | `DON00111054` | Water **Conservation** | degraded | nothing |
+| 23 Jun | `DON00114559` | Reservoir **Interruption** | outage | everything |
+| 9 Jul | `DON00115765` | Reservoir **Interruption** | outage | 949,824 person-hours |
+
+Overlapping villages, identical window, near-identical wording, opposite treatment — and the July one was the largest single figure on the site. Whichever way that pair is resolved, it has to be resolved alike.
+
+`classify` now takes `recurring` and downgrades an outage to `degraded` when the *event* announced a window repeating over a date range. It downgrades an outage and nothing else: a nightly leak-detection round is still maintenance. Recurrence is read at event level, not per notice, because the pin carrying the completion update reports no window and would otherwise sit as a lone outage inside a restriction event, whose interval the per-reference union then charges in full.
+
+The reasoning: a scheduled, repeating, announced overnight window is demand management rather than a failure, and that is true whichever title carries it. The conservative side is also the one already published — restrictions have never counted here.
+
+Measured on the 2026-08-02 corpus: **July national person-hours −3.8%** (25,395,359 → 24,440,623), Donegal −45% and out of the per-capita table's top five (rank 1 at 12,682 h/1k → rank 6 at 6,997). Only two July events move class. **No county's grade changes**, so the A–F thresholds did not need recalibrating.
+
+Note what this does *not* touch. May's largest event, a 23.8h reservoir interruption across Drogheda, is one continuous interruption with no repeating window and stays an outage at 551,427 person-hours — which is the discrimination the rule exists to make.
+
+⚠️ **This makes the recurring-window expansion numerically inert.** Person-seconds accrue for `outage` only, so an event that is now `degraded` contributes nothing however its intervals are shaped. The expansion still earns its place — the day bars and event counts read from those intervals, and the `end_recurrence` field it introduced is exactly what this rule keys on — but nothing multiplies by a window's length any more. If the policy ever flips to counting restrictions, the arithmetic is already there and correct.
+
 ### Recurring windows cover hours, not days (added 2026-08-01)
 
 A notice reading *"daily from 10pm until 7am, from 9 July to 27 July"* is 18 nights of nine hours, not 16 days of continuous outage. Prompt v3 extracts the window itself (`recurrence`, `window_open`, `window_close`, `window_first_date`) and `resolve_case` expands it into one interval per night, so a `Case` now carries a *list* of intervals. Everything downstream already unioned and clipped lists, so only `Region.add` changed.
