@@ -49,9 +49,13 @@ The only genuinely intricate part. It runs in four stages:
 
 **c. Regions become months.** `region_month` produces counts, person-hours and availability for one region in one month. Counties additionally get day bars, an A–F `grade`, and the notice-to-completion medians; areas get neither grades nor bars, and their month rows are written sparsely because they dominate the payload.
 
-**d. Output.** Everything is serialised into `data.js` as `window.UISCE_DATA` and `site.html` is copied beside it. A `<script>` tag rather than `fetch`, so the site works opened straight off disk.
+**d. Output.** `write_site` writes 3 + 26 files. The county and area *metrics* are serialised into `data.js` as `window.UISCE_DATA`, and `site.html` is copied beside it. A `<script>` tag rather than `fetch`, so the site works opened straight off disk.
 
-`site.html` is the whole front end: hash routing between an overview and one county view, no build step, no dependencies.
+The per-area *incident histories* — every notice ever published, event by event — do not go in `data.js`: together they are twice its size. They are written to `h/<county>.js`, one shard per county, each assigning into `window.UISCE_HISTORY`, and the page injects a `<script>` tag for one county when a reader opens an area in it. Same reason as above: an injected script survives `file://`, where `fetch` cannot read a local path at all. `write_site` owns the split, so a field added to the history cannot leak into the payload by somebody forgetting to pop it.
+
+The third file is `areas.html`, a directory of every area with a notice, linking into those histories. Unlike `index.html` it is a *template* — `src/uisce/areas.html` with an `<!--AREAS-->` marker that `write_site` substitutes — so its markup and CSS stay in an HTML file and only the rows come from Python.
+
+`site.html` is the whole front end: hash routing between an overview, one county view, one area history and the top ten, no build step, no dependencies.
 
 ## Flow 4 — the geography (`sa_pop.py`, `towns.py`)
 

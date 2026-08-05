@@ -1,12 +1,17 @@
+import json
 from datetime import date, datetime, time, timezone
 
 from uisce.site import (
+    COUNTY_POP,
     UNPLACED,
     SmallAreaIndex,
     TownLookup,
+    _area_index_html,
+    area_index,
     boil_notice_fate,
     build_site,
     classify,
+    county_slug,
     daily_windows,
     describes_recurrence,
     event_windows,
@@ -20,6 +25,7 @@ from uisce.site import (
     recurring_events,
     resolve_case,
     union_seconds,
+    write_site,
 )
 
 UTC = timezone.utc
@@ -1188,3 +1194,379 @@ class TestHealthNotices:
         month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["grade"] == "F"       # driven by the outage alone
         assert month["health_n"] == 1
+
+
+def _history(rows, now=NOW, towns=TOWNS, sa=SA_INDEX, county="Carlow", code="T1"):
+    """The events one area's history renders, for the common single-area case."""
+    site = build_site(rows, sa, now, towns)
+    return site["history"][county][code]["events"]
+
+
+class TestAreaHistory:
+    """Every notice ever published in one area.
+
+    Not in data.js: all of it together is twice the payload, so it is written to
+    per-county shards the page loads on demand. What is tested here is the
+    regrouping and, mostly, the two places where saying nothing is the only
+    honest answer.
+    """
+
+    def test_one_event_becomes_one_record(self):
+        events = _history([_case()])
+        assert len(events) == 1
+        assert events[0] == {
+            "ref": "CAR00000001", "title": "Burst Water Main - Carlow", "sev": "outage",
+            "start": "2026-05-01", "pins": 1, "hours": 24.0, "people": 1000,
+            "confirmed": 1, "loc": "Somewhere",
+        }
+
+    def test_a_multi_pin_event_is_one_record_counting_its_pins(self):
+        """The same rule the top ten uses: "was this confirmed complete?" is a
+        count across the event's notices, never a boolean."""
+        rows = [_case(id=1)] + [
+            _case(id=i, end_source="scheduled_end_with_time") for i in (2, 3, 4)
+        ]
+        events = _history(rows)
+        assert len(events) == 1
+        assert (events[0]["pins"], events[0]["confirmed"], events[0]["scheduled"]) == (4, 1, 3)
+
+    def test_a_closed_event_that_never_reported_an_end_has_no_duration(self):
+        """It carries resolve_case's token one-second footprint, so publishing a
+        duration would print 0.0h — a measurement that was never made. 801 events
+        in the live corpus are this shape."""
+        rows = [_case(status="Closed", notice_to_end_seconds=None,
+                      end_source="not_found", end_local_date=None)]
+        event = _history(rows)[0]
+        assert "hours" not in event
+        assert "span_h" not in event
+        assert "confirmed" not in event and "scheduled" not in event
+        assert "open" not in event
+
+    def test_an_open_event_with_no_signal_reports_the_time_so_far(self):
+        """Unlike the closed case above, this one is still running and is being
+        charged for it — so the hours are real, and the page says "at least"."""
+        rows = [_case(status="Open", notice_to_end_seconds=None,
+                      end_source="not_found", end_local_date=None)]
+        event = _history(rows)[0]
+        assert event["open"] == 1
+        assert event["hours"] == 9 * 24.0  # May 1 -> NOW, under the 14-day cap
+        assert "closed" not in event
+
+    def test_a_recurring_window_reports_covered_hours_and_its_span(self):
+        """63h of works across seven nights. Publishing only the span would
+        restate the bug the recurrence work exists to fix.
+
+        The span is the window series' own — first opening to last close, 1 May
+        22:00 local to 8 May 07:00 — not the 165h notice-to-end, which starts at
+        publication 13 hours before the first window opened. "The repeating
+        window spanned this long" is a claim about the windows.
+        """
+        event = _history([_recurring()], now=AFTER_MAY)[0]
+        assert event["hours"] == 63.0
+        assert event["span_h"] == 153.0
+
+    def test_a_single_interval_event_omits_the_span(self):
+        assert "span_h" not in _history([_case()])[0]
+
+    def test_the_worst_severity_across_an_events_pins_wins(self):
+        """An event is a reference_num, not a severity slice: a burst published
+        alongside its own investigation notice is a burst."""
+        rows = [_case(id=1), _case(id=2, work_category="investigation")]
+        event = _history(rows)[0]
+        assert event["sev"] == "outage"
+        assert event["pins"] == 2
+
+    def test_a_works_event_is_kept_not_only_disruptions(self):
+        """The county metrics rank supply disruptions; a history that showed only
+        those would answer a narrower question than the one the reader asked."""
+        event = _history([_case(work_category="investigation")])[0]
+        assert event["sev"] == "maintenance"
+
+    def test_a_boil_notice_closed_by_its_paired_lift_reads_confirmed(self):
+        issue = _case(
+            work_category="boil_notice_issued", boil_water_notice=1, status="Open",
+            notice_to_end_seconds=None, location="Ardfinnan Public Water Supply",
+            reference_num="TIP1",
+        )
+        lift = _case(
+            id=99, work_category="boil_notice_lifted", status="Closed",
+            notice_to_end_seconds=None, location="Ardfinnan Regional Water Supply Scheme",
+            reference_num="TIP2", start_date="2026-05-03T00:00:00+00:00",
+        )
+        # the lift is good news and is never an event of its own (IGNORE_CATS)
+        events = _history([issue, lift])
+        assert [e["ref"] for e in events] == ["TIP1"]
+        assert events[0]["confirmed"] == 1
+        assert events[0]["health"] == 1
+        assert events[0]["hours"] == 48.0  # 1 May -> the lift on the 3rd
+
+    def test_a_closed_event_carries_the_date_it_was_seen_to_close(self):
+        rows = [_case(status="Closed", closed_at="2026-05-06T04:00:00+00:00")]
+        assert _history(rows)[0]["closed"] == "2026-05-06"
+
+    def test_the_newest_event_is_first(self):
+        rows = [_case(id=1, reference_num="CAR1"),
+                _case(id=2, reference_num="CAR2", start_date="2026-05-04T00:00:00+00:00")]
+        assert [e["ref"] for e in _history(rows)] == ["CAR2", "CAR1"]
+
+    def test_the_start_is_the_earliest_publication_across_the_pins(self):
+        """Rows arrive in id order, not start_date order."""
+        rows = [_case(id=1, start_date="2026-05-04T00:00:00+00:00"),
+                _case(id=2, start_date="2026-05-01T00:00:00+00:00")]
+        assert _history(rows)[0]["start"] == "2026-05-01"
+
+    def test_people_is_the_whole_footprint_capped_at_the_county(self):
+        """The same number the national top ten prints for the same event — two
+        pages disagreeing about how many people a burst reached would be worse
+        than either answer."""
+        sa = SmallAreaIndex([(52.836, -6.926, "SA1", COUNTY_POP["Carlow"] * 2)])
+        towns = TownLookup([("SA1", "T1", "Testtown", "Carlow")], sa.pop)
+        assert _history([_case()], sa=sa, towns=towns)[0]["people"] == COUNTY_POP["Carlow"]
+
+    def test_a_pin_outside_its_county_lands_in_the_unplaced_bucket(self):
+        towns = TownLookup([("SA1", "T1", "Blessington", "Wicklow")], SA_INDEX.pop)
+        site = build_site([_case()], SA_INDEX, NOW, towns)
+        area = site["history"]["Carlow"][UNPLACED]
+        assert area["name"] == "Pinned outside the county"
+        assert len(area["events"]) == 1
+
+    def test_one_reference_published_in_two_counties_appears_in_both(self):
+        """16 reference numbers do this. Each half has its own footprint and its
+        own county cap, so two records is the honest rendering, not a duplicate."""
+        sa = SmallAreaIndex([(52.836, -6.926, "SA1", 1000), (53.15, -6.8, "SA2", 500)])
+        towns = TownLookup(
+            [("SA1", "T1", "Testtown", "Carlow"), ("SA2", "T2", "Kilcullen", "Kildare")], sa.pop
+        )
+        rows = [_case(id=1), _case(id=2, county="Kildare", full_lat=53.15, full_lon=-6.8)]
+        site = build_site(rows, sa, NOW, towns)
+        assert site["history"]["Carlow"]["T1"]["events"][0]["ref"] == "CAR00000001"
+        assert site["history"]["Kildare"]["T2"]["events"][0]["ref"] == "CAR00000001"
+
+    def test_there_is_no_history_without_a_town_lookup(self):
+        assert build_site([_case()], SA_INDEX, NOW)["history"] == {}
+
+
+class TestHistoryShards:
+    """The history is 26 files the page loads one at a time, and write_site owns
+    the split — so a field added to the history cannot leak into data.js by
+    somebody forgetting to pop it."""
+
+    def _write(self, tmp_path, rows=None):
+        site = build_site(rows or [_case()], SA_INDEX, NOW, TOWNS)
+        site.pop("recurrence_report")
+        return site, write_site(site, tmp_path, TOWNS)
+
+    def test_a_county_slug_is_a_usable_and_unique_filename(self):
+        """Every county is one ASCII word today. A future one spelled with a
+        space or a fada would silently collide or produce a name the loader
+        cannot request, so the assumption is checked rather than trusted."""
+        slugs = [county_slug(c) for c in COUNTY_POP]
+        assert all(s.isascii() and s.isalpha() and s.islower() for s in slugs)
+        assert len(set(slugs)) == len(COUNTY_POP)
+
+    def test_the_files_written_are_data_index_and_one_shard_per_county(self, tmp_path):
+        site, (data_bytes, shard_bytes, n_areas, _) = self._write(tmp_path)
+        assert (tmp_path / "data.js").exists() and (tmp_path / "index.html").exists()
+        shards = sorted(p.name for p in (tmp_path / "h").iterdir())
+        assert shards == sorted(f"{county_slug(c)}.js" for c in site["counties"])
+        assert (data_bytes, n_areas) == (len((tmp_path / "data.js").read_bytes()), 1)
+        assert shard_bytes > 0
+
+    def test_a_shard_round_trips_through_json(self, tmp_path):
+        self._write(tmp_path)
+        body = (tmp_path / "h" / "carlow.js").read_text()
+        assert body.startswith("window.UISCE_HISTORY = window.UISCE_HISTORY || {};")
+        payload = body.split(" = ", 2)[2].rstrip(";")
+        assert json.loads(payload)["T1"]["name"] == "Testtown"
+
+    def test_a_county_with_no_history_still_gets_a_well_formed_shard(self, tmp_path):
+        """So the loader never has to tell a 404 apart from a county with nothing
+        to show. Every county in a real build has both, so this drives write_site
+        directly rather than waiting for a corpus that cannot arise."""
+        write_site({"counties": {"Kildare": {}}, "history": {}}, tmp_path, TOWNS)
+        body = (tmp_path / "h" / "kildare.js").read_text()
+        assert json.loads(body.split(" = ", 2)[2].rstrip(";")) == {}
+
+    def test_the_history_never_reaches_data_js(self, tmp_path):
+        """The hard constraint of the whole feature, made mechanical."""
+        site, _ = self._write(tmp_path)
+        data = (tmp_path / "data.js").read_text()
+        assert "history" not in site
+        assert "UISCE_HISTORY" not in data
+        assert "Testtown" in data          # the area breakdown is still there
+        assert "CAR00000001" not in data   # but no event of its own
+
+
+class TestPayloadShape:
+    """A key-set snapshot of everything data.js ships.
+
+    A byte-size assertion cannot run in CI — the DB is gitignored — but "no field
+    was added to the payload" is what actually needs guarding, and this fails
+    loudly on the next well-meaning addition rather than quietly costing 80 KB.
+    """
+
+    def _site(self):
+        site = build_site([_case()], SA_INDEX, AFTER_MAY, TOWNS)
+        site.pop("recurrence_report")
+        site.pop("history")
+        return site
+
+    def test_the_top_level_keys_are_unchanged(self):
+        assert set(self._site()) == {"generated", "months", "counties", "national", "top"}
+
+    def test_the_county_keys_are_unchanged(self):
+        county = self._site()["counties"]["Carlow"]
+        assert set(county) == {"pop", "open_total", "months", "open", "towns", "resolved"}
+        assert set(county["towns"]["T1"]) == {"name", "pop", "months"}
+        assert set(county["towns"]["T1"]["months"]["2026-05"]) == {
+            "events", "availability", "person_h"
+        }
+
+    def test_the_county_month_keys_are_unchanged(self):
+        month = self._site()["counties"]["Carlow"]["months"]["2026-05"]
+        assert set(month) == {
+            "days", "clear_days", "grade", "events", "person_h", "period_h", "availability",
+            "health_n", "median_completion_h", "completed_n", "median_scheduled_h",
+            "scheduled_n",
+        }
+
+    def test_the_top_row_keys_are_unchanged(self):
+        """Guards the widening of event_meta to every severity from drifting
+        into the published ranking."""
+        assert set(self._site()["top"]["2026-05"][0]) == {
+            "ref", "county", "title", "person_h", "hours", "people", "start", "pins",
+            "confirmed", "scheduled", "area",
+        }
+
+
+# two Small Areas 1.5 km apart in different settlements, so a two-pin event
+# published across both is homed to one area per pin — the shape 764 real events
+# have, and the one the county breakdown and the history used to disagree about
+SPLIT_SA = SmallAreaIndex(
+    [(52.836, -6.926, "SA1", 1000), (52.850, -6.926, "SA2", 400)]
+)
+SPLIT_TOWNS = TownLookup(
+    [("SA1", "T1", "Bigtown", "Carlow"), ("SA2", "T2", "Smallville", "Carlow")],
+    SPLIT_SA.pop,
+)
+
+
+def _split_event():
+    """One reference_num published as a pin in each settlement."""
+    return [_case(id=1, full_lat=52.836), _case(id=2, full_lat=52.850)]
+
+
+class TestMultiAreaEvents:
+    """An event is listed under every area its pins were homed to.
+
+    The county breakdown homes each *pin*, so a burst published across two
+    settlements puts counts and person-hours on both rows. Listing it only under
+    the area holding most of its people left 220 of the 1,830 areas in the county
+    tables with no history at all — and their pages said no notice had ever been
+    published there, directly under the row that had just counted one.
+    """
+
+    def _site(self):
+        return build_site(_split_event(), SPLIT_SA, NOW, SPLIT_TOWNS)
+
+    def test_every_area_in_the_county_tables_has_a_history(self):
+        """The invariant the pin/event mismatch broke, and the reason the area
+        directory can link every row it lists."""
+        site = self._site()
+        listed = set(site["counties"]["Carlow"]["towns"])
+        assert listed and listed <= set(site["history"]["Carlow"])
+
+    def test_the_event_appears_in_both_areas(self):
+        history = self._site()["history"]["Carlow"]
+        assert [e["ref"] for e in history["T1"]["events"]] == ["CAR00000001"]
+        assert [e["ref"] for e in history["T2"]["events"]] == ["CAR00000001"]
+
+    def test_both_listings_report_the_whole_events_footprint(self):
+        """The record describes an event, not an area's accrual — so it is the
+        same number the national top ten prints for the same event, on both."""
+        history = self._site()["history"]["Carlow"]
+        big, small = history["T1"]["events"][0], history["T2"]["events"][0]
+        assert big["people"] == small["people"] == 1400
+        assert big["hours"] == small["hours"]
+
+    def test_a_shared_event_says_how_many_areas_it_is_in(self):
+        """Or meeting the same burst on two pages reads as double-counting."""
+        assert self._site()["history"]["Carlow"]["T1"]["events"][0]["areas"] == 2
+
+    def test_a_single_area_event_does_not_carry_the_field(self):
+        assert "areas" not in _history([_case()])[0]
+
+    def test_the_record_is_built_once_and_shared(self):
+        """event_record merges intervals and sums a footprint; doing it again per
+        listing would be 1,270 wasted passes and could let the two drift."""
+        history = self._site()["history"]["Carlow"]
+        assert history["T1"]["events"][0] is history["T2"]["events"][0]
+
+    def test_the_county_still_counts_the_event_once(self):
+        """The duplication is in the histories only — it must not reach the
+        county's own arithmetic, which dedupes by reference_num."""
+        month = self._site()["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["events"]["outage"] == 1
+
+
+class TestAreaIndex:
+    """The directory page's rows: every area with a notice, county by county."""
+
+    def _index(self):
+        site = build_site(_split_event(), SPLIT_SA, NOW, SPLIT_TOWNS)
+        return area_index(site["history"], SPLIT_TOWNS)
+
+    def test_counties_and_areas_come_out_sorted(self):
+        [(county, areas)] = self._index()
+        assert county == "Carlow"
+        assert [name for _, name, _, _ in areas] == ["Bigtown", "Smallville"]
+
+    def test_each_area_carries_its_population_and_notice_count(self):
+        [(_, areas)] = self._index()
+        assert areas[0] == ("T1", "Bigtown", 1000, 1)
+        assert areas[1] == ("T2", "Smallville", 400, 1)
+
+    def test_the_count_is_the_length_of_the_history_not_a_month_sum(self):
+        """An event spanning a month boundary is deliberately counted in both
+        months, so summing the county payload's month rows would overstate."""
+        rows = [_case(start_date="2026-05-31T12:00:00+00:00",
+                      notice_to_end_seconds=48 * 3600, end_local_date="2026-06-02")]
+        site = build_site(rows, SA_INDEX, datetime(2026, 7, 5, tzinfo=UTC), TOWNS)
+        months = site["counties"]["Carlow"]["towns"]["T1"]["months"]
+        assert sum(m["events"]["outage"] for m in months.values()) == 2   # the trap
+        [(_, areas)] = area_index(site["history"], TOWNS)
+        assert areas[0][3] == 1                                          # the truth
+
+    def test_an_unplaced_bucket_is_labelled_and_has_no_population(self):
+        towns = TownLookup([("SA1", "T1", "Blessington", "Wicklow")], SA_INDEX.pop)
+        site = build_site([_case()], SA_INDEX, NOW, towns)
+        [(_, areas)] = area_index(site["history"], towns)
+        assert areas == [(UNPLACED, "Pinned outside the county", None, 1)]
+
+
+class TestAreaIndexHtml:
+    """Links out of the directory have to survive area codes that are not
+    URL-safe: 31 contain a slash, 2,808 a colon, 15 an apostrophe, 4 are
+    non-ASCII. A slash left unescaped breaks the route's county capture."""
+
+    def _links(self, code, name="X"):
+        index = [("Cork", [(code, name, 100, 1)])]
+        return _area_index_html(index)
+
+    def test_a_slash_in_a_code_is_escaped(self):
+        html = self._links("ed:Cork:Whiddy/Bantry Rural")
+        assert "index.html#area/Cork/ed%3ACork%3AWhiddy%2FBantry%20Rural" in html
+        assert "Whiddy/Bantry" not in html   # no raw slash reaches the href
+
+    def test_an_apostrophe_and_a_fada_are_escaped(self):
+        assert "O%27Briensbridge" in self._links("ed:Clare:O'Briensbridge")
+        assert "D%C3%BAn%20Laoghaire" in self._links("02341-Dún Laoghaire")
+
+    def test_an_area_name_is_html_escaped(self):
+        assert "&amp;" in self._links("T1", name="Ballymore & Kill")
+
+    def test_there_is_one_section_and_one_nav_link_per_county(self):
+        html = _area_index_html([("Cork", [("T1", "A", 1, 1)]),
+                                 ("Louth", [("T2", "B", 1, 1)])])
+        assert html.count("<section") == 2
+        assert 'href="#c-cork"' in html and 'id="c-louth"' in html

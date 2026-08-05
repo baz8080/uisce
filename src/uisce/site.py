@@ -25,6 +25,7 @@ thresholds are documented in notes/statuspage-methodology.md.
 """
 
 import csv
+import html
 import json
 import math
 import re
@@ -35,10 +36,13 @@ from collections import Counter, defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
+from urllib.parse import quote
 
 from uisce.config import DB_PATH, DUBLIN, RECURRING, SA_POP_PATH, SA_TOWNS_PATH, SITE_DIR
 
 SITE_HTML = Path(__file__).parent / "site.html"
+AREAS_HTML = Path(__file__).parent / "areas.html"
+AREAS_MARKER = "<!--AREAS-->"
 
 # The feed was first snapshotted on 2026-04-20; earlier days are unobserved
 # (the ArcGIS source only retains recent notices).
@@ -1000,6 +1004,178 @@ def county_town_data(regions, towns, county, months, now):
     return out
 
 
+def event_record(county, ref, meta, intervals, sas):
+    """One published event as the per-area history renders it.
+
+    Every field that is zero, absent or implied is left out, the same discipline
+    town_months applies and for the same reason — this is the bulk of what the
+    history ships, and most events are one disruption and six defaults.
+
+    Two of the omissions are not thrift but honesty:
+
+    `hours` is dropped entirely for an event that is closed and never reported an
+    end. Those carry resolve_case's token one-second footprint, so publishing the
+    number would print "0.0h" for 801 events — a fabricated measurement, and the
+    exact failure ended_by_publication and boil_notice_fate exist to prevent. The
+    page says no end was ever reported instead.
+
+    `span_h` appears only when a recurring window makes it differ from `hours`.
+    Covered time is what the works took; elapsed time is what the notice spanned,
+    and 18 nights of nine hours is not 16 days of outage. Publishing only the
+    span would restate the bug notes/statuspage-methodology.md records.
+    """
+    iv = merge(intervals)
+    record = {
+        "ref": ref,
+        "title": meta["title"],
+        "sev": meta["sev"],
+        # earliest publication across the event's pins, not the first pin's own
+        # date: rows arrive in id order, not start_date order
+        "start": meta["first_pub"].strftime("%Y-%m-%d"),
+        "pins": meta["pins"],
+    }
+    if iv and (meta["open"] or meta["confirmed"] or meta["scheduled"]):
+        hours = sum((e - s).total_seconds() for s, e in iv) / 3600
+        record["hours"] = round(hours, 1)
+        span = (iv[-1][1] - iv[0][0]).total_seconds() / 3600
+        if span - hours > 0.1:
+            record["span_h"] = round(span, 1)
+    # the whole event's footprint, capped as Region.event_pop caps it — this
+    # describes an event, not an area's accrual, so it is the same number the
+    # national top ten prints for the same event
+    people = min(sum(sas.values()), COUNTY_POP[county])
+    if people:
+        record["people"] = people
+    for field in ("confirmed", "scheduled"):
+        if meta[field]:
+            record[field] = meta[field]
+    if meta["open"]:
+        record["open"] = 1
+    if meta["closed"]:
+        record["closed"] = meta["closed"]
+    if meta["loc"]:
+        # the vernacular name the settlement it was homed to does not carry:
+        # "Sefton Green" inside Dún Laoghaire. Too fragmented to group on (see
+        # notes/statuspage-methodology.md), exactly right to print.
+        record["loc"] = meta["loc"]
+    if meta["health"]:
+        record["health"] = 1
+    return record
+
+
+def area_history(event_meta, event_iv, event_sas, event_codes, towns):
+    """{county: {code: {"name": ..., "events": [...]}}}, newest event first.
+
+    A regrouping of what build_site already holds rather than new geography.
+
+    An event is listed under **every** area its pins were homed to, not only the
+    one area_of names it after. The two answer different questions and the county
+    breakdown already takes this position: it homes each pin individually, so a
+    burst published as pins in Naas and in Sallins puts counts and person-hours
+    on both rows. Listing it only under the area holding most of its people left
+    220 of the county tables' 1,830 areas with no history at all, and their pages
+    said "no notice has ever been published here" directly underneath the row
+    that had just counted one. 764 events are multi-area; the duplication costs
+    6 KB gzipped across every shard and is what makes the two pages agree.
+
+    So this is deliberately not a partition. `areas` on the record says how many
+    histories an event appears in, because a reader who meets the same burst
+    twice would otherwise reasonably conclude the site is double-counting.
+
+    area_of is untouched and still names an event once, for the county's open
+    list and the national top ten — what changed is where an event is *listed*,
+    not what it is called.
+
+    Keyed (county, ref) throughout, so the 16 reference numbers published in two
+    counties appear in both, each with its own footprint and its own county cap.
+    That is the same "two rows is the honest rendering" decision top_events
+    documents, not a duplicate.
+
+    `name` is carried per area even though the county payload already has one,
+    because it does not always: an area whose every event is still in the future
+    has no month rows, so county_town_data drops it and the page would have no
+    name to print.
+    """
+    out = defaultdict(dict)
+    for key, codes in event_codes.items():
+        county, ref = key
+        # built once and shared by reference across the areas it is listed in:
+        # event_record merges intervals and sums a footprint, and the record is
+        # the same event whichever page it appears on
+        record = event_record(county, ref, event_meta[key], event_iv[key], event_sas[key])
+        if len(codes) > 1:
+            record["areas"] = len(codes)
+        for code in codes:
+            area = out[county].setdefault(code, {"name": towns.label(code), "events": []})
+            area["events"].append(record)
+    for areas in out.values():
+        for area in areas.values():
+            # newest first, ref breaking ties so a rebuild is reproducible —
+            # the rule event_windows uses for the same reason
+            area["events"].sort(key=lambda e: (e["start"], e["ref"]), reverse=True)
+    return dict(out)
+
+
+def area_index(history, towns):
+    """[(county, [(code, name, pop, n_notices), ...]), ...] for the directory page.
+
+    Counties A-Z, areas A-Z within them. Reads the finished history, so the
+    notice count is len(events) — true by construction rather than re-derived,
+    and free, since the shards already exist by the time this runs.
+
+    Deliberately not summed from the county payload's month rows: an event
+    spanning a month boundary is counted in both months there, so adding them up
+    would overstate every area that has ever had one.
+    """
+    out = []
+    for county in sorted(history):
+        areas = [
+            (code, area["name"], towns.pop[code] if code != UNPLACED else None,
+             len(area["events"]))
+            for code, area in history[county].items()
+        ]
+        # by name, code breaking ties so a rebuild is reproducible
+        out.append((county, sorted(areas, key=lambda a: (a[1], a[0]))))
+    return out
+
+
+def _area_index_html(index):
+    """The directory's body: a jump nav and one section per county."""
+    nav = " · ".join(
+        f'<a href="#c-{county_slug(c)}">{html.escape(c)}</a>' for c, _ in index
+    )
+    sections = []
+    for county, areas in index:
+        items = []
+        for code, name, pop, n in areas:
+            href = f"index.html#area/{quote(county, safe='')}/{quote(code, safe='')}"
+            items.append(
+                f'<li{" class=\"unplaced\"" if pop is None else ""}>'
+                f'<a href="{href}">{html.escape(name)}</a>'
+                # no per-item title: 1,836 of them repeating the column heading
+                # was 46 KB of the page to say what the legend says once
+                f'<span class="fill"></span><span class="n">{n}</span>'
+                f'<span class="p">{"—" if pop is None else f"{pop:,}"}</span></li>'
+            )
+        sections.append(
+            f'<section id="c-{county_slug(county)}">'
+            f'<h2>Co. {html.escape(county)} <span>· {len(areas)} areas</span></h2>'
+            f'<ul>{"".join(items)}</ul></section>'
+        )
+    return f"<nav>{nav}</nav>\n{''.join(sections)}"
+
+
+def county_slug(county):
+    """The history shard filename for a county.
+
+    Every key of COUNTY_POP is one ASCII word, so lowercasing is total and
+    injective — asserted in the tests rather than trusted, because a future
+    county spelled with a space or a fada would silently collide or produce a
+    filename the loader cannot request.
+    """
+    return county.lower()
+
+
 def _window_label(case):
     """"22:00-07:00 from 2026-07-09" — the window a case actually expanded on.
 
@@ -1108,10 +1284,19 @@ def build_site(rows, sa_index, now, towns=None):
     # homed to, so the event can be named once, after the loop, from all of it
     event_sas = defaultdict(dict)
     event_codes = defaultdict(set)
+    # (county, ref) -> every disruption interval the event's pins contributed,
+    # unmerged. area_history merges them; nothing else reads this.
+    event_iv = defaultdict(list)
     # (county, ref) -> title, start, and how each of the event's pins signalled
     # its end. Kept out of Region, which is instantiated once per county *and*
     # once per county-area — a couple of thousand times — and none of the area
     # regions need any of this.
+    #
+    # Covers every severity, not just outages. An event is a reference_num, and
+    # a per-area history that skipped the works and the quality notices would be
+    # answering a narrower question than the one a reader asked. The consequence
+    # is that the 36 events whose pins disagree on severity now report all their
+    # pins to top_events rather than only the outage ones — see the build report.
     event_meta = {}
     recurrence = []  # every pin that claimed a window, for the report's detail lines
     # every pin's outcome, claimed or not — the mixed-event check needs the ones
@@ -1129,22 +1314,35 @@ def build_site(rows, sa_index, now, towns=None):
         if case.rec != "none":
             recurrence.append(case)
         counties[case.county].add(case, case.sas)
-        if case.sev == "outage":
-            meta = event_meta.setdefault(
-                (case.county, case.ref),
-                # first pin wins, matching how the event's open entry is recorded
-                {"title": r["title"], "start": r["start_date"][:10], "first_pub": case.start,
-                 "pins": 0, "confirmed": 0, "scheduled": 0},
-            )
-            meta["pins"] += 1
-            # the earliest publication across the event's pins, which is what
-            # "started this month" means for the completion median. Not
-            # setdefault: rows arrive in id order, not start_date order.
-            meta["first_pub"] = min(meta["first_pub"], case.start)
-            if case.observed_end:
-                meta["confirmed"] += 1
-            elif case.has_end:
-                meta["scheduled"] += 1
+        meta = event_meta.setdefault(
+            (case.county, case.ref),
+            # first pin wins, matching how the event's open entry is recorded
+            {"title": r["title"], "start": r["start_date"][:10], "first_pub": case.start,
+             "pins": 0, "confirmed": 0, "scheduled": 0, "sev": case.sev,
+             "loc": r["location"] or "", "open": False, "closed": None, "health": False},
+        )
+        meta["pins"] += 1
+        # the earliest publication across the event's pins, which is what
+        # "started this month" means for the completion median. Not
+        # setdefault: rows arrive in id order, not start_date order.
+        meta["first_pub"] = min(meta["first_pub"], case.start)
+        if case.observed_end:
+            meta["confirmed"] += 1
+        elif case.has_end:
+            meta["scheduled"] += 1
+        # the worst class any of the event's pins was put in. A burst published
+        # alongside its own traffic-management notice is a burst.
+        meta["sev"] = min(meta["sev"], case.sev, key=SEV_ORDER.index)
+        meta["loc"] = meta["loc"] or (r["location"] or "")
+        meta["health"] |= knocks_grade(r)
+        if case.is_open:
+            meta["open"] = True
+        elif meta["closed"] is None and r["closed_at"]:
+            # first pin with a close stamp wins, so the history and the county's
+            # "observed to close" list — which reads Region.resolved, filled the
+            # same way — cannot disagree about when an event ended
+            meta["closed"] = r["closed_at"][:10]
+        event_iv[(case.county, case.ref)].extend(case.intervals)
         if towns is not None:
             # the breakdown still homes each pin individually, with `within`
             # clipping its footprint, so an area only accrues its own people
@@ -1273,6 +1471,11 @@ def build_site(rows, sa_index, now, towns=None):
         for ym in months
         if ym < current
     }
+    # Not part of the payload: write_site splits it into per-county shards the
+    # page loads on demand. All of it together is twice the size of data.js.
+    site["history"] = (
+        area_history(event_meta, event_iv, event_sas, event_codes, towns) if towns else {}
+    )
     site["recurrence_report"] = recurrence_report(recurrence, pin_tags)
 
     return site
@@ -1299,6 +1502,60 @@ def load_cases(conn):
     ).fetchall()
 
 
+HISTORY_DIR = "h"
+
+
+def write_site(site, site_dir, towns=None):
+    """data.js, index.html, areas.html, and one history shard per county.
+
+    Owning the split here is what keeps it from failing open: the history is
+    popped before data.js is serialised, so a future field added to it cannot
+    leak into the payload by omission. All the shards together are twice the
+    size of data.js, which is the whole reason they are separate files.
+
+    A shard is written for every county, empty ones included, so the loader
+    never has to tell a 404 apart from a county with nothing to show.
+
+    Per county rather than per area, on two counts. Area codes are not
+    filenames — 31 of them contain a slash, most contain a colon, several are
+    non-ASCII — so per-area files would need a slug scheme and a collision map,
+    the same string-munging this project refused when it declined to key the
+    drill-down on `location`. And a county shard is one request for every area
+    a reader is likely to open in a sitting, at a median 5 KB gzipped.
+    """
+    history = site.pop("history", {})
+    data = "window.UISCE_DATA = " + json.dumps(site) + ";"
+    site_dir.mkdir(parents=True, exist_ok=True)
+    (site_dir / "data.js").write_text(data)
+    shutil.copyfile(SITE_HTML, site_dir / "index.html")
+
+    shard_dir = site_dir / HISTORY_DIR
+    shard_dir.mkdir(exist_ok=True)
+    shard_bytes = 0
+    for county in site["counties"]:
+        # keyed by the county's real name, so the page never has to invert the
+        # slug; the ||= guard makes a shard self-sufficient and order-independent
+        body = (
+            "window.UISCE_HISTORY = window.UISCE_HISTORY || {};\n"
+            f"window.UISCE_HISTORY[{json.dumps(county)}] = "
+            f"{json.dumps(history.get(county, {}))};"
+        )
+        (shard_dir / f"{county_slug(county)}.js").write_text(body)
+        shard_bytes += len(body.encode())
+
+    # The directory. Substituted rather than copied, unlike index.html: the rows
+    # are the page, and generating them into a template keeps the markup and CSS
+    # in an HTML file instead of in Python string literals.
+    index_bytes = 0
+    if towns is not None:
+        page = AREAS_HTML.read_text().replace(
+            AREAS_MARKER, _area_index_html(area_index(history, towns))
+        )
+        (site_dir / "areas.html").write_text(page)
+        index_bytes = len(page.encode())
+    return len(data.encode()), shard_bytes, sum(len(a) for a in history.values()), index_bytes
+
+
 def run():
     sa_index = SmallAreaIndex.from_csv(SA_POP_PATH)
     towns = TownLookup.from_csv(SA_TOWNS_PATH, sa_index.pop)
@@ -1310,12 +1567,17 @@ def run():
     for line in site.pop("recurrence_report"):
         print(line)
 
-    SITE_DIR.mkdir(parents=True, exist_ok=True)
-    (SITE_DIR / "data.js").write_text("window.UISCE_DATA = " + json.dumps(site) + ";")
-    shutil.copyfile(SITE_HTML, SITE_DIR / "index.html")
-    n_months = len(site["months"])
+    n_counties, n_months = len(site["counties"]), len(site["months"])
     n_towns = sum(len(c["towns"]) for c in site["counties"].values())
+    data_bytes, shard_bytes, n_areas, index_bytes = write_site(site, SITE_DIR, towns)
     print(
-        f"Wrote {SITE_DIR}/ ({len(site['counties'])} counties, "
+        f"Wrote {SITE_DIR}/ ({n_counties} counties, "
         f"{n_towns} town breakdowns, {n_months} months)"
+    )
+    # the payload is the thing this site keeps having to defend; print it every
+    # build so a regression is visible in the log rather than in the field
+    print(
+        f"  data.js {data_bytes:,} bytes  ·  {n_counties} history shards "
+        f"{shard_bytes:,} bytes over {n_areas} areas (loaded on demand)  ·  "
+        f"areas.html {index_bytes:,} bytes"
     )

@@ -203,6 +203,11 @@
   .badge.confirmed { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
   .badge.partial { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, transparent); }
   .badge.sched { color: var(--muted); border-color: var(--border); }
+  /* An event that never reported an end is not the same claim as one still
+     accruing to the cap, so it does not borrow the scheduled badge's look. */
+  .badge.none { color: var(--muted); border-color: transparent;
+                background: color-mix(in srgb, var(--muted) 12%, transparent); }
+  .badge.health { color: var(--serious); border-color: color-mix(in srgb, var(--serious) 45%, transparent); }
   @media (max-width: 480px) {
     .toprow { grid-template-columns: 22px 1fr; }
     .toprow .ph { grid-column: 2; text-align: left; margin-top: 4px; }
@@ -237,6 +242,25 @@
 
   .tgroup { margin-top: 10px; }
   .tgroup > .tname { font-size: 13px; font-weight: 650; }
+
+  /* The per-area history. One row per event, wider than an .incident because
+     it carries a duration and its provenance rather than just a date. */
+  .hrow { padding: 9px 0; border-top: 1px dashed var(--grid); }
+  .hrow:first-of-type { border-top: 0; }
+  .hrow .t { font-size: 14px; font-weight: 600; }
+  .hrow .t .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+                  margin-right: 7px; vertical-align: middle; }
+  .hrow .m { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .hrow .badge { margin-right: 5px; }
+  .hmonth { font-size: 13px; font-weight: 650; margin: 16px 0 2px; }
+  .hmonth:first-child { margin-top: 0; }
+  .hmonth span { color: var(--muted); font-weight: 400; }
+  /* Area names in the county breakdown are links to that area's history. The
+     row carries the click too, so the whole row is the target on a phone. */
+  .towns tr.hist { cursor: pointer; }
+  .towns tr.hist:hover { background: var(--cell-empty); }
+  .towns .name a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); }
+  .towns .name a:hover { border-bottom-color: currentColor; }
   .tsort { display: none; font: inherit; font-size: 13px; color: var(--ink);
            background: var(--surface); border: 1px solid var(--border);
            border-radius: 8px; padding: 5px 8px; margin-bottom: 10px; }
@@ -300,9 +324,11 @@
   </div>
 
   <div id="countyview" hidden></div>
+  <div id="areaview" hidden></div>
   <div id="topview" hidden></div>
 
   <footer>
+    <p><a href="areas.html" style="color:inherit">Every area with a notice</a> — a full directory of the 1,800-odd Census areas on this site, each linking to its incident history.</p>
     <p><b>What this measures:</b> supply disruptions <em>announced</em> by Uisce Éireann — not measured availability at anyone's tap. Every time on this page is measured from <em>when the notice was published</em>, not from when supply was actually lost: publication is the earliest moment the data records, and for unplanned events the disruption had already begun. Treat every figure here as a <em>floor</em> on the true length.</p>
     <p><b>Median time to completion</b> is the time from notice publication to a stated &ldquo;works are now complete&rdquo; update, over disruption events that carry one. Where a notice describes works repeating over a range of nights or days &mdash; &ldquo;daily from 10pm until 7am, from 9 to 27 July&rdquo; &mdash; only the hours inside those windows are counted, here and in the person-hour figures, so such an event reads as the hours the works took rather than the days they spanned. Events whose only end signal was a <em>scheduled</em> finish are counted separately and shown as &ldquo;scheduled&rdquo;: a published plan is not evidence the works ended then, so the two are never pooled into a single headline. End times are read from the notice text by an LLM (see the <a href="https://github.com/baz8080/uisce/blob/main/notes/end-time-eval.md" style="color:inherit">accuracy evaluation</a>); no time on this page is a measurement taken in the field.</p>
     <p>Each notice pin is assumed to affect the Census 2022 Small Areas whose centres lie within 500&nbsp;m (CSO SAPS populations); the headline percentage is the population-weighted share of person-time not covered by an announced supply disruption. Only hard disruptions count against it: bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages, and unplanned repair works. Investigations, leak detection, hydrant works and installations are shown as works but never count; restrictions, low pressure and discolouration are shown but never count. A notice announcing a window that <em>repeats</em> over a range of dates — &ldquo;nightly from 10pm until 7am, from 9 to 27 July&rdquo; — is treated as a restriction whatever its title says, because the same supply zone is published sometimes as a conservation restriction and sometimes as an interruption, and the two describe the same thing. Grades: A ≥ 99.9%, B ≥ 99.75%, C ≥ 99.45%, D ≥ 99.0%, else F &mdash; supply availability and nothing else. An active boil-water / do-not-drink / do-not-consume notice is shown as a marker <em>beside</em> the grade rather than folded into it: whether the water is safe to drink is a different question from how much of it there was, and a letter cannot answer both. Until 2 August 2026 such a notice knocked the grade one step; that made a county with a notice affecting 200 people indistinguishable from one that lost supply county-wide. County <em>rankings</em> are robust to the 500&nbsp;m assumption; the letter grades are calibrated to it. The <a href="#top" onclick="go('#top'); return false;" style="color:inherit">ten largest disruptions</a> of each finished month rank the same hard disruptions as individual events, with person-hours clipped to the month so they sum against the county figures; a notice reported &ldquo;confirmed&rdquo; there is one carrying a completion update, and since an event is often published as several notices with different end signals, the count of confirmed notices is shown rather than a single verdict. Closed cases with no usable end signal still mark their start day and event counts, but add no disruption time. Full methodology: <a href="https://github.com/baz8080/uisce/blob/main/notes/statuspage-methodology.md" style="color:inherit">notes/statuspage-methodology.md</a>.</p>
@@ -323,8 +349,9 @@ let curMonth = LATEST;
 let sortBy = "name";
 let townSort = "impact";
 let county = null;  // the county being drilled into, when view === "county"
+let areaCounty = null, areaCode = null;  // the area whose history is on screen
 let view = "overview";
-const VIEW_EL = { overview: "overview", county: "countyview", top: "topview" };
+const VIEW_EL = { overview: "overview", county: "countyview", area: "areaview", top: "topview" };
 // months with a finished top ten; the in-progress month has none (see top_events)
 const TOP_MONTHS = Object.keys(D.top || {});
 const today = new Date().toISOString().slice(0, 10);
@@ -353,6 +380,14 @@ function healthMark(m) {
 
 function monthLabel(ym) { return MONTH_NAMES[ym.slice(5)] + " " + ym.slice(0, 4); }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+// One argument of an inline onclick, as a JS string literal safe in a
+// double-quoted attribute. The site's older handlers wrap their argument in
+// single quotes, which is fine for a county name and wrong for an area code:
+// 15 of them contain an apostrophe ("ed:Clare:O'Briensbridge") and would end
+// the literal early. &quot; is decoded after the attribute is parsed, so it
+// reaches JS as a plain quote without ever terminating the attribute.
+function jsArg(s) { return esc(JSON.stringify(String(s))); }
 
 // Open-case figures are a right-now snapshot of status='Open' — the DB keeps
 // each case's current status, not a history, so there is no such figure for a
@@ -392,7 +427,7 @@ function incident(o, when) {
     </div>`;
 }
 
-const RENDER = { overview: renderOverview, county: renderCounty, top: renderTop };
+const RENDER = { overview: renderOverview, county: renderCounty, area: renderArea, top: renderTop };
 
 function render() {
   for (const [name, id] of Object.entries(VIEW_EL)) {
@@ -499,12 +534,14 @@ function townRows(c) {
   const open = openByArea(c);
   const rows = Object.entries(c.towns)
     .filter(([, t]) => t.months[curMonth])
-    .map(([code, t]) => [t, t.months[curMonth], open[code] || 0]);
+    // the code rides along as a fourth element: it is the area's key in the
+    // history shards, and every comparator reads only the first three
+    .map(([code, t]) => [t, t.months[curMonth], open[code] || 0, code]);
   rows.sort(TOWN_SORTS[townSort]);
   if (!rows.length) return `<div class="note">No cases announced anywhere in the county in ${monthLabel(curMonth)}.</div>`;
 
   const num = (v, label) => `<td class="${v ? "" : "z"}" data-label="${label}">${v ? `<b>${v}</b>` : "0"}</td>`;
-  const body = rows.map(([t, m, openNow]) => {
+  const body = rows.map(([t, m, openNow, code]) => {
     // share of the area's person-time lost, as a hairline meter — the numbers
     // alone all read "99.something" and hide which area actually took the hit
     const lost = m.availability == null ? 0 : Math.min(100, 100 - m.availability);
@@ -513,8 +550,13 @@ function townRows(c) {
     const avail = m.availability == null
       ? '<span class="z">—</span>'
       : `${m.availability.toFixed(2)}%<span class="meter" title="${lost.toFixed(2)}% of person-time disrupted"><i style="width:${Math.min(100, lost * 5).toFixed(1)}%"></i></span>`;
-    return `<tr class="${t.unplaced ? "unplaced" : ""}">
-      <td class="name">${esc(t.name)}${t.pop == null ? "" : `<br><span class="tpop">${t.pop.toLocaleString()} people</span>`}</td>
+    // the whole row is the click target, but the name is also a real anchor so
+    // middle-click and open-in-new-tab work — the county rows predate this and
+    // still don't
+    const href = esc(`#area/${encodeURIComponent(county)}/${encodeURIComponent(code)}`);
+    const jump = `goArea(${jsArg(county)}, ${jsArg(code)})`;
+    return `<tr class="hist ${t.unplaced ? "unplaced" : ""}" onclick="${jump}">
+      <td class="name"><a href="${href}" onclick="${jump}; return false;">${esc(t.name)}</a>${t.pop == null ? "" : `<br><span class="tpop">${t.pop.toLocaleString()} people</span>`}</td>
       ${num(ev(m, "outage"), "Disruptions")}
       ${num(ev(m, "quality"), "Quality notices")}
       ${num(ev(m, "degraded") + ev(m, "maintenance"), "Works")}
@@ -613,7 +655,7 @@ function renderCounty() {
 
     <div class="card">
       <h3>Areas with cases in ${monthLabel(curMonth)}</h3>
-      <div class="note">Each notice pin is placed in the Census 2022 area its affected population centres on: the settlement it is in, or — for the roughly 40% of the network that runs between towns rather than through one — the countryside of the surrounding Electoral Division, shown as <em>Around&nbsp;…</em> to keep it distinct from the town of the same name. The Census counts a city and its suburbs as <em>one</em> settlement, Dublin's being a single area of 1.26 million, so any settlement above 50,000 is broken into its Local Electoral Areas instead. Availability is measured against each area's <em>own</em> population, so a burst covering a whole village reads far worse than the same event does in the county figure above; that is what the breakdown is for, and it is why there are no letter grades at this level — the A–F thresholds are calibrated to county-months and would mislead against a village-sized denominator.</div>
+      <div class="note">Each notice pin is placed in the Census 2022 area its affected population centres on: the settlement it is in, or — for the roughly 40% of the network that runs between towns rather than through one — the countryside of the surrounding Electoral Division, shown as <em>Around&nbsp;…</em> to keep it distinct from the town of the same name. The Census counts a city and its suburbs as <em>one</em> settlement, Dublin's being a single area of 1.26 million, so any settlement above 50,000 is broken into its Local Electoral Areas instead. Availability is measured against each area's <em>own</em> population, so a burst covering a whole village reads far worse than the same event does in the county figure above; that is what the breakdown is for, and it is why there are no letter grades at this level — the A–F thresholds are calibrated to county-months and would mislead against a village-sized denominator. <b>Select an area</b> to see every notice ever published there, or <a href="areas.html" style="color:inherit">browse every area on the site</a>.</div>
       ${townRows(c)}
     </div>
 
@@ -631,11 +673,18 @@ function fmtPersonH(h) {
 // Each pin carries its own end signal, so "was this confirmed complete?" is a
 // count, not a boolean — and saying "confirmed" off a single pin out of 18 would
 // present a schedule as a measurement, which is the one thing this page must not do.
-function endBadge(r) {
+// `open` distinguishes the two ways an event can carry no end signal, which the
+// top ten never had to separate because every event it ranks accrued time. An
+// open case is still running and counted to the cap; a *closed* one never
+// reported an end at all and was charged nothing — saying "capped at 14 days"
+// there would claim a measurement that was never made. Left undefined, the
+// wording is the top ten's, unchanged.
+function endBadge(r, open) {
   if (r.confirmed && !r.scheduled) return `<span class="badge confirmed">completion confirmed</span>`;
   if (r.confirmed) return `<span class="badge partial">partly confirmed — ${r.confirmed} of ${r.pins} notices reported complete</span>`;
   if (r.scheduled) return `<span class="badge sched">scheduled end only — no completion reported</span>`;
-  return `<span class="badge sched">no end signal — capped at 14 days</span>`;
+  if (open === undefined || open) return `<span class="badge sched">no end signal — capped at 14 days</span>`;
+  return `<span class="badge none" title="The notice was withdrawn without an update saying the works had finished, so there is no duration to report. It is counted as an event but adds no disruption time.">no end was ever reported</span>`;
 }
 
 function topMonth() {
@@ -681,6 +730,123 @@ function renderTop() {
     </div>`;
 }
 
+// ---- the per-area history ----
+
+// Every event ever published in an area, loaded one county at a time. All of it
+// together is twice the size of data.js, so it is not in the payload: the county
+// shard arrives when a reader opens an area and stays for the session.
+//
+// An injected <script> rather than fetch, for the same reason data.js is a
+// <script>: the site has to work opened straight off disk, and fetch cannot read
+// a file:// URL.
+const HISTORY = {};
+window.UISCE_HISTORY = HISTORY;   // each shard assigns straight into it
+const HISTORY_STATE = {};         // county -> "loading" | "ok" | "error"
+
+function loadHistory(name) {
+  if (HISTORY_STATE[name]) return;   // already loading, loaded, or failed
+  HISTORY_STATE[name] = "loading";
+  const el = document.createElement("script");
+  // A query string on a file:// URL is part of the path, so cache-busting there
+  // would 404 the shard that this whole mechanism exists to keep loadable.
+  el.src = "h/" + name.toLowerCase() + ".js" +
+    (location.protocol === "file:" ? "" : "?v=" + encodeURIComponent(D.generated));
+  let settled = false;
+  const settle = () => {
+    if (settled) return;
+    settled = true;
+    // onload alone is not success: a file served but blocked, or truncated,
+    // loads without assigning anything
+    HISTORY_STATE[name] = HISTORY[name] ? "ok" : "error";
+    // the reader may have moved on while it was in flight
+    if (view === "area" && areaCounty === name) render();
+  };
+  el.onload = el.onerror = settle;
+  setTimeout(settle, 10000);
+  document.head.appendChild(el);
+}
+
+// A duration is only ever a floor: every span is measured from when the notice
+// was published, not from when supply actually went. `hours` is absent entirely
+// for an event that closed without reporting an end — see endBadge.
+function historyDuration(e) {
+  if (e.hours == null) return "";
+  if (e.span_h) return `${e.hours}h of works inside a repeating window spanning ${e.span_h}h`;
+  return e.open ? `at least ${e.hours}h so far` : `${e.hours}h`;
+}
+
+function historyRow(e) {
+  const bits = [
+    e.loc ? esc(e.loc) : "",
+    e.open ? `open since ${e.start}` : `from ${e.start}`,
+    historyDuration(e),
+    e.people ? `~${e.people.toLocaleString()} people` : "",
+    // 15 notices stopped being listed before the date they announced. "Closed"
+    // would imply works that finished; what actually happened is the notice was
+    // taken down, so say that instead of dressing it as a completion.
+    e.closed ? (e.closed < e.start ? `withdrawn ${e.closed}` : `closed ${e.closed}`) : "",
+  ].filter(Boolean);
+  return `<div class="hrow">
+    <div class="t"><span class="dot s-${e.sev}" title="${SEVLABEL[e.sev]}"></span>${esc(e.title)}</div>
+    <div class="m">${bits.join(" · ")}</div>
+    ${endBadge(e, !!e.open)}${e.health
+      ? `<span class="badge health" title="A boil-water, do-not-drink or do-not-consume notice — the water may not have been safe to drink.">drinking-water notice</span>` : ""}${
+      // one event published as pins in several areas is listed under each of
+      // them, matching the county breakdown, which counts it in each row too.
+      // Say so, or meeting the same burst twice reads as double-counting.
+      e.areas ? `<span class="badge sched" title="This notice was published as map pins in more than one area, so it appears in each of their histories. The people affected is the whole event's, not this area's share.">also affects ${e.areas - 1} other area${e.areas === 2 ? "" : "s"}</span>` : ""}
+  </div>`;
+}
+
+function historyBody(name) {
+  const state = HISTORY_STATE[name];
+  if (state !== "ok") {
+    return state === "error"
+      ? `<div class="note" style="margin:0">The incident history for each county is a separate file (<code>h/${esc(name.toLowerCase())}.js</code>) that loads when you open an area. It did not load.</div>`
+      : `<div class="note" style="margin:0">Loading the incident history for Co.&nbsp;${esc(name)}…</div>`;
+  }
+  const area = HISTORY[name][areaCode];
+  const events = area ? area.events : [];
+  if (!events.length) return `<div class="note" style="margin:0">No notice has ever been published for this area.</div>`;
+
+  // grouped by the month the notice went up, newest first. The events arrive
+  // sorted, so the groups come out in order without sorting again.
+  let out = "", ym = null;
+  for (const e of events) {
+    if (e.start.slice(0, 7) !== ym) {
+      ym = e.start.slice(0, 7);
+      const n = events.filter(x => x.start.slice(0, 7) === ym).length;
+      out += `<div class="hmonth">${monthLabel(ym)} <span>· ${n} notice${n === 1 ? "" : "s"}</span></div>`;
+    }
+    out += historyRow(e);
+  }
+  return out;
+}
+
+function renderArea() {
+  const c = D.counties[areaCounty];
+  const t = c.towns[areaCode];
+  const loaded = HISTORY_STATE[areaCounty] === "ok" ? HISTORY[areaCounty][areaCode] : null;
+  // the name comes from data.js when the area has month rows and from the shard
+  // otherwise — an area whose every notice is still in the future has neither a
+  // month row nor a place in the county breakdown
+  const name = (t && t.name) || (loaded && loaded.name) || areaCode;
+  const total = loaded ? loaded.events.length : null;
+
+  document.getElementById("areaview").innerHTML = `
+    <a class="back" href="#county/${encodeURIComponent(areaCounty)}"
+       onclick="goCounty(${jsArg(areaCounty)}); return false;">← Co. ${esc(areaCounty)}</a>
+    <div class="chead">
+      <h2>${esc(name)}</h2>
+      <span class="pop">${t && t.pop != null ? t.pop.toLocaleString() + " people · Census 2022 · " : ""}Co.&nbsp;${esc(areaCounty)}</span>
+    </div>
+    <div class="card">
+      <h3>Every notice published here${total == null ? "" : ` <span class="n">${total} notice${total === 1 ? "" : "s"}</span>`}</h3>
+      <div class="note">Everything Uisce Éireann has published for this area since collection began on 20&nbsp;April&nbsp;2026, newest first. A notice is placed here when the Census Small Areas its pins affect centre on this area, so an event that straddles a boundary appears once, under whichever area holds most of the people it reached. Dates are when the notice was <em>published</em>, not when supply actually went, so every duration is a floor; where an event was published as several notices, the badge counts how many of them reported the works complete.</div>
+      ${historyBody(areaCounty)}
+    </div>`;
+}
+
 // ---- routing ----
 
 function go(hash) {
@@ -692,15 +858,31 @@ function go(hash) {
   window.scrollTo(0, 0);
 }
 function goCounty(name) { go("#county/" + encodeURIComponent(name)); }
+// Both segments encoded: an area code is not URL-safe — 31 of them contain a
+// slash ("ed:Cavan:Dunmakeever/Benbrack/Derrynananta"), most contain colons,
+// several are non-ASCII. Encoding turns the slash into %2F, which is what keeps
+// it out of the county capture below.
+function goArea(name, code) {
+  go("#area/" + encodeURIComponent(name) + "/" + encodeURIComponent(code));
+}
 function setMonth(m) { curMonth = m; render(); }
 function setTownSort(k) { townSort = k; render(); }
 function route() {
+  // matched before the county pattern, which would otherwise never see it
+  const am = location.hash.match(/^#area\/([^/]+)\/(.+)$/);
   const match = location.hash.match(/^#county\/([^/]+)$/);
   const name = match ? decodeURIComponent(match[1]) : null;
   county = name && D.counties[name] ? name : null;
-  // an unknown county, or #top on a build with no complete month yet, falls
-  // back to the overview rather than rendering an empty view
-  view = county ? "county" : location.hash === "#top" && TOP_MONTHS.length ? "top" : "overview";
+  areaCounty = am && D.counties[decodeURIComponent(am[1])] ? decodeURIComponent(am[1]) : null;
+  areaCode = areaCounty ? decodeURIComponent(am[2]) : null;
+  // An unknown county, or #top on a build with no complete month yet, falls back
+  // to the overview rather than rendering an empty view. An unknown *area code*
+  // does not: the county is real, so the page can say that nothing was ever
+  // published there, which is a better answer than silently going somewhere else.
+  view = areaCounty ? "area"
+    : county ? "county"
+    : location.hash === "#top" && TOP_MONTHS.length ? "top" : "overview";
+  if (areaCounty) loadHistory(areaCounty);
   render();
 }
 document.getElementById("sort").addEventListener("change", e => { sortBy = e.target.value; render(); });
