@@ -64,7 +64,10 @@
   .partial-note { font-size: 12.5px; color: var(--muted); width: 100%; }
 
   .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 10px 0 18px; font-size: 12.5px; color: var(--ink-2); }
-  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  /* direct children only: an entry may contain a swatch that is itself a span
+     (the health mark), and an unscoped `.legend span` would beat `.healthmark`
+     on specificity and lay its "!" out as a flex row instead of centring it */
+  .legend > span { display: inline-flex; align-items: center; gap: 6px; }
   .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 
   .county {
@@ -95,6 +98,7 @@
     cursor: help;
   }
   .chead .healthmark { width: 24px; height: 24px; font-size: 13.5px; }
+  .healthmark.sm { width: 15px; height: 15px; font-size: 10px; }
   .bar { display: flex; gap: 2px; height: 28px; }
   .bar i { flex: 1; border-radius: 2px; background: var(--good); min-width: 3px; }
   .bar i.outage { background: var(--critical); }
@@ -363,7 +367,7 @@ const LEGEND = `
   <span><i style="background:var(--warning)"></i> Restrictions / low pressure</span>
   <span><i style="background:var(--maint)"></i> Works (planned / non-disruptive)</span>
   <span><i style="background:var(--critical);opacity:.4"></i><i style="background:var(--critical);opacity:.7"></i><i style="background:var(--critical)"></i> deeper = larger share of county affected (&lt;0.5% / 0.5–2% / &gt;2%)</span>
-  <span><span class="healthmark" style="width:15px;height:15px;font-size:10px">!</span> beside a grade: an active boil-water or do-not-drink notice</span>`;
+  <span><span class="healthmark sm">!</span> beside a grade: an active boil-water or do-not-drink notice</span>`;
 
 // The grade is availability alone. An active boil-water / do-not-drink /
 // do-not-consume notice is shown next to it rather than folded into it, so a
