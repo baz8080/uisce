@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Every area — Irish Water Supply Disruptions</title>
+<style>
+  /* Standalone, so it repeats site.html's tokens rather than importing them.
+     Deliberate: this page is loaded on its own and a shared stylesheet would be
+     a second request on both pages to save a kilobyte on one. Keep the two
+     :root blocks in step by hand — they are the only duplication here. */
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --border: rgba(11,11,11,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19;
+      --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--page); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 24px 16px 64px;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  a { color: inherit; }
+  header h1 { font-size: 22px; font-weight: 650; }
+  header .sub { color: var(--ink-2); margin-top: 4px; font-size: 14px; }
+  .back { display: inline-block; color: var(--muted); text-decoration: none;
+          font-size: 13px; margin-bottom: 14px; }
+  .back:hover { color: var(--ink); }
+
+  /* The jump nav sticks, because the whole point of one long document is that
+     you can Ctrl+F it — and having scrolled to Wicklow you still want Cork. */
+  nav {
+    position: sticky; top: 0; z-index: 2; margin: 18px 0 8px;
+    padding: 10px 12px; border-radius: 8px; line-height: 2;
+    background: var(--surface); border: 1px solid var(--border);
+    font-size: 13px; color: var(--muted);
+    /* bounded, so a narrow window cannot leave the sticky nav taller than the
+       scroll-margin below it and hide the heading it just jumped to */
+    max-height: 30vh; overflow-y: auto;
+  }
+  nav a { text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+
+  /* clears the two-line nav at desktop widths */
+  section { margin-top: 26px; scroll-margin-top: 104px; }
+  section h2 { font-size: 16px; font-weight: 650; padding-bottom: 6px;
+               border-bottom: 1px solid var(--grid); }
+  section h2 span { color: var(--muted); font-weight: 400; font-size: 13px; }
+  ul { list-style: none; columns: 2; column-gap: 28px; margin-top: 8px; }
+  li { break-inside: avoid; display: flex; align-items: baseline; gap: 6px;
+       padding: 3px 0; font-size: 13.5px; }
+  li a { text-decoration: none; border-bottom: 1px solid var(--border); }
+  li a:hover { border-bottom-color: currentColor; }
+  /* the dotted leader carries the eye across to the count in a two-column list */
+  li .fill { flex: 1; border-bottom: 1px dotted var(--grid); min-width: 8px; }
+  li .n { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  li .p { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums;
+          min-width: 62px; text-align: right; }
+  li.unplaced a { color: var(--muted); }
+  /* On a phone the nav wraps to six lines and eats the screen, so it scrolls
+     away with the page instead of pinning to the top of it. */
+  @media (max-width: 640px) {
+    ul { columns: 1; }
+    nav { position: static; max-height: none; }
+    section { scroll-margin-top: 12px; }
+  }
+
+  footer { margin-top: 40px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+  footer p + p { margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← Status by county</a>
+  <header>
+    <h1>Every area with a notice</h1>
+    <p class="sub">Every Census 2022 area Uisce Éireann has published a supply or works notice for since 20 April 2026 — pick one for its full incident history. The two figures beside each name are <b>notices published</b> and <b>people living there</b>.</p>
+  </header>
+
+  <!--AREAS-->
+
+  <footer>
+    <p>An area is a CSO settlement, a Local Electoral Area of one of the five cities, or the countryside of an Electoral Division shown as <em>Around&nbsp;…</em>. A notice is placed in the area its affected population centres on, so an event whose map pins span two areas is listed under each of them and its count appears in both — the figure beside each name is how many notices that area has seen, not a share of a national total.</p>
+    <p>Areas with no notice at all are not listed: roughly 1,900 of Ireland's named areas have had none since collection began, and a page of them would say nothing. <a href="https://github.com/baz8080/uisce">Source and methodology</a>.</p>
+  </footer>
+</div>
+</body>
+</html>
