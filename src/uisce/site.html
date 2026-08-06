@@ -1081,9 +1081,15 @@ function renderArea() {
 // ---- routing ----
 
 function go(hash) {
-  // Cloudflare Web Analytics' automatic SPA tracking watches the History
-  // API, not hashchange, so a bare hash assignment is invisible to it —
-  // push the new URL so drill-downs register as page views.
+  // pushState rather than a bare hash assignment, so that popstate below gets
+  // the back and forward buttons working across drill-downs.
+  //
+  // This was originally added to make Cloudflare Web Analytics count a county
+  // drill-down as a page view, and at that it does not work: what it pushes is
+  // a fragment, so the path stays /uisce/ throughout and the beacon has no new
+  // page to report. That is a property of counting views by path, not
+  // something a different call here would fix — the county pages are what
+  // actually solved it, being real documents at their own URLs.
   if (hash !== location.hash) history.pushState(null, "", hash || location.pathname + location.search);
   route();
   window.scrollTo(0, 0);

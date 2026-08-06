@@ -1517,6 +1517,19 @@ class TestIndexablePages:
         text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", body)).strip()
         assert len(text) > 600, text
 
+    def test_every_page_a_reader_can_land_on_reports_to_analytics(self, tmp_path):
+        """A published page that reports nothing cannot tell you whether
+        publishing it worked. The hash routes never could report: pushState of a
+        fragment leaves the path at /uisce/, so there was no new page for the
+        beacon to count — see the note on go() in site.html. Every real URL the
+        site serves carries it, which is now the whole indexable surface."""
+        counties, _ = self._write(tmp_path)
+        beacon = "static.cloudflareinsights.com/beacon.min.js"
+        pages = ["index.html", "areas.html"] + [
+            f"c/{county_slug(c)}.html" for c in counties
+        ]
+        assert [p for p in pages if beacon not in (tmp_path / p).read_text()] == []
+
     def test_an_empty_county_page_still_renders_and_says_so(self, tmp_path):
         """A county with no notice is a page a search result can still land on,
         so it has to be a document rather than a stack trace."""
