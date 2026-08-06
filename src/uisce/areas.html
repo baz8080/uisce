@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Every area — Irish Water Supply Disruptions</title>
+<meta name="description" content="Every Irish town, settlement and rural area Uisce Éireann has published a water supply or works notice for, county by county, with the number of notices each has seen.">
+<link rel="canonical" href="<!--CANONICAL-->">
 <style>
   /* Standalone, so it repeats site.html's tokens rather than importing them.
      Deliberate: this page is loaded on its own and a shared stylesheet would be
@@ -92,6 +94,7 @@
   footer { margin-top: 40px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
   footer p + p { margin-top: 8px; }
 </style>
+<!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "38aafde3cd5b407fbeda43cd3fc4a66c"}'></script><!-- End Cloudflare Web Analytics -->
 </head>
 <body>
 <div class="wrap">
@@ -122,7 +125,9 @@
   const nav = document.querySelector("nav");
   const sections = [...document.querySelectorAll("section")].map(sec => ({
     sec,
-    county: sec.querySelector("h2").textContent.toLowerCase(),
+    // the bare name, not the heading: the heading also carries the area count
+    // and the county-page link, and "page" must not match all 26 counties
+    county: sec.dataset.county.toLowerCase(),
     items: [...sec.querySelectorAll("li")].map(li => ({ li, text: li.textContent.toLowerCase() })),
   }));
 

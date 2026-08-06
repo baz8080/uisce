@@ -29,7 +29,6 @@ import html
 import json
 import math
 import re
-import shutil
 import sqlite3
 import statistics
 from collections import Counter, defaultdict
@@ -38,11 +37,21 @@ from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import quote
 
-from uisce.config import DB_PATH, DUBLIN, RECURRING, SA_POP_PATH, SA_TOWNS_PATH, SITE_DIR
+from uisce.config import (
+    BASE_URL,
+    DB_PATH,
+    DUBLIN,
+    RECURRING,
+    SA_POP_PATH,
+    SA_TOWNS_PATH,
+    SITE_DIR,
+)
 
 SITE_HTML = Path(__file__).parent / "site.html"
 AREAS_HTML = Path(__file__).parent / "areas.html"
+COUNTY_HTML = Path(__file__).parent / "county.html"
 AREAS_MARKER = "<!--AREAS-->"
+CANONICAL_MARKER = "<!--CANONICAL-->"
 
 # The feed was first snapshotted on 2026-04-20; earlier days are unobserved
 # (the ArcGIS source only retains recent notices).
@@ -1139,6 +1148,32 @@ def area_index(history, towns):
     return out
 
 
+def _area_items(county, areas, prefix=""):
+    """The <li> rows for one county's areas, shared by the directory and c/*.html.
+
+    `prefix` is prepended to the link target because the county pages sit one
+    directory down; everything else about a row is identical on both pages, and
+    the two drifting apart is exactly the bug a reader would report as "the
+    directory says three notices and the county page says four".
+    """
+    items = []
+    for code, name, pop, n in areas:
+        href = f"{prefix}index.html#area/{quote(county, safe='')}/{quote(code, safe='')}"
+        # The units ride on every row rather than in a column heading: the
+        # heading scrolls away after the first county, and two bare
+        # right-aligned integers are read in the wrong order by most people
+        # (the bigger one looks like the count). ~15 KB for a page that
+        # explains itself wherever you land in it, and in search results.
+        items.append(
+            f'<li{" class=\"unplaced\"" if pop is None else ""}>'
+            f'<a href="{href}">{html.escape(name)}</a>'
+            f'<span class="fill"></span>'
+            f'<span class="n">{n} notice{"" if n == 1 else "s"}</span>'
+            f'<span class="p">{"" if pop is None else f"{pop:,} people"}</span></li>'
+        )
+    return "".join(items)
+
+
 def _area_index_html(index):
     """The directory's body: a jump nav and one section per county."""
     nav = " · ".join(
@@ -1146,25 +1181,17 @@ def _area_index_html(index):
     )
     sections = []
     for county, areas in index:
-        items = []
-        for code, name, pop, n in areas:
-            href = f"index.html#area/{quote(county, safe='')}/{quote(code, safe='')}"
-            # The units ride on every row rather than in a column heading: the
-            # heading scrolls away after the first county, and two bare
-            # right-aligned integers are read in the wrong order by most people
-            # (the bigger one looks like the count). ~15 KB for a page that
-            # explains itself wherever you land in it, and in search results.
-            items.append(
-                f'<li{" class=\"unplaced\"" if pop is None else ""}>'
-                f'<a href="{href}">{html.escape(name)}</a>'
-                f'<span class="fill"></span>'
-                f'<span class="n">{n} notice{"" if n == 1 else "s"}</span>'
-                f'<span class="p">{"" if pop is None else f"{pop:,} people"}</span></li>'
-            )
+        # The crawlable link into c/*.html. A sitemap alone is a weak discovery
+        # signal — an internal link from an already-indexed page is the strong
+        # one, and this page is where a county's name is already the heading.
+        # data-county carries the bare name for the search: the heading itself
+        # now also holds the count and the county-page link, and matching on all
+        # of that would make "page" select every county in the country
         sections.append(
-            f'<section id="c-{county_slug(county)}">'
-            f'<h2>Co. {html.escape(county)} <span>· {len(areas)} areas</span></h2>'
-            f'<ul>{"".join(items)}</ul></section>'
+            f'<section id="c-{county_slug(county)}" data-county="{html.escape(county)}">'
+            f'<h2>Co. {html.escape(county)} <span>· {len(areas)} areas · '
+            f'<a href="c/{county_slug(county)}.html">county page</a></span></h2>'
+            f'<ul>{_area_items(county, areas)}</ul></section>'
         )
     return f"<nav>{nav}</nav>\n{''.join(sections)}"
 
@@ -1178,6 +1205,204 @@ def county_slug(county):
     filename the loader cannot request.
     """
     return county.lower()
+
+
+# Kept in step with SEVLABEL in site.html by hand — the same duplication, and
+# for the same reason, as the :root token block areas.html repeats.
+SEV_LABEL = {
+    "outage": "Supply disruption",
+    "quality": "Water quality notice",
+    "degraded": "Restrictions / low pressure",
+    "maintenance": "Works (planned / non-disruptive)",
+}
+
+# The county page is a document, not the app: past this many events a reader is
+# better served by the interactive view, and the page stays a few KB.
+COUNTY_EVENTS_SHOWN = 60
+
+# Cork has 46 notices open at once, which is enough to push everything else on
+# the page below the fold. Capped for the same reason resolved_by_month caps its
+# own list, and the true count is still printed beside the heading.
+COUNTY_OPEN_SHOWN = 20
+
+
+def county_events(areas_history):
+    """Every event in one county, newest first, each appearing once.
+
+    area_history lists an event under every area its pins were homed to and
+    shares one record by reference between them, so the county's own list has to
+    de-duplicate or it would print the 764 multi-area events twice over. Keyed on
+    `ref`, which is unique within a county — the (county, ref) pairing that
+    area_history documents is already resolved by the time we are inside one.
+    """
+    seen = {}
+    for area in areas_history.values():
+        for event in area["events"]:
+            seen.setdefault(event["ref"], event)
+    return sorted(seen.values(), key=lambda e: (e["start"], e["ref"]), reverse=True)
+
+
+def _county_open_html(cdata, shown=COUNTY_OPEN_SHOWN):
+    """Notices open right now — the one thing on the page a reader may have come
+    for today rather than for the record."""
+    if not cdata["open"]:
+        return ""
+    rows = "".join(
+        f'<li><span class="sev sev-{html.escape(o["sev"])}">'
+        f'{html.escape(SEV_LABEL[o["sev"]])}</span> '
+        f'<strong>{html.escape(o["title"])}</strong>'
+        + (f' — {html.escape(o["loc"])}' if o["loc"] else "")
+        + f'<span class="when">since {html.escape(o["since"])}</span></li>'
+        for o in cdata["open"][:shown]
+    )
+    more = ""
+    if cdata["open_total"] > shown:
+        more = (
+            f'<p class="more">{cdata["open_total"] - shown:,} more open — '
+            f'see the interactive view.</p>'
+        )
+    return (
+        f'<section id="open"><h2>Open now <span>· {cdata["open_total"]}</span></h2>'
+        f'<ul class="notices">{rows}</ul>{more}</section>'
+    )
+
+
+def _county_summary_html(county, cdata, n_areas, n_events, months):
+    """The opening paragraph and the current-state line."""
+    pop = cdata["pop"]
+    # Newest month with any elapsed days: the current month is legitimate here
+    # (unlike in `top`, which needs settled months to rank) because this states
+    # a present condition rather than a ranking that must not reshuffle.
+    latest = next(
+        (ym for ym in reversed(months) if cdata["months"][ym]["days_elapsed"]), None
+    )
+    parts = [
+        f"<p class=\"sub\">Every water supply notice Uisce Éireann has published for "
+        f"Co. {html.escape(county)} since 20 April 2026: "
+        f"{n_events:,} notice{'' if n_events == 1 else 's'} across "
+        f"{n_areas:,} area{'' if n_areas == 1 else 's'}, "
+        f"population {pop:,}.</p>"
+    ]
+    if latest:
+        m = cdata["months"][latest]
+        health = ""
+        if m["health_n"]:
+            health = (
+                f' <span class="health">{m["health_n"]} active health '
+                f'notice{"" if m["health_n"] == 1 else "s"}</span>'
+            )
+        parts.append(
+            f'<p class="now">This month: grade <strong>{m["grade"]}</strong>, '
+            f'{m["availability"]:.3f}% supply availability, '
+            f'{m["clear_days"]} of {m["days_elapsed"]} elapsed days with no notice.'
+            f'{health}</p>'
+        )
+    return "".join(parts)
+
+
+def _county_months_html(cdata, months):
+    """One row per month: the same figures the app's county view charts."""
+    rows = []
+    for ym in reversed(months):
+        m = cdata["months"][ym]
+        if not m["days_elapsed"]:
+            continue  # a month collection never reached says nothing
+        ev = m["events"]
+        rows.append(
+            f'<tr><th scope="row">{ym}</th>'
+            f'<td class="g g-{m["grade"]}">{m["grade"]}</td>'
+            f'<td>{m["availability"]:.3f}%</td>'
+            f'<td>{ev["outage"]}</td><td>{ev["quality"]}</td>'
+            f'<td>{ev["degraded"]}</td><td>{ev["maintenance"]}</td>'
+            f'<td>{m["person_h"]:,}</td></tr>'
+        )
+    if not rows:
+        return ""
+    return (
+        '<section id="months"><h2>Month by month</h2>'
+        '<div class="scroll"><table><thead><tr>'
+        '<th scope="col">Month</th><th scope="col">Grade</th>'
+        '<th scope="col">Availability</th>'
+        '<th scope="col" title="Supply disruptions">Outages</th>'
+        '<th scope="col" title="Boil water, do not drink, discolouration">Quality</th>'
+        '<th scope="col" title="Restrictions and low pressure">Restricted</th>'
+        '<th scope="col" title="Planned or non-disruptive works">Works</th>'
+        '<th scope="col" title="Population-weighted hours of lost supply">Person-hours</th>'
+        f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div></section>'
+    )
+
+
+def _county_events_html(events, shown=COUNTY_EVENTS_SHOWN):
+    """The county's notice history, newest first."""
+    if not events:
+        return ""
+    rows = []
+    for e in events[:shown]:
+        bits = []
+        if e.get("hours") is not None:
+            # "so far" on an open event: the figure is time accrued to this
+            # build, not what the works took, and a bare "0h · still open" on
+            # something published this morning reads as a completed nothing
+            bits.append(f'{e["hours"]:g}h so far' if e.get("open") else f'{e["hours"]:g}h')
+        if e.get("people"):
+            bits.append(f'{e["people"]:,} people')
+        if e.get("open"):
+            bits.append("still open")
+        elif e.get("closed"):
+            bits.append(f'closed {e["closed"]}')
+        elif not e.get("confirmed") and not e.get("scheduled"):
+            # the distinction event_record is careful about: no end was ever
+            # reported, which is not the same as an end of zero hours
+            bits.append("no end reported")
+        meta = " · ".join(bits)
+        rows.append(
+            f'<li><span class="sev sev-{html.escape(e["sev"])}">'
+            f'{html.escape(SEV_LABEL[e["sev"]])}</span> '
+            f'<strong>{html.escape(e["title"])}</strong>'
+            + (f' — {html.escape(e["loc"])}' if e.get("loc") else "")
+            + f'<span class="when">{html.escape(e["start"])}'
+            + (f' · {meta}' if meta else "")
+            + '</span></li>'
+        )
+    more = ""
+    if len(events) > shown:
+        more = f'<p class="more">{len(events) - shown:,} older notices not shown here.</p>'
+    return (
+        f'<section id="notices"><h2>Notice history '
+        f'<span>· {len(events):,}</span></h2>'
+        f'<ul class="notices">{"".join(rows)}</ul>{more}</section>'
+    )
+
+
+def county_page_html(county, cdata, areas, events, months, all_counties):
+    """The whole body of c/<slug>.html.
+
+    Server-rendered in full and carrying no data.js: the point of these pages is
+    to be readable and indexable without executing anything, which the hash
+    routes in site.html can never be. The interactive month chart stays one link
+    away rather than being reproduced here.
+    """
+    nav = " · ".join(
+        f'<a href="{county_slug(c)}.html">{html.escape(c)}</a>'
+        if c != county
+        else f"<strong>{html.escape(c)}</strong>"
+        for c in all_counties
+    )
+    app = f"../index.html#county/{quote(county, safe='')}"
+    return (
+        f'<header><h1>Co. {html.escape(county)} water supply disruptions</h1>'
+        f'{_county_summary_html(county, cdata, len(areas), len(events), months)}'
+        f'<p class="app"><a href="{app}">Open the interactive view for '
+        f'Co. {html.escape(county)}</a> — daily bars, month switching and the '
+        f'area drill-down.</p></header>'
+        f'<nav>{nav}</nav>'
+        f'{_county_open_html(cdata)}'
+        f'{_county_months_html(cdata, months)}'
+        f'{_county_events_html(events)}'
+        f'<section id="areas"><h2>Areas with a notice '
+        f'<span>· {len(areas)}</span></h2>'
+        f'<ul class="areas">{_area_items(county, areas, "../")}</ul></section>'
+    )
 
 
 def _window_label(case):
@@ -1522,10 +1747,33 @@ def load_cases(conn):
 
 
 HISTORY_DIR = "h"
+COUNTY_DIR = "c"
+
+
+def _sitemap_xml(paths, lastmod):
+    """A sitemap over the pages, not the payload. data.js and the shards are
+    fetched by the app, never landed on, and listing them would invite a crawler
+    to index 26 files of JSON as if they were documents."""
+    urls = "".join(
+        f"<url><loc>{html.escape(f'{BASE_URL}/{p}')}</loc>"
+        f"<lastmod>{lastmod}</lastmod></url>"
+        for p in paths
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{urls}</urlset>\n"
+    )
 
 
 def write_site(site, site_dir, towns=None):
-    """data.js, index.html, areas.html, and one history shard per county.
+    """data.js, index.html, areas.html, c/<county>.html, and a history shard each.
+
+    The c/ pages, sitemap.xml and robots.txt are the site's indexable surface.
+    Before them the whole site was two URLs: everything a reader might search
+    for — a county, a town — lived behind a hash route, which is not a URL a
+    crawler can index. The county pages carry the same figures server-rendered
+    and link into the app rather than embedding it.
 
     Owning the split here is what keeps it from failing open: the history is
     popped before data.js is serialised, so a future field added to it cannot
@@ -1546,7 +1794,11 @@ def write_site(site, site_dir, towns=None):
     data = "window.UISCE_DATA = " + json.dumps(site) + ";"
     site_dir.mkdir(parents=True, exist_ok=True)
     (site_dir / "data.js").write_text(data)
-    shutil.copyfile(SITE_HTML, site_dir / "index.html")
+    # substituted rather than copied, now that it carries a canonical — the
+    # treatment areas.html has always had
+    (site_dir / "index.html").write_text(
+        SITE_HTML.read_text().replace(CANONICAL_MARKER, f"{BASE_URL}/")
+    )
 
     shard_dir = site_dir / HISTORY_DIR
     shard_dir.mkdir(exist_ok=True)
@@ -1565,14 +1817,68 @@ def write_site(site, site_dir, towns=None):
     # The directory. Substituted rather than copied, unlike index.html: the rows
     # are the page, and generating them into a template keeps the markup and CSS
     # in an HTML file instead of in Python string literals.
-    index_bytes = 0
+    index_bytes = county_bytes = n_county_pages = 0
+    pages = ["", "areas.html"]
     if towns is not None:
-        page = AREAS_HTML.read_text().replace(
-            AREAS_MARKER, _area_index_html(area_index(history, towns))
+        index = area_index(history, towns)
+        page = (
+            AREAS_HTML.read_text()
+            .replace(AREAS_MARKER, _area_index_html(index))
+            .replace(CANONICAL_MARKER, f"{BASE_URL}/areas.html")
         )
         (site_dir / "areas.html").write_text(page)
         index_bytes = len(page.encode())
-    return len(data.encode()), shard_bytes, sum(len(a) for a in history.values()), index_bytes
+
+        # The indexable surface, one page per county in the payload — the same
+        # set the shards cover, so a county the app can route to is always a
+        # county a search result can land on. A county with no notice at all is
+        # absent from both, and has no page rather than an empty one; every one
+        # of the 26 has had notices since collection began.
+        county_dir = site_dir / COUNTY_DIR
+        county_dir.mkdir(exist_ok=True)
+        by_county = dict(index)
+        template = COUNTY_HTML.read_text()
+        all_counties = sorted(site["counties"])
+        for county in all_counties:
+            slug = county_slug(county)
+            areas = by_county.get(county, [])
+            events = county_events(history.get(county, {}))
+            body = county_page_html(
+                county, site["counties"][county], areas, events, site["months"], all_counties
+            )
+            page = (
+                template.replace(
+                    "<!--TITLE-->",
+                    html.escape(f"Co. {county} water supply disruptions — Uisce Éireann notices"),
+                )
+                .replace(
+                    "<!--DESC-->",
+                    html.escape(
+                        f"Water outages, boil notices, restrictions and works announced by "
+                        f"Uisce Éireann in Co. {county} — {len(events):,} notices across "
+                        f"{len(areas):,} areas, updated twice daily."
+                    ),
+                )
+                .replace(CANONICAL_MARKER, f"{BASE_URL}/{COUNTY_DIR}/{slug}.html")
+                .replace("<!--BODY-->", body)
+            )
+            (county_dir / f"{slug}.html").write_text(page)
+            county_bytes += len(page.encode())
+            pages.append(f"{COUNTY_DIR}/{slug}.html")
+        n_county_pages = len(all_counties)
+
+    (site_dir / "sitemap.xml").write_text(_sitemap_xml(pages, site["generated_iso"]))
+    (site_dir / "robots.txt").write_text(
+        f"User-agent: *\nAllow: /\nSitemap: {BASE_URL}/sitemap.xml\n"
+    )
+    return (
+        len(data.encode()),
+        shard_bytes,
+        sum(len(a) for a in history.values()),
+        index_bytes,
+        n_county_pages,
+        county_bytes,
+    )
 
 
 def run():
@@ -1588,7 +1894,9 @@ def run():
 
     n_counties, n_months = len(site["counties"]), len(site["months"])
     n_towns = sum(len(c["towns"]) for c in site["counties"].values())
-    data_bytes, shard_bytes, n_areas, index_bytes = write_site(site, SITE_DIR, towns)
+    data_bytes, shard_bytes, n_areas, index_bytes, n_county_pages, county_bytes = write_site(
+        site, SITE_DIR, towns
+    )
     print(
         f"Wrote {SITE_DIR}/ ({n_counties} counties, "
         f"{n_towns} town breakdowns, {n_months} months)"
@@ -1599,4 +1907,10 @@ def run():
         f"  data.js {data_bytes:,} bytes  ·  {n_counties} history shards "
         f"{shard_bytes:,} bytes over {n_areas} areas (loaded on demand)  ·  "
         f"areas.html {index_bytes:,} bytes"
+    )
+    # the indexable surface, printed for the same reason: these pages exist to
+    # be crawled, and one silently rendering empty is invisible from the field
+    print(
+        f"  {n_county_pages} county pages {county_bytes:,} bytes  ·  "
+        f"sitemap {n_county_pages + 2} URLs"
     )

@@ -25,6 +25,14 @@ SA_POP_PATH = Path("data/sa_pop.csv")
 SA_TOWNS_PATH = Path("data/sa_towns.csv")
 SITE_DIR = Path("out/site")
 
+# Where the built site is published. Read by site.py for canonical URLs and the
+# sitemap, both of which have to be absolute. Kept here as the single point of
+# change: `github.io` is on the Public Suffix List, so the current host carries
+# no ranking penalty, but every accrued link points at it and GitHub Pages
+# cannot issue a 301 off it — so if the site ever does move to its own domain,
+# this constant is the whole edit.
+BASE_URL = "https://baz8080.github.io/uisce"
+
 DEFAULT_TIMEOUT = 15
 
 

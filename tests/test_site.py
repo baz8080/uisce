@@ -1,6 +1,9 @@
 import json
+import re
+import xml.etree.ElementTree as ET
 from datetime import date, datetime, time, timezone
 
+from uisce.config import BASE_URL
 from uisce.site import (
     COUNTY_POP,
     UNPLACED,
@@ -8,10 +11,12 @@ from uisce.site import (
     SmallAreaIndex,
     TownLookup,
     _area_index_html,
+    _area_items,
     area_index,
     boil_notice_fate,
     build_site,
     classify,
+    county_events,
     county_slug,
     daily_windows,
     describes_recurrence,
@@ -1385,6 +1390,31 @@ class TestAreaHistory:
         assert build_site([_case()], SA_INDEX, NOW)["history"] == {}
 
 
+def _bare_site(county="Kildare"):
+    """The least a payload can be and still be one write_site can render.
+
+    Fuller than it used to need to be: write_site now also renders a county page,
+    which reads the month list and the generation stamp for the sitemap. Still
+    hand-built rather than grown from a corpus, because the cases that drive it
+    are the empty ones a real build never produces.
+    """
+    return {
+        "generated_iso": "2026-08-06T00:00:00Z",
+        "months": [],
+        "counties": {
+            county: {
+                "pop": COUNTY_POP[county],
+                "months": {},
+                "open": [],
+                "open_total": 0,
+                "towns": {},
+                "resolved": {},
+            }
+        },
+        "history": {},
+    }
+
+
 class TestHistoryShards:
     """The history is 26 files the page loads one at a time, and write_site owns
     the split — so a field added to the history cannot leak into data.js by
@@ -1404,7 +1434,7 @@ class TestHistoryShards:
         assert len(set(slugs)) == len(COUNTY_POP)
 
     def test_the_files_written_are_data_index_and_one_shard_per_county(self, tmp_path):
-        site, (data_bytes, shard_bytes, n_areas, _) = self._write(tmp_path)
+        site, (data_bytes, shard_bytes, n_areas, _, _, _) = self._write(tmp_path)
         assert (tmp_path / "data.js").exists() and (tmp_path / "index.html").exists()
         shards = sorted(p.name for p in (tmp_path / "h").iterdir())
         assert shards == sorted(f"{county_slug(c)}.js" for c in site["counties"])
@@ -1422,7 +1452,7 @@ class TestHistoryShards:
         """So the loader never has to tell a 404 apart from a county with nothing
         to show. Every county in a real build has both, so this drives write_site
         directly rather than waiting for a corpus that cannot arise."""
-        write_site({"counties": {"Kildare": {}}, "history": {}}, tmp_path, TOWNS)
+        write_site(_bare_site(), tmp_path, TOWNS)
         body = (tmp_path / "h" / "kildare.js").read_text()
         assert json.loads(body.split(" = ", 2)[2].rstrip(";")) == {}
 
@@ -1434,6 +1464,165 @@ class TestHistoryShards:
         assert "UISCE_HISTORY" not in data
         assert "Testtown" in data          # the area breakdown is still there
         assert "CAR00000001" not in data   # but no event of its own
+
+
+class TestIndexablePages:
+    """The site's crawlable surface.
+
+    Before the c/ pages it was two URLs: everything else lived behind a hash
+    route, which a search engine does not index. These assert the pages exist,
+    carry their county's own content, and are reachable — a page that renders
+    empty or duplicates its neighbour is worse than not publishing it, because
+    26 near-identical pages is what a search engine demotes as doorway pages.
+    """
+
+    def _write(self, tmp_path, rows=None):
+        site = build_site(rows or [_case()], SA_INDEX, NOW, TOWNS)
+        site.pop("recurrence_report")
+        counties = sorted(site["counties"])
+        return counties, write_site(site, tmp_path, TOWNS)
+
+    def test_every_county_gets_a_page_including_the_empty_ones(self, tmp_path):
+        counties, (*_, n_pages, county_bytes) = self._write(tmp_path)
+        written = sorted(p.name for p in (tmp_path / "c").iterdir())
+        assert written == sorted(f"{county_slug(c)}.html" for c in counties)
+        assert (n_pages, len(written)) == (len(counties), len(counties))
+        assert county_bytes > 0
+
+    def test_a_county_page_carries_its_own_areas_and_not_another_county_s(self, tmp_path):
+        """The doorway-page failure, made mechanical. The Kildare pin sits on
+        the same Small Area as the Carlow one, so only `dominant`'s own-county
+        rule keeps Testtown off the Kildare page — which is the case worth
+        pinning, since a bug there would put one area on two counties' pages."""
+        self._write(
+            tmp_path,
+            [_case(), _case(id=2, county="Kildare", reference_num="KIL00000001",
+                            title="Burst Water Main - Kildare")],
+        )
+        carlow = (tmp_path / "c" / "carlow.html").read_text()
+        kildare = (tmp_path / "c" / "kildare.html").read_text()
+        assert "Testtown" in carlow
+        assert "Testtown" not in kildare
+        assert "<h1>Co. Carlow" in carlow and "<h1>Co. Kildare" in kildare
+        assert "Burst Water Main - Kildare" in kildare
+        assert "Burst Water Main - Kildare" not in carlow
+
+    def test_a_county_page_needs_no_javascript_to_say_anything(self, tmp_path):
+        """The whole point of the page. It must not pull the 680 KB payload, and
+        it must carry real text rather than a shell for a script to fill."""
+        self._write(tmp_path)
+        page = (tmp_path / "c" / "carlow.html").read_text()
+        assert "data.js" not in page and "UISCE_DATA" not in page
+        body = re.sub(r"<(script|style).*?</\1>", "", page, flags=re.S)
+        text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", body)).strip()
+        assert len(text) > 600, text
+
+    def test_every_page_a_reader_can_land_on_reports_to_analytics(self, tmp_path):
+        """A published page that reports nothing cannot tell you whether
+        publishing it worked. The hash routes never could report: pushState of a
+        fragment leaves the path at /uisce/, so there was no new page for the
+        beacon to count — see the note on go() in site.html. Every real URL the
+        site serves carries it, which is now the whole indexable surface."""
+        counties, _ = self._write(tmp_path)
+        beacon = "static.cloudflareinsights.com/beacon.min.js"
+        pages = ["index.html", "areas.html"] + [
+            f"c/{county_slug(c)}.html" for c in counties
+        ]
+        assert [p for p in pages if beacon not in (tmp_path / p).read_text()] == []
+
+    def test_an_empty_county_page_still_renders_and_says_so(self, tmp_path):
+        """A county with no notice is a page a search result can still land on,
+        so it has to be a document rather than a stack trace."""
+        write_site(_bare_site(), tmp_path, TOWNS)
+        page = (tmp_path / "c" / "kildare.html").read_text()
+        assert "Co. Kildare" in page
+        assert "0 notices across 0 areas" in page
+
+    def test_the_area_rows_differ_only_by_the_link_prefix(self, tmp_path):
+        """The directory and the county page render the same area from the same
+        builder, so the two can't drift into disagreeing about a notice count."""
+        site = build_site([_case()], SA_INDEX, NOW, TOWNS)
+        county, areas = area_index(site["history"], TOWNS)[0]
+        assert _area_items(county, areas, "../") == _area_items(county, areas).replace(
+            'href="index.html', 'href="../index.html'
+        )
+
+    def test_the_directory_links_to_every_county_page(self, tmp_path):
+        """A sitemap is a weak discovery signal; an internal link is the strong
+        one, and this is the page that already names every county."""
+        counties, _ = self._write(tmp_path)
+        areas_page = (tmp_path / "areas.html").read_text()
+        for county in counties:
+            assert f'href="c/{county_slug(county)}.html"' in areas_page
+
+    def test_the_county_name_the_search_matches_on_stays_bare(self, tmp_path):
+        """The directory's search treats a county-name hit as selecting the whole
+        section, and it reads this attribute. It used to read the <h2>, which now
+        also carries the area count and the county-page link — so a search for
+        "page" would have selected all 26 counties."""
+        counties, _ = self._write(tmp_path)
+        areas_page = (tmp_path / "areas.html").read_text()
+        for county in counties:
+            assert f'data-county="{county}"' in areas_page
+        assert "sec.dataset.county" in areas_page
+
+    def test_the_sitemap_lists_every_page_and_nothing_else(self, tmp_path):
+        counties, _ = self._write(tmp_path)
+        root = ET.fromstring((tmp_path / "sitemap.xml").read_text())
+        ns = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
+        locs = [el.text for el in root.iter(f"{ns}loc")]
+        assert locs == [f"{BASE_URL}/", f"{BASE_URL}/areas.html"] + [
+            f"{BASE_URL}/c/{county_slug(c)}.html" for c in counties
+        ]
+        # the payload is fetched by the app, never landed on
+        assert not any("data.js" in loc or "/h/" in loc for loc in locs)
+
+    def test_robots_points_at_the_sitemap(self, tmp_path):
+        self._write(tmp_path)
+        assert f"Sitemap: {BASE_URL}/sitemap.xml" in (tmp_path / "robots.txt").read_text()
+
+    def test_every_page_has_exactly_one_self_referential_canonical(self, tmp_path):
+        """A canonical pointing at the wrong page is worse than none: it tells a
+        search engine to drop the page it is on."""
+        counties, _ = self._write(tmp_path)
+        expected = {"index.html": f"{BASE_URL}/", "areas.html": f"{BASE_URL}/areas.html"}
+        for county in counties:
+            slug = county_slug(county)
+            expected[f"c/{slug}.html"] = f"{BASE_URL}/c/{slug}.html"
+        for rel, want in expected.items():
+            found = re.findall(
+                r'<link rel="canonical" href="([^"]*)">', (tmp_path / rel).read_text()
+            )
+            assert found == [want], rel
+
+    def test_no_marker_survives_into_a_published_page(self, tmp_path):
+        """A template marker left in the output is invisible in a browser and
+        fatal in a search result — an unsubstituted <!--TITLE--> is the tab."""
+        counties, _ = self._write(tmp_path)
+        pages = ["index.html", "areas.html"] + [
+            f"c/{county_slug(c)}.html" for c in counties
+        ]
+        for rel in pages:
+            text = (tmp_path / rel).read_text()
+            assert not re.search(r"<!--(TITLE|DESC|CANONICAL|BODY|AREAS)-->", text), rel
+
+
+class TestCountyEvents:
+    """The county page's own notice list."""
+
+    def test_a_multi_area_event_is_listed_once(self, tmp_path):
+        """area_history lists an event under every area its pins were homed to
+        and shares one record between them; the county's list is the one place
+        that has to collapse them, or 764 events would print twice."""
+        record = {"ref": "CAR00000001", "start": "2026-05-01", "title": "t", "sev": "outage"}
+        history = {"A": {"name": "A", "events": [record]}, "B": {"name": "B", "events": [record]}}
+        assert county_events(history) == [record]
+
+    def test_events_come_back_newest_first(self):
+        old = {"ref": "R1", "start": "2026-05-01", "title": "old", "sev": "outage"}
+        new = {"ref": "R2", "start": "2026-06-01", "title": "new", "sev": "outage"}
+        history = {"A": {"name": "A", "events": [old, new]}}
+        assert [e["ref"] for e in county_events(history)] == ["R2", "R1"]
 
 
 class TestPayloadShape:
