@@ -29,6 +29,15 @@
     }
   }
   * { box-sizing: border-box; margin: 0; }
+  /* Every view on this page is switched by toggling the `hidden` attribute, and
+     the UA stylesheet's [hidden] rule is a plain `display: none` that any author
+     `display` outranks. #overview's narrow-screen `display: flex` below did
+     exactly that, so under 640px the overview stayed on screen underneath every
+     drill-down: tapping a county scrolled to the top of an overview that had
+     never gone away, and a reload landed on an un-rendered one — an empty
+     .banner box — with the county view far below it. !important is what keeps
+     `hidden` meaning hidden whatever display a future layout needs. */
+  [hidden] { display: none !important; }
   body {
     background: var(--page); color: var(--ink);
     font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
