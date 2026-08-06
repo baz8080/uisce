@@ -73,7 +73,7 @@ FALLBACK_KM = 8.0
 # `county` and its own coordinates, not a gap in the geography, so the bucket says
 # so instead of pretending to be a place.
 UNPLACED = "unplaced"
-UNPLACED_LABEL = "Pinned outside the county"
+UNPLACED_LABEL = "Couldn't be placed in a town"
 
 # Census 2022 county populations (approximate; city+county combined).
 COUNTY_POP = {
@@ -1149,13 +1149,17 @@ def _area_index_html(index):
         items = []
         for code, name, pop, n in areas:
             href = f"index.html#area/{quote(county, safe='')}/{quote(code, safe='')}"
+            # The units ride on every row rather than in a column heading: the
+            # heading scrolls away after the first county, and two bare
+            # right-aligned integers are read in the wrong order by most people
+            # (the bigger one looks like the count). ~15 KB for a page that
+            # explains itself wherever you land in it, and in search results.
             items.append(
                 f'<li{" class=\"unplaced\"" if pop is None else ""}>'
                 f'<a href="{href}">{html.escape(name)}</a>'
-                # no per-item title: 1,836 of them repeating the column heading
-                # was 46 KB of the page to say what the legend says once
-                f'<span class="fill"></span><span class="n">{n}</span>'
-                f'<span class="p">{"—" if pop is None else f"{pop:,}"}</span></li>'
+                f'<span class="fill"></span>'
+                f'<span class="n">{n} notice{"" if n == 1 else "s"}</span>'
+                f'<span class="p">{"" if pop is None else f"{pop:,} people"}</span></li>'
             )
         sections.append(
             f'<section id="c-{county_slug(county)}">'
@@ -1363,6 +1367,10 @@ def build_site(rows, sa_index, now, towns=None):
 
     site = {
         "generated": now.strftime("%Y-%m-%d %H:%M UTC"),
+        # the same instant in a form Date.parse handles across engines, so the
+        # banner can say "4 hours ago" rather than make the reader do timezone
+        # arithmetic. The human-readable one above stays, in the footer.
+        "generated_iso": now.strftime("%Y-%m-%dT%H:%M:00Z"),
         "months": months,
         "counties": {},
         "national": {},
@@ -1400,11 +1408,20 @@ def build_site(rows, sa_index, now, towns=None):
             ndays = (hi - lo).days
 
             days = []
+            # Days the month has actually reached: neither before collection
+            # began nor in the future. Counting "clear" over the whole month
+            # counts days that have not happened yet as clear — on 6 August a
+            # county with four bad days out of six read "27/31 clear days".
+            days_elapsed = clear_days = 0
             for d in range(ndays):
                 dlo, dhi = lo + timedelta(days=d), lo + timedelta(days=d + 1)
                 if dhi <= COLLECTION_START:
                     days.append(["nd", 0])
                     continue
+                # the same predicate dayCells applies client-side, and both
+                # sides read UTC dates, so they agree on the boundary
+                elapsed = dlo.date() <= now.date()
+                days_elapsed += elapsed
                 worst = ""
                 for sev in SEV_ORDER:
                     if union_seconds(merged[sev], dlo, dhi) > 0:
@@ -1418,6 +1435,7 @@ def build_site(rows, sa_index, now, towns=None):
                         if union_seconds(iv, dlo, dhi) > 0
                     )
                     pct = min(100.0, 100.0 * affected / cpop)
+                clear_days += elapsed and not worst
                 days.append([worst, round(pct, 2)])
 
             stats = region_month(region, cpop, ym, now)
@@ -1452,7 +1470,8 @@ def build_site(rows, sa_index, now, towns=None):
 
             cdata["months"][ym] = {
                 "days": days,
-                "clear_days": sum(1 for d in days if d[0] == ""),
+                "clear_days": clear_days,
+                "days_elapsed": days_elapsed,
                 "grade": county_grade,
                 **stats,
                 **span_stats(observed_h, scheduled_h),

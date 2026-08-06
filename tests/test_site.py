@@ -4,6 +4,7 @@ from datetime import date, datetime, time, timezone
 from uisce.site import (
     COUNTY_POP,
     UNPLACED,
+    UNPLACED_LABEL,
     SmallAreaIndex,
     TownLookup,
     _area_index_html,
@@ -435,7 +436,7 @@ class TestTownBreakdown:
         towns = TownLookup([("SA1", "T1", "Over the border", "Wicklow")], {"SA1": 1000})
         county = build_site([_case()], SA_INDEX, NOW, towns)["counties"]["Carlow"]
         area = county["towns"][UNPLACED]
-        assert area["name"] == "Pinned outside the county"
+        assert area["name"] == UNPLACED_LABEL
         assert area["unplaced"] is True and "pop" not in area
         month = area["months"]["2026-05"]
         assert month["events"]["outage"] == 1
@@ -522,6 +523,44 @@ class TestResolved:
 # May is in progress under NOW, and the top ten is a finished-month list, so
 # these need a clock that has left May behind
 AFTER_MAY = datetime(2026, 6, 15, tzinfo=UTC)
+
+
+class TestClearDays:
+    """"N/M clear days" is the one figure on the site that could overstate.
+
+    Counting every day of the month whose severity is empty counts days that
+    have not happened yet as clear — on 6 August a county with four bad days out
+    of six read "27/31 clear days", which is both wrong and flattering.
+    """
+
+    def _month(self, now, ym="2026-05"):
+        return build_site([_case()], SA_INDEX, now, TOWNS)["counties"]["Carlow"]["months"][ym]
+
+    def test_the_in_progress_month_counts_only_days_that_have_happened(self):
+        m = self._month(NOW)          # 10 May 2026
+        assert m["days_elapsed"] == 10
+        assert len(m["days"]) == 31   # the bar still draws the whole month
+        # the one case runs on 1 May, so nine of the ten elapsed days are clear
+        assert m["clear_days"] == 9
+
+    def test_a_finished_month_counts_every_day(self):
+        m = self._month(AFTER_MAY)
+        assert m["days_elapsed"] == 31
+        assert m["clear_days"] == 30
+
+    def test_days_before_collection_began_are_not_counted_as_clear(self):
+        # April 2026 is a part-month: collection started on the 20th, so the
+        # first 19 days are "nd" and belong to neither figure
+        m = self._month(AFTER_MAY, "2026-04")
+        assert m["days_elapsed"] == 11
+        assert m["clear_days"] == 11
+
+    def test_clear_days_never_exceeds_days_elapsed(self):
+        for now in (NOW, AFTER_MAY):
+            for ym, month in build_site(
+                [_case()], SA_INDEX, now, TOWNS
+            )["counties"]["Carlow"]["months"].items():
+                assert month["clear_days"] <= month["days_elapsed"], ym
 
 
 class TestTopEvents:
@@ -1327,7 +1366,7 @@ class TestAreaHistory:
         towns = TownLookup([("SA1", "T1", "Blessington", "Wicklow")], SA_INDEX.pop)
         site = build_site([_case()], SA_INDEX, NOW, towns)
         area = site["history"]["Carlow"][UNPLACED]
-        assert area["name"] == "Pinned outside the county"
+        assert area["name"] == UNPLACED_LABEL
         assert len(area["events"]) == 1
 
     def test_one_reference_published_in_two_counties_appears_in_both(self):
@@ -1412,7 +1451,9 @@ class TestPayloadShape:
         return site
 
     def test_the_top_level_keys_are_unchanged(self):
-        assert set(self._site()) == {"generated", "months", "counties", "national", "top"}
+        assert set(self._site()) == {
+            "generated", "generated_iso", "months", "counties", "national", "top"
+        }
 
     def test_the_county_keys_are_unchanged(self):
         county = self._site()["counties"]["Carlow"]
@@ -1425,7 +1466,8 @@ class TestPayloadShape:
     def test_the_county_month_keys_are_unchanged(self):
         month = self._site()["counties"]["Carlow"]["months"]["2026-05"]
         assert set(month) == {
-            "days", "clear_days", "grade", "events", "person_h", "period_h", "availability",
+            "days", "clear_days", "days_elapsed", "grade", "events", "person_h",
+            "period_h", "availability",
             "health_n", "median_completion_h", "completed_n", "median_scheduled_h",
             "scheduled_n",
         }
@@ -1541,7 +1583,7 @@ class TestAreaIndex:
         towns = TownLookup([("SA1", "T1", "Blessington", "Wicklow")], SA_INDEX.pop)
         site = build_site([_case()], SA_INDEX, NOW, towns)
         [(_, areas)] = area_index(site["history"], towns)
-        assert areas == [(UNPLACED, "Pinned outside the county", None, 1)]
+        assert areas == [(UNPLACED, UNPLACED_LABEL, None, 1)]
 
 
 class TestAreaIndexHtml:
