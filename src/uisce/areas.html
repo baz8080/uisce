@@ -59,14 +59,28 @@
   ul { list-style: none; columns: 2; column-gap: 28px; margin-top: 8px; }
   li { break-inside: avoid; display: flex; align-items: baseline; gap: 6px;
        padding: 3px 0; font-size: 13.5px; }
+  /* an author `display` beats the UA stylesheet's [hidden] rule, so the search
+     could set li.hidden all it liked and every row stayed on screen */
+  li[hidden] { display: none; }
   li a { text-decoration: none; border-bottom: 1px solid var(--border); }
   li a:hover { border-bottom-color: currentColor; }
   /* the dotted leader carries the eye across to the count in a two-column list */
   li .fill { flex: 1; border-bottom: 1px dotted var(--grid); min-width: 8px; }
-  li .n { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  li .n { color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
   li .p { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums;
-          min-width: 62px; text-align: right; }
+          min-width: 92px; text-align: right; white-space: nowrap; }
   li.unplaced a { color: var(--muted); }
+
+  /* Search. 1,836 areas behind a jump nav is not findable by anyone who does
+     not already know their county — and knowing the county is the thing a
+     visitor is least sure of for the "Around …" rural areas. */
+  .find { margin: 16px 0 0; }
+  .find input {
+    width: 100%; padding: 10px 12px; border-radius: 8px; font: inherit;
+    background: var(--surface); color: var(--ink); border: 1px solid var(--border);
+  }
+  .find input:focus { outline: 2px solid var(--ink-2); outline-offset: -1px; }
+  .find p { color: var(--muted); font-size: 13px; margin-top: 6px; min-height: 1.45em; }
   /* On a phone the nav wraps to six lines and eats the screen, so it scrolls
      away with the page instead of pinning to the top of it. */
   @media (max-width: 640px) {
@@ -81,10 +95,14 @@
 </head>
 <body>
 <div class="wrap">
-  <a class="back" href="index.html">← Status by county</a>
+  <a class="back" href="index.html">← Irish Water Supply Disruptions</a>
   <header>
     <h1>Every area with a notice</h1>
-    <p class="sub">Every Census 2022 area Uisce Éireann has published a supply or works notice for since 20 April 2026 — pick one for its full incident history. The two figures beside each name are <b>notices published</b> and <b>people living there</b>.</p>
+    <p class="sub">Every Census 2022 area Uisce Éireann has published a supply or works notice for since 20 April 2026. Pick one for its full incident history.</p>
+    <div class="find">
+      <input id="q" type="search" placeholder="Search for your town or area" autocomplete="off" aria-label="Search for your town or area">
+      <p id="qcount" role="status" aria-live="polite"></p>
+    </div>
   </header>
 
   <!--AREAS-->
@@ -94,5 +112,45 @@
     <p>Areas with no notice at all are not listed: roughly 1,900 of Ireland's named areas have had none since collection began, and a page of them would say nothing. <a href="https://github.com/baz8080/uisce">Source and methodology</a>.</p>
   </footer>
 </div>
+<script>
+// Filter in place over the rendered list — the whole directory is already in the
+// document, so this needs no data and no request. A county name matches its
+// whole section, because someone who knows only the county is exactly the
+// visitor the jump nav already served and the search must not serve worse.
+(function () {
+  const q = document.getElementById("q"), count = document.getElementById("qcount");
+  const nav = document.querySelector("nav");
+  const sections = [...document.querySelectorAll("section")].map(sec => ({
+    sec,
+    county: sec.querySelector("h2").textContent.toLowerCase(),
+    items: [...sec.querySelectorAll("li")].map(li => ({ li, text: li.textContent.toLowerCase() })),
+  }));
+
+  function apply() {
+    const s = q.value.trim().toLowerCase();
+    let n = 0;
+    for (const { sec, county, items } of sections) {
+      const wholeCounty = !!s && county.includes(s);
+      let any = false;
+      for (const { li, text } of items) {
+        const hit = !s || wholeCounty || text.includes(s);
+        li.hidden = !hit;
+        if (hit) { any = true; n++; }
+      }
+      sec.hidden = !!s && !any;
+    }
+    // half its links would scroll to a hidden section during a search
+    nav.hidden = !!s;
+    count.textContent = s
+      ? (n ? `${n.toLocaleString()} ${n === 1 ? "area matches" : "areas match"} “${q.value.trim()}”`
+           : `No area matches “${q.value.trim()}”.`)
+      : "";
+  }
+
+  q.addEventListener("input", apply);
+  // a search field restored by the browser on back/reload starts with a value
+  if (q.value) apply();
+})();
+</script>
 </body>
 </html>
