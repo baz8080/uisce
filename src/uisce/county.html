@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><!--TITLE--></title>
+<meta name="description" content="<!--DESC-->">
+<meta property="og:title" content="<!--TITLE-->">
+<meta property="og:description" content="<!--DESC-->">
+<meta property="og:type" content="website">
+<link rel="canonical" href="<!--CANONICAL-->">
+<style>
+  /* Standalone, like areas.html and for the same reason: this page is entered
+     directly from a search result, and a shared stylesheet would cost every one
+     of those readers a second request. Keep the :root block in step with
+     site.html and areas.html by hand — the three are the only duplication. */
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --border: rgba(11,11,11,0.10);
+    --good: #0ca30c; --warning: #fab219; --serious: #ec835a;
+    --critical: #d03b3b; --maint: #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19;
+      --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
+      --maint: #3987e5;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--page); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 24px 16px 64px;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  a { color: inherit; }
+  header h1 { font-size: 22px; font-weight: 650; }
+  header .sub { color: var(--ink-2); margin-top: 6px; font-size: 14px; }
+  header .now { margin-top: 10px; font-size: 14px; }
+  header .app { margin-top: 12px; font-size: 13.5px; color: var(--ink-2); }
+  .back { display: inline-block; color: var(--muted); text-decoration: none;
+          font-size: 13px; margin-bottom: 14px; }
+  .back:hover { color: var(--ink); }
+  .health { color: var(--serious); font-weight: 600; }
+
+  nav {
+    margin: 18px 0 8px; padding: 10px 12px; border-radius: 8px; line-height: 2;
+    background: var(--surface); border: 1px solid var(--border);
+    font-size: 13px; color: var(--muted);
+  }
+  nav a { text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  nav strong { color: var(--ink); }
+
+  section { margin-top: 26px; }
+  section h2 { font-size: 16px; font-weight: 650; padding-bottom: 6px;
+               border-bottom: 1px solid var(--grid); }
+  section h2 span { color: var(--muted); font-weight: 400; font-size: 13px; }
+
+  /* A month table is the one thing here that cannot reflow, so it scrolls
+     inside its own box rather than pushing the page sideways on a phone. */
+  .scroll { overflow-x: auto; margin-top: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { padding: 6px 10px; text-align: right; white-space: nowrap;
+           border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+  thead th { color: var(--muted); font-weight: 500; font-size: 12.5px; text-align: right; }
+  tbody th { text-align: left; font-weight: 500; }
+  td.g { font-weight: 700; color: #fff; text-align: center; width: 1%; }
+  .g-A { background: var(--good); } .g-B { background: color-mix(in srgb, var(--good) 60%, var(--warning)); }
+  /* td.g-C, not .g-C: `td.g` above is the more specific selector and would keep
+     the letter white on amber. site.html reaches for !important here instead. */
+  td.g-C { background: var(--warning); color: #1a1a19; }
+  .g-D { background: var(--serious); } .g-F { background: var(--critical); }
+
+  ul.notices { list-style: none; margin-top: 10px; }
+  ul.notices li { padding: 8px 0; border-bottom: 1px solid var(--grid);
+                  font-size: 13.5px; }
+  ul.notices .when { display: block; color: var(--muted); font-size: 12.5px;
+                     margin-top: 2px; }
+  .sev { display: inline-block; padding: 1px 7px; border-radius: 999px;
+         font-size: 11.5px; font-weight: 600; color: #fff; vertical-align: 1px; }
+  .sev-outage { background: var(--critical); }
+  .sev-quality { background: var(--serious); }
+  .sev-degraded { background: var(--warning); color: #1a1a19; }
+  .sev-maintenance { background: var(--maint); }
+  .more { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+
+  /* the directory's row treatment, so an area reads the same on both pages */
+  ul.areas { list-style: none; columns: 2; column-gap: 28px; margin-top: 8px; }
+  ul.areas li { break-inside: avoid; display: flex; align-items: baseline;
+                gap: 6px; padding: 3px 0; font-size: 13.5px; }
+  ul.areas li a { text-decoration: none; border-bottom: 1px solid var(--border); }
+  ul.areas li a:hover { border-bottom-color: currentColor; }
+  ul.areas li .fill { flex: 1; border-bottom: 1px dotted var(--grid); min-width: 8px; }
+  ul.areas li .n { color: var(--ink-2); font-variant-numeric: tabular-nums;
+                   white-space: nowrap; }
+  ul.areas li .p { color: var(--muted); font-size: 12px; min-width: 92px;
+                   text-align: right; white-space: nowrap;
+                   font-variant-numeric: tabular-nums; }
+  ul.areas li.unplaced a { color: var(--muted); }
+
+  @media (max-width: 640px) {
+    ul.areas { columns: 1; }
+  }
+
+  footer { margin-top: 40px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+  footer p + p { margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../index.html">← Irish Water Supply Disruptions</a>
+
+  <!--BODY-->
+
+  <footer>
+    <p>Supply availability is the population-weighted share of people's time not covered by an announced supply disruption; the letter grade is calibrated to it and to nothing else. An active boil-water or do-not-drink notice is published beside the grade rather than folded into it. Person-hours count population-weighted hours of lost supply.</p>
+    <p>A notice is placed in the area its affected population centres on, so an event whose map pins span two areas is listed under each of them. The count beside an area name is how many notices that area has seen. <a href="https://github.com/baz8080/uisce">Source and methodology</a> · <a href="../areas.html">every area in Ireland</a>.</p>
+    <p>Independent and not affiliated with Uisce Éireann.</p>
+  </footer>
+</div>
+</body>
+</html>
