@@ -408,6 +408,7 @@
 
   <footer>
     <p><a href="areas.html" style="color:inherit">Every area with a notice</a> — a full directory of the 1,800-odd Census areas on this site, each linking to its incident history.</p>
+    <p id="countyHistoryLink" hidden></p>
     <p><b>What this measures.</b> This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. Every duration is counted from when a notice was published — for an unplanned burst the water was already off before that. Treat every figure here as a <b>minimum</b>.</p>
 
     <details class="method" id="method">
@@ -649,6 +650,11 @@ function render() {
   }
   document.getElementById("gen").textContent =
     "Generated " + D.generated + " from uisce.db · github.com/baz8080/uisce · not affiliated with Uisce Éireann.";
+  const chl = document.getElementById("countyHistoryLink");
+  chl.hidden = view !== "county";
+  if (view === "county") {
+    chl.innerHTML = `<a href="c/${county.toLowerCase()}.html" style="color:inherit">See every notice ever recorded for ${esc(county)}</a>`;
+  }
   RENDER[view]();
 }
 
