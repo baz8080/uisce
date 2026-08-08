@@ -1,15 +1,11 @@
 """Replay the current prompt over an already-labelled eval round.
 
 Step 2 of the pv2 workflow in notes/end-time-eval.md: re-run the prompt in
-uisce.inference over every description in a labelled round file and score the
-new answers against the human labels that round already carries. No human time
-is needed, so a prompt edit can be measured against the previous version's
-headline accuracy before any re-inference of the corpus.
-
-A row's ground truth is the human label: for `incorrect` rows it is the
-human_* columns, and for `correct` rows it is the model's original three
-fields, which the labeller endorsed by marking them correct. `unsure` rows are
-excluded from the denominator, matching uisce-eval-score.
+uisce.inference over every description in a labelled round file and score
+against the human labels it already carries — no human time needed, so a
+prompt edit can be measured before any re-inference of the corpus. Ground
+truth per row matches uisce-eval-score; see notes/end-time-eval.md for the
+definition.
 
     uv run uisce-eval-replay                 # newest round file
     uv run uisce-eval-replay --csv <path> --out <path>

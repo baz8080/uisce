@@ -1,23 +1,18 @@
 """Review the recurrence calls that actually change a published figure.
 
-The window fields sit outside the end-time eval harness — `FIELDNAMES` there
-carries only the end_source/date/time triple, and no round labels a window. This
-is the check that stands in for one, and it is deliberately *not* a sample.
-
-Only a handful of recurrence calls have any consequence. A window claimed on a
-notice that was already a restriction changes nothing, because person-seconds
-accrue for `outage` alone. What matters is the two places the call flips an
-answer:
+The window fields sit outside the end-time eval harness (see
+notes/end-time-eval.md), so this stands in for a sample instead: it enumerates
+every call that flips an answer, rather than drawing one.
 
   downgraded — the recurrence rule turned an outage into a restriction, so a
                wrong "daily" here erases a real outage from the index entirely
   charged    — the notice's own text describes a repeating window but no window
                was extracted, so a nightly regime is being charged as one
-               continuous outage
+               continuous outage (see notes/data-quality.md, "Recurring
+               windows were charged as continuous outages")
 
-Both sets are small enough to read in full, so this enumerates them rather than
-sampling, and sorts by the person-hours at stake so a partial pass still covers
-most of the exposure. Re-run it after any prompt change or corpus run.
+Sorted by the person-hours at stake so a partial pass still covers most of the
+exposure. Re-run after any prompt change or corpus run.
 """
 
 import argparse

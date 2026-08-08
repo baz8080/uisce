@@ -111,21 +111,11 @@ def _quoted(forms, text):
 def unquotable_windows(conn):
     """(flagged, inert) recurring windows whose values are not in the notice text.
 
-    The window fields have a property the end-time answer does not: every value
-    should be quotable from the description the model read. That makes them
-    checkable with no labelled data at all — a reported "22:00" that appears
-    nowhere in the text was invented, whatever else it might be.
-
-    This is the only standing check on those fields. No eval round labels them,
-    so a prompt that began hallucinating windows would otherwise surface only as
-    person-hours quietly falling.
-
-    An absent *first date* is treated separately and counted as `inert` rather
-    than flagged. The model fills that gap with the publication date when a
-    notice says only "nightly from 8pm until 10am until 5 August", and
-    site.daily_windows clamps the series start to publication anyway, so such a
-    value cannot move a single figure. Reporting it as suspicious every build
-    would train the reader to ignore the check.
+    Needs no labelled data: every window value should be quotable from the
+    description the model read, so a reported "22:00" appearing nowhere in the
+    text was invented. See notes/end-time-eval.md ("unquotable_windows in
+    build.py") for why this is the only standing check on these fields, and
+    why an absent first date counts as `inert` rather than flagged.
     """
     rows = conn.execute(
         """

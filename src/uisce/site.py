@@ -72,15 +72,11 @@ OBSERVED_END_SOURCES = {"completion_update"}
 AFFECT_RADIUS_KM = 0.5
 FALLBACK_KM = 8.0
 
-# Key and label for the county drill-down bucket holding every case that does
-# not fall in a named settlement — 40% of them, since most of Ireland's water
-# infrastructure is not in a town.
-# Every Small Area belongs to a named area — a settlement, a Local Electoral Area
-# of a city, or the countryside of an Electoral Division — so a pin lands in one
-# unless its whole affected footprint lies outside the county the notice names.
-# That happens for ~1.5% of case-months and is a disagreement between the feed's
-# `county` and its own coordinates, not a gap in the geography, so the bucket says
-# so instead of pretending to be a place.
+# Key and label for the county drill-down bucket holding cases whose pin
+# footprint lies outside the county the notice names (~1.5% of case-months) —
+# a disagreement between the feed's `county` and its own coordinates, not a
+# gap in the geography. See notes/data-quality.md ("county and the pin's own
+# coordinates disagree") and notes/statuspage-methodology.md.
 UNPLACED = "unplaced"
 UNPLACED_LABEL = "Couldn't be placed in a town"
 
@@ -115,16 +111,10 @@ HARD_CATS = {
     "pump_station_interruption", "pump_failure", "power_outage",
 }
 # Emergency repair works: supply is normally shut off while they run, so they
-# accrue unless the feed says they were planned.
-#
-# NULL categories deliberately do NOT group here. A title classify_category
-# cannot place — "unknown", a bare reference number — evidences nothing, and
-# counting it as a national supply outage fabricates downtime in the way
-# ended_by_publication and boil_notice_fate exist to prevent. It also made the
-# rule table fail loudly in the wrong direction: an unrecognised spelling of
-# "Water Conservation/Restriction" accrued as a hard outage until someone
-# noticed. Unmatched titles now fall through to maintenance and are printed by
-# every backfill instead (see backfill_work_category).
+# accrue unless the feed says they were planned. NULL categories deliberately
+# do NOT group here — see notes/data-quality.md ("A missing variant was
+# silently inventing supply outages") for why; unmatched titles fall through
+# to maintenance and are printed by every backfill (see backfill_work_category).
 REPAIR_CATS = {"mains_repair", "valve_repair", "pump_repair"}
 
 # Only health-relevant quality notices knock a grade; discolouration shows

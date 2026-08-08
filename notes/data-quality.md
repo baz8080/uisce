@@ -216,6 +216,12 @@ The 12% figure above is stale, and the paragraph's implied remedy — shrink the
 
 If a closure *series* is ever published (month-over-month counts, or a time-to-close metric keyed on `closed_at`), this stops being a prose caveat and needs the cadence recorded alongside the data so the series can be corrected rather than annotated.
 
+### Twice-daily builds: why, and why not three (2026-07-31)
+
+The second daily build slot exists for publication latency, not to sharpen `closed_at` (see above — past a daily cadence, Uisce Éireann's own administrative lag dominates, not the build gap). Notices publish between 07:00 and 16:00 UTC (staffed office hours), so a second build only helps if it lands inside that window: measured over 8,135 cases, a single evening build leaves a mean **7.7h** from publication to the site, a midday build halves that to **3.9h**, and an overnight build would only have bought **0.9h**. A third build takes 3.9h to 3.5h — not worth the run.
+
+The schedule (`.github/workflows/build.yml`) is two crons 6h apart; scheduled runs land ~1h20 after the cron fires, so these hit ~12:45 and ~18:45 UTC — spacing far wider than the 1–3 minute run time needs, which is what makes overlapping runs (guarded against via `concurrency`, queued rather than cancelled since a cancelled run has already read the feed) a manual-dispatch edge case rather than a routine one.
+
 ## `water_outage` flag is not a filter
 
 The flag is set on 7,345 of 7,553 cases (97%) — including installations, investigations, and flushing works. Any "which cases actually cut supply" logic has to come from `work_category` + `work_type`, not this flag (the status site's severity classes in [statuspage-methodology.md](statuspage-methodology.md) do exactly that).

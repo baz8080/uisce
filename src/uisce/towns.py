@@ -2,29 +2,14 @@
 
 Writes data/sa_towns.csv (guid, town_code, town_name, town_county) — the lookup
 uisce-site uses to break a county down into named areas. Three kinds of area, in
-priority order:
+priority order: a Census settlement, a Local Electoral Area for one too big to
+read as one row (see split_large_settlements), or "Around <Electoral Division>"
+for Small Areas in no settlement at all.
 
-- a **Census settlement** (CSO Urban Area), for the ~70% of the country living in one
-- a **Local Electoral Area**, where the settlement is too big to read as one row:
-  the Census counts a city and its suburbs as a single settlement, and Dublin's is
-  1.26M people (see split_large_settlements)
-- **"Around <Electoral Division>"**, for Small Areas in no settlement at all —
-  most of the water network is between towns rather than in one
-
-All of it comes from attributes the Small Area layer already carries
-(`SA_URBAN_AREA_NAME`, `CSO_LEA`, `ED_ENGLISH`, `COUNTY_ENGLISH`), so no boundary
-polygons are downloaded and no point-in-polygon test is needed. That is not just
-cheaper than deriving it from geometry, it is *exact*: summing Small Areas
-reproduces all 867 published settlement populations to the person, where a
-centroid-in-polygon assignment recovered 97.5% of urban population, dropped 54
-settlements whose boundary contained no centroid, and left 24% of settlements
-more than a tenth short — which matters because the site divides by that
-population to get availability.
-
-The Census figures are still downloaded, purely to assert that invariant.
-
-See notes/population-data-sources.md. The result is committed, so this only needs
-re-running if the CSO revises the geography (next census).
+All of it comes from attributes the Small Area layer already carries, not
+boundary polygons — see notes/population-data-sources.md for why that's both
+cheaper and exact. The result is committed, so this only needs re-running if
+the CSO revises the geography (next census).
 """
 
 import csv
@@ -53,14 +38,11 @@ PAGE_SIZE = 2000
 # be broken by the CSO renaming them.
 SPLIT_ABOVE_POP = 50_000
 
-# An LEA is kept as its own row only if this much of it lies inside the settlement
-# being split. Below that it is a sliver of an area that mostly lies elsewhere, and
-# naming a row after it actively misleads: the Cork agglomeration clips 942 people
-# of the 39,145-person Carrigaline LEA, which would otherwise appear as
-# "Carrigaline" beside the real Carrigaline town row. Every name collision observed
-# between a part and an existing settlement row was a sliver, which is not luck —
-# an LEA shares a town's name precisely when it is named after a town that is not
-# part of the agglomeration.
+# Share of an LEA's population that must lie inside the settlement being split
+# for the LEA to earn its own row — below that it's a sliver of an area that
+# mostly lies elsewhere. See notes/statuspage-methodology.md ("Slivers are
+# pooled...") for why this threshold, and not name-matching, is what avoids
+# collisions with existing settlement rows.
 MIN_PART_SHARE = 0.30
 
 # The Small Area layer reports the 34 local-authority areas; the site works in the
@@ -90,12 +72,8 @@ def elsewhere_label(settlement_name):
 def around_label(ed_name):
     """The countryside of an Electoral Division, named for the place at its centre.
 
-    Not bare "Celbridge": the Electoral Division of that name is the parish
-    *around* the town, and the town has its own row on the same page. Almost every
-    county has at least one such pair — Kildare alone would otherwise show
-    Celbridge, Leixlip, Maynooth, Kill and Carragh twice — and unlike the LEA
-    slivers these cannot be pooled away, because a rural Electoral Division is not
-    a sliver of anything. It is a real place that happens to share a name.
+    Not the bare ED name — see notes/statuspage-methodology.md ("The
+    countryside: Around <Electoral Division>") for why the prefix is needed.
     """
     return f"Around {ed_name}"
 
@@ -167,18 +145,10 @@ def fetch_small_areas(session):
 def resolve_settlements(small_areas, settlements):
     """{guid: settlement code} for the Small Areas the CSO places in a settlement.
 
-    The Small Area carries its settlement's *name*, not its code, and 19 names are
-    shared by two or three unrelated settlements — there is a Milltown in Kerry,
-    another in Kildare and a third in Galway. So the join is on (name, county),
-    which keeps those apart.
-
-    A settlement may also genuinely straddle a county boundary, in which case its
-    minority-county Small Areas find no (name, county) pair: the Limerick
-    agglomeration reaches into Clare, Waterford's into Kilkenny, Drogheda into
-    Meath. Those fall through to the name, which is unambiguous for every
-    straddler on file, and so stay with the settlement rather than splitting off a
-    phantom one. Measured on the 2022 geography: 13,060 exact, 125 straddlers, no
-    name both ambiguous and unmatched, nothing unresolved.
+    Joined on (name, county), since settlement names collide across counties;
+    falls back to name alone for a settlement that straddles a county line, since
+    that name is unambiguous for every straddler on file. See
+    notes/population-data-sources.md for the collision/straddler counts.
     """
     by_pair, by_name = {}, defaultdict(list)
     for code, name, county in settlements:
@@ -202,12 +172,9 @@ def resolve_settlements(small_areas, settlements):
 def split_large_settlements(resolved, small_areas, sa_pop, names):
     """Re-home the Small Areas of any settlement too large to read as one row.
 
-    The parts are Local Electoral Areas, read straight off `CSO_LEA`. An LEA is not
-    contained by the settlement — it extends into the surrounding county — so a
-    part earns its own row only when MIN_PART_SHARE of the LEA lies inside, and
-    the remainder pools into one "Elsewhere in ..." row. The share is measured
-    against the LEA's whole population, summed over every Small Area in it, so no
-    separate population file is needed and the two figures cannot disagree.
+    Parts are Local Electoral Areas (`CSO_LEA`), kept only when MIN_PART_SHARE of
+    the LEA's population lies inside; the remainder pools into an "Elsewhere in
+    ..." row. See notes/statuspage-methodology.md for why that threshold.
 
     Returns (assignment, parts, report): `parts` names each part code it created,
     `report` is one row per settlement split.
