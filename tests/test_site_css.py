@@ -1,15 +1,5 @@
-"""The two pages are hand-written HTML, and both switch things on and off with
-the `hidden` attribute. The UA stylesheet's rule for it is a plain
-`display: none`, which any author `display` on the same element outranks — and
-then the element stays on screen while the page believes it is gone.
-
-That is not hypothetical. `#overview { display: flex }` under 640px left the
-whole front page rendered underneath every drill-down: on a phone, tapping a
-county appeared to do nothing (the router scrolled to the top of an overview
-that had never left), and a reload showed an un-rendered overview — an empty
-banner box — with the county view thousands of pixels below it.
-
-So these tests run a small cascade: for each element the page hides, work out
+"""Guards against a regression of the `hidden`-vs-`display` bug fixed 2026-08-06
+— see notes/frontend-notes.md. For each element either page hides, works out
 which `display` actually wins once `hidden` is set, in every media context the
 stylesheet defines. Only `display` matters here, so the parser is deliberately
 small — it reads the two files it is pointed at, not CSS in general.

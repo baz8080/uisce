@@ -1,26 +1,8 @@
 """Backfill cases.closed_at by replaying published DB snapshots.
 
-A one-off historical repair, not a pipeline step. The feed publishes only a
-case's *current* status, so the Open -> Closed transition is observable exactly
-once, in the upsert (see load_cases). Every case that closed before closed_at
-existed therefore carries NULL forever — except that each build publishes a
-full uisce.db as a dated GitHub release, so those releases are a snapshot
-series the transitions can be recovered from after the fact.
-
-The recovered value means exactly what the forward path's does: the first
-snapshot in which we observed the case no longer Open. Both are observation
-time, not event time, so replayed and live rows are the same measurement and
-can share a column. Resolution is the gap between builds (cron is daily since
-2026-07-21, Mon/Wed/Fri before that, plus any missed runs).
-
-Two limits are inherent and do not shrink with effort:
-
-  * Cases that closed before the earliest snapshot are unrecoverable. At the
-    time of writing that is 76% of closed cases — the releases start
-    2026-06-30, collection began 2026-04-20.
-  * Cases created *and* closed inside a single gap are never observed Open, so
-    no transition exists to find (~12% of newly-appearing cases). This one
-    applies to the live path too: "closed in month M" is a floor, not a count.
+One-off historical repair, not a pipeline step — see notes/data-quality.md
+("closed_at is a floor") for why this is needed, what it recovers, and its
+two inherent limits (pre-earliest-snapshot closures, single-gap open/closes).
 
     uv run uisce-replay-closed-at --snapshots <dir>          # dry run
     uv run uisce-replay-closed-at --snapshots <dir> --write

@@ -1,13 +1,9 @@
 """Human evaluation of the LLM end-time extraction.
 
-uisce-eval-sample draws a stratified random sample of inferred cases into a
-new round file, data/eval/end_time_sample_<date>_<model>_pv<N>.csv, carrying
-the model and prompt version that produced each sampled output. Cases drawn
-in earlier rounds are excluded, so each round extends coverage. A human fills
-in the human_* columns (see notes/end-time-eval.md for the labelling guide),
-then uisce-eval-score reports accuracy overall and per end_source class,
-defaulting to the newest round file. Labelled rounds are committed so the
-published accuracy numbers are reproducible.
+Draws a stratified random sample of inferred cases into a new round file,
+data/eval/end_time_sample_<date>_<model>_pv<N>.csv. Cases drawn in earlier
+rounds are excluded, so each round extends coverage. Label the human_*
+columns per notes/end-time-eval.md, then run uisce-eval-score.
 """
 
 import argparse
@@ -194,16 +190,11 @@ def sample(argv=None):
 def sample_fresh(argv=None):
     """Draw N unseen cases and infer only those — a fresh round without a corpus run.
 
-    uisce-eval-sample draws from inferred_cases, so measuring a new prompt on unseen
-    cases would mean re-inferring all ~7,500 first. This path inverts that: sample
-    from `cases`, run the current prompt over just the sampled rows, and write the
-    round from those answers. N calls instead of the whole corpus.
-
-    The cost is stratification. end_source is not known until the model has run, so
-    minority classes cannot be oversampled and rare ones may land few rows or none.
-    In exchange the draw is uniform, so the round reflects the corpus's real class
-    mix and its headline number is an unbiased corpus-wide estimate — which the
-    stratified rounds, by design, are not.
+    Unlike uisce-eval-sample (which draws from already-inferred cases), this
+    samples uniformly from `cases`, infers just the sampled rows, and writes
+    the round from those answers — no re-inference of the whole corpus needed.
+    See notes/end-time-eval.md for why the draw is uniform rather than
+    stratified, and the tradeoff that implies.
     """
     parser = argparse.ArgumentParser(description=sample_fresh.__doc__)
     parser.add_argument("-n", "--size", type=int, default=120,

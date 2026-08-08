@@ -395,19 +395,14 @@ def create_db(cases, db_path=DB_PATH):
 
 
 def check_schema_version(conn, db_path=DB_PATH):
-    """The full `cases` schema is declared in CREATE TABLE above; MIGRATIONS
-    carries DBs already in the wild forward to it. The published DB is
-    downloaded and updated in place each build, so this runs on every build.
-
-    Migration is deliberately narrow — additive nullable columns only (see
-    MIGRATIONS). A DB missing any V1 column predates the archive entirely and is
-    still rejected rather than migrated: that is a rebuild, and rebuilds are not
-    free, since the DB accumulates cases the feed no longer serves plus the
-    geocode cache. Keep a copy before rebuilding.
+    """Runs every build, carrying an older DB forward through MIGRATIONS to the
+    schema declared in CREATE TABLE above. Migration is deliberately narrow —
+    additive nullable columns only — and a DB missing a V1 column predates the
+    archive entirely, so it is rejected rather than migrated: keep a copy
+    before rebuilding, since a rebuild costs every case the feed has dropped.
 
     DBs built before versioning began carry user_version 0 but are structurally
-    v1 (work_category / first_seen / last_seen were added by the ALTER TABLE
-    helpers this replaced), so they migrate from the v1 floor like any other."""
+    v1, so they migrate from the v1 floor like any other."""
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     if version == SCHEMA_VERSION:
         return
@@ -451,14 +446,9 @@ def load_cases(conn, cases, now=None):
     # upsert rather than INSERT OR REPLACE so an existing row's first_seen
     # survives; last_seen advances on every download that includes the case.
     #
-    # closed_at records when *we first observed* the case stop being Open — the
-    # feed carries only a case's current status, so this is the one chance to
-    # catch the transition before `status` is overwritten. It is observation
-    # time, not event time: resolution is the build cadence, and a case already
-    # Closed on its first sighting never gets one (hence NULL on insert, and
-    # NULL for every row that closed before this column existed). Consequently
-    # NULL is ambiguous — "still open" or "closed unobserved" — so readers must
-    # pair it with status rather than treating NULL as open.
+    # closed_at stamps this build's first observation of the case leaving
+    # Open — see notes/data-quality.md ("closed_at is a floor") for what that
+    # means, why NULL is ambiguous, and its limits.
     #
     # SQLite evaluates every SET expression against the pre-update row, so
     # `cases.status` here is the previous status even though `{updates}` also
@@ -484,13 +474,10 @@ def _is_usable_case(attrs):
     return any(attrs.get(f) for f in USABLE_CASE_THRESHOLD_FIELDS)
 
 
-# titles are structured "Category – County". Each rule normalises the category
-# part to a stable slug for work_category, and carries a work_type policy:
-#   - "Unplanned"/"Planned": set work_type to this, OVERRIDING the feed, because
-#     the label is editorially unambiguous (a burst main is never planned; the
-#     odd contradicting row is the completion update at the end of the job).
-#   - None: give a work_category slug but leave work_type as the feed reported it
-#     (e.g. mains repair / power outage — genuinely both planned and unplanned).
+# Titles are structured "Category – County"; each rule normalises the category
+# to a stable work_category slug and carries a work_type policy — Planned/
+# Unplanned overrides the feed, None leaves it as reported. See
+# notes/data-quality.md ("work_category and work_type derivation") for why.
 # This is the single categorisation mechanism; there is no separate fill tier.
 @dataclass(frozen=True)
 class CategoryRule:
@@ -731,12 +718,11 @@ def trim_titles(conn):
 def unmatched_categories(conn):
     """Counter of title prefixes no CategoryRule claims, commonest first.
 
-    A slug the rule table misses is not a cosmetic gap: an unmatched title gets
-    work_category = NULL, which classify() reads as "not a disruption" and so
-    silently drops from the metrics. The feed invents spellings constantly
-    ("Water Conservation/Restriction" alongside "...Restrictions", "Discoloration"
-    alongside "Discolouration"), so this is a standing condition, not a one-off
-    cleanup — printing it on every backfill is what makes the next one visible.
+    An unmatched title gets work_category = NULL, which classify() reads as
+    "not a disruption" and silently drops from the metrics — see
+    notes/data-quality.md ("A missing variant was silently inventing supply
+    outages") for why this must be printed on every backfill rather than
+    handled as a one-off cleanup.
     """
     counts = Counter(
         prefix
@@ -800,14 +786,11 @@ def backfill_reduced_pressure(conn):
     did not. Returns the number of rows changed.
 
     Same principle as the work_type override above: the feed's own field is
-    corrected from its own notice, where the notice is unambiguous. Two cases on
-    the 2026-08 snapshot, both titled "Reservoir Interruption" and so classified
-    as hard supply outages, while their text describes only low pressure — the
-    title is the category, but here the body contradicts it.
+    corrected from its own notice, where the notice is unambiguous — see
+    notes/data-quality.md ("The notice title is not a reliable severity signal").
 
     Only ever sets the flag, never clears it, matching the additive discipline of
-    every other backfill. site.classify already reads reduced_pressure ahead of
-    the hard categories, so no severity rule changes.
+    every other backfill.
     """
     rows = conn.execute(
         "SELECT id, description FROM cases WHERE description IS NOT NULL AND NOT reduced_pressure"
