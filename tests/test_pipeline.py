@@ -3,6 +3,7 @@ import sqlite3
 
 import pytest
 import requests
+from conftest import case_record, make_cases_table
 
 from uisce import pipeline
 from uisce.pipeline import (
@@ -667,6 +668,66 @@ class TestSchemaVersion:
         assert set(pipeline.MIGRATIONS) == set(range(2, pipeline.SCHEMA_VERSION + 1))
 
 
+class TestSchemaIsDeclaredOnce:
+    """CASE_COLUMNS is the single declaration; everything else derives from it.
+
+    Adding `first_start_date` broke ten tests because the table was written out
+    in three places by hand and two were missed. These pin the derivations so
+    the next column cannot do the same.
+    """
+
+    def test_create_db_declares_exactly_the_columns_in_order(self, tmp_path):
+        db_path = tmp_path / "fresh.db"
+        pipeline.create_db([], db_path=db_path)
+        with sqlite3.connect(db_path) as conn:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(cases)")]
+        assert cols == list(pipeline.CASE_COLUMNS)
+
+    def test_the_test_fixture_table_matches_the_real_one(self, tmp_path):
+        """The fixture relaxes the column *types* so a record of Nones does not
+        trip `REAL NOT NULL`; it must not diverge on the columns themselves."""
+        db_path = tmp_path / "fresh.db"
+        pipeline.create_db([], db_path=db_path)
+        with sqlite3.connect(db_path) as conn:
+            real = [row[1] for row in conn.execute("PRAGMA table_info(cases)")]
+        fixture_conn = make_cases_table(sqlite3.connect(":memory:"))
+        fixture = [row[1] for row in fixture_conn.execute("PRAGMA table_info(cases)")]
+        assert fixture == real
+
+    def test_fed_and_stamped_columns_partition_the_schema(self):
+        assert set(pipeline.DB_CASE_COLUMNS) | pipeline.STAMPED_CASE_COLUMNS == set(
+            pipeline.CASE_COLUMNS
+        )
+        assert not set(pipeline.DB_CASE_COLUMNS) & pipeline.STAMPED_CASE_COLUMNS
+
+    def test_the_v1_floor_is_the_schema_minus_what_migrations_can_add(self):
+        # The floor used to be a hand-kept literal, so a new column could be
+        # written on the wrong side of it and turn a migration into a rebuild.
+        migrated = {c for step in pipeline.MIGRATIONS.values() for c in step}
+        assert pipeline.REQUIRED_CASE_COLUMNS == set(pipeline.CASE_COLUMNS)
+        assert pipeline.V1_CASE_COLUMNS == set(pipeline.CASE_COLUMNS) - migrated
+        assert migrated <= set(pipeline.CASE_COLUMNS)
+
+    def test_a_new_column_reaches_every_derivation(self, monkeypatch, tmp_path):
+        """The actual claim: one entry in CASE_COLUMNS plus a MIGRATIONS step is
+        the whole edit. Nothing here is hand-listed, so if a fourth statement of
+        the schema reappears, this fails."""
+        monkeypatch.setattr(
+            pipeline, "CASE_COLUMNS", {**pipeline.CASE_COLUMNS, "probe_col": "TEXT"}
+        )
+        monkeypatch.setattr(
+            pipeline, "MIGRATIONS", {**pipeline.MIGRATIONS, 4: {"probe_col": "TEXT"}}
+        )
+        monkeypatch.setattr(pipeline, "SCHEMA_VERSION", 4)
+
+        db_path = tmp_path / "probe.db"
+        pipeline.create_db([], db_path=db_path)
+        with sqlite3.connect(db_path) as conn:
+            assert "probe_col" in [r[1] for r in conn.execute("PRAGMA table_info(cases)")]
+        fixture = make_cases_table(sqlite3.connect(":memory:"))
+        assert "probe_col" in [r[1] for r in fixture.execute("PRAGMA table_info(cases)")]
+
+
 def test_trim_titles():
     conn = sqlite3.connect(":memory:")
     conn.execute("CREATE TABLE cases (id INTEGER PRIMARY KEY, title TEXT)")
@@ -711,19 +772,12 @@ def test_geocode_cache_row_flattens_address():
 
 class TestLoadCasesSeenStamps:
     def _conn(self):
-        conn = sqlite3.connect(":memory:")
-        cols = ", ".join(f"{c} TEXT" if c != "id" else "id INTEGER PRIMARY KEY"
-                         for c in pipeline.DB_CASE_COLUMNS)
-        conn.execute(
-            f"CREATE TABLE cases ({cols}, first_seen TEXT, last_seen TEXT, closed_at TEXT)"
-        )
-        return conn
+        return make_cases_table(sqlite3.connect(":memory:"))
 
     def _record(self, **overrides):
-        record = dict.fromkeys(pipeline.DB_CASE_COLUMNS)
-        record.update({"id": 1, "title": "Burst Water Main – Cork", "status": "Open"})
-        record.update(overrides)
-        return record
+        return case_record(
+            **{"id": 1, "title": "Burst Water Main – Cork", "status": "Open", **overrides}
+        )
 
     def test_fresh_insert_stamps_first_and_last_seen(self):
         conn = self._conn()
@@ -759,6 +813,16 @@ class TestLoadCasesClosedAt:
     def _closed_at(self, conn, case_id=1):
         return conn.execute(
             "SELECT closed_at FROM cases WHERE id = ?", (case_id,)
+        ).fetchone()[0]
+
+    def _first_start(self, conn, case_id=1):
+        return conn.execute(
+            "SELECT first_start_date FROM cases WHERE id = ?", (case_id,)
+        ).fetchone()[0]
+
+    def _start(self, conn, case_id=1):
+        return conn.execute(
+            "SELECT start_date FROM cases WHERE id = ?", (case_id,)
         ).fetchone()[0]
 
     def test_open_to_closed_stamps_the_observing_build(self):
@@ -807,6 +871,31 @@ class TestLoadCasesClosedAt:
         pipeline.load_cases(conn, [self._record(status="Open")],
                             now="2026-07-15T00:00:00+00:00")
         assert self._closed_at(conn) is None
+
+    def test_first_start_date_survives_a_re_stamped_start(self):
+        """The feed rewrites STARTDATE in place when a notice is edited, usually
+        forwards past the works it describes — the negative-span family. The
+        upsert overwrites start_date on every download, so the publication time
+        we first saw is only recoverable if it is kept here."""
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record(start_date="2026-05-01T09:00:00+00:00")],
+                            now="2026-07-01T00:00:00+00:00")
+        pipeline.load_cases(conn, [self._record(start_date="2026-06-01T09:00:00+00:00")],
+                            now="2026-07-08T00:00:00+00:00")
+        assert self._first_start(conn) == "2026-05-01T09:00:00+00:00"
+        assert self._start(conn) == "2026-06-01T09:00:00+00:00"  # still tracks the feed
+
+    def test_first_start_date_is_first_observed_not_earliest(self):
+        """COALESCE, not MIN. A backward re-stamp is as real as a forward one
+        (case 238140 moved -30 days), and taking the minimum would let one
+        install a bogus early start and inflate the duration. That rule was
+        measured and rejected — notes/data-quality.md, 2026-07-20."""
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record(start_date="2026-06-01T09:00:00+00:00")],
+                            now="2026-07-01T00:00:00+00:00")
+        pipeline.load_cases(conn, [self._record(start_date="2026-05-01T09:00:00+00:00")],
+                            now="2026-07-08T00:00:00+00:00")
+        assert self._first_start(conn) == "2026-06-01T09:00:00+00:00"
 
     def test_stays_open_leaves_no_stamp(self):
         conn = self._conn()

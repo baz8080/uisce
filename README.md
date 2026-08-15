@@ -4,7 +4,7 @@ Download, transform, and geocode [Uisce Éireann](https://www.water.ie/) (Irish 
 
 The [website that this repo generates](https://baz8080.github.io/uisce/) is deployed twice a day.
 
-**What the time figures mean.** This project does not measure outage duration and cannot: the feed never records when supply was actually lost. What it measures is the span from **when a notice was published** to **the end that notice reports** (`notice_to_end_seconds`), and the site publishes the subset where that end is an observed "works are now complete" update rather than a schedule. Every figure is a floor on true length. See [notes/data-quality.md](notes/data-quality.md) and [notes/statuspage-methodology.md](notes/statuspage-methodology.md).
+**What the time figures mean.** This project does not measure outage duration and cannot: the feed never records when supply was actually lost. What it measures is the span from **when a notice was published** to **the end that notice reports** (`notice_to_end_seconds`), and the site publishes the subset where that end is an observed "works are now complete" update rather than a schedule. That published median is a floor on true length. The availability percentages are not: about one disruption in twenty reports no usable end, and since 2026-08-15 those are charged the typical observed span for their kind of works rather than counted as zero — a total has to put a number on every event, and omitting one asserts it lasted no time at all. See [notes/data-quality.md](notes/data-quality.md) and [notes/statuspage-methodology.md](notes/statuspage-methodology.md).
 
 ## Just want the data?
 

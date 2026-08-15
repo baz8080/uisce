@@ -405,7 +405,7 @@
   <footer>
     <p><a href="areas.html" style="color:inherit">Every area with a notice</a> — a full directory of the 1,800-odd Census areas on this site, each linking to its incident history.</p>
     <p id="countyHistoryLink" hidden></p>
-    <p><b>What this measures.</b> This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. Every duration is counted from when a notice was published — for an unplanned burst the water was already off before that. Treat every figure here as a <b>minimum</b>.</p>
+    <p><b>What this measures.</b> This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. Every duration is counted from when a notice was published — for an unplanned burst the water was already off before that. The headline &ldquo;works complete&rdquo; time is a <b>minimum</b>: it counts only the notices that reported one. The availability percentages are a <b>best estimate</b>, because a total has to put a number on every disruption, including the ones that never reported an end.</p>
 
     <details class="method" id="method">
       <summary>How these numbers are worked out</summary>
@@ -413,8 +413,10 @@
       <h4>How long a disruption lasted</h4>
       <p>The time from notice publication to a stated &ldquo;works are now complete&rdquo; update, over disruption incidents that carry one. Incidents whose only end signal was a <em>scheduled</em> finish are counted separately and shown as &ldquo;scheduled&rdquo;: a published plan is not evidence the works ended then, so the two are never pooled into a single headline. End times are read from the notice text by an LLM (see the <a href="https://github.com/baz8080/uisce/blob/main/notes/end-time-eval.md">accuracy evaluation</a>); no time on this page is a measurement taken in the field.</p>
 
+      <p>About one incident in twenty never reports an end at all — the count is shown beside the headline each month. Those are left out of the figure above, because including them would mean counting an estimate as a confirmation. They are not the long ones being quietly hidden: checked both ways, they run <em>shorter</em> than average, so leaving them out moves the headline <em>up</em>, not down. <span id="sensNote"></span> They are still counted in full in the availability percentages and person-hours, where leaving something out means calling it zero rather than calling it unknown.</p>
+
       <h4>What counts as a disruption</h4>
-      <p>Only hard disruptions count against the availability figures: bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages, and unplanned repair works. Investigations, leak detection, hydrant works and installations are shown as works but never count; restrictions, low pressure and discolouration are shown but never count. A closed notice with no usable end signal still marks its start day and its place in the counts, but adds no disruption time.</p>
+      <p>Only hard disruptions count against the availability figures: bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages, and unplanned repair works. Investigations, leak detection, hydrant works and installations are shown as works but never count; restrictions, low pressure and discolouration are shown but never count. A closed notice that never reported a usable end is charged the typical length of a completed notice of the same kind of works — a burst main and a hydrant repair get different figures — rather than nothing at all.</p>
 
       <h4>Repeating works</h4>
       <p>Where a notice describes works repeating over a range of nights or days — &ldquo;daily from 10pm until 7am, from 9 to 27 July&rdquo; — only the hours inside those windows are counted, so the incident reads as the hours the works took rather than the days they spanned. A notice announcing a window that <em>repeats</em> like this is treated as a restriction whatever its title says, because the same supply zone is published sometimes as a conservation restriction and sometimes as an interruption, and the two describe the same thing.</p>
@@ -443,6 +445,7 @@
 
     <details class="method">
       <summary>Changes to how this site measures</summary>
+      <p><b>15 August 2026.</b> About one disruption in twenty never reports when it ended. Those used to be recorded as one second long, which counted a real outage as having disrupted nobody. They are now charged the typical length of a completed notice for the same kind of works, and how many were estimated is shown beside the headline each month. National availability falls by one to two hundredths of a percentage point; the worst-hit county-month falls by two tenths, and four county-months move down one grade. The headline &ldquo;works complete&rdquo; time is unchanged in four months of five and rose 0.2h in the fifth — these incidents stay out of it, but five large disruptions were published as several notices of which only some reported an end, and those now carry an estimate for the rest.</p>
       <p><b>2 August 2026.</b> An active boil-water or do-not-drink notice used to knock the grade down one step. It no longer does — that made a county with a notice affecting 200 people indistinguishable from one that lost supply county-wide. The notice is now shown as a marker beside the grade instead.</p>
     </details>
 
@@ -676,7 +679,8 @@ function renderOverview() {
   const fixNote = nat.median_completion_h == null
     ? "no completed notices this month"
     : `${nat.completed_n || 0} notices confirmed complete` +
-      (nat.scheduled_n ? ` · ${nat.scheduled_n} had only a scheduled end` : "");
+      (nat.scheduled_n ? ` · ${nat.scheduled_n} had only a scheduled end` : "") +
+      (nat.imputed_n ? ` · ${nat.imputed_n} never reported one` : "");
   document.getElementById("natHeading").textContent = `The national picture in ${monthLabel(curMonth)}`;
   document.getElementById("tiles").innerHTML = `
     <div class="tile"><div class="v">${availText(natAvail, personH)}</div><div class="k">of people's time with no outage announced</div></div>
@@ -685,6 +689,16 @@ function renderOverview() {
     <div class="tile"><div class="v">${fmtPersonH(personH)}</div><div class="k">hours without water, added up across everyone affected</div></div>
     <div class="tile"><div class="v">${quality}</div><div class="k">water-quality notices</div></div>
     ${isLatest() ? `<div class="tile"><div class="v">${openNow}</div><div class="k">notices open right now</div></div>` : ""}`;
+
+  // The sensitivity figure, in the footer's methodology block: what the headline
+  // would be if the estimated incidents were let into it. Written from the data
+  // rather than fixed in the copy, because the gap varies by month and a stale
+  // sentence here would be exactly the kind of quiet overclaim it exists to rule out.
+  document.getElementById("sensNote").textContent =
+    (nat.median_pooled_h == null || nat.median_completion_h == null || !nat.imputed_n)
+      ? ""
+      : `Including them for ${monthLabel(curMonth)} would put the figure at `
+        + `${nat.median_pooled_h}h rather than ${nat.median_completion_h}h.`;
 
   // the top ten is a finished-month list, so on the in-progress month this
   // deliberately points at a different month than the one on screen
@@ -877,7 +891,7 @@ function renderCounty() {
         <span><b>${m.events.outage}</b> supply ${plural(m.events.outage, "disruption")} (<b>${m.person_h.toLocaleString()}</b> person-hours)</span>
         ${m.events.outage === 0 ? "" : `<span>${m.median_completion_h == null
           ? `none of them has reported completion yet`
-          : `typical time from notice to &ldquo;works complete&rdquo; <b>${m.median_completion_h}h</b> (${m.completed_n} confirmed complete${m.scheduled_n ? `, ${m.scheduled_n} scheduled only` : ""})`}</span>`}
+          : `typical time from notice to &ldquo;works complete&rdquo; <b>${m.median_completion_h}h</b> (${m.completed_n} confirmed complete${m.scheduled_n ? `, ${m.scheduled_n} scheduled only` : ""}${m.imputed_n ? `, ${m.imputed_n} never reported an end` : ""})`}</span>`}
         <span><b>${m.events.maintenance}</b> planned ${plural(m.events.maintenance, "work item", "works")}</span>
         <span><b>${m.events.quality}</b> quality ${plural(m.events.quality, "notice")}</span>
         <span><b>${m.clear_days}</b>/${m.days_elapsed} clear days${isPartial() ? " so far" : ""}</span>

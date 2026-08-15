@@ -1,14 +1,17 @@
 import json
 import re
 import xml.etree.ElementTree as ET
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 from uisce.config import BASE_URL
 from uisce.site import (
+    CAP_DAYS,
     COUNTY_POP,
+    MIN_CATEGORY_N,
     UNPLACED,
     UNPLACED_LABEL,
     SmallAreaIndex,
+    SpanTable,
     TownLookup,
     _area_index_html,
     _area_items,
@@ -300,26 +303,78 @@ class TestBuildSite:
         month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["outage"] == 1
 
-    def test_closed_case_without_end_signal_still_marks_its_day(self):
+    def test_closed_case_without_end_signal_is_charged_a_typical_span(self):
+        """It used to take a token 1-second footprint and accrue nothing.
+
+        Availability divides by a denominator fixed by population and calendar,
+        so an event contributing no duration contributes a zero — and zero is
+        the one value a real outage certainly did not last. It is charged the
+        typical observed span instead, while staying out of the median.
+        """
+        rows = [
+            _case(id=1, reference_num="CAR1"),  # observed, 24h: the evidence
+            _case(id=2, reference_num="CAR2", full_lat=52.900, status="Closed",
+                  notice_to_end_seconds=None, end_source="not_found", end_local_date=None),
+        ]
+        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["events"]["outage"] == 2
+        assert month["person_h"] == 2 * 24 * 1000  # both accrue, not just the observed one
+        assert month["days"][0][0] == "outage"  # May 1st is not a false green
+        assert month["median_completion_h"] == 24.0  # the estimate does not enter it
+        assert month["completed_n"] == 1
+        assert month["imputed_n"] == 1
+
+    def test_imputation_needs_evidence_to_draw_on(self):
+        """With no observed completion anywhere in the corpus there is no typical
+        span to charge, and the token footprint stands. A guess with nothing
+        behind it is worse than the zero it replaces."""
         rows = [_case(notice_to_end_seconds=None, status="Closed",
                       end_source="not_found", end_local_date=None)]
         month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["outage"] == 1
         assert month["person_h"] == 0
-        assert month["days"][0][0] == "outage"  # May 1st is not a false green
-        assert month["median_completion_h"] is None  # unknown ends can't drag the median
+        assert month["days"][0][0] == "outage"
+        assert month["median_completion_h"] is None
+        # nothing was estimated, so there is no estimate to disclose — the event
+        # still counts and still colours its day, as it always did
+        assert month["imputed_n"] == 0
+
+    def test_negative_span_case_is_charged_backwards_from_its_reported_end(self):
+        """The negative-span family knows when it ended and only lost its start
+        (start_date is re-stamped in place upstream). Charging forwards from
+        publication would put the hours on the day the notice went up, days
+        after the works finished."""
+        rows = [
+            _case(id=1, reference_num="CAR1"),  # observed, 24h: the evidence
+            _case(id=2, reference_num="CAR2", full_lat=52.900, status="Open",
+                  start_date="2026-05-10T00:00:00+00:00", notice_to_end_seconds=None,
+                  end_source="completion_update", end_local_date="2026-05-05",
+                  end_local_time="00:00"),
+        ]
+        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["imputed_n"] == 1
+        # 24h charged backwards from 5 May 00:00 lands on 4 May, not on the 10th
+        assert month["days"][3][0] == "outage"
+        assert month["days"][9][0] == ""
 
     def test_open_case_whose_text_says_it_ended_does_not_accrue_to_now(self):
         # the negative-span family: build.py nulls the span when the reported
         # end precedes publication, but the works are over — a stale 'Open'
-        # must not turn that into 9 days of fabricated downtime
-        rows = [_case(status="Open", notice_to_end_seconds=None,
-                      end_source="completion_update", end_local_date="2026-05-01")]
+        # must not turn that into 9 days of fabricated downtime. It is now
+        # charged a typical span rather than a token second, but the point of
+        # this test is the ceiling: nowhere near the 14-day cap.
+        rows = [
+            _case(id=1, reference_num="CAR1"),  # observed, 24h: the evidence
+            _case(id=2, reference_num="CAR2", full_lat=52.900, status="Open",
+                  start_date="2026-05-10T00:00:00+00:00", notice_to_end_seconds=None,
+                  end_source="completion_update", end_local_date="2026-05-08",
+                  end_local_time="12:00"),
+        ]
         month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["events"]["outage"] == 1
-        assert month["person_h"] == 0
-        assert month["days"][0][0] == "outage"  # its day still colours
-        assert month["median_completion_h"] is None  # no usable span either way
+        assert month["events"]["outage"] == 2
+        assert month["person_h"] == 2 * 24 * 1000  # a typical span each, not 9 days
+        assert month["median_completion_h"] == 24.0  # no usable span of its own
+        assert month["imputed_n"] == 1
 
     def test_open_case_with_no_signal_at_all_still_accrues(self):
         # end_source None = downloaded since the last uisce-infer run
@@ -328,6 +383,26 @@ class TestBuildSite:
                           end_source=source, end_local_date=None)]
             month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
             assert month["person_h"] == 9 * 24 * 1000  # May 1 -> NOW, uncapped
+
+    def test_pooled_median_is_the_sensitivity_figure(self):
+        """What the headline would be if the estimated events were let into it.
+
+        Published beside the headline so the exclusion is arithmetic a reader
+        can check rather than a silence. The headline itself must not move.
+        """
+        rows = [
+            _case(id=1, reference_num="CAR1", notice_to_end_seconds=20 * 3600),
+            _case(id=2, reference_num="CAR2", full_lat=52.900,
+                  notice_to_end_seconds=20 * 3600),
+            _case(id=3, reference_num="CAR3", full_lat=52.910, status="Closed",
+                  notice_to_end_seconds=None, end_source="not_found", end_local_date=None),
+        ]
+        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["median_completion_h"] == 20.0
+        assert month["completed_n"] == 2
+        assert month["imputed_n"] == 1
+        # the estimate is the observed median by construction, so pooling holds it
+        assert month["median_pooled_h"] == 20.0
 
     def test_open_boil_notice_is_closed_by_its_paired_lift(self):
         issue = _case(
@@ -370,6 +445,48 @@ class TestBuildSite:
 
     def test_towns_are_absent_without_a_lookup(self):
         assert build_site([_case()], SA_INDEX, NOW)["counties"]["Carlow"]["towns"] == {}
+
+
+class TestSpanTable:
+    """What a case with no usable end signal gets charged, and on what evidence."""
+
+    def test_only_observed_completions_are_evidence(self):
+        """A scheduled end is a published plan. It accrues its own announced
+        interval, but it cannot say what a *different* notice's works took —
+        that is the same line the headline median already draws."""
+        rows = [_case(end_source="scheduled_end_with_time", notice_to_end_seconds=99 * 3600)]
+        assert SpanTable(rows).overall is None
+
+    def test_a_category_with_enough_cases_uses_its_own_median(self):
+        rows = [_case(id=i, work_category="mains_repair", notice_to_end_seconds=6 * 3600)
+                for i in range(MIN_CATEGORY_N)]
+        rows += [_case(id=100 + i, notice_to_end_seconds=30 * 3600) for i in range(4)]
+        table = SpanTable(rows)
+        assert table.for_category("mains_repair") == 6 * 3600
+        # burst_main is under the threshold, so it falls back to the global median
+        assert table.for_category("burst_main") == table.overall
+
+    def test_a_thin_category_falls_back_rather_than_setting_its_own_number(self):
+        rows = [_case(id=i, work_category="mains_repair", notice_to_end_seconds=6 * 3600)
+                for i in range(MIN_CATEGORY_N - 1)]
+        rows += [_case(id=100 + i, notice_to_end_seconds=30 * 3600) for i in range(20)]
+        assert SpanTable(rows).for_category("mains_repair") == 30 * 3600
+
+    def test_the_cap_applies_to_the_evidence_too(self):
+        """A 40-day observed span is already capped everywhere it accrues; it
+        must not enter the table uncapped and charge a longer estimate than the
+        case it was measured from could ever have contributed."""
+        rows = [_case(notice_to_end_seconds=40 * 24 * 3600)]
+        assert SpanTable(rows).overall == CAP_DAYS * 86400
+
+    def test_without_a_table_resolve_case_keeps_the_token_footprint(self):
+        """The single-row callers throughout this suite ask about severity and
+        recurrence, not accrual, and must not be made to stand up a corpus."""
+        row = _case(status="Closed", notice_to_end_seconds=None,
+                    end_source="not_found", end_local_date=None)
+        case = resolve_case(row, SA_INDEX, {}, NOW)
+        assert case.imputed is False
+        assert case.intervals[0][1] - case.intervals[0][0] == timedelta(seconds=1)
 
 
 class TestTownLookup:
@@ -1658,7 +1775,7 @@ class TestPayloadShape:
             "days", "clear_days", "days_elapsed", "grade", "events", "person_h",
             "period_h", "availability",
             "health_n", "median_completion_h", "completed_n", "median_scheduled_h",
-            "scheduled_n",
+            "scheduled_n", "median_pooled_h", "imputed_n",
         }
 
     def test_the_top_row_keys_are_unchanged(self):
