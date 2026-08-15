@@ -1,6 +1,7 @@
 import sqlite3
 
 import pytest
+from conftest import case_record, make_cases_table
 
 from uisce import pipeline
 from uisce.replay_closed_at import apply_stamps, replay, snapshot_files
@@ -133,15 +134,9 @@ def test_replayed_and_live_stamps_share_one_column(tmp_path):
     live upsert cannot reach, and the live upsert takes over from there."""
     db = tmp_path / "live.db"
     with sqlite3.connect(db) as conn:
-        cols = ", ".join(
-            f"{c} TEXT" if c != "id" else "id INTEGER PRIMARY KEY"
-            for c in pipeline.DB_CASE_COLUMNS
-        )
-        conn.execute(
-            f"CREATE TABLE cases ({cols}, first_seen TEXT, last_seen TEXT, closed_at TEXT)"
-        )
+        make_cases_table(conn)
 
-    record = dict.fromkeys(pipeline.DB_CASE_COLUMNS)
+    record = case_record()
     with sqlite3.connect(db) as conn:
         pipeline.load_cases(conn, [record | {"id": 1, "status": "Open"},
                                    record | {"id": 2, "status": "Closed"}],

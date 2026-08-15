@@ -37,41 +37,56 @@ USABLE_CASE_THRESHOLD_FIELDS = ["TITLE", "DESCRIPTION"]
 # Stamped into PRAGMA user_version. The `cases` schema is declared once, in
 # create_db; bump this only when that declaration changes, and add the matching
 # step to MIGRATIONS so DBs already in the wild can be carried forward.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
-DB_CASE_COLUMNS = [
-    "id",
-    "work_type",
-    "title",
-    "start_date",
-    "end_date",
-    "description",
-    "status",
-    "global_id",
-    "approval_status",
-    "location",
-    "county",
-    "reference_num",
-    "boil_water_notice",
-    "traffic_disruptions",
-    "pollution",
-    "water_outage",
-    "do_not_drink",
-    "discolouration",
-    "reduced_pressure",
-    "water_restrictions",
-    "full_lat",
-    "full_lon",
-    "rounded_lat",
-    "rounded_lon",
-]
+# The `cases` schema, declared once: every column in table order, with its SQL
+# type. create_db renders this into the CREATE TABLE, the migration guard derives
+# its required set from it, and the test fixtures build their throwaway tables
+# from the same keys. Adding a column is one entry here (plus a MIGRATIONS step,
+# below, so DBs already in the wild can reach it).
+CASE_COLUMNS = {
+    "id": "INTEGER PRIMARY KEY",
+    "work_type": "TEXT",
+    "title": "TEXT",
+    "start_date": "TEXT",
+    "end_date": "TEXT",
+    "description": "TEXT",
+    "status": "TEXT",
+    "global_id": "TEXT",
+    "approval_status": "TEXT",
+    "location": "TEXT",
+    "county": "TEXT",
+    "reference_num": "TEXT",
+    "boil_water_notice": "INTEGER",
+    "traffic_disruptions": "INTEGER",
+    "pollution": "INTEGER",
+    "water_outage": "INTEGER",
+    "do_not_drink": "INTEGER",
+    "discolouration": "INTEGER",
+    "reduced_pressure": "INTEGER",
+    "water_restrictions": "INTEGER",
+    "work_category": "TEXT",
+    "first_seen": "TEXT",
+    "last_seen": "TEXT",
+    "closed_at": "TEXT",
+    "first_start_date": "TEXT",
+    "full_lat": "REAL NOT NULL",
+    "full_lon": "REAL NOT NULL",
+    "rounded_lat": "REAL NOT NULL",
+    "rounded_lon": "REAL NOT NULL",
+}
 
-# Columns not in DB_CASE_COLUMNS (they are derived or stamped, not fed) but
-# still required by the declared schema. V1 is the floor: a DB carrying these is
-# structurally sound and can be migrated forward, whatever it is stamped. A DB
-# missing any of them predates the archive and is a rebuild, not a migration.
-V1_CASE_COLUMNS = set(DB_CASE_COLUMNS) | {"work_category", "first_seen", "last_seen"}
-REQUIRED_CASE_COLUMNS = V1_CASE_COLUMNS | {"closed_at"}
+# Derived or stamped by this pipeline rather than fed by the ArcGIS response, so
+# they carry no value in a mapped case and are never part of the INSERT's value
+# tuple. load_cases sets first_seen / last_seen / closed_at / first_start_date
+# explicitly; backfill_work_category fills work_category.
+STAMPED_CASE_COLUMNS = frozenset(
+    {"work_category", "first_seen", "last_seen", "closed_at", "first_start_date"}
+)
+
+# The columns fed straight from the feed, in table order. This is the INSERT's
+# column list and the source of its placeholders, so its order is load-bearing.
+DB_CASE_COLUMNS = [c for c in CASE_COLUMNS if c not in STAMPED_CASE_COLUMNS]
 
 # v(n-1) -> v(n), as {version: {column: decl}}. Additive nullable columns only:
 # SQLite adds those without rewriting a single row, which is what keeps the
@@ -80,7 +95,32 @@ REQUIRED_CASE_COLUMNS = V1_CASE_COLUMNS | {"closed_at"}
 # archive (cases the feed no longer serves, and the geocode cache).
 MIGRATIONS = {
     2: {"closed_at": "TEXT"},
+    3: {"first_start_date": "TEXT"},
 }
+
+# V1 is the floor: a DB carrying these is structurally sound and can be migrated
+# forward, whatever it is stamped. A DB missing any of them predates the archive
+# and is a rebuild, not a migration. It is the declared schema minus everything
+# MIGRATIONS knows how to add, so a new column lands on the right side of the
+# floor by construction rather than by being remembered.
+_MIGRATED_COLUMNS = {column for step in MIGRATIONS.values() for column in step}
+V1_CASE_COLUMNS = set(CASE_COLUMNS) - _MIGRATED_COLUMNS
+REQUIRED_CASE_COLUMNS = set(CASE_COLUMNS)
+
+
+def cases_ddl(sql_type=None):
+    """The CREATE TABLE body for `cases`, from the single column declaration.
+
+    `sql_type(name, declared)` may rewrite a column's SQL type — the test
+    fixtures relax everything to TEXT so a throwaway record of Nones does not
+    trip `REAL NOT NULL`. It cannot change the set of columns or their order,
+    which always come from CASE_COLUMNS, and it is applied per column as the
+    string is built so there is no snapshot to go stale.
+    """
+    sql_type = sql_type or (lambda name, declared: declared)
+    return ",\n                ".join(
+        f"{name} {sql_type(name, declared)}" for name, declared in CASE_COLUMNS.items()
+    )
 
 FIELD_MAP = {
     "OBJECTID": "id",
@@ -355,36 +395,9 @@ def create_db(cases, db_path=DB_PATH):
 
         _create_geocode_cache_table(conn)
 
-        conn.execute("""
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS cases (
-                id INTEGER PRIMARY KEY,
-                work_type TEXT,
-                title TEXT,
-                start_date TEXT,
-                end_date TEXT,
-                description TEXT,
-                status TEXT,
-                global_id TEXT,
-                approval_status TEXT,
-                location TEXT,
-                county TEXT,
-                reference_num TEXT,
-                boil_water_notice INTEGER,
-                traffic_disruptions INTEGER,
-                pollution INTEGER,
-                water_outage INTEGER,
-                do_not_drink INTEGER,
-                discolouration INTEGER,
-                reduced_pressure INTEGER,
-                water_restrictions INTEGER,
-                work_category TEXT,
-                first_seen TEXT,
-                last_seen TEXT,
-                closed_at TEXT,
-                full_lat REAL NOT NULL,
-                full_lon REAL NOT NULL,
-                rounded_lat REAL NOT NULL,
-                rounded_lon REAL NOT NULL,
+                {cases_ddl()},
                 FOREIGN KEY (rounded_lat, rounded_lon)
                     REFERENCES geocode_cache (rounded_lat, rounded_lon)
             )
@@ -440,7 +453,8 @@ def load_cases(conn, cases, now=None):
     updates = ", ".join(f"{c} = excluded.{c}" for c in DB_CASE_COLUMNS if c != "id")
 
     rows = [
-        tuple(record[col] for col in DB_CASE_COLUMNS) + (now, now) for record in cases
+        tuple(record[col] for col in DB_CASE_COLUMNS) + (now, now, record["start_date"])
+        for record in cases
     ]
 
     # upsert rather than INSERT OR REPLACE so an existing row's first_seen
@@ -461,11 +475,28 @@ def load_cases(conn, cases, now=None):
         "  ELSE cases.closed_at"
         " END"
     )
+    # start_date is the feed's STARTDATE, and the feed re-stamps it in place when
+    # a notice is edited — usually forwards, past the works it describes, which
+    # is what produces the negative-span family (notes/data-quality.md,
+    # 2026-07-20). `{updates}` overwrites start_date on every download, so the
+    # original is lost unless it is kept here.
+    #
+    # COALESCE, not MIN: first observed, never earliest seen. A backward re-stamp
+    # is as real as a forward one (case 238140 moved -30 days), and taking the
+    # minimum would let one install a bogus early start and inflate the duration.
+    # That rule was measured and rejected; see the same section.
+    #
+    # This is an instrument, not yet an input: nothing computes a duration from
+    # it. build.py's first_start_date_per_case already pins the start seen at the
+    # first *inference*, and can only witness a re-stamp when the description
+    # changed too — stamping at download time is what closes that gap, and it
+    # needs history behind it before it can say anything.
+    first_start = "first_start_date = COALESCE(cases.first_start_date, excluded.start_date)"
     cur.executemany(
-        f"INSERT INTO cases ({columns}, first_seen, last_seen) "
-        f"VALUES ({placeholders}, ?, ?) "
+        f"INSERT INTO cases ({columns}, first_seen, last_seen, first_start_date) "
+        f"VALUES ({placeholders}, ?, ?, ?) "
         f"ON CONFLICT(id) DO UPDATE SET {updates}, "
-        f"last_seen = excluded.last_seen, {closed_at}",
+        f"last_seen = excluded.last_seen, {closed_at}, {first_start}",
         rows,
     )
 

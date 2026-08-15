@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import quote
 
+from uisce.build import reported_end_utc
 from uisce.config import (
     BASE_URL,
     DB_PATH,
@@ -66,6 +67,14 @@ CAP_DAYS = 14
 # (a stated plan is the best interval available) but are kept out of the
 # published median, which would otherwise mix a plan with an observation.
 OBSERVED_END_SOURCES = {"completion_update"}
+
+# Smallest number of observed completions a work_category needs before its own
+# median is used to impute a missing span; below this it falls back to the
+# global one. Fifteen keeps every category that carries real volume on its own
+# figure (mains_repair 7.5h against pump_repair 43.7h — the spread is wide
+# enough to be worth honouring) while stopping a category with three cases from
+# setting a number for itself.
+MIN_CATEGORY_N = 15
 
 # A pin is assumed to affect the Small Areas whose centroids lie within
 # AFFECT_RADIUS_KM; if none, the nearest Small Area within FALLBACK_KM.
@@ -431,15 +440,67 @@ class TownLookup:
         return {guid: pop for guid, pop in sas.items() if self.town.get(guid) == code}
 
 
-def span_stats(observed_h, scheduled_h):
+class SpanTable:
+    """Typical observed span per work_category, for imputing the ones we lost.
+
+    Built from observed completions only — the same evidence tier the published
+    median rests on — so an imputed value is a statement about how long that
+    kind of works actually took, not how long one was announced to take.
+
+    This exists because a *total* has no exclude option. Availability divides
+    person-disruption-seconds by a denominator fixed by population and calendar,
+    so an event that supplies no duration supplies a zero, and zero is the one
+    value known to be wrong for an outage that really happened. The 1-second
+    token this replaces was introduced to stop open negative-span cases
+    accruing to "now" (see `ended_by_publication`); it fixed that, but as a
+    number it books a burst main as having disrupted nobody.
+
+    The published median does *not* use these values — an imputation is weaker
+    evidence than the scheduled ends already kept out of it. See the
+    2026-08-15 section of notes/statuspage-methodology.md for the split and the
+    censoring checks behind it.
+    """
+
+    def __init__(self, rows):
+        by_cat = defaultdict(list)
+        for r in rows:
+            span = r["notice_to_end_seconds"]
+            if span is None or r["end_source"] not in OBSERVED_END_SOURCES:
+                continue
+            by_cat[r["work_category"]].append(min(span, CAP_DAYS * 86400))
+        every = [s for spans in by_cat.values() for s in spans]
+        self.overall = statistics.median(every) if every else None
+        self.by_cat = {
+            cat: statistics.median(spans)
+            for cat, spans in by_cat.items()
+            if len(spans) >= MIN_CATEGORY_N
+        }
+
+    def for_category(self, cat):
+        """Seconds to charge a case of this category whose own span is unusable."""
+        return self.by_cat.get(cat, self.overall)
+
+
+def span_stats(observed_h, scheduled_h, imputed_h=()):
     """Published notice-to-end figures. `median_completion_h` is the headline and
     covers observed completions only; the scheduled figures are reported
-    alongside so the split is visible rather than silently pooled."""
+    alongside so the split is visible rather than silently pooled.
+
+    `imputed_n` and `median_pooled_h` are the disclosure: how many disruption
+    events carried no usable end at all, and what the headline would be if they
+    were included at typical times for their kind of works. Publishing both is
+    what keeps the exclusion an argument rather than a silence — Ofwat's supply
+    interruptions guidance requires companies to report "what proportion of its
+    start/stop times has been informed by each data source" for the same reason.
+    """
+    pooled = list(observed_h) + list(imputed_h)
     return {
         "median_completion_h": round(statistics.median(observed_h), 1) if observed_h else None,
         "completed_n": len(observed_h),
         "median_scheduled_h": round(statistics.median(scheduled_h), 1) if scheduled_h else None,
         "scheduled_n": len(scheduled_h),
+        "median_pooled_h": round(statistics.median(pooled), 1) if pooled else None,
+        "imputed_n": len(imputed_h),
     }
 
 
@@ -655,6 +716,11 @@ class Case(NamedTuple):
     has_end: bool
     observed_end: bool
     rec: str = "none"  # recurrence outcome, for the build report
+    # No usable end signal, so the interval is a SpanTable estimate rather than
+    # anything the notice said. Deliberately separate from has_end, which stays
+    # False: that is what keeps these out of the published median without
+    # touching the filter that reads it.
+    imputed: bool = False
 
     @property
     def county(self):
@@ -665,7 +731,7 @@ class Case(NamedTuple):
         return self.row["status"] == "Open"
 
 
-def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None):
+def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, spans=None):
     """A Case for one row, or None if it isn't an event at all.
 
     `shared_window` is the recurring window this row's *event* reported, used
@@ -674,6 +740,11 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None):
     signal (see recurring_events); it decides severity, while shared_window
     decides the intervals. Left None, it falls back to this row's own fields,
     which is enough for a single-notice caller.
+
+    `spans` is the SpanTable used to charge a case whose end signal is unusable.
+    Left None, such a case keeps the token 1-second footprint this replaced,
+    which is what lets the single-row callers in the test suite ask about
+    severity and recurrence without standing up a corpus.
 
     The interval rules and their rationale are in
     notes/statuspage-methodology.md; this is the code they describe.
@@ -696,6 +767,13 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None):
     # a paired boil-notice lift is an observed end too; set below
     observed_end = has_end and r["end_source"] in OBSERVED_END_SOURCES
     rec = "none"
+    imputed = False
+    # where the disruption interval opens. Publication for everything with an
+    # end signal, but an imputed negative-span case is anchored to the end it
+    # does know and runs backwards from there, so the two come apart. `start`
+    # stays publication either way: first_pub reads it to decide which month an
+    # event belongs to, and that is a fact about the notice, not the works.
+    iv_start = start
 
     if r["work_category"] == "boil_notice_issued":
         # This class never ends itself; boil_notice_fate owns the whole decision.
@@ -713,11 +791,29 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None):
             # ongoing with no inferred end: runs from start until now, capped
             end = min(now, start + cap)
         else:
-            # closed with no usable end signal, or already over per the
-            # notice's own text: a token 1s footprint so its start day
-            # still colours and it counts as an event, while adding
-            # ~nothing to downtime
-            end = start + timedelta(seconds=1)
+            # Closed with no usable end signal, or already over per the notice's
+            # own text. These used to take a token 1-second footprint, which kept
+            # the start day coloured but booked a real outage as zero downtime —
+            # the one value it certainly was not. They are now charged a typical
+            # span for their kind of works; `imputed` keeps them out of the
+            # published median all the same. See notes/statuspage-methodology.md
+            # (2026-08-15) and the SpanTable docstring.
+            charge = spans and spans.for_category(r["work_category"])
+            if not charge:
+                end = start + timedelta(seconds=1)
+            else:
+                imputed = True
+                charge = min(timedelta(seconds=charge), cap)
+                # The negative-span family knows exactly when it ended and only
+                # lost its start (start_date is re-stamped in place upstream —
+                # notes/data-quality.md, 2026-07-20), so it is anchored backwards
+                # from the end. That puts the hours on the days they happened
+                # rather than on the day the notice finally went up.
+                known_end = reported_end_utc(r["end_local_date"], r["end_local_time"])
+                if known_end is None:
+                    end = start + charge
+                else:
+                    iv_start, end = known_end - charge, known_end
     else:
         end = start + min(timedelta(seconds=notice_to_end), cap)
         # Recurrence lives strictly under has_end, which keeps it away from the
@@ -737,11 +833,12 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None):
         sev=sev,
         ref=case_ref(r),
         start=start,
-        intervals=[(start, end)],
+        intervals=[(iv_start, end)],
         sas=sa_index.affected(r["full_lat"], r["full_lon"]),
         has_end=has_end,
         observed_end=observed_end,
         rec=rec,
+        imputed=imputed,
     )
 
 
@@ -764,6 +861,10 @@ class Region:
         # page counts pins instead — see event_meta in build_site.
         self.has_end = defaultdict(lambda: defaultdict(bool))
         self.observed_end = defaultdict(lambda: defaultdict(bool))
+        # OR'd the same way, and read only for the published coverage figure:
+        # an event any of whose pins had to be estimated is not one the site can
+        # claim it observed.
+        self.imputed = defaultdict(lambda: defaultdict(bool))
         self.knock_refs = set()
         self.open_now = {}  # ref -> case (dedups multi-pin events)
         self.resolved = {}  # ref -> case, for cases observed to close
@@ -775,6 +876,7 @@ class Region:
         self.sas[sev][ref].update(sas)
         self.has_end[sev][ref] |= case.has_end
         self.observed_end[sev][ref] |= case.observed_end
+        self.imputed[sev][ref] |= case.imputed
         if knocks_grade(case.row):
             self.knock_refs.add(ref)
         r = case.row
@@ -1523,10 +1625,11 @@ def build_site(rows, sa_index, now, towns=None):
     pin_tags = defaultdict(list)
     shared = event_windows(rows)
     recurring = recurring_events(rows, shared)
+    spans = SpanTable(rows)
 
     for r in rows:
         key = (r["county"], case_ref(r))
-        case = resolve_case(r, sa_index, lifts, now, shared.get(key), key in recurring)
+        case = resolve_case(r, sa_index, lifts, now, shared.get(key), key in recurring, spans)
         if case is None:
             continue
         pin_tags[(case.county, case.ref)].append(case.rec)
@@ -1594,6 +1697,7 @@ def build_site(rows, sa_index, now, towns=None):
     # scheduled. Only the observed list feeds the published headline.
     national_observed = defaultdict(list)
     national_scheduled = defaultdict(list)
+    national_imputed = defaultdict(list)
 
     for county in sorted(counties):
         region = counties[county]
@@ -1656,32 +1760,39 @@ def build_site(rows, sa_index, now, towns=None):
             stats = region_month(region, cpop, ym, now)
             county_grade = grade(stats.pop("avail_raw"))
 
-            # Notice-to-end span of disruption events that started this month
-            # and carry a real end signal (open/no-signal events excluded so
-            # they can't drag the median). Split by end kind: an observed
-            # completion says how long works took; a scheduled end only says
-            # what was announced, so the two are never pooled.
-            observed_h, scheduled_h = [], []
+            # Notice-to-end span of disruption events that started this month.
+            # Three tiers, never pooled into the headline: an observed completion
+            # says how long works took; a scheduled end only says what was
+            # announced; an imputed span says nothing the notice said at all and
+            # is reported as coverage, so the exclusion is visible arithmetic
+            # rather than a silence. Events still open with no signal carry
+            # neither flag and stay out of all three.
+            observed_h, scheduled_h, imputed_h = [], [], []
             for ref, iv in events["outage"].items():
                 # an empty interval list would not raise here, it would quietly
                 # contribute a 0.0 and drag the published median toward zero
                 if not iv:
                     continue
                 # publication, not iv[0][0]: a recurring event's first *window*
-                # can open in the month after the notice went up, and the median
-                # is over events that started this month
-                if not (region.has_end["outage"][ref]
-                        and lo <= event_meta[(county, ref)]["first_pub"] < hi):
+                # can open in the month after the notice went up, and an imputed
+                # event's interval can close before it — the median is over
+                # events that started this month either way
+                if not (region.has_end["outage"][ref] or region.imputed["outage"][ref]):
+                    continue
+                if not lo <= event_meta[(county, ref)]["first_pub"] < hi:
                     continue
                 # covered hours, not elapsed span — for a recurring event these
                 # differ, and what the works took is the honest reading
                 hours = sum((e - s).total_seconds() for s, e in iv) / 3600
-                if region.observed_end["outage"][ref]:
+                if not region.has_end["outage"][ref]:
+                    imputed_h.append(hours)
+                elif region.observed_end["outage"][ref]:
                     observed_h.append(hours)
                 else:
                     scheduled_h.append(hours)
             national_observed[ym].extend(observed_h)
             national_scheduled[ym].extend(scheduled_h)
+            national_imputed[ym].extend(imputed_h)
 
             cdata["months"][ym] = {
                 "days": days,
@@ -1689,12 +1800,14 @@ def build_site(rows, sa_index, now, towns=None):
                 "days_elapsed": days_elapsed,
                 "grade": county_grade,
                 **stats,
-                **span_stats(observed_h, scheduled_h),
+                **span_stats(observed_h, scheduled_h, imputed_h),
             }
         site["counties"][county] = cdata
 
     for ym in months:
-        site["national"][ym] = span_stats(national_observed[ym], national_scheduled[ym])
+        site["national"][ym] = span_stats(
+            national_observed[ym], national_scheduled[ym], national_imputed[ym]
+        )
 
     # Complete months only. The in-progress month reshuffles between builds as
     # open events accrue toward the 14-day cap and then resolve, so a "largest

@@ -40,13 +40,19 @@ def create_table(conn):
     """)
 
 
-def compute_notice_to_end_seconds(start_date, end_source, local_date, local_time):
-    """Seconds from notice publication (cases.start_date) to the end the notice
-    reports. This is NOT outage duration: the start is when Uisce Éireann
-    published the notice, not when supply was lost, and for the scheduled_*
-    sources the end is a stated plan rather than an observed completion.
-    See notes/data-quality.md."""
-    if end_source in NO_END_SIGNAL_SOURCES or not local_date or not start_date:
+def reported_end_utc(local_date, local_time):
+    """The instant a notice says it ends, as UTC, or None if it names no date.
+
+    The values are wall clock in Irish time, so the date and time are combined
+    with Europe/Dublin and converted rather than offset. A date with no time
+    means the end of that day: a notice saying "until Friday" has not ended on
+    Friday morning.
+
+    site.py imports this to anchor the negative-span family — cases whose
+    reported end precedes their publication timestamp, so the span below is
+    NULL but the *end* is known. See notes/data-quality.md.
+    """
+    if not local_date:
         return None
 
     year, month, day = (int(p) for p in local_date.split("-"))
@@ -56,8 +62,20 @@ def compute_notice_to_end_seconds(start_date, end_source, local_date, local_time
     else:
         hour, minute, second = 23, 59, 59
 
-    end_local = datetime(year, month, day, hour, minute, second, tzinfo=DUBLIN)
-    end_utc = end_local.astimezone(timezone.utc)
+    return datetime(year, month, day, hour, minute, second,
+                    tzinfo=DUBLIN).astimezone(timezone.utc)
+
+
+def compute_notice_to_end_seconds(start_date, end_source, local_date, local_time):
+    """Seconds from notice publication (cases.start_date) to the end the notice
+    reports. This is NOT outage duration: the start is when Uisce Éireann
+    published the notice, not when supply was lost, and for the scheduled_*
+    sources the end is a stated plan rather than an observed completion.
+    See notes/data-quality.md."""
+    if end_source in NO_END_SIGNAL_SOURCES or not local_date or not start_date:
+        return None
+
+    end_utc = reported_end_utc(local_date, local_time)
     start_utc = datetime.fromisoformat(start_date)
 
     elapsed = (end_utc - start_utc).total_seconds()

@@ -27,7 +27,7 @@ Interval inputs come from `inferred_cases.notice_to_end_seconds`, capped at 14 d
 
 - Cases are grouped into events by `reference_num` (a 13-pin multi-pin publication counts once); each event's pin intervals are unioned before any accounting.
 - Open cases with no inferred end (e.g. an active boil notice — `boil_notice_issued` cases never have inferred durations) accrue from publication until "now", capped at 14 days. Exception: a case whose own text says it already ended — an extracted end that precedes publication (nulled in `build.py`) or a `lifted_immediate` — gets the token 1-second footprint instead, whatever the feed's `status` claims (`ended_by_publication` in `site.py`; see [data-quality.md](data-quality.md) for the 532-case family behind this).
-- Closed cases with no usable end signal keep a token 1-second footprint: their start day still colours and they count as events, but they add no downtime. Without this, ~300 `not_found` cases silently produced false-green days.
+- Closed cases with no usable end signal are charged the typical observed span for their `work_category` (`SpanTable`), anchored backwards from the reported end where there is one. Until 2026-08-15 they kept a token 1-second footprint instead — their start day coloured and they counted as events, but they added no downtime, which is a zero rather than a floor. See the 2026-08-15 section below.
 - Nothing accrues beyond "now" (a scheduled end in the future is not downtime yet) or before **2026-04-20**, when data collection began; earlier days render as "no data" and each month's denominator is the observed window only. Collection start matters a lot: April 2026 originally graded far better than later months purely because its first three weeks were unobserved.
 - Boil-water notices are lifted by separate cases with fresh reference_nums, so issue → lift is paired by county + normalised scheme name from `location` ("Ardfinnan Regional Public Water Supply" → "ardfinnan"), with up to 2 days of publication-order slack. On the July 2026 snapshot only one notice pairs — every other lift on file refers to a notice issued before collection began — but coverage grows with history.
 
@@ -230,10 +230,42 @@ So a window is treated as a property of the **works**, not of the notice: `event
 
 The ranking is by raw person-hours, not per-capita, and it ranks events rather than counties deliberately. A county ranking adds nothing: by raw person-hours it is a population ranking, and per-capita it is arithmetically identical to the availability column already on the overview (Donegal's 22,156 person-hours per 1,000 residents in July *is* its 97.022%).
 
+## An event with no usable end is charged a typical span, not a zero (settled 2026-08-15)
+
+The events with no usable `notice_to_end_seconds` were being kept out of the published median **and** given a token 1-second footprint in the availability arithmetic. The first is right; the second was not, and this splits them.
+
+**The population is not what its name suggests.** Of 4,473 outage-class events on the 2026-08-15 corpus, 204 took the token footprint. Only **4** of those are genuinely `not_found`. **200** are the negative-span family — the end is known, the *publication timestamp* is not, because the feed re-stamps `STARTDATE` in place (measured 2026-07-20, [data-quality.md](data-quality.md)). A further 29 are open with no signal at all and take the accrue-to-now branch instead. So this is overwhelmingly "closed, with a known end, and a broken start", not "never closed".
+
+**Why the median still excludes them.** Three reasons, in order of weight:
+
+1. **The precedent.** 894 `scheduled_end_with_time` events are already excluded from the headline because a plan is not an observation (the 2026-07-20 section below). An imputed category median is *weaker* evidence than a published plan. Letting imputations in while keeping plans out would be incoherent.
+2. **Complete-case analysis is valid here.** Only the outcome variable (duration) is incomplete, and two checks say missingness is not related to it: Kaplan-Meier treating the open-no-signal events as censored gives **13.9h against the naive 13.4h**; and for no-signal cases carrying a `closed_at`, start→`closed_at` runs a median 80.8h against a calibrated 70.1h overshoot measured on observed completions, implying **~10.7h** against 16.9h for observed. The missing events are *shorter*, not longer. This is the check that would have made exclusion dishonest had it failed.
+3. **It barely moves.** Pooling all 204 in at category medians gives 12.9h against 13.4h — and downwards, because 102 of the 204 are `mains_repair`, whose median is 7.5h.
+
+**Why availability must not.** Its denominator is fixed by population and calendar, so an event that supplies no duration supplies a **zero** — "exclude" and "impute 0" are the same operation, and there is no third option the way there is for a median. One second is not a conservative reading of a burst main; it is a claim that it disrupted nobody. The token was introduced to stop open negative-span cases accruing to the 14-day cap (`ended_by_publication`), and it fixed that, but it was never the right *value*.
+
+**What is charged.** `SpanTable` in `site.py`: the median observed-completion span for that `work_category`, capped at `CAP_DAYS`, requiring n ≥ 15 before a category speaks for itself and falling back to the global observed median otherwise. Evidence is observed completions only — the same tier the headline rests on. The negative-span family is anchored **backwards** from the end it does know, so the hours land on the days the works ran rather than on the day the notice finally went up; `not_found` cases anchor forwards from publication. With no observed completion anywhere in the corpus there is no table and the token stands, because a guess with nothing behind it is worse than the zero it replaces.
+
+**What it moved** (2026-08-15 corpus, measured by building both ways over the same rows):
+
+| | Apr | May | Jun | Jul | Aug |
+|---|---|---|---|---|---|
+| `median_completion_h` | 7.1 → 7.1 | 12.6 → 12.6 | 15.8 → 15.8 | 12.5 → **12.7** | 15.2 → 15.2 |
+| `imputed_n` | 23 | 39 | 53 | 58 | 43 |
+| person-hours | +2.9% | +3.4% | +2.4% | +2.3% | +4.4% |
+| national availability | −0.0118pp | −0.0154pp | −0.0130pp | −0.0144pp | −0.0200pp |
+
+Four county-months move down one grade: Limerick 2026-04 B→C, Mayo 2026-05 C→D, Monaghan 2026-08 C→D, Offaly 2026-08 B→C. The worst-hit single county-month is Offaly 2026-08 at −0.179pp; the median affected county-month is −0.018pp.
+
+**July's headline moved, and that is a real leak.** `has_end` and `imputed` are OR'd across an event's pins, and an event's span is the union of its pins' intervals. **5 events of 4,473** carry both an observed completion on one pin and an imputed span on another, so their unioned spans grew and the July median rose 0.2h. This is the same mechanism by which a scheduled-end pin already contributes its announced interval to an event counted as observed, so it is consistent with existing behaviour rather than new — but it does mean the headline is not perfectly insulated from the estimate. Separating the tiers would need a second per-tier interval accumulator in `Region` for a 0.2h effect in one month of five, which is not worth the machinery.
+
+**Prior art.** Ofwat's supply interruptions commitment is the closest regulated analogue — property-minutes as a total, same shape as availability. Its default position is that "there are no exclusions"; where telemetry or logging is unavailable, start and stop times are taken from customer contact, flow/pressure indications or **"verified modelled data"**, so a missing timestamp is modelled rather than used to discard the event. It also requires companies to report "what proportion of its start/stop times has been informed by each data source", which is what `imputed_n` on the page is. See [PR24 common performance commitments](https://www.ofwat.gov.uk/wp-content/uploads/2023/05/Water-supply-interruptions.pdf) and the [2018 reporting guidance](https://www.ofwat.gov.uk/wp-content/uploads/2018/03/Reporting-guidance-supply-interruptions.pdf).
+
 ## Known limitations
+- **We deviate from Ofwat's precautionary principle.** It resolves uncertain interruption data toward "the start and finish times and the properties affected that will give the **highest** supply interruption value". A category median is a central estimate, not the highest, so the imputed events are charged less than that principle would ask. Chosen because the site's own claim is a floor rather than a worst case, but it is a deviation and it favours the utility.
 - Overlapping events in the same area double-count person-hours.
 - The 14-day cap applies to each *notice*, not each event, so an event published as several staggered notices can span longer than 14 days — July's largest ran 385h (16 days) across 18 pins published over three days. The page copy says so.
-- The scheduled-end events that accrue disruption time are accruing an *announced* interval, not an observed one. They are kept out of the headline median but not out of the availability percentage, so availability carries an assumption the median does not.
+- The scheduled-end events that accrue disruption time are accruing an *announced* interval, not an observed one. They are kept out of the headline median but not out of the availability percentage, so availability carries an assumption the median does not. As of 2026-08-15 the same is true one tier further down, for the events charged an imputed span.
 - `start_date` is the notice publication time, so durations are a floor on true outage length (overnight events are typically posted the next working morning — see [data-quality.md](data-quality.md)).
 - "May be affected" notices count everyone in the radius; the index measures disruption exposure, not confirmed loss of supply.
 - County populations are hardcoded Census 2022 figures in site.py.
