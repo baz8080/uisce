@@ -1,5 +1,5 @@
 # 5a. A website, and a number that is fair to Cork
-*~9 min read · PR #16 · 18 July 2026*
+*~7 min read · PR #16 · 18 July 2026*
 
 *Where we are:* an archive of every notice with a machine-read end time on nearly all of them
 (chapters 1–4). Nothing has been shown to anyone. This chapter builds the first web page — and
