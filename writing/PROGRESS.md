@@ -18,7 +18,7 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 06 | Say what you actually measured | #18–20 | drafted | 2,090 |
 | 07 | Record the moment a case closes | #21–22 | drafted | 2,074 |
 | 08a | How a pin gets a population | #23 | drafted | 2,323 |
-| 08b | Where you actually live | #23–25 | drafted | 2,400 |
+| 08b | Where you actually live | #23–25 | drafted | 2,491 |
 | 09 | Not everything is an outage | #26–31 | todo | |
 | 10 | For a reader, not an analyst | #32–36 | todo | |
 | 11 | Be findable | #37–39 | todo | |
@@ -215,7 +215,7 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
-- 2026-08-18 · Session 7 · drafted Ch 8b (2,400 w); SVG straddle; reconciled PR #23's Kildare
+- 2026-08-18 · Session 7 · drafted Ch 8b (2,491 w); SVG straddle; reconciled PR #23's Kildare
   table (588.5 h denominator) and pulled today's July figures from data.js.
 - 2026-08-18 · Session 6 · drafted Ch 8a (2,323 w); two SVGs; measured KLD00118059's 500 m
   footprint (12 SAs / 3,255) and Doneraile's three SAs.
