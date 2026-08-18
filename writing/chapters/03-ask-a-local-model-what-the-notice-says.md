@@ -178,7 +178,7 @@ feed's own `end_date` would have said 24 hours and 4 seconds.
 Still no site — but for the first time, a duration for (nearly) every case, derived from what
 the notice actually said, rebuilt weekly, with a fingerprint on every reading so changed notices
 are re-read and unchanged ones are not. Two things were missing, and each got its own chapter.
-Nobody had yet measured how *often* the model was right — that is chapter 5's job, and the
+Nobody had yet measured how *often* the model was right — that is chapter 5b's job, and the
 answer starts at a sobering 71.9%. And the column was called `end_duration_seconds`, which is not
 what it measures: it is the span from *publication* to reported end, and the difference is
 chapter 6.

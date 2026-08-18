@@ -8,23 +8,23 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 
 | Ch | Title | PRs | Status | Words |
 |---|---|---|---|---|
-| 00 | Intro | — | todo (final pass) | |
-| 01 | A notice is a row | pre, #1–4 | drafted | 1,934 |
-| 02 | Let a robot do it every week | #5–6 | drafted | 1,034 |
-| 03 | Ask a local model what the notice actually says | #8–13 | drafted | 2,231 |
-| 04 | Make it a real project | #14–15 | drafted | 1,296 |
-| 05a | A website, and a number that is fair to Cork | #16 | drafted | 1,694 |
-| 05b | An honest number on the model | #16–17 | drafted | 2,024 |
-| 06 | Say what you actually measured | #18–20 | drafted | 2,090 |
-| 07 | Record the moment a case closes | #21–22 | drafted | 2,074 |
-| 08a | How a pin gets a population | #23 | drafted | 2,323 |
-| 08b | Where you actually live | #23–25 | drafted | 2,491 |
-| 09a | Eighteen nights in a trench coat | #26–27 | drafted | 1,913 |
-| 09b | The title is not the severity | #28–31 | drafted | 2,117 |
-| 10 | For a reader, not an analyst | #31(last), #32–36 | drafted | 2,085 |
-| 11 | Be findable | #37–39 | drafted | 1,034 |
-| 12 | Put a number on what you don't know | #40–41 | drafted | 2,623 |
-| 13 | Closing + glossary | — | todo (final pass) | |
+| 00 | Are other areas having as many outages as I am? (intro) | — | reviewed | 1,250 |
+| 01 | A notice is a row | pre, #1–4 | reviewed | 1,934 |
+| 02 | Let a robot do it every week | #5–6 | reviewed | 1,034 |
+| 03 | Ask a local model what the notice actually says | #8–13 | reviewed | 2,231 |
+| 04 | Make it a real project | #14–15 | reviewed | 1,296 |
+| 05a | A website, and a number that is fair to Cork | #16 | reviewed | 1,694 |
+| 05b | An honest number on the model | #16–17 | reviewed | 2,024 |
+| 06 | Say what you actually measured | #18–20 | reviewed | 2,090 |
+| 07 | Record the moment a case closes | #21–22 | reviewed | 2,074 |
+| 08a | How a pin gets a population | #23 | reviewed | 2,323 |
+| 08b | Where you actually live | #23–25 | reviewed | 2,491 |
+| 09a | Eighteen nights in a trench coat | #26–27 | reviewed | 1,913 |
+| 09b | The title is not the severity | #28–31 | reviewed | 2,117 |
+| 10 | For a reader, not an analyst | #31(last), #32–36 | reviewed | 2,085 |
+| 11 | Be findable | #37–39 | reviewed | 1,034 |
+| 12 | Put a number on what you don't know | #40–41 | reviewed | 2,623 |
+| 13 | Closing: what the site can say, and what it cannot (+ glossary) | — | reviewed | 1,900 |
 
 ## Chapter summaries (3 lines each, added when drafted)
 
@@ -143,9 +143,24 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 - PR #23's Kildare table shows Naas at 25,824; the corrected settlement figure is 26,180. When
   quoting the table say "as published in PR #23" and note the correction once.
 
-## Next session
+## Status: complete (18 Aug 2026)
 
-**FINAL PASS** (1–2 sessions). Everything is drafted (16 posts). Do, in order:
+All 18 posts drafted and reviewed. Continuity pass done: no `[verify:` markers; every read time
+matches wc/230; every forward cross-reference lands (one sharpened: Ch 3 → "chapter 5b");
+vocabulary clean against the fixed table; 32 concept boxes, each in the glossary once.
+
+**How to publish.** Each file in `chapters/` is a standalone post: title, read time, "where we
+are", concept boxes as blockquotes, worked examples, notes. Diagrams are relative links to
+`../diagrams/*.svg` (11 files) and mermaid fences (4) — a blog host needs mermaid support or
+the fences pre-rendered. Publish in file order (00 → 13). For a paper, `figures.md` is the
+figure registry and `outline.md` the structure; the settled-decisions table in Ch 13 is the
+discussion section in embryo.
+
+**Optional later passes.** Diagram polish (consistent palette/typography; the SVGs are
+deliberately unstyled); a root `README.md` line pointing at `writing/`; re-run the anchor
+queries in `figures.md` if the series is published long after 18 Aug 2026 and mark the date.
+
+_Superseded brief (done):_ **FINAL PASS** (1–2 sessions). Everything is drafted (16 posts). Do, in order:
 1. Write `chapters/00-intro.md` (~1,200 w): the question; what the site is today (one paragraph
    with today's Leixlip/Naas figures from Ch 8b); how it was built — AI-assisted, named here
    once and not again (see the Co-Authored-By trailers in the source packs: Sonnet 4.6 → Sonnet
@@ -324,6 +339,10 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
+- 2026-08-18 · Session 11 (final pass) · wrote 00-intro (1,250 w, AI process named once with
+  the trailer counts: Sonnet 4.6 ×5, Sonnet 5 ×13, Opus 4.8 ×17, Opus 5 ×41, Fable 5 ×29) and
+  13-closing (1,900 w: can/cannot say, settled-decisions table in plain language, 32-entry
+  glossary); mechanical checks; all statuses → reviewed.
 - 2026-08-18 · Session 10 · drafted Ch 12 (2,623 w); SVGs overlap-double-count,
   radius-sensitivity. All 16 posts drafted.
 - 2026-08-18 · Session 9 · drafted Ch 10 (2,085 w) and Ch 11 (1,034 w).
