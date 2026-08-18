@@ -18,7 +18,7 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 06 | Say what you actually measured | #18–20 | drafted | 2,090 |
 | 07 | Record the moment a case closes | #21–22 | drafted | 2,074 |
 | 08a | How a pin gets a population | #23 | drafted | 2,323 |
-| 08b | Where you actually live | #23–25 | todo | |
+| 08b | Where you actually live | #23–25 | drafted | 2,400 |
 | 09 | Not everything is an outage | #26–31 | todo | |
 | 10 | For a reader, not an analyst | #32–36 | todo | |
 | 11 | Be findable | #37–39 | todo | |
@@ -88,6 +88,16 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
   circle = 12 SAs / 3,255 people, all Leixlip, ≈47,900 ph; radius 300 m/1 km → 1,966/8,440
   (plants Ch 12); Leixlip 56 SAs = 16,733 exact. SVGs: pin-circle-centroids,
   doneraile-polygon-vs-attribute. Ends: tiers/homing/straddle → 8b, ending at the Kildare table.
+- **08b** Three tiers concept box + one rule ("finest official geography whose names arrive
+  usable"); Dublin 1,261,884 = 83% → 40 LEA rows, 30% sliver threshold and why it kills name
+  collisions; 242/1,492 vs 0/2,552 suffixing; rural bucket 44% / 22 of 26 → 1,172 "Around <ED>";
+  uniform alternative rejected (~300 km²); LEA names administrative (12/5/11), ED costed;
+  homing by dominant share (median 1.00) + charge only inside (SVG straddle); own-county guard,
+  "Pinned outside the county"; no town grades (0.18 vs 11); county page, closed_at first use
+  (Carlow 8), payload 645 KB. Worked example: PR #23's Kildare table reconciled via the 588.5 h
+  observed denominator; today's full-July: Leixlip 438,691 / 96.48% vs Naas & Maynooth 100%,
+  county 99.20% D — THE ANSWER. Mermaid tier tree. #24/#25 as footnotes. Ends: → Ch 9 recurring
+  windows.
 
 ## Open threads
 
@@ -99,7 +109,31 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 
 ## Next session
 
-**Ch 8b "Where you actually live"** (PR #23 second half + #24, #25 footnotes). Read: this file
+**Ch 9 "Not everything is an outage"** (PRs #26–#31, 31 Jul – 2 Aug; heavy — likely split into
+9a events/recurring windows and 9b naming/severity/review). Read: this file → `README.md` →
+`outline.md` Ch 9 → `sources/ch09.md` (~8k words — the biggest; read in two passes, #26–#27
+then #28–#31) → `notes/statuspage-methodology.md` "The national top ten" (~230), "A scheduled
+repeating window is a restriction" (~242), "Recurring windows cover hours, not days" (~264) →
+`notes/data-quality.md` "Multi-pin events" (~131), "The notice title is not a reliable severity
+signal", "A missing variant was silently inventing supply outages (found 2026-08-01)" (~144),
+"What the v3 corpus run delivered" (~164) → `src/uisce/site.py` `daily_windows` (~609),
+`event_windows` (~708), `recurring_intervals` (~740), `Region.add` (~1019), `event_pop` (~1068).
+Cover: #26 midday build (7.7 → 3.9 h) and 75.7 h feed lag; #27 top ten (21.9%), DON00115765
+"daily 10pm–7am, 9–27 July" 385.2 h → 144.0 h, July −7.7%, NULL-category leak (66 cases, one
+#9); #28 name an event once over its footprint (348 events, Exton/Wyeville/Zedbury table); #29
+repeating window is a restriction whatever the title (Donegal Conservation vs Interruption,
+949,824 ph, −3.8%); #30/#31 recurrence review 2 right / 9 wrong, text detection, pv3. Concept
+boxes: pin vs case vs event (LOU00112686 13 pins; 675 refs / 1,930 rows); interval union +
+population unioned once, capped; recurring windows as hours not days; the completion pin
+borrows its siblings' window. Worked examples: DON00115765 arithmetic (18 pins, 9–11 Jul
+publication; 18 nights × 9 h = 162 h — reconcile with the 144.0 h figure: PR #27 says 144.0;
+check whether that is 16 nights or clipped to "now"/month; register); Exton table lifted from
+#28. Diagrams: SVG 16 solid days vs 18 nightly stripes; SVG 13 dots → one event with unioned
+footprint. Continuity: Ch 5a "eighteen nightly windows in a trench coat"; Ch 4 "title is a
+category not a severity"; Ch 7 promised the 31 Jul twice-daily reason. Register figures.
+Update this file. Commit.
+
+_Superseded brief (done):_ **Ch 8b "Where you actually live"** (PR #23 second half + #24, #25 footnotes). Read: this file
 → `README.md` → `outline.md` Ch 8 concepts 4–6 → `sources/ch08.md` lines ~106–260 (commits
 "Break each county down", "Split the city agglomerations", "Correct the claim that LEA names",
 "Take the drill-down geography… name the countryside", "State the drill-down geography rule
@@ -181,6 +215,8 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
+- 2026-08-18 · Session 7 · drafted Ch 8b (2,400 w); SVG straddle; reconciled PR #23's Kildare
+  table (588.5 h denominator) and pulled today's July figures from data.js.
 - 2026-08-18 · Session 6 · drafted Ch 8a (2,323 w); two SVGs; measured KLD00118059's 500 m
   footprint (12 SAs / 3,255) and Doneraile's three SAs.
 - 2026-08-18 · Session 5 · drafted Ch 7 (2,074 w); SVG build-gap-timeline; measured closed_at

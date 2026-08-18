@@ -147,6 +147,16 @@ Chapters quote from here rather than re-deriving; a missing figure is written in
 | Urban Areas layer | 867 settlements; BUA CSV 868 rows (Ireland total row); cp1252 dies at byte 8,073 in utf-8 | notes/population-data-sources.md |
 | Small Area count/pages | 18,919 features in 10 pages of 2,000 | same |
 | Grid bin | 0.01° ≈ 1.1 km latitude | `site.py:SmallAreaIndex.BIN` |
+| Kildare table reconciliation | denominator on 25 Jul ≈ 588.5 h observed: Leixlip 405,666 ÷ (16,733 × 588.5) = 4.12% → 95.88%; Prosperous 7.56% → 92.44%; Celbridge 0.76% → 99.24%; Lackagh 3.45% → 96.55% | my arithmetic on PR #23's table |
+| Kildare July 2026 today | county person_h 1,466,931 / 744 h / 99.202% / D / 20 outage events; Leixlip 2 / 438,691 / 96.48%; Prosperous 2 / 201,335 / 88.78%; Allenwood 2 / 137,870 / 89.0%; Newbridge (24,366) 3 / 95,158 / 99.47%; Celbridge 4 / 93,305 / 99.39%; Around Lackagh 1 / 17,091 / 97.27%; Naas (26,180) 0 / 100.0%; Maynooth (17,259) 0 / 100.0% | measured 18 Aug 2026 from `out/site/data.js` built 14:37Z (verified Y) |
+| Agglomerations | Dublin 1,261,884 / 808 of 973 cases (83%); Cork 222,288 / 257 (25%); Galway 85,876 / 124 (32%); Limerick 102,287 / 82 (22%); Waterford 60,079 / 40 (14%) | notes/statuspage-methodology.md "Cities" |
+| LEA slivers | 26 of Dublin's 30 parts ≥91% inside; Elsewhere: Dublin 0.6%, Cork 2.8%, Galway 2.2%, Limerick 4.3%, Waterford 9.6% (Ferrybank); Carrigaline LEA 942 of 39,145 vs town 18,239 | PR #23 commit |
+| Dublin LEA names | 12 hyphenated compounds, 5 compass-qualified, 11 plain; Cork 4 quadrants; ED alternative: 104 names ~12,100 people | PR #23 commit; notes |
+| Rural bucket | 44% of cases, first in 22 of 26 (Longford 80%, Tipperary 72%, Roscommon 71%, Kerry 63%); Tipperary 456 cases → Around Ardmayle etc.; 1,172 areas ~2.9 cases; median county 33 rows/month, Cork 104 | notes "The countryside" |
+| ED keying | (county, name) merges 50 of 3,368 pairs | notes |
+| Pinned outside the county | ~1.5% of case-months; Tipperary 21, Kilkenny 24 | notes; data-quality |
+| Area breakdowns | 1,767 nationally (623 settlement-only at first commit) | notes; PR #23 commit |
+| Carlow July closures | 8 (0 open) | PR #23 |
 
 ### Ch 9
 | Figure | Value | Source |
