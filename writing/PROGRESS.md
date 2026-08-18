@@ -17,7 +17,7 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 05b | An honest number on the model | #16–17 | drafted | 2,024 |
 | 06 | Say what you actually measured | #18–20 | drafted | 2,090 |
 | 07 | Record the moment a case closes | #21–22 | drafted | 2,074 |
-| 08a | How a pin gets a population | #23 | todo | |
+| 08a | How a pin gets a population | #23 | drafted | 2,250 |
 | 08b | Where you actually live | #23–25 | todo | |
 | 09 | Not everything is an outage | #26–31 | todo | |
 | 10 | For a reader, not an analyst | #32–36 | todo | |
@@ -79,6 +79,15 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
   75.7 h late — the floor's owner is the operator. Worked example KLD00118059's five days
   (72 h lag). SVG build-gap-timeline. Concept boxes: observation vs event time; additive-only
   migration ladder. Ends: closed_at's first use is Ch 8.
+- **08a** cases.location unusable (3,866 values); Small Area concept box (18,919 → 5,149,139);
+  the four Census files table with join keys and traps + mermaid; 500 m centroid rule (grid
+  bins, fallback 8 km, cache) with concept box "centroid, not polygon"; SA→named area is the
+  CSO's own attribute; the retracted point-in-polygon method (97.5%, 54 settlements missing,
+  187/789 >10% short, Doneraile 214 vs 857 ~4×) with concept box on systematic under-count in
+  a denominator; join wrinkles (19 shared names, 125 straddlers). Worked examples: KLD00118059's
+  circle = 12 SAs / 3,255 people, all Leixlip, ≈47,900 ph; radius 300 m/1 km → 1,966/8,440
+  (plants Ch 12); Leixlip 56 SAs = 16,733 exact. SVGs: pin-circle-centroids,
+  doneraile-polygon-vs-attribute. Ends: tiers/homing/straddle → 8b, ending at the Kildare table.
 
 ## Open threads
 
@@ -90,7 +99,30 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 
 ## Next session
 
-**Ch 8a "How a pin gets a population"** (PR #23, first half — the chapter Barry most needs).
+**Ch 8b "Where you actually live"** (PR #23 second half + #24, #25 footnotes). Read: this file
+→ `README.md` → `outline.md` Ch 8 concepts 4–6 → `sources/ch08.md` lines ~106–260 (commits
+"Break each county down", "Split the city agglomerations", "Correct the claim that LEA names",
+"Take the drill-down geography… name the countryside", "State the drill-down geography rule
+once") and the #24/#25 stubs at the end → `notes/statuspage-methodology.md` "The county
+drill-down" (~81–180: closed_at gives a past month something to say; Cities; LEA names;
+countryside; pins outside the county) → `src/uisce/site.py` ~470–545 (`TownLookup.dominant`,
+`.within`) → `src/uisce/towns.py` `split_large_settlements` (~172), `around_label` (~72).
+Cover: three tiers (settlement / LEA >50,000 / "Around <ED>") and *why* — the finest official
+geography whose names arrive usable (242/1,492 city EDs letter-suffixed vs 0/2,552 rural);
+Dublin 1,261,884 = 83% of cases → 40 rows; MIN_PART_SHARE 0.30 and "Elsewhere in…"; rural
+bucket ranked first in 22/26 → 1,172 areas; homing by dominant share (median 1.00); straddle
+rule (filed under winner, charged only what's inside → area ph ≤ county); cross-county refusal
+and "Pinned outside the county" (~1.5%); no town grades (0.18 pt vs 11); payload 645 KB;
+closed_at's first use (Carlow 8 closures). END on the Kildare July table (Leixlip 405,666 ph
+95.88% vs Naas 100%) — the answer to the original question; note Naas 25,824 → 26,180
+correction once. Worked examples: Kildare table arithmetic (405,666 ÷ (16,733 × 744 h) =
+3.26% → 96.74%? — check: PR says 95.88%; July observed window may be shorter than 744 h or the
+2 events' footprints differ; derive or mark [verify]); a 60/40 straddle toy. Diagrams: mermaid
+three-tier decision tree with Leixlip / Kimmage-Rathmines / Around Ardmayle as leaves; SVG
+straddle. #24 (Cloudflare analytics) and #25 (pushState — retracted in Ch 11) as footnotes.
+Register figures. Update this file. Commit.
+
+_Superseded brief (done):_ **Ch 8a "How a pin gets a population"** (PR #23, first half — the chapter Barry most needs).
 Read: this file → `README.md` → `outline.md` Ch 8 concepts 1–3 → `sources/ch08.md` (~4.5k
 words; PR #23 body + commits, incl. the "Kildare 99.25% hid…" commit) →
 `notes/population-data-sources.md` (whole, ~1.4k words) → `src/uisce/site.py` ~415–470
@@ -149,6 +181,8 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
+- 2026-08-18 · Session 6 · drafted Ch 8a (2,250 w); two SVGs; measured KLD00118059's 500 m
+  footprint (12 SAs / 3,255) and Doneraile's three SAs.
 - 2026-08-18 · Session 5 · drafted Ch 7 (2,074 w); SVG build-gap-timeline; measured closed_at
   distribution and KLD00118059 lifecycle.
 - 2026-08-18 · Session 4 · drafted Ch 6 (2,090 w); SVG observed-vs-scheduled.

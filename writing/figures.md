@@ -139,6 +139,14 @@ Chapters quote from here rather than re-deriving; a missing figure is written in
 | Median dominant share of a pin | 1.00 | notes/statuspage-methodology.md "The county drill-down" |
 | Why no town grades | 24 h event: county of 62,000 moves 0.18 pt; town of 1,000 moves 11 | notes/statuspage-methodology.md |
 | Payload | data.js 645 KB (84 KB gz), down from 960 KB; grows ~85 KB/month | PR #23 |
+| KLD00118059 footprint | 12 SAs within 500 m of 53.3627, −6.506 → 3,255 people, all Leixlip (nearest 56 m, farthest 495 m); 300 m → 8 SAs / 1,966; 1 km → 29 SAs / 8,440; × 14.72 h ≈ 47,900 person-hours | measured 18 Aug 2026 via `SmallAreaIndex` (verified Y) |
+| Doneraile Small Areas | 385 + 214 + 258 = 857; polygon method caught only the 214 | measured 18 Aug 2026 (verified Y); PR #23 |
+| Polygon-method figures | 12,837 of 18,919 SAs in a settlement (67.9%), 3,539,104 people = 97.5%; Allenwood 1,233 vs 1,685; check warned only for >5,000 recovering <80% | PR #23 commit |
+| Missing settlements' population | 15,893 (54 settlements) | PR #23 commit |
+| Geocode cache `city_district` only | 94% of rows | PR #23 commit |
+| Urban Areas layer | 867 settlements; BUA CSV 868 rows (Ireland total row); cp1252 dies at byte 8,073 in utf-8 | notes/population-data-sources.md |
+| Small Area count/pages | 18,919 features in 10 pages of 2,000 | same |
+| Grid bin | 0.01° ≈ 1.1 km latitude | `site.py:SmallAreaIndex.BIN` |
 
 ### Ch 9
 | Figure | Value | Source |
