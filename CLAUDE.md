@@ -33,6 +33,7 @@ with the evidence that closed them.
 | `closed_at` is a floor: short-lived cases are never observed open. Twice-daily builds are the settled cadence. | data-quality.md — "`closed_at` is a floor" (re-measured 2026-07-31) |
 | gemma-4-12b-qat over qwen3.5-9b for end-time extraction; prompt version is at v3. | model-and-runtime-benchmarks.md, end-time-eval.md |
 | Geography is CSO Census settlements, not the feed's `location` string (3,866 distinct values, fragments badly, carries no population). | statuspage-methodology.md — "The county drill-down" (2026-07-25) |
+| Overlapping events double-count person-hours by **3.6%** nationally, and that is left uncorrected — it is pessimistic, smaller than the 500 m radius error, and a fix would touch the availability arithmetic itself. Re-measure with `uv run uisce-eval-overlap`. | statuspage-methodology.md — "Known limitations" (2026-08-18) |
 
 ## Conventions
 

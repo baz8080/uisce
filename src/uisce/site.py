@@ -10,8 +10,9 @@ Per county and calendar month the generator computes:
 - a median notice-to-completion time over events whose end was *observed*
   (an "works are now complete" update), excluding those whose only end signal
   was a schedule — see the notice_to_end_seconds docstring in build.py
-- an A-F grade from availability, knocked one step by any active
-  boil-water / do-not-drink / do-not-consume notice
+- an A-F grade from availability alone; an active boil-water / do-not-drink /
+  do-not-consume notice is published beside the grade (health_n) rather than
+  folded into it — see grade() for why the knock was removed
 
 Each county then breaks down into the named Census settlements its cases fall
 in, plus one bucket for everything outside a settlement. A town gets the same

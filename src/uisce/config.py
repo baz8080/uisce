@@ -22,7 +22,9 @@ RECURRING = "daily"
 # supports a claim about how long works actually took: scheduled ends still
 # accrue disruption time, since a stated plan is the best interval available,
 # but they stay out of the published median, which would otherwise mix a plan
-# with an observation. See notes/statuspage-methodology.md.
+# with an observation. Shared here for the same reason as RECURRING and DUBLIN:
+# site.py importing it from build.py would invert the pipeline's direction.
+# See notes/statuspage-methodology.md.
 OBSERVED_END_SOURCES = {"completion_update"}
 
 DB_PATH = Path("out/uisce.db")

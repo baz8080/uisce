@@ -30,7 +30,7 @@ Migration is deliberately narrow: **additive nullable columns only**, which SQLi
 
 * It is observation time, not event time — resolution is the build cadence.
 * `NULL` is ambiguous: either still open, or closed before the column existed (every case closed prior to v2). Pair it with `status` rather than reading `NULL` as open.
-* It is a **floor**. Cases created and closed between two builds are never observed open, so no transition exists to record — 12% of newly-appearing cases, measured 2026-07-21. See [notes/data-quality.md](notes/data-quality.md).
+* It is a **floor**. Cases created and closed between two builds are never observed open, so no transition exists to record. Under the original Mon/Wed/Fri cadence that was 12% of newly-appearing cases (measured 2026-07-21); daily builds cut it to 1.9%, and the twice-daily cadence since 2026-07-31 to ~1.1% at best — the residual is Uisce Éireann's own administrative lag, which no build frequency can close. See [notes/data-quality.md](notes/data-quality.md).
 
 History from before v2 can be partially recovered by replaying the published release DBs, each of which is a full snapshot. Run the **Build DB** workflow with `replay_closed_at` ticked — it does the whole thing in one build, after the pipeline has migrated the DB and stamped its own transitions.
 
