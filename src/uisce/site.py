@@ -227,9 +227,17 @@ def boil_notice_fate(row, lifts, now):
     """
     start = parse_dt(row["start_date"])
     key = (row["county"], LIFT_OF[row["work_category"]])
+    # No ended_by_publication guard, unlike the do-not-consume pairing in
+    # resolve_case, and the asymmetry is deliberate rather than missed: it can
+    # only fire on a case carrying an extracted end, and this class never has
+    # one — end_source is `not_found` for all 35 on file, structurally, because
+    # the end is published as a different case. Adding the guard would mean a
+    # fourth outcome and a rewrite of TestBoilNoticeFate's fixture (which does
+    # carry an end, unlike anything real) to protect against zero cases. If a
+    # prompt version ever starts extracting ends here, add it then.
     lift = paired_lift(lifts, key, row["location"], start)
     if lift is not None:
-        return "paired", max(lift, start)
+        return "paired", paired_end(lift, start)
     if row["status"] != "Open":
         return "closed_no_signal", None
     if now - start > timedelta(days=CAP_DAYS):
@@ -240,6 +248,33 @@ def boil_notice_fate(row, lifts, now):
     # future start back to now. The clipped county arithmetic never sees the
     # negative span, but the area history prints it as "-240h so far".
     return "accrue", max(min(now, start + timedelta(days=CAP_DAYS)), start)
+
+
+def paired_end(lift, start):
+    """Where a paired lift puts the end of the notice it closes.
+
+    Clamped at both ends, and both clamps carry weight. Below, because multi-pin
+    publishing is not chronologically tidy and a lift can be stamped before the
+    issue it lifts. Above, because CAP_DAYS is the ceiling on what one notice may
+    charge whatever its end signal says — every other branch of `resolve_case`
+    caps, including an observed `completion_update`, and a paired lift is not a
+    stronger signal than that.
+
+    Without the upper clamp, pairing a notice *raises* what it accrues: an
+    unpaired notice stops at the cap (a boil notice past it is dropped outright),
+    so finding its lift — strictly better evidence, and evidence that the thing
+    ended — would charge more rather than less. That inversion is the bug, not
+    the length. The exposure is real and not only in the consumption class: on
+    the 2026-08-18 snapshot Whiddy Island had been Open 1,460 days and Dursey
+    Island 740, but so had the Carrignagower boil notice at 590 days and
+    Poulnagunogue at 405. Any one of their lifts landing would have repainted
+    every collected month in that county as a quality event carrying a health
+    marker.
+
+    Capping costs nothing on the snapshot this was written against: one notice
+    pairs, and it spans 0.00 days.
+    """
+    return min(max(lift, start), start + timedelta(days=CAP_DAYS))
 
 
 def collect_lifts(rows):
@@ -834,16 +869,25 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         # naming a specific water-quality failure. Dropping them would remove a
         # live drinking-water warning on an assumption rather than on evidence.
         # See notes/statuspage-methodology.md.
+        #
+        # `already_over` gates the pairing and the accrual below it alike, which
+        # is why it is read once here rather than inside the second branch only.
+        # A notice whose own text reported an end before it was even published
+        # did not then run on until some later lift, so pairing it to one would
+        # fabricate precisely the downtime ended_by_publication exists to refuse.
+        # The lift is still a real lift; it just ends a notice already over.
+        already_over = ended_by_publication(r)
         lift = (
             paired_lift(lifts, (r["county"], LIFT_OF[r["work_category"]]), r["location"], start)
-            if r["work_category"] in LIFT_OF
+            if r["work_category"] in LIFT_OF and not already_over
             else None
         )
         if lift is not None:
-            # a lift is a real, observed end, not a schedule
-            end = max(lift, start)
+            # a lift is a real, observed end, not a schedule — but still capped
+            # like every other end signal here; see paired_end
+            end = paired_end(lift, start)
             has_end = observed_end = True
-        elif r["status"] == "Open" and start < now and not ended_by_publication(r):
+        elif r["status"] == "Open" and start < now and not already_over:
             # ongoing with no inferred end: runs from start until now, capped
             end = min(now, start + cap)
         else:

@@ -10,12 +10,18 @@ Small Area at the same time therefore charge that population twice. The exact
 numerator unions intervals per *Small Area* across every event touching it,
 which cannot double-count by construction. The delta is the overstatement.
 
-For a month with no overlap the two agree exactly (one event's footprint sum
-times its seconds is the same product either way), so any delta is overlap and
-nothing else. The one wrinkle is the county cap: the published figure caps an
-event's population at its county's, the per-SA sum has nothing to cap, so a
-single event bigger than its county could read here as a small negative
-overlap. No event in the corpus is; the report would show it as such.
+Both sides charge an event's *whole* interval union against its *whole* SA
+footprint, which is the pairing `region_month` publishes; only the de-overlapping
+differs. That is what makes the delta mean one thing: an event's own pins are
+staggered in time and place (July's largest ran 385h across 18 pins published
+over three days), and splitting the exact side per pin would book that
+staggering as overlap, which it is not. With the event-level pairing, a month
+with no overlap agrees exactly however many pins its events carry.
+
+The one wrinkle is the county cap: the published figure caps an event's
+population at its county's, the per-SA sum has nothing to cap, so a single event
+bigger than its county could read here as a small negative overlap. No event in
+the corpus is; the report would show it as such.
 
 A diagnostic, not a correction: it prints and changes nothing. If the
 overstatement ever grows to matter, the fix belongs in region_month, priced
@@ -31,6 +37,7 @@ from uisce.site import (
     COLLECTION_START,
     COUNTY_POP,
     SmallAreaIndex,
+    SpanTable,
     case_ref,
     collect_lifts,
     event_windows,
@@ -47,28 +54,44 @@ from uisce.site import (
 def overlap_by_month(rows, sa_index, now):
     """{ym: (published_person_s, exact_person_s)} over the outage class nationally.
 
-    Resolution mirrors build_site — same lifts, shared windows and recurrence
-    signals — so "published" here is the same accrual the site ships, restricted
-    to the only class that accrues.
+    Resolution mirrors build_site — same lifts, shared windows, recurrence
+    signals and SpanTable — so "published" here is the same accrual the site
+    ships, restricted to the only class that accrues. The SpanTable matters as
+    much as the rest: without it every case with no usable end signal takes a
+    1-second token footprint instead of the imputed span the site charges it
+    (see resolve_case), and roughly one disruption in twenty is one of those.
     """
     lifts = collect_lifts(rows)
     shared = event_windows(rows)
     recurring = recurring_events(rows, shared)
+    spans = SpanTable(rows)
 
     # (county, ref) -> intervals and footprint, as Region accumulates them
     ev_iv = defaultdict(list)
     ev_sas = defaultdict(dict)
-    # (county, guid) -> intervals from every event touching that Small Area
-    sa_iv = defaultdict(list)
     for r in rows:
         key = (r["county"], case_ref(r))
-        case = resolve_case(r, sa_index, lifts, now, shared.get(key), key in recurring)
+        case = resolve_case(
+            r, sa_index, lifts, now, shared.get(key), key in recurring, spans
+        )
         if case is None or case.sev != "outage":
             continue
         ev_iv[key].extend(case.intervals)
         ev_sas[key].update(case.sas)
-        for guid in case.sas:
-            sa_iv[(case.county, guid)].extend(case.intervals)
+
+    # Merged once, not once per month: the merge is a property of the event, and
+    # only the clipping bounds below change from month to month.
+    ev_merged = {key: merge(iv) for key, iv in ev_iv.items()}
+
+    # (county, guid) -> the intervals of every event touching that Small Area.
+    # The event's merged intervals against the event's whole footprint, matching
+    # what region_month charges — see the module docstring on why a per-pin split
+    # here would report an event's own staggered pins as overlap.
+    sa_iv = defaultdict(list)
+    for key, iv in ev_merged.items():
+        for guid in ev_sas[key]:
+            sa_iv[(key[0], guid)].extend(iv)
+    sa_merged = {key: merge(iv) for key, iv in sa_iv.items()}
 
     out = {}
     for ym in month_list(COLLECTION_START, now):
@@ -77,13 +100,12 @@ def overlap_by_month(rows, sa_index, now):
         if eff_hi <= eff_lo:
             continue
         published = 0.0
-        for key, iv in ev_iv.items():
-            secs = union_seconds(merge(iv), eff_lo, eff_hi)
+        for key, iv in ev_merged.items():
+            secs = union_seconds(iv, eff_lo, eff_hi)
             published += secs * min(sum(ev_sas[key].values()), COUNTY_POP[key[0]])
         exact = 0.0
-        for (_, guid), iv in sa_iv.items():
-            secs = union_seconds(merge(iv), eff_lo, eff_hi)
-            exact += secs * sa_index.pop[guid]
+        for (_, guid), iv in sa_merged.items():
+            exact += union_seconds(iv, eff_lo, eff_hi) * sa_index.pop[guid]
         out[ym] = (published, exact)
     return out
 

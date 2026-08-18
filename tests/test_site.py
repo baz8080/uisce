@@ -3,6 +3,8 @@ import re
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, time, timedelta, timezone
 
+from conftest import site_case as _case
+
 from uisce.config import BASE_URL
 from uisce.site import (
     CAP_DAYS,
@@ -42,41 +44,6 @@ UTC = timezone.utc
 
 def _dt(iso):
     return datetime.fromisoformat(iso).astimezone(UTC)
-
-
-def _case(**overrides):
-    base = {
-        "id": 1,
-        "county": "Carlow",
-        "work_category": "burst_main",
-        "work_type": "Unplanned",
-        "status": "Closed",
-        "title": "Burst Water Main - Carlow",
-        "reference_num": "CAR00000001",
-        "start_date": "2026-05-01T00:00:00+00:00",
-        "location": "Somewhere",
-        # read only by describes_recurrence; the default says nothing about a
-        # repeating window, so a case is non-recurring unless a test says so
-        "description": "Works may cause supply disruptions to Somewhere, Co. Carlow.",
-        "closed_at": None,
-        "full_lat": 52.836,
-        "full_lon": -6.926,
-        "boil_water_notice": 0,
-        "do_not_drink": 0,
-        "water_restrictions": 0,
-        "reduced_pressure": 0,
-        "notice_to_end_seconds": 86400.0,
-        "end_source": "completion_update",
-        "end_local_date": "2026-05-02",
-        "end_local_time": "00:00",
-        # prompt v3; NULL on every v2 record, which reads as "not recurring"
-        "end_recurrence": None,
-        "end_window_open": None,
-        "end_window_close": None,
-        "end_window_first_date": None,
-    }
-    base.update(overrides)
-    return base
 
 
 # one Small Area of 1,000 people sitting right on the test pin
@@ -215,6 +182,17 @@ class TestBoilNoticeFate:
         outcome, end = boil_notice_fate(self._notice(), lifts, NOW)
         assert outcome == "paired"
         assert end == _dt("2026-05-01T00:00:00+00:00")
+
+    def test_a_late_lift_is_capped_like_every_other_end_signal(self):
+        """Pairing must never *raise* what a notice accrues. Unpaired, this one
+        stops at CAP_DAYS (and past it would be dropped outright); finding the
+        lift is better evidence and evidence that it ended, so it cannot buy the
+        notice 20 days when 14 is the ceiling on every other branch."""
+        lifts = {("Carlow", "boil_notice_lifted"):
+                 [("somewhere", _dt("2026-05-21T00:00:00+00:00"))]}
+        outcome, end = boil_notice_fate(self._notice(), lifts, NOW)
+        assert outcome == "paired"
+        assert end == _dt("2026-05-01T00:00:00+00:00") + timedelta(days=CAP_DAYS)
 
     def test_a_lift_of_the_other_kind_never_pairs(self):
         """A do-not-consume lift for the same scheme is a different notice's end;
@@ -480,6 +458,10 @@ class TestBuildSite:
             do_not_drink=1,
             status="Open",
             notice_to_end_seconds=None,
+            # as all 7 on file are: the end is a different case, so there is
+            # nothing in this notice's own text for the extraction to find
+            end_source="not_found",
+            end_local_date=None,
             location="Coolineagh Public Water Supply",
             reference_num="COR1",
         )
@@ -488,6 +470,8 @@ class TestBuildSite:
             work_category="consumption_notice_lifted",
             status="Closed",
             notice_to_end_seconds=None,
+            end_source="not_found",
+            end_local_date=None,
             location="Coolineagh PWS",
             reference_num="COR2",
             start_date="2026-05-03T00:00:00+00:00",
@@ -497,6 +481,68 @@ class TestBuildSite:
         assert month["days"][1][0] == "quality"  # May 2: active
         assert month["days"][4][0] == ""  # May 5: lifted
         assert month["health_n"] == 1
+
+    def test_a_long_running_consumption_notice_is_capped_at_its_lift(self):
+        """The class where this bites hardest: Whiddy Island has been Open since
+        2022 and Dursey since 2024, and their capped intervals predate collection
+        precisely because the cap holds. An uncapped paired lift would drag one
+        of them forward over every month on the site at once."""
+        issue = _case(
+            work_category="consumption_notice_issued",
+            status="Open",
+            notice_to_end_seconds=None,
+            end_source="not_found",
+            end_local_date=None,
+            start_date="2026-04-21T00:00:00+00:00",
+            location="Whiddy Island",
+            reference_num="COR1",
+        )
+        lift = _case(
+            id=99,
+            work_category="consumption_notice_lifted",
+            status="Closed",
+            notice_to_end_seconds=None,
+            end_source="not_found",
+            end_local_date=None,
+            location="Whiddy Island",
+            reference_num="COR2",
+            start_date="2026-05-09T00:00:00+00:00",
+        )
+        months = build_site([issue, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]
+        # 21 April + 14 days runs out on 5 May, not on the 9th the lift is stamped
+        coloured = sum(1 for m in months.values() for d in m["days"] if d[0] == "quality")
+        assert coloured == CAP_DAYS
+        assert months["2026-05"]["days"][8][0] == ""  # May 9: past the cap
+
+    def test_a_notice_already_over_at_publication_does_not_take_a_later_lift(self):
+        """A lift is only an end for a notice that was still running. This one's
+        own text reported an end before it was published (`lifted_immediate`), so
+        pairing it to a lift eight days later would invent the eight days — the
+        fabrication ended_by_publication exists to refuse. It keeps the token
+        footprint instead, and the lift still ends whatever it really ended."""
+        issue = _case(
+            work_category="consumption_notice_issued",
+            status="Open",
+            notice_to_end_seconds=None,
+            end_source="lifted_immediate",
+            location="Somewhere",
+            reference_num="COR1",
+        )
+        lift = _case(
+            id=99,
+            work_category="consumption_notice_lifted",
+            status="Closed",
+            notice_to_end_seconds=None,
+            end_source="not_found",
+            end_local_date=None,
+            location="Somewhere",
+            reference_num="COR2",
+            start_date="2026-05-09T00:00:00+00:00",
+        )
+        months = build_site([issue, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]
+        coloured = sum(1 for m in months.values() for d in m["days"] if d[0] == "quality")
+        assert coloured == 1  # publication day only, not through to the lift
+        assert months["2026-05"]["days"][7][0] == ""  # May 8: never reached
 
     def test_an_unpaired_consumption_notice_is_not_excluded_as_stale(self):
         """The deliberate half-measure. Boil notices older than CAP_DAYS with no
@@ -510,12 +556,16 @@ class TestBuildSite:
             do_not_drink=1,
             status="Open",
             notice_to_end_seconds=None,
+            end_source="not_found",
+            end_local_date=None,
             start_date="2026-05-01T00:00:00+00:00",
             reference_num="COR1",
         )
         month = build_site([stale], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["quality"] == 1
         assert month["health_n"] == 1
+        # still accruing, which is the half of the boil policy that was not taken
+        assert month["days"][8][0] == "quality"  # May 9, well past a token footprint
 
     def test_days_before_collection_start_are_no_data(self):
         site = build_site([_case()], SA_INDEX, NOW)
