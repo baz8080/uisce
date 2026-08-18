@@ -499,8 +499,17 @@ const LEGEND = `
 // The seventh legend entry, promoted to its own line and its own colour. As a
 // swatch among five others it was the least noticeable thing on the page and the
 // only one about drinking water.
-const HEALTH_KEY =
-  `<span class="healthmark sm">!</span> means an active boil-water or do-not-drink notice — open the county for details.`;
+//
+// Tensed to the month on screen. The mark is month-scoped like the grade and the
+// percentage — viewing May shows what was active in May — but the copy said
+// "active", which a reader lands on as *now*. On a month months past that is a
+// live drinking-water warning the site is not making.
+function healthKey() {
+  return `<span class="healthmark sm">!</span> ` + (isLatest()
+    ? `means an active boil-water or do-not-drink notice`
+    : `marks a boil-water or do-not-drink notice active in ${monthLabel(curMonth)}`)
+    + ` — open the county for details.`;
+}
 
 // The reader is looking at two different clocks at once: the grade and the
 // percentage are the selected month's, "open now" is live. Nothing said so, and
@@ -556,9 +565,14 @@ function freshness(iso) {
 // county graded D with unsafe water reads as exactly that, instead of as an F
 // indistinguishable from a county that lost supply.
 function healthTitle(n) {
-  return `${n === 1 ? "An active" : n + " active"} boil-water, do-not-drink or do-not-consume ` +
-    `${n === 1 ? "notice" : "notices"} — the water may not be safe to drink. ` +
-    `Separate from the grade, which measures supply availability.`;
+  const what = `boil-water, do-not-drink or do-not-consume ${n === 1 ? "notice" : "notices"}`;
+  // "the water may not be safe to drink" is a claim about now, so it is only
+  // made on the live month; on a past month the mark is a record, not a warning
+  return isLatest()
+    ? `${n === 1 ? "An active" : n + " active"} ${what} — the water may not be safe ` +
+      `to drink. Separate from the grade, which measures supply availability.`
+    : `${n === 1 ? "A" : n} ${what} active in ${monthLabel(curMonth)}. ` +
+      `Separate from the grade, which measures supply availability.`;
 }
 
 function healthMark(m) {
@@ -572,9 +586,10 @@ function healthMark(m) {
 function healthPill(m) {
   const n = m.health_n || 0;
   if (!n) return "";
+  const when = isLatest() ? "in effect" : `active in ${monthLabel(curMonth)}`;
   const what = n === 1
-    ? "Boil-water or do-not-drink notice in effect"
-    : `${n} drinking-water notices in effect`;
+    ? `Boil-water or do-not-drink notice ${when}`
+    : `${n} drinking-water notices ${when}`;
   return `<span class="badge health" title="${healthTitle(n)}">${what}</span>`;
 }
 
@@ -680,7 +695,7 @@ function renderOverview() {
   document.getElementById("months").innerHTML = monthTabs("setMonth");
   document.getElementById("partialNote").textContent = partialNote();
   document.getElementById("legend").innerHTML = LEGEND;
-  document.getElementById("healthKey").innerHTML = HEALTH_KEY;
+  document.getElementById("healthKey").innerHTML = healthKey();
   document.getElementById("basis").innerHTML = basisNote();
 
   // national tiles
