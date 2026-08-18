@@ -1,5 +1,5 @@
 # 13. Closing: what the site can say, and what it cannot
-*~9 min read · with a glossary*
+*~10 min read · with a glossary*
 
 *Where we are:* the end of the account, on 18 August 2026, with the repository at pull request
 #41. This chapter returns to the question, sets out plainly what the site can and cannot claim,

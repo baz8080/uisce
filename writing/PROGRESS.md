@@ -8,7 +8,7 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 
 | Ch | Title | PRs | Status | Words |
 |---|---|---|---|---|
-| 00 | Are other areas having as many outages as I am? (intro) | — | reviewed | 1,250 |
+| 00 | Are other areas having as many outages as I am? (intro) | — | reviewed | 1,368 |
 | 01 | A notice is a row | pre, #1–4 | reviewed | 1,934 |
 | 02 | Let a robot do it every week | #5–6 | reviewed | 1,034 |
 | 03 | Ask a local model what the notice actually says | #8–13 | reviewed | 2,231 |
@@ -24,7 +24,7 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 10 | For a reader, not an analyst | #31(last), #32–36 | reviewed | 2,085 |
 | 11 | Be findable | #37–39 | reviewed | 1,034 |
 | 12 | Put a number on what you don't know | #40–41 | reviewed | 2,623 |
-| 13 | Closing: what the site can say, and what it cannot (+ glossary) | — | reviewed | 1,900 |
+| 13 | Closing: what the site can say, and what it cannot (+ glossary) | — | reviewed | 2,197 |
 
 ## Chapter summaries (3 lines each, added when drafted)
 
@@ -339,9 +339,9 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
-- 2026-08-18 · Session 11 (final pass) · wrote 00-intro (1,250 w, AI process named once with
+- 2026-08-18 · Session 11 (final pass) · wrote 00-intro (1,368 w, AI process named once with
   the trailer counts: Sonnet 4.6 ×5, Sonnet 5 ×13, Opus 4.8 ×17, Opus 5 ×41, Fable 5 ×29) and
-  13-closing (1,900 w: can/cannot say, settled-decisions table in plain language, 32-entry
+  13-closing (2,197 w: can/cannot say, settled-decisions table in plain language, 32-entry
   glossary); mechanical checks; all statuses → reviewed.
 - 2026-08-18 · Session 10 · drafted Ch 12 (2,623 w); SVGs overlap-double-count,
   radius-sensitivity. All 16 posts drafted.
