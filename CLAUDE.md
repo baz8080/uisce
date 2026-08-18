@@ -26,16 +26,16 @@ with the evidence that closed them.
 | Recurring windows are charged as hours inside the windows, not as continuous days. | statuspage-methodology.md — "Recurring windows cover hours, not days" (2026-08-01) |
 | An active boil-water / do-not-drink notice is a marker *beside* the grade, not a knock to it. | statuspage-methodology.md — "The health notice was unbundled from the grade" (2026-08-02) |
 | `lifted_immediate` is excluded from site metrics; its duration is NULL, never 0. | end-time-eval.md — "Decision: `lifted_immediate` is excluded" (2026-07-18) |
-| Do-not-consume notices get lift pairing but **not** the boil-notice staleness exclusion. The exclusion rests on a case whose text contradicted its status; no consumption notice does that, and dropping a live one removes a drinking-water warning. | statuspage-methodology.md — "Do-not-consume notices got the pairing, not the exclusion" (2026-08-18) |
+| Do-not-consume notices get lift pairing but **not** the boil-notice staleness exclusion. A paired lift is capped for what it charges, uncapped for the health marker. | statuspage-methodology.md — "Do-not-consume notices got the pairing, not the exclusion" (2026-08-18) |
 | The notice title alone is not a reliable severity signal. | data-quality.md — "The notice title is not a reliable severity signal" (2026-08-02) |
 | The `water_outage` feed flag cannot filter anything — it is set on 97% of cases. | data-quality.md — "`water_outage` flag is not a filter" |
-| Neither health flag is a signal either: `boil_water_notice` is 100% redundant with the category, `do_not_drink` is wrong on 9 of 19. Both dropped from `classify`/`knocks_grade` — category only. **Text-gating them instead was measured and rejected** (identical results, prose regex to maintain). | data-quality.md — "The two health flags are not signals either" (2026-08-18) |
+| Neither feed health flag is a signal: both dropped from `classify`/`knocks_grade`, which read the category only. Text-gating them instead was measured and rejected. | data-quality.md — "The two health flags are not signals either" (2026-08-18) |
 | Duration outliers are categorical, not statistical. The 14-day cap is a backstop, not the outlier strategy. | data-quality.md — "Duration outliers are categorical" |
 | "We are investigating" reference pairing works but rescues almost nothing — not worth building. | data-quality.md — "'We are investigating' notices" (corrected 2026-07-20) |
 | `closed_at` is a floor: short-lived cases are never observed open. Twice-daily builds are the settled cadence. | data-quality.md — "`closed_at` is a floor" (re-measured 2026-07-31) |
 | gemma-4-12b-qat over qwen3.5-9b for end-time extraction; prompt version is at v3. | model-and-runtime-benchmarks.md, end-time-eval.md |
 | Geography is CSO Census settlements, not the feed's `location` string (3,866 distinct values, fragments badly, carries no population). | statuspage-methodology.md — "The county drill-down" (2026-07-25) |
-| Overlapping events double-count person-hours by **2.0%** nationally, and that is left uncorrected — it is pessimistic, smaller than the 500 m radius error, and a fix would touch the availability arithmetic itself. Re-measure with `uv run uisce-eval-overlap`. | statuspage-methodology.md — "Known limitations" (2026-08-18) |
+| Overlapping events double-count person-hours by **2.0%** nationally, left uncorrected. Re-measure with `uv run uisce-eval-overlap`. | statuspage-methodology.md — "Known limitations" (2026-08-18) |
 
 ## Conventions
 

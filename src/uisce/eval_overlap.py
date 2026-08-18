@@ -79,18 +79,28 @@ def overlap_by_month(rows, sa_index, now):
         ev_iv[key].extend(case.intervals)
         ev_sas[key].update(case.sas)
 
-    # Merged once, not once per month: the merge is a property of the event, and
-    # only the clipping bounds below change from month to month.
+    # Both per-event derivations happen once here, not once per month: an event's
+    # merged intervals and its capped population are properties of the event, and
+    # only the clipping bounds in the loop below change from month to month.
     ev_merged = {key: merge(iv) for key, iv in ev_iv.items()}
+    ev_pop = {
+        key: min(sum(sas.values()), COUNTY_POP[key[0]]) for key, sas in ev_sas.items()
+    }
 
     # (county, guid) -> the intervals of every event touching that Small Area.
     # The event's merged intervals against the event's whole footprint, matching
     # what region_month charges — see the module docstring on why a per-pin split
     # here would report an event's own staggered pins as overlap.
+    #
+    # Copied to tuples rather than shared: `merge` hands back mutable [start, end]
+    # lists, and extending with them would leave one object reachable from both
+    # ev_merged and sa_merged. It does not mutate its input today, but nothing
+    # says it must not, and every other interval in this codebase is a tuple.
     sa_iv = defaultdict(list)
     for key, iv in ev_merged.items():
+        spans = [tuple(span) for span in iv]
         for guid in ev_sas[key]:
-            sa_iv[(key[0], guid)].extend(iv)
+            sa_iv[(key[0], guid)].extend(spans)
     sa_merged = {key: merge(iv) for key, iv in sa_iv.items()}
 
     out = {}
@@ -101,8 +111,7 @@ def overlap_by_month(rows, sa_index, now):
             continue
         published = 0.0
         for key, iv in ev_merged.items():
-            secs = union_seconds(iv, eff_lo, eff_hi)
-            published += secs * min(sum(ev_sas[key].values()), COUNTY_POP[key[0]])
+            published += union_seconds(iv, eff_lo, eff_hi) * ev_pop[key]
         exact = 0.0
         for (_, guid), iv in sa_merged.items():
             exact += union_seconds(iv, eff_lo, eff_hi) * sa_index.pop[guid]

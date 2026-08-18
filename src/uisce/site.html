@@ -500,15 +500,22 @@ const LEGEND = `
 // swatch among five others it was the least noticeable thing on the page and the
 // only one about drinking water.
 //
-// Tensed to the month on screen. The mark is month-scoped like the grade and the
-// percentage — viewing May shows what was active in May — but the copy said
-// "active", which a reader lands on as *now*. On a month months past that is a
-// live drinking-water warning the site is not making.
+// Scoped to the month on screen, always. The mark is month-scoped like the grade
+// and the percentage — viewing May shows what was active in May — but the copy
+// said "active", which a reader lands on as *now*. That is a live drinking-water
+// warning the site is not making, and it was wrong on the current month too: a
+// notice lifted on the 3rd still marks the month on the 25th. The legend cannot
+// know which counties are still standing, so it makes the weaker, true claim and
+// leaves "right now" to the per-county mark, which does know (health_now).
+//
+// All three kinds named, not two: the mark is raised by KNOCK_CATS, which
+// includes consumption_notice_issued, and this line is the only always-visible
+// explanation of it — the fuller wording is in a title=, which never fires on a
+// touchscreen.
 function healthKey() {
-  return `<span class="healthmark sm">!</span> ` + (isLatest()
-    ? `means an active boil-water or do-not-drink notice`
-    : `marks a boil-water or do-not-drink notice active in ${monthLabel(curMonth)}`)
-    + ` — open the county for details.`;
+  return `<span class="healthmark sm">!</span> marks a boil-water, do-not-drink` +
+    ` or do-not-consume notice active in ${monthLabel(curMonth)}` +
+    ` — open the county for details.`;
 }
 
 // The reader is looking at two different clocks at once: the grade and the
@@ -564,11 +571,16 @@ function freshness(iso) {
 // do-not-consume notice is shown next to it rather than folded into it, so a
 // county graded D with unsafe water reads as exactly that, instead of as an F
 // indistinguishable from a county that lost supply.
-function healthTitle(n) {
+// "the water may not be safe to drink" is a claim about *now*, so it is made
+// only where one is still standing. isLatest() alone was not enough: health_n
+// counts notices active at any point in the month, so on the live month a notice
+// lifted on the 3rd went on warning about the water on the 25th. health_now is
+// the right-now count, and where it is zero the mark is a record of the month.
+function healthTitle(m) {
+  const live = isLatest() && (m.health_now || 0) > 0;
+  const n = live ? m.health_now : (m.health_n || 0);
   const what = `boil-water, do-not-drink or do-not-consume ${n === 1 ? "notice" : "notices"}`;
-  // "the water may not be safe to drink" is a claim about now, so it is only
-  // made on the live month; on a past month the mark is a record, not a warning
-  return isLatest()
+  return live
     ? `${n === 1 ? "An active" : n + " active"} ${what} — the water may not be safe ` +
       `to drink. Separate from the grade, which measures supply availability.`
     : `${n === 1 ? "A" : n} ${what} active in ${monthLabel(curMonth)}. ` +
@@ -576,21 +588,23 @@ function healthTitle(n) {
 }
 
 function healthMark(m) {
-  const n = m.health_n || 0;
-  if (!n) return "";
-  return `<span class="healthmark" title="${healthTitle(n)}">!</span>`;
+  if (!(m.health_n || 0)) return "";
+  return `<span class="healthmark" title="${healthTitle(m)}">!</span>`;
 }
 
 // The county view has room for words, and the "!" alone put the site's only
 // drinking-water warning behind a hover — which on a phone is nowhere at all.
 function healthPill(m) {
-  const n = m.health_n || 0;
-  if (!n) return "";
-  const when = isLatest() ? "in effect" : `active in ${monthLabel(curMonth)}`;
+  if (!(m.health_n || 0)) return "";
+  // same live/record split as healthTitle, and the same three kinds: this pill
+  // said "boil-water or do-not-drink" while its own tooltip named all three
+  const live = isLatest() && (m.health_now || 0) > 0;
+  const n = live ? m.health_now : m.health_n;
+  const when = live ? "in effect" : `active in ${monthLabel(curMonth)}`;
   const what = n === 1
-    ? `Boil-water or do-not-drink notice ${when}`
+    ? `Boil-water, do-not-drink or do-not-consume notice ${when}`
     : `${n} drinking-water notices ${when}`;
-  return `<span class="badge health" title="${healthTitle(n)}">${what}</span>`;
+  return `<span class="badge health" title="${healthTitle(m)}">${what}</span>`;
 }
 
 function monthLabel(ym) { return MONTH_NAMES[ym.slice(5)] + " " + ym.slice(0, 4); }

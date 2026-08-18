@@ -143,13 +143,13 @@ class TestBoilNoticeFate:
     def test_paired_lift_gives_the_real_end(self):
         lifts = {("Carlow", "boil_notice_lifted"):
                  [("somewhere", _dt("2026-05-04T09:00:00+00:00"))]}
-        outcome, end = boil_notice_fate(self._notice(), lifts, NOW)
+        outcome, (_, end) = boil_notice_fate(self._notice(), lifts, NOW)
         assert outcome == "paired"
         assert end == _dt("2026-05-04T09:00:00+00:00")
 
     def test_recent_unpaired_notice_still_accrues(self):
         """9 days old at NOW: 'Open' is plausible, so it runs to now."""
-        outcome, end = boil_notice_fate(self._notice(), {}, NOW)
+        outcome, (_, end) = boil_notice_fate(self._notice(), {}, NOW)
         assert outcome == "accrue"
         assert end == NOW
 
@@ -167,7 +167,7 @@ class TestBoilNoticeFate:
         old = self._notice(start_date="2026-01-01T00:00:00+00:00")
         lifts = {("Carlow", "boil_notice_lifted"):
                  [("somewhere", _dt("2026-01-05T00:00:00+00:00"))]}
-        outcome, end = boil_notice_fate(old, lifts, NOW)
+        outcome, (_, end) = boil_notice_fate(old, lifts, NOW)
         assert outcome == "paired"
         assert end == _dt("2026-01-05T00:00:00+00:00")
 
@@ -179,7 +179,7 @@ class TestBoilNoticeFate:
         """Multi-pin lifts publish untidily; a negative duration must not result."""
         lifts = {("Carlow", "boil_notice_lifted"):
                  [("somewhere", _dt("2026-04-30T00:00:00+00:00"))]}
-        outcome, end = boil_notice_fate(self._notice(), lifts, NOW)
+        outcome, (_, end) = boil_notice_fate(self._notice(), lifts, NOW)
         assert outcome == "paired"
         assert end == _dt("2026-05-01T00:00:00+00:00")
 
@@ -190,9 +190,13 @@ class TestBoilNoticeFate:
         stand on the evidence while the arithmetic stays bounded."""
         lifts = {("Carlow", "boil_notice_lifted"):
                  [("somewhere", _dt("2026-05-21T00:00:00+00:00"))]}
-        outcome, end = boil_notice_fate(self._notice(), lifts, NOW)
+        outcome, (in_force, end) = boil_notice_fate(self._notice(), lifts, NOW)
         assert outcome == "paired"
-        assert end == _dt("2026-05-21T00:00:00+00:00")
+        # the marker stands to the lift itself, 20 days out...
+        assert in_force == [(_dt("2026-05-01T00:00:00+00:00"),
+                             _dt("2026-05-21T00:00:00+00:00"))]
+        # ...while the charge stops at the cap
+        assert end == _dt("2026-05-01T00:00:00+00:00") + timedelta(days=CAP_DAYS)
 
     def test_a_lift_of_the_other_kind_never_pairs(self):
         """A do-not-consume lift for the same scheme is a different notice's end;
@@ -208,7 +212,7 @@ class TestBoilNoticeFate:
         end before the start, which the clipped county arithmetic never sees but
         the area history prints as "-240h so far"."""
         future = self._notice(start_date="2026-05-20T00:00:00+00:00")
-        outcome, end = boil_notice_fate(future, {}, NOW)
+        outcome, (_, end) = boil_notice_fate(future, {}, NOW)
         assert outcome == "accrue"
         assert end == _dt("2026-05-20T00:00:00+00:00")
 
@@ -583,6 +587,28 @@ class TestBuildSite:
         coloured = sum(1 for m in months.values() for d in m["days"] if d[0] == "quality")
         assert coloured == 1  # publication day only, not through to the lift
         assert months["2026-05"]["days"][7][0] == ""  # May 8: never reached
+
+    def test_health_now_separates_a_standing_notice_from_a_lifted_one(self):
+        """health_n counts notices active at any point in the month, which the
+        front end was reading as "right now" — a notice lifted on the 3rd went on
+        saying the water may not be safe on the 25th. health_now is the live
+        count. It is inclusive of the interval end because an ongoing notice
+        accrues to exactly `now`, and a half-open test calls those lifted."""
+        base = dict(work_category="consumption_notice_issued", status="Open",
+                    notice_to_end_seconds=None, end_source="not_found",
+                    end_local_date=None, reference_num="COR1")
+        standing = _case(**base, start_date="2026-05-05T00:00:00+00:00")
+        month = build_site([standing], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert (month["health_n"], month["health_now"]) == (1, 1)
+
+        # same notice, lifted on the 3rd: still a fact about May, not about now
+        lifted = _case(**base, start_date="2026-05-01T00:00:00+00:00")
+        lift = _case(id=99, work_category="consumption_notice_lifted", status="Closed",
+                     notice_to_end_seconds=None, end_source="not_found",
+                     end_local_date=None, reference_num="COR2",
+                     start_date="2026-05-03T00:00:00+00:00")
+        month = build_site([lifted, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert (month["health_n"], month["health_now"]) == (1, 0)
 
     def test_an_unpaired_consumption_notice_is_not_excluded_as_stale(self):
         """The deliberate half-measure. Boil notices older than CAP_DAYS with no
@@ -1976,7 +2002,7 @@ class TestPayloadShape:
             "days", "clear_days", "days_elapsed", "grade", "events", "person_h",
             "period_h", "availability",
             "health_n", "median_completion_h", "completed_n", "median_scheduled_h",
-            "scheduled_n", "median_pooled_h", "imputed_n",
+            "scheduled_n", "median_pooled_h", "imputed_n", "health_now",
         }
 
     def test_the_top_row_keys_are_unchanged(self):
