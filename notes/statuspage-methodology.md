@@ -13,13 +13,13 @@ The replacement is **population-weighted availability**, a SAIDI-style measure: 
 Each case maps to one class from `work_category` plus the impact flags, tested in that order:
 
 1. `boil_notice_lifted` → ignored as an event (it is the good-news end of an earlier notice; used only for pairing, below)
-2. `do_not_drink` / `boil_water_notice` flags, or category boil_notice_issued / consumption_notice_issued / discolouration → **quality**
+2. category boil_notice_issued / consumption_notice_issued / discolouration → **quality**. The feed's `do_not_drink` / `boil_water_notice` flags were read here until 2026-08-18 and are not: both are redundant with the category, and `do_not_drink` is wrong on 9 of 19 cases — see [data-quality.md](data-quality.md)
 3. water_conservation / low_pressure categories, or `water_restrictions` / `reduced_pressure` flags → **degraded**
 4. burst_main, reservoir_interruption, water_treatment_plant_interruption, pump_station_interruption, pump_failure, power_outage → **outage**, regardless of `work_type` (the title itself announces lost supply)
 5. mains_repair / valve_repair / pump_repair / NULL category, when not marked Planned → **outage** (emergency repairs normally shut off supply)
 6. everything else — investigations, leak detection, hydrant works, installations, and anything Planned → **works**
 
-Only the **outage** class accrues availability downtime. This is deliberate: an F grade should mean people lost water, not that a county ran many investigations. Before this split, `investigation` alone contributed ~8% of accrued hours (4,090 h in May+June 2026 against 27,128 h from burst mains). The `water_outage` feed flag cannot do this job — it is set on 97% of all cases.
+Only the **outage** class accrues availability downtime. This is deliberate: an F grade should mean people lost water, not that a county ran many investigations. Before this split, `investigation` alone contributed ~8% of accrued hours (4,090 h in May+June 2026 against 27,128 h from burst mains). No feed flag can do this job: `water_outage` is set on 97% of all cases, and the two health flags carry nothing the category does not (2026-08-18).
 
 Interval inputs come from `inferred_cases.notice_to_end_seconds`, capped at 14 days. The genuinely long events (40–87-day conservation restrictions) are classed degraded and never accrue, so the cap is a backstop, not the outlier strategy — see the outliers section of [data-quality.md](data-quality.md).
 

@@ -101,9 +101,22 @@ class TestClassify:
         assert classify(_case(work_category="leak_detection")) == "maintenance"
 
     def test_quality_beats_works_and_lift_notices_are_ignored(self):
-        assert classify(_case(boil_water_notice=1)) == "quality"
+        assert classify(_case(work_category="boil_notice_issued")) == "quality"
         assert classify(_case(work_category="discolouration")) == "quality"
         assert classify(_case(work_category="boil_notice_lifted")) is None
+
+    def test_the_feed_health_flags_do_not_override_the_category(self):
+        """Measured 2026-08-18: both flags are redundant with the category, and
+        do_not_drink is additionally wrong on 9 cases whose descriptions never
+        mention drinking water. Reading them turned ordinary burst mains into
+        quality events, where they accrued no downtime at all."""
+        assert classify(_case(work_category="burst_main", do_not_drink=1)) == "outage"
+        assert classify(_case(work_category="burst_main", boil_water_notice=1)) == "outage"
+        assert classify(_case(work_category="mains_repair", work_type=None,
+                              do_not_drink=1)) == "outage"
+        # the categories still carry it, which is the whole point
+        assert classify(_case(work_category="consumption_notice_issued",
+                              do_not_drink=0)) == "quality"
 
     def test_restriction_flags_are_degraded(self):
         assert classify(_case(work_category=None, work_type=None, reduced_pressure=1)) == "degraded"
@@ -130,7 +143,7 @@ class TestClassify:
         """A nightly leak-detection round is still works, not a restriction."""
         assert classify(_case(work_category="leak_detection"), recurring=True) == "maintenance"
         assert classify(_case(work_category="essential_works"), recurring=True) == "maintenance"
-        assert classify(_case(boil_water_notice=1), recurring=True) == "quality"
+        assert classify(_case(work_category="boil_notice_issued"), recurring=True) == "quality"
 
     def test_the_notice_text_can_correct_the_feed_to_low_pressure(self):
         """Two Reservoir Interruption notices describe only low pressure. The
@@ -1351,8 +1364,20 @@ class TestHealthNotices:
         assert month["events"]["quality"] == 1
         assert month["health_n"] == 0
 
-    def test_a_do_not_drink_flag_raises_it_whatever_the_category(self):
+    def test_a_feed_flag_alone_no_longer_raises_the_marker(self):
+        """The inverse of what this pinned before. A burst main carrying the
+        feed's do_not_drink flag but no drinking-water language in its text is a
+        burst main: it accrues as an outage and raises no marker. Nine such cases
+        were painting a warning across eight county-months (2026-08-18)."""
         rows = [_case(work_category="burst_main", do_not_drink=1)]
+        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["health_n"] == 0
+        assert month["events"]["outage"] == 1
+
+    def test_a_consumption_notice_still_raises_the_marker(self):
+        """Dropping the flags must not cost a real notice its marker: every
+        legitimate flagged case on file is already one of these categories."""
+        rows = [_case(work_category="consumption_notice_issued", do_not_drink=0)]
         month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["health_n"] == 1
 

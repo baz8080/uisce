@@ -623,8 +623,13 @@ function monthTabs(onclick, months, current) {
   }).join("");
 }
 
+// The in-progress month always reads a little worse than it will settle at:
+// an open notice with no reported end accrues to now, and some of those ends
+// never arrive at all (the text simply doesn't state one). Saying so here beats
+// a separate caveat line, and it stays true whether or not inference is current.
 function partialNote() {
-  return curMonth === today.slice(0, 7) ? "Partial month — in progress." :
+  return curMonth === today.slice(0, 7)
+    ? "Partial month — in progress. Notices that haven't reported an end yet count as ongoing, so the figures will move as the month progresses." :
     curMonth === D.months[0] ? "This site started collecting on 20 April 2026, so April is a part-month." : "";
 }
 

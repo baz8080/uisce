@@ -154,7 +154,14 @@ def classify(row, recurring=False):
         return None
     if IGNORE_BOIL_NOTICES and cat == "boil_notice_issued":
         return None
-    if row["do_not_drink"] or row["boil_water_notice"] or cat in QUALITY_CATS:
+    # Category only: the feed's do_not_drink / boil_water_notice flags were tested
+    # here too, and measured 2026-08-18 to add nothing. boil_water_notice appears
+    # on the two boil categories and nowhere else; do_not_drink adds only 9 cases
+    # on unrelated categories (burst mains, mains repairs, a new connection) whose
+    # descriptions say nothing about drinking water at all. Reading them promoted
+    # ordinary outages to quality, where they accrued no downtime, and painted a
+    # drinking-water marker no notice supported. See notes/data-quality.md.
+    if cat in QUALITY_CATS:
         return "quality"
     if cat in DEGRADED_CATS or row["water_restrictions"] or row["reduced_pressure"]:
         return "degraded"
@@ -165,9 +172,9 @@ def classify(row, recurring=False):
 
 
 def knocks_grade(row):
-    return bool(
-        row["do_not_drink"] or row["boil_water_notice"] or row["work_category"] in KNOCK_CATS
-    )
+    """Whether a case raises the health marker. Category only — see classify for
+    why the feed's two health flags are not read."""
+    return row["work_category"] in KNOCK_CATS
 
 
 def ended_by_publication(row):

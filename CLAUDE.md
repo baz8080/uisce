@@ -28,6 +28,7 @@ with the evidence that closed them.
 | `lifted_immediate` is excluded from site metrics; its duration is NULL, never 0. | end-time-eval.md — "Decision: `lifted_immediate` is excluded" (2026-07-18) |
 | The notice title alone is not a reliable severity signal. | data-quality.md — "The notice title is not a reliable severity signal" (2026-08-02) |
 | The `water_outage` feed flag cannot filter anything — it is set on 97% of cases. | data-quality.md — "`water_outage` flag is not a filter" |
+| Neither health flag is a signal either: `boil_water_notice` is 100% redundant with the category, `do_not_drink` is wrong on 9 of 19. Both dropped from `classify`/`knocks_grade` — category only. **Text-gating them instead was measured and rejected** (identical results, prose regex to maintain). | data-quality.md — "The two health flags are not signals either" (2026-08-18) |
 | Duration outliers are categorical, not statistical. The 14-day cap is a backstop, not the outlier strategy. | data-quality.md — "Duration outliers are categorical" |
 | "We are investigating" reference pairing works but rescues almost nothing — not worth building. | data-quality.md — "'We are investigating' notices" (corrected 2026-07-20) |
 | `closed_at` is a floor: short-lived cases are never observed open. Twice-daily builds are the settled cadence. | data-quality.md — "`closed_at` is a floor" (re-measured 2026-07-31) |
