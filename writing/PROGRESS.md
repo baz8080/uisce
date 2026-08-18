@@ -15,7 +15,7 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 04 | Make it a real project | #14–15 | drafted | 1,296 |
 | 05a | A website, and a number that is fair to Cork | #16 | drafted | 1,694 |
 | 05b | An honest number on the model | #16–17 | drafted | 2,024 |
-| 06 | Say what you actually measured | #18–20 | drafted | 2,000 |
+| 06 | Say what you actually measured | #18–20 | drafted | 2,090 |
 | 07 | Record the moment a case closes | #21–22 | todo | |
 | 08a | How a pin gets a population | #23 | todo | |
 | 08b | Where you actually live | #23–25 | todo | |
@@ -126,7 +126,7 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
-- 2026-08-18 · Session 4 · drafted Ch 6 (2,000 w); SVG observed-vs-scheduled.
+- 2026-08-18 · Session 4 · drafted Ch 6 (2,090 w); SVG observed-vs-scheduled.
 - 2026-08-18 · Session 3 · drafted Ch 5a (1,694 w) and 5b (2,024 w) — Ch 5 split as the length
   rule intends; first SVG diagram.
 - 2026-08-18 · Session 2 · drafted Ch 3 (2,231 w) and Ch 4 (1,296 w); pulled prompt v1/v2 diffs
