@@ -22,11 +22,11 @@ Tables:
 
 Before leaning on `start_date`/`end_date` or per-case counts, read [notes/data-quality.md](notes/data-quality.md) — several fields don't mean what they appear to mean.
 
-The `cases` schema is declared once, in `create_db`, and stamped into `PRAGMA user_version` (`SCHEMA_VERSION`, currently 2). The published DB is downloaded and updated in place each build, so `check_schema_version` runs every time and carries older DBs forward via `MIGRATIONS`.
+The `cases` schema is declared once, in `create_db`, and stamped into `PRAGMA user_version` (`SCHEMA_VERSION`, currently 3). The published DB is downloaded and updated in place each build, so `check_schema_version` runs every time and carries older DBs forward via `MIGRATIONS`.
 
 Migration is deliberately narrow: **additive nullable columns only**, which SQLite applies without rewriting a row. A DB missing any v1 column is refused with instructions to rebuild rather than migrated. That asymmetry is on purpose — the DB is an accumulating archive of a feed with no history, so a rebuild costs every case the feed no longer serves plus the geocode cache. Take a copy before rebuilding.
 
-`cases.closed_at` (v2) records when a build **first observed** a case stop being `Open`. The feed publishes only current status, so this is the sole record of the transition. Two consequences for anyone querying it:
+`cases.closed_at` (v2) records when a build **first observed** a case stop being `Open`. The feed publishes only current status, so this is the sole record of the transition. Three consequences for anyone querying it:
 
 * It is observation time, not event time — resolution is the build cadence.
 * `NULL` is ambiguous: either still open, or closed before the column existed (every case closed prior to v2). Pair it with `status` rather than reading `NULL` as open.
@@ -42,6 +42,8 @@ Locally, against a directory of downloaded snapshots named `<release-tag>.db`:
 uv run uisce-replay-closed-at --snapshots snaps          # dry run
 uv run uisce-replay-closed-at --snapshots snaps --write
 ```
+
+`cases.first_start_date` (v3) stamps the `start_date` seen on the **first download** of a case and never advances it — the feed re-stamps `start_date` in place, so the original is otherwise lost. It is first-observed, not earliest-seen, and nothing computes a published number from it yet; it is an instrument accumulating history. See [notes/data-quality.md](notes/data-quality.md).
 
 ## Running it yourself
 
