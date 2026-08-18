@@ -173,6 +173,17 @@ Chapters quote from here rather than re-deriving; a missing figure is written in
 | Recurring-window downgrade effect | July 25,395,359 → 24,440,623 (−3.8%) | notes/statuspage-methodology.md "A scheduled repeating window is a restriction" |
 | Recurrence review | 2 correct, 9 wrong | PRs #30, #31 |
 | Multi-pin events | LOU00112686 13 pins in 22 min; 675 refs cover 1,930 rows; 6,758 cases ≈ 5,485 events | notes/data-quality.md "Multi-pin events…" |
+| Build-latency simulation | 8,135 cases: 1×18:45 mean 7.7 h / median 7.5 / p90 11.1; 2×06:45+18:45 6.8 h; 2×12:45+18:45 3.9 h / 3.4 / 5.6; 3× 3.5 h; burst mains 8.7→4.0 h; boil-flagged 7.0→3.3 h | PR #26 |
+| DON00115765 reconciliation | 18 nights × 9 h = 162 h announced; 16 nights run → 144.0 h; 385.2 h ≈ 16 days continuous; 6,596 people = 949,824 ÷ 144.0; 2,540,854 = 6,596 × 385.2 | my arithmetic on PRs #27/#29 |
+| v3 replay | identical to pv2: 99/114, 120/120, 0 parse errors / 234 rows; 8 labelled recurring rows | PR #27 |
+| First v3 run | −0.4% vs −5.9% projected (completion pin re-covered gaps) | PR #27 |
+| unquotable_windows | 89 of 97 exact, 0 flagged | PR #27 |
+| Prompt v3 size | 6,255 → 9,746 chars; 29 cases hit context length until LM Studio raised to 8,192 | PR #27 |
+| Cork DNC lift mis-stored | "Lifting of Do Not Consume Notice" stored as consumption_notice_issued | PR #27 |
+| Phrase counts | "may cause supply disruptions" 100% of burst mains; "allow 3–4 hours" 99–100%; "supply should have returned" 39–48%; "may cause low pressure to" 98% low_pressure vs 0% burst | PR #29 |
+| Donegal after #29 | July national 25,395,359 → 24,440,623 (−3.8%); Donegal 2,118,941/98.295% → 1,169,117/99.060%; per-capita rank 1 (12,682) → 6 (6,997); Clare 9,588 | PR #29 |
+| Recurrence review | 11 events, 1,289,079 ph; 2 correct / 9 wrong; text 33 events, model 5; May/Jun/Jul −0.2/−0.4/−0.5%; 238,887 ph on the eight; case 232976 47,124 ph left | PRs #30, #31 |
+| Grade thresholds check | 78 settled county-months; cuts at A 97%, B 76%, C 33→32%, D 10→9%; exactly one letter changes after −11.8% national | PR #31 |
 
 ### Ch 10–11
 | Figure | Value | Source |

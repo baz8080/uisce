@@ -19,7 +19,8 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 07 | Record the moment a case closes | #21–22 | drafted | 2,074 |
 | 08a | How a pin gets a population | #23 | drafted | 2,323 |
 | 08b | Where you actually live | #23–25 | drafted | 2,491 |
-| 09 | Not everything is an outage | #26–31 | todo | |
+| 09a | Eighteen nights in a trench coat | #26–27 | drafted | 2,000 |
+| 09b | The title is not the severity | #28–31 | drafted | 1,950 |
 | 10 | For a reader, not an analyst | #32–36 | todo | |
 | 11 | Be findable | #37–39 | todo | |
 | 12 | Put a number on what you don't know | #40–41 | todo | |
@@ -98,6 +99,19 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
   observed denominator; today's full-July: Leixlip 438,691 / 96.48% vs Naas & Maynooth 100%,
   county 99.20% D — THE ANSWER. Mermaid tier tree. #24/#25 as footnotes. Ends: → Ch 9 recurring
   windows.
+- **09a** #26 midday build (7.7→3.9 h) as an aside. Concept box pin/case/event (LOU00112686;
+  union intervals, union footprints, cap) + SVG pins-to-event. Top ten (21.9%); NULL-category
+  leak (66, one #9; Cork DNC lift). Recurring windows: representation not reading; concept box
+  hours-not-days; v3 replay identical; results table (−7.7%, Donegal 22,156→12,682/1k). Two
+  failures: completion pin re-covered gaps → event_windows lends; the report that missed it.
+  Worked example DON00115765 (162 announced, 144.0 run, 385.2 charged, 6,596 people) + SVG
+  recurring-window. Ends: 949,824 still looked wrong → 9b.
+- **09b** #28 name once (348 events; Exton/Wyeville/Zedbury table). #29 same zone two titles
+  table; phrase counts rule out the text reading; concept box "a repeating window is a
+  restriction whatever the title"; −3.8%, Donegal rank 1→6, no grade changes; reduced_pressure
+  backfill; expansion now numerically inert. #30/#31 review 2/9, concept box "review the
+  consequential calls"; text+model detection; grade thresholds checked (one letter). Worked
+  example: Donegal event 2,540,854 → 949,824 → 0. Ends: correct but unreadable → Ch 10.
 
 ## Open threads
 
@@ -109,7 +123,26 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 
 ## Next session
 
-**Ch 9 "Not everything is an outage"** (PRs #26–#31, 31 Jul – 2 Aug; heavy — likely split into
+**Ch 10 + Ch 11** (light pair). Ch 10 "For a reader, not an analyst" (PRs #32–#36, 5–6 Aug):
+per-area incident history + directory (1,836 areas; 220 of 1,830 with no history because
+multi-area events named once; 764 multi-area; 6 KB gz; 801 false 0.0 h; h/<county>.js shards
+1.5 MB/183 KB), legend icon (#33), plain-language rewrite (#34: Cavan 27/31 clear days on 6 Aug;
+100.00% beside a disruption; 2,600-char paragraph → seven sections), Actions bump (#35), mobile
+view switching (#36, 375 px). Also the health-marker unbundling (2 Aug, in #29's timeframe? —
+check `sources/ch10.md` and notes "The health notice was unbundled from the grade" ~185: 0.45 pp
+vs 0.003–0.012 pp ~100×; Tipperary three notices invisible; grade mix A2 B16 C31 D19 F10 → A2 B17
+C34 D18 F7). Ch 11 "Be findable" (PRs #37–#39, 6–8 Aug): county landing pages 2→28 indexable
+URLs, static text 73,087→383,714 chars, analytics pages 1→28, retraction of #25's pushState;
+#38 link; #39 trim comments duplicating notes. Read: this file → `README.md` → `outline.md` Ch
+10–11 → `sources/ch10.md` (~4.2k words), `sources/ch11.md` (~1.6k) → notes
+`statuspage-methodology.md` "The health notice was unbundled from the grade" (~185–225) and the
+history/directory paragraphs already read in Ch 8b (lines ~100–112, skip) → `notes/frontend-notes.md`
+(short). Concept boxes: history lists name an event under every area it reached, accounting
+charges it once; health marker beside the grade not inside it; why a JS-routed static site is
+invisible to search. Worked example: Cavan clear-days arithmetic; the pushState retraction.
+Register figures. Update this file. Commit.
+
+_Superseded brief (done):_ **Ch 9 "Not everything is an outage"** (PRs #26–#31, 31 Jul – 2 Aug; heavy — likely split into
 9a events/recurring windows and 9b naming/severity/review). Read: this file → `README.md` →
 `outline.md` Ch 9 → `sources/ch09.md` (~8k words — the biggest; read in two passes, #26–#27
 then #28–#31) → `notes/statuspage-methodology.md` "The national top ten" (~230), "A scheduled
@@ -215,6 +248,8 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
+- 2026-08-18 · Session 8 · drafted Ch 9a (2,000 w) and 9b (1,950 w); SVGs recurring-window,
+  pins-to-event; reconciled 144.0 h / 6,596 people.
 - 2026-08-18 · Session 7 · drafted Ch 8b (2,491 w); SVG straddle; reconciled PR #23's Kildare
   table (588.5 h denominator) and pulled today's July figures from data.js.
 - 2026-08-18 · Session 6 · drafted Ch 8a (2,323 w); two SVGs; measured KLD00118059's 500 m
