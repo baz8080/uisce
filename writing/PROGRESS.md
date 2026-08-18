@@ -16,7 +16,7 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 05a | A website, and a number that is fair to Cork | #16 | drafted | 1,694 |
 | 05b | An honest number on the model | #16–17 | drafted | 2,024 |
 | 06 | Say what you actually measured | #18–20 | drafted | 2,090 |
-| 07 | Record the moment a case closes | #21–22 | drafted | 2,050 |
+| 07 | Record the moment a case closes | #21–22 | drafted | 2,074 |
 | 08a | How a pin gets a population | #23 | todo | |
 | 08b | Where you actually live | #23–25 | todo | |
 | 09 | Not everything is an outage | #26–31 | todo | |
@@ -149,7 +149,7 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
-- 2026-08-18 · Session 5 · drafted Ch 7 (2,050 w); SVG build-gap-timeline; measured closed_at
+- 2026-08-18 · Session 5 · drafted Ch 7 (2,074 w); SVG build-gap-timeline; measured closed_at
   distribution and KLD00118059 lifecycle.
 - 2026-08-18 · Session 4 · drafted Ch 6 (2,090 w); SVG observed-vs-scheduled.
 - 2026-08-18 · Session 3 · drafted Ch 5a (1,694 w) and 5b (2,024 w) — Ch 5 split as the length
