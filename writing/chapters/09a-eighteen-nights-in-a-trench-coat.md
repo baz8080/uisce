@@ -1,5 +1,5 @@
 # 9a. Eighteen nights in a trench coat
-*~10 min read · PRs #26–#27 · 31 July – 2 August 2026*
+*~8 min read · PRs #26–#27 · 31 July – 2 August 2026*
 
 *Where we are:* every county has a page that breaks it into named areas, and Leixlip's July is a
 row on it (chapter 8b). The next thing to break was not geography. It was the meaning of the
