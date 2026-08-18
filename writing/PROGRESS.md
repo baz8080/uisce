@@ -11,8 +11,8 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 00 | Intro | — | todo (final pass) | |
 | 01 | A notice is a row | pre, #1–4 | drafted | 1,934 |
 | 02 | Let a robot do it every week | #5–6 | drafted | 1,034 |
-| 03 | Ask a local model what the notice actually says | #8–13 | todo | |
-| 04 | Make it a real project | #14–15 | todo | |
+| 03 | Ask a local model what the notice actually says | #8–13 | drafted | 2,231 |
+| 04 | Make it a real project | #14–15 | drafted | 1,296 |
 | 05 | A website, and an honest number on the model | #16–17 | todo | |
 | 06 | Say what you actually measured | #18–20 | todo | |
 | 07 | Record the moment a case closes | #21–22 | todo | |
@@ -37,6 +37,18 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
   from the geocode cache, strips "County ". Concept box: CI as a scheduled clerk. Foreshadows
   Ch 7 (release snapshots are the only history; 1,816 closures recovered) and Ch 4 (one job per
   step). Ends: "when did the water come back" is in the prose, not a column.
+- **03** Opens with end_date agreeing with the text 6.6% of the time. PR #8 gemma-4-12b-qat on
+  LM Studio; PR #9 "do less in the model" — v1 asked for UTC+DST arithmetic (hallucinations,
+  loops), v2 reads only: notes-first, end_source, local_date, local_time, temp 0. PR #10 hash
+  gate + append-only JSONL as truth; PR #11 zoneinfo duration, NULL rules, ~19 negatives (→532,
+  Ch 6); PR #12 pin start at first inference, JSONL/DB independent; PR #13 table on CI (6,561).
+  15 Jul benchmark detour: decode-bound, qwen faster but wrong. Worked example KLD00118059
+  → 52,987 s. Concept boxes: extraction is reading not writing; hash-based incremental work.
+  Ends: accuracy unmeasured (Ch 5, 71.9%); column misnamed (Ch 6).
+- **04** PR #14 package + 42 tests + hardening (retry, ordered paging, placeholder geocode rows,
+  circuit breaker, dedupe −15% calls, timeout 120 s). PR #15 work_category (26 slugs) and
+  work_type 31%→89% by title rules; today 90.4%, 16 uncategorised. Concept boxes: what a test
+  suite buys; a title is a category, not a severity (→ Ch 9). Ends: next the Census, Ch 5.
 
 ## Open threads
 
@@ -48,7 +60,18 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 
 ## Next session
 
-**Ch 3** (+ Ch 4 if the window allows). Read: this file → `README.md` → `outline.md` Ch 3–4 →
+**Ch 5** (heavy — first site, person-hours, availability, grades, the model eval). Read: this
+file → `README.md` → `outline.md` Ch 5 → `sources/ch05.md` (~3.4k words) →
+`notes/statuspage-methodology.md` "Why not plain uptime?" and "Severity classes" →
+`notes/end-time-eval.md` "Workflow", "Labelling guide", and the 2026-07-18/19 results → `site.py`
+`region_month` (~1075–1120) and `grade`. Worked example: one event's person-hours → a
+county-month availability (Drogheda 23.8 h / 551,427 ph is in the notes; or derive one for
+Kildare July from PR #23's table). Diagrams: rectangle (hours × people); a county-month bar with
+the lost sliver. Keep grade *calibration* for Ch 12 — Ch 5 only states the thresholds. Continuity:
+Ch 3 promised "71.9%" and Ch 4 ended "that is where the Census comes in". Register figures.
+Update this file. Commit.
+
+_Superseded brief (done):_ **Ch 3** (+ Ch 4 if the window allows). Read: this file → `README.md` → `outline.md` Ch 3–4 →
 `sources/ch03.md` (~1.7k words), `sources/ch04.md` → `notes/end-time-eval.md` intro and
 "Decision: `lifted_immediate` is excluded" → `notes/model-and-runtime-benchmarks.md` (whole,
 short). For the worked example reuse KLD00118059 from Ch 1: pull its `inferred_cases` row
@@ -58,6 +81,8 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
+- 2026-08-18 · Session 2 · drafted Ch 3 (2,231 w) and Ch 4 (1,296 w); pulled prompt v1/v2 diffs
+  and KLD00118059's inferred row; category counts measured.
 - 2026-08-18 · Session 1 · drafted Ch 1 (1,934 w) and Ch 2 (1,034 w); measured 10,610 cases /
   10,550 distinct rounded coords; KLD00118059 pulled as the running example.
 - 2026-08-18 · Session 0 · scaffold: README (style guide), outline, figures registry with anchors

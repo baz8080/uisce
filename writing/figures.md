@@ -51,6 +51,17 @@ Chapters quote from here rather than re-deriving; a missing figure is written in
 | Dedupe of identical descriptions | ≈ 15% fewer LLM calls; timeout 15 s → 120 s | PR #14 |
 | `work_type` coverage | 31% → 68% (#14) → 89% via 26 title categories, 29 unplaced (#15) | PRs #14, #15 |
 | Circuit breaker | after 10 consecutive geocode failures | PR #14 |
+| Prompt v1 vs v2 | v1 asked for a UTC timestamp with DST rules in the prompt; v2 (PR #9, 3 Jul) reports notes/end_source/local_date/local_time only, temperature 0, `lifted_immediate` added | diffs of `819faaf^2`, `52bee6c^2` |
+| Model in PR #8 | gemma-4-12b-qat via LM Studio at localhost:1234, from the first commit | `819faaf^2:infer_duration.py` |
+| `end_date` vs completion updates | agree within 1 h on 6.6% of 2,500 `completion_update` cases; offsets cluster at −30 d, −29 d, +24 h, 0 h | notes/data-quality.md (probed 7 Jul, PR #11 commit) |
+| Negative spans at PR #11 | ~19 cases (later 532 on 20 Jul) | PR #11 commit; notes/data-quality.md |
+| Date-only end | taken as 23:59:59 local | PR #11 |
+| start_date drift | observed twice, same time-of-day, date shifted forward whole days | PR #12 |
+| Model timing | ~1.9 s/call: prefill ~0.6 s (~1,700 tok/s, ~1,000-token input), decode ~75 tokens at ~57 tok/s; parallel slots ≈ 1.1× | notes/model-and-runtime-benchmarks.md, 15 Jul |
+| qwen3.5-9b | 1.15 s/call (~40% faster), 61% agreement, 150 header-block refusals, 12→24 h errors | same |
+| KLD00118059 inferred | pv3, completion_update, 2026-08-10 13:00 local = 12:00 UTC; 52,987 s = 14 h 43 m 07 s | measured 18 Aug 2026 (verified Y) |
+| Categories today | burst_main 3,332 (Unplanned) · essential_works 1,376 (Planned) · mains_repair 1,272 (828 blank/269 U/175 P) · investigation 671 · reservoir_interruption 620; work_type filled 90.4%; 16 uncategorised | measured 18 Aug 2026 (verified Y) |
+| Tests after PR #15 | 56 | PR #15 |
 
 ### Ch 5
 | Figure | Value | Source |
