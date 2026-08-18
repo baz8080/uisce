@@ -9,8 +9,8 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | Ch | Title | PRs | Status | Words |
 |---|---|---|---|---|
 | 00 | Intro | — | todo (final pass) | |
-| 01 | A notice is a row | pre, #1–4 | todo | |
-| 02 | Let a robot do it every week | #5–6 | todo | |
+| 01 | A notice is a row | pre, #1–4 | drafted | 1,934 |
+| 02 | Let a robot do it every week | #5–6 | drafted | 1,034 |
 | 03 | Ask a local model what the notice actually says | #8–13 | todo | |
 | 04 | Make it a real project | #14–15 | todo | |
 | 05 | A website, and an honest number on the model | #16–17 | todo | |
@@ -26,7 +26,17 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 
 ## Chapter summaries (3 lines each, added when drafted)
 
-_(none yet)_
+- **01** Opens with the Leixlip question. Feed = ArcGIS feature service (Web Mercator → lat/lon,
+  epoch-ms dates); pins reverse-geocoded via LocationIQ at 4-dp rounding with a cache; SQLite
+  `cases` + `geocode_cache`; PR #4 upsert turns snapshot into archive because the feed has no
+  memory (0/8,155 LASTUPDATE). Worked example KLD00118059 (Forest Park, Leixlip) foreshadows
+  Ch 3 (end in prose), Ch 6 (end_date is a default), Ch 5/8 (no footprint). Concept boxes:
+  ArcGIS feed; reverse geocoding + cache; notice/pin/case; the feed has no memory.
+- **02** Weekly GHA (Mon 06:00 UTC) downloads last release DB → upsert → geocode new coords →
+  publish dated Release; geocodes.jsonl folded into the DB. PR #6 backfills ~10 blank counties
+  from the geocode cache, strips "County ". Concept box: CI as a scheduled clerk. Foreshadows
+  Ch 7 (release snapshots are the only history; 1,816 closures recovered) and Ch 4 (one job per
+  step). Ends: "when did the water come back" is in the prose, not a column.
 
 ## Open threads
 
@@ -38,14 +48,17 @@ _(none yet)_
 
 ## Next session
 
-**Ch 1 + Ch 2** (light pair). Read: this file → `README.md` → `outline.md` Ch 1–2 →
-`sources/ch01.md`, `sources/ch02.md` → `notes/how-it-works.md` "The shape of it" →
-`notes/data-quality.md` "The feed carries no modification timestamp". Pull one real Kildare case
-row for the worked example (`sqlite3 -readonly out/uisce.db`). Draft `chapters/01-…md` and
-`chapters/02-…md`; open Ch 1 with the Leixlip motivation. Register any new figures. Update this
-file.
+**Ch 3** (+ Ch 4 if the window allows). Read: this file → `README.md` → `outline.md` Ch 3–4 →
+`sources/ch03.md` (~1.7k words), `sources/ch04.md` → `notes/end-time-eval.md` intro and
+"Decision: `lifted_immediate` is excluded" → `notes/model-and-runtime-benchmarks.md` (whole,
+short). For the worked example reuse KLD00118059 from Ch 1: pull its `inferred_cases` row
+(`end_source`, inferred end, `notice_to_end_seconds`) and, if cheap, the prompt text from
+`src/uisce/inference.py`. Continuity: Ch 1 promised that "getting the end out of the prose is
+chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Commit per chapter.
 
 ## Session log
 
+- 2026-08-18 · Session 1 · drafted Ch 1 (1,934 w) and Ch 2 (1,034 w); measured 10,610 cases /
+  10,550 distinct rounded coords; KLD00118059 pulled as the running example.
 - 2026-08-18 · Session 0 · scaffold: README (style guide), outline, figures registry with anchors
   verified, source pack built (12 files, 34.7k words) via `tools/build_sources.sh`.

@@ -34,8 +34,13 @@ Chapters quote from here rather than re-deriving; a missing figure is written in
 ### Ch 1–2
 | Figure | Value | Source |
 |---|---|---|
-| Feed rows with LASTUPDATE/CREATEDATE | 0 of 8,155 (100% NULL) | PR #21, 21 Jul 2026 |
+| Feed rows with LASTUPDATE/CREATEDATE | 0 of 8,155 (100% NULL); `ENDDATE IS NOT NULL` 6,497 for scale; capabilities = Query only | notes/data-quality.md "The feed carries no modification timestamp", probed 21 Jul 2026 |
 | Cases with empty county backfilled | ~10 of 5,000+ | PR #6, 30 Jun 2026 |
+| Cases vs distinct rounded coordinates | 10,610 cases at 10,550 distinct (rounded_lat, rounded_lon); `geocode_cache` 10,567 rows | measured 18 Aug 2026 (verified Y) |
+| Coordinate rounding | 4 dp ≈ 11 m latitude (commit `5ac63dc`; earlier `c171eb6` used 5 dp ≈ 1 m); KLD00118059 moves ≈ 3 m when rounded | code + arithmetic |
+| Worked example KLD00118059 | Investigation Works – Kildare; Forest Park, Leixlip; start 2026-08-09 21:16:53Z, end_date 2026-08-10 21:16:57Z (24 h 4 s later), text says complete 1 pm 10 Aug; closed_at 2026-08-13 12:02:06Z; geocode: road Forest Park, town Leixlip, county "County Kildare", W23 A6YH | measured 18 Aug 2026 (verified Y) |
+| Weekly build cadence | Mondays 06:00 UTC (PR #5); later Mon/Wed/Fri; daily from PR #22 (21 Jul); midday added PR #26 (31 Jul) | PRs #5, #22, #26; notes/data-quality.md "closed_at is a floor" |
+| PR #4 size | +29/−32 lines | gh |
 
 ### Ch 3–4
 | Figure | Value | Source |
