@@ -13,11 +13,18 @@
   :root {
     color-scheme: light;
     --page: #f9f9f7; --surface: #fcfcfb;
-    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #6e6c66;
     --grid: #e1e0d9; --border: rgba(11,11,11,0.10);
-    --good: #0ca30c; --warning: #fab219; --serious: #ec835a;
-    --critical: #d03b3b; --maint: #2a78d6;
+    --good: #087f08; --warning: #fab219; --serious: #ec835a;
+    --critical: #d03b3b; --maint: #1e62b8;
     --cell-empty: #e8e7e1;
+    /* Text-safe shades: the status hues above are tuned for fills, and most
+       are too light (or too dark, per mode) to carry 4.5:1 text. *-text is
+       the same hue at a contrast that passes as text on page and surface;
+       --serious-deep is a serious fill dark enough to carry white text. */
+    --good-text: #0a7c0a; --warning-text: #8a6001;
+    --serious-text: #b34a20; --serious-deep: #b34a20;
+    --critical-text: #d03b3b;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -27,6 +34,9 @@
       --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
       --maint: #3987e5;
       --cell-empty: #2c2c2a;
+      --good-text: #3dbd3d; --warning-text: #fab219;
+      --serious-text: #ec835a;
+      --critical-text: #e05252;
     }
   }
   * { box-sizing: border-box; margin: 0; }
@@ -53,7 +63,7 @@
   .banner strong { font-weight: 650; }
   .banner .meta { color: var(--muted); font-size: 13px; margin-left: auto; }
   /* an overdue build is the only non-routine thing the stamp ever says */
-  .banner .meta .stale { color: var(--critical); font-weight: 600; }
+  .banner .meta .stale { color: var(--critical-text); font-weight: 600; }
 
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0; }
   .tile {
@@ -64,7 +74,9 @@
   .tile .k { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
 
   .controls { display: flex; gap: 8px; align-items: center; margin: 22px 0 10px; flex-wrap: wrap; }
-  .months { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+  /* wraps: one tab is added per collected month, and by five tabs the strip
+     is already wider than a 390px phone */
+  .months { display: flex; flex-wrap: wrap; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
   .months button {
     border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 13.5px;
     padding: 5px 12px; border-radius: 6px; cursor: pointer;
@@ -88,7 +100,7 @@
      seventh entry in a wrapped row of swatches it read as a sixth colour. */
   .healthkey {
     display: flex; align-items: center; gap: 7px; margin: -8px 0 14px;
-    font-size: 12.5px; color: var(--serious);
+    font-size: 12.5px; color: var(--serious-text);
   }
   .basis { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
   .natheading { font-size: 15px; font-weight: 650; margin: 30px 0 0; }
@@ -112,16 +124,19 @@
     display: grid; place-items: center;
     color: #fff; font-weight: 700; font-size: 14px;
   }
-  .g-A { background: var(--good); } .g-B { background: color-mix(in srgb, var(--good) 60%, var(--warning)); }
+  /* B and D join C in dark lettering: their mid-range fills can't carry
+     4.5:1 white text (B ≈2.9:1, D 2.6:1), and A/F keep white on ends dark
+     enough to hold it */
+  .g-A { background: var(--good); } .g-B { background: color-mix(in srgb, var(--good) 60%, var(--warning)); color: #1a1a19 !important; }
   .g-C { background: var(--warning); color: #1a1a19 !important; }
-  .g-D { background: var(--serious); } .g-F { background: var(--critical); }
+  .g-D { background: var(--serious); color: #1a1a19 !important; } .g-F { background: var(--critical); }
   /* an active health notice sits beside the letter, not inside it: the grade
      measures supply availability, and whether the water is safe to drink is a
      different question that a letter cannot answer */
   .healthmark {
     flex: none; display: inline-grid; place-items: center;
     width: 20px; height: 20px; border-radius: 50%;
-    background: var(--serious); color: #fff; font-size: 12px; font-weight: 700;
+    background: var(--serious-deep); color: #fff; font-size: 12px; font-weight: 700;
     cursor: help;
   }
   .chead .healthmark { width: 24px; height: 24px; font-size: 13.5px; }
@@ -251,14 +266,14 @@
     display: inline-block; margin-top: 5px; padding: 1px 7px; border-radius: 999px;
     font-size: 11.5px; border: 1px solid;
   }
-  .badge.confirmed { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
-  .badge.partial { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, transparent); }
+  .badge.confirmed { color: var(--good-text); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+  .badge.partial { color: var(--warning-text); border-color: color-mix(in srgb, var(--warning) 45%, transparent); }
   .badge.sched { color: var(--muted); border-color: var(--border); }
   /* An event that never reported an end is not the same claim as one still
      accruing to the cap, so it does not borrow the scheduled badge's look. */
   .badge.none { color: var(--muted); border-color: transparent;
                 background: color-mix(in srgb, var(--muted) 12%, transparent); }
-  .badge.health { color: var(--serious); border-color: color-mix(in srgb, var(--serious) 45%, transparent); }
+  .badge.health { color: var(--serious-text); border-color: color-mix(in srgb, var(--serious) 45%, transparent); }
   @media (max-width: 480px) {
     .toprow { grid-template-columns: 22px 1fr; }
     .toprow .ph { grid-column: 2; text-align: left; margin-top: 4px; }
@@ -585,8 +600,12 @@ function isLatest() { return curMonth === LATEST; }
 // `current` is the month actually on screen, which is curMonth everywhere except
 // the top ten, whose month list omits the in-progress month curMonth defaults to
 function monthTabs(onclick, months, current) {
-  return (months || D.months).map(m =>
-    `<button class="${m === (current || curMonth) ? "on" : ""}" onclick="${onclick}('${m}')">${monthLabel(m)}</button>`).join("");
+  // aria-pressed carries the .on state to screen readers, which otherwise
+  // hear five identical buttons with no way to tell which month is showing
+  return (months || D.months).map(m => {
+    const on = m === (current || curMonth);
+    return `<button class="${on ? "on" : ""}" aria-pressed="${on}" onclick="${onclick}('${m}')">${monthLabel(m)}</button>`;
+  }).join("");
 }
 
 function partialNote() {
