@@ -15,7 +15,7 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 04 | Make it a real project | #14–15 | drafted | 1,296 |
 | 05a | A website, and a number that is fair to Cork | #16 | drafted | 1,694 |
 | 05b | An honest number on the model | #16–17 | drafted | 2,024 |
-| 06 | Say what you actually measured | #18–20 | todo | |
+| 06 | Say what you actually measured | #18–20 | drafted | 2,000 |
 | 07 | Record the moment a case closes | #21–22 | todo | |
 | 08a | How a pin gets a population | #23 | todo | |
 | 08b | Where you actually live | #23–25 | todo | |
@@ -63,6 +63,14 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
   three → ≥97.5%. Corpus 7,892 re-read, date_only 55→0, no fabrications. Boil-notice staleness
   (Cork May F→D) and no-better-start (toggle rejected). Concept boxes: stratified sample;
   replay vs hold-out. Ends: the metric gets renamed → Ch 6.
+- **06** PR #18 renames (notice_to_end_seconds etc.), floor not estimate; observed 17.0 h
+  (3,166) vs scheduled 5.4 h (894) vs pooled 9.3 h — plans still accrue, excluded from median;
+  overrun probe 69.5% late (parked); 183 un-inferred. PR #19: 532 negative spans (not 19),
+  re-stamp evidence, 12 open outage cases fabricating ~101k Kildare / 66k Donegal ph →
+  ended_by_publication; both rescue routes closed (minimum-start rejected — Ch 3's promise
+  kept); create_db double column. PR #20 Pages deploy. Worked examples: case 237573 (−5 h 04 m)
+  and a toy pooled-median list. SVG observed-vs-scheduled. Concept boxes: floor vs estimate;
+  why pooling two populations lies. Ends: nobody can say which month a case closed → Ch 7.
 
 ## Open threads
 
@@ -74,7 +82,19 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 
 ## Next session
 
-**Ch 6** (PRs #18–#20: rename to notice_to_end, observed 17.0 h vs scheduled 5.4 h vs pooled
+**Ch 7** (PRs #21–#22: `closed_at`, schema v2 and the additive-only migration ladder, replaying
+release DBs to recover 1,816 of 7,613 closures, 12% of cases open+close inside one build gap →
+daily builds). Read: this file → `README.md` → `outline.md` Ch 7 → `sources/ch07.md` (~2.2k
+words) → `notes/data-quality.md` "`closed_at` is a floor" (line ~209) and its "Re-measured
+2026-07-31" subsection (line ~215) → README migration paragraphs (~lines 25–40) →
+`src/uisce/replay_closed_at.py` docstring only. Worked example: a case seen Open in the 14 Jul
+snapshot and Closed in the 16 Jul one — closed_at = 16 Jul (a floor); and KLD00118059's
+closed_at 2026-08-13 12:02 vs its text's 1 pm 10 Aug (three days of feed lag — ties to Ch 9's
+75.7 h median). Diagram: timeline with build ticks and a short case that fits between two (SVG).
+Continuity: Ch 2 promised the release snapshots would recover 1,816 closures; Ch 6 ended on
+"which month did a case close". Register figures. Update this file. Commit.
+
+_Superseded brief (done):_ **Ch 6** (PRs #18–#20: rename to notice_to_end, observed 17.0 h vs scheduled 5.4 h vs pooled
 9.3 h, the 532-case negative-span family and ~101k fabricated Kildare person-hours, deploy to
 Pages). Read: this file → `README.md` → `outline.md` Ch 6 → `sources/ch06.md` (~2k words) →
 `notes/statuspage-methodology.md` "The published time metric is notice → observed completion"
@@ -106,6 +126,7 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
+- 2026-08-18 · Session 4 · drafted Ch 6 (2,000 w); SVG observed-vs-scheduled.
 - 2026-08-18 · Session 3 · drafted Ch 5a (1,694 w) and 5b (2,024 w) — Ch 5 split as the length
   rule intends; first SVG diagram.
 - 2026-08-18 · Session 2 · drafted Ch 3 (2,231 w) and Ch 4 (1,296 w); pulled prompt v1/v2 diffs

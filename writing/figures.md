@@ -98,7 +98,17 @@ Chapters quote from here rather than re-deriving; a missing figure is written in
 | Scheduled ends | median 5.4 h, n = 894 | PR #18 |
 | Pooled | 9.3 h (scheduled = 22% of the pool) | PR #18 |
 | Schedule overrun | 69.5% finish late; median +2.7 h; 8.8% within 15 min | PR #18 |
-| Negative-span family | 532 cases (not ~19); ~101k person-hours Kildare, ~66k Donegal, July | PR #19, 20 Jul |
+| Negative-span family | 532 cases (6.6% of 8,074 inferred; 314 scheduled_end_with_time, 218 completion_update); median −2.7 h, 78% within −6 h; 18 more than a day negative; 28 open, 12 outage-class; ~101k person-hours Kildare, ~66k Donegal, July | PR #19, 20 Jul; notes/data-quality.md "Measured 2026-07-20" |
+| Case 237573 | works "9am until midday on 03 July", published 17:04 → −5 h 04 m → NULL | notes/data-quality.md |
+| Re-stamp evidence | case 232428 works 08 May, start_date 08 Jun; 10 JSONL cases with date moved, time-of-day kept (235225 `12:43:19` +40 d; 238140 `09:17:25` −30 d) | same |
+| Rescue routes closed | earliest-JSONL start: only 1 of 532 has two starts; minimum-start rejected (backward re-stamps); stated window: parses 478/532, plan-minus-plan median 4.0 h; hybrid 4.7 h vs corpus 18.3 h | same |
+| Positive-side clusters | ±12 h of 7/14/28/29/30/31 d: 19/2/0/0/1/2 of 7,177 — noise | same |
+| start_date machine stamp | 97.6% non-zero seconds; publication precedes stated start in 59% | notes/data-quality.md "Sharpened 2026-07-19" |
+| Event-level medians by month Apr–Jul | observed 7.1/12.6/15.8/10.2 h; scheduled 4.8/5.3/4.4/4.3 h | notes/statuspage-methodology.md "The published time metric" |
+| Overrun retention | 90.3% of completion updates keep the scheduled window in text | PR #18 |
+| Un-inferred backlog at PR #18 | 183 cases, 98% open | PR #18 |
+| Tests | 114 (PR #18), 118 (PR #19) | PRs |
+| Toy median | observed {10,15,17,20,30}=17; scheduled {4,5,6}=5; pooled median 12.5; weighted mean 14 | illustrative |
 
 ### Ch 7
 | Figure | Value | Source |
