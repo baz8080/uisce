@@ -183,16 +183,16 @@ class TestBoilNoticeFate:
         assert outcome == "paired"
         assert end == _dt("2026-05-01T00:00:00+00:00")
 
-    def test_a_late_lift_is_capped_like_every_other_end_signal(self):
-        """Pairing must never *raise* what a notice accrues. Unpaired, this one
-        stops at CAP_DAYS (and past it would be dropped outright); finding the
-        lift is better evidence and evidence that it ended, so it cannot buy the
-        notice 20 days when 14 is the ceiling on every other branch."""
+    def test_a_late_lift_reports_the_real_end_uncapped(self):
+        """`boil_notice_fate` answers when the notice ended, which is a different
+        question from what it may charge. The cap is the caller's (`charged_end`),
+        so this reports the lift itself — which is what lets the health marker
+        stand on the evidence while the arithmetic stays bounded."""
         lifts = {("Carlow", "boil_notice_lifted"):
                  [("somewhere", _dt("2026-05-21T00:00:00+00:00"))]}
         outcome, end = boil_notice_fate(self._notice(), lifts, NOW)
         assert outcome == "paired"
-        assert end == _dt("2026-05-01T00:00:00+00:00") + timedelta(days=CAP_DAYS)
+        assert end == _dt("2026-05-21T00:00:00+00:00")
 
     def test_a_lift_of_the_other_kind_never_pairs(self):
         """A do-not-consume lift for the same scheme is a different notice's end;
@@ -513,6 +513,46 @@ class TestBuildSite:
         coloured = sum(1 for m in months.values() for d in m["days"] if d[0] == "quality")
         assert coloured == CAP_DAYS
         assert months["2026-05"]["days"][8][0] == ""  # May 9: past the cap
+
+    def test_the_cap_bounds_the_arithmetic_but_not_the_health_marker(self):
+        """The other half of the cap. Capping what a notice charges must not
+        quietly withdraw the drinking-water warning from months its own lift
+        proves it was standing — the grade was unbundled from the health notice
+        exactly because a person-hours instrument is the wrong one for it. Here
+        the lift lands two months out: the charge stops at 14 days, the marker
+        does not."""
+        issue = _case(
+            work_category="consumption_notice_issued",
+            status="Open",
+            notice_to_end_seconds=None,
+            end_source="not_found",
+            end_local_date=None,
+            start_date="2026-05-01T00:00:00+00:00",
+            location="Whiddy Island",
+            reference_num="COR1",
+        )
+        lift = _case(
+            id=99,
+            work_category="consumption_notice_lifted",
+            status="Closed",
+            notice_to_end_seconds=None,
+            end_source="not_found",
+            end_local_date=None,
+            location="Whiddy Island",
+            reference_num="COR2",
+            start_date="2026-07-05T00:00:00+00:00",
+        )
+        july = datetime(2026, 7, 15, tzinfo=UTC)
+        months = build_site([issue, lift], SA_INDEX, july)["counties"]["Carlow"]["months"]
+        # in force 1 May - 5 July per the lift, so every one of those months
+        # carries the marker
+        assert [months[ym]["health_n"] for ym in ("2026-05", "2026-06", "2026-07")] == [1, 1, 1]
+        # but the charge still stops at the cap: 14 days in May, nothing after
+        coloured = sum(1 for m in months.values() for d in m["days"] if d[0] == "quality")
+        assert coloured == CAP_DAYS
+        assert months["2026-06"]["events"] == {
+            "outage": 0, "quality": 0, "degraded": 0, "maintenance": 0
+        }
 
     def test_a_notice_already_over_at_publication_does_not_take_a_later_lift(self):
         """A lift is only an end for a notice that was still running. This one's

@@ -237,6 +237,8 @@ def boil_notice_fate(row, lifts, now):
     # prompt version ever starts extracting ends here, add it then.
     lift = paired_lift(lifts, key, row["location"], start)
     if lift is not None:
+        # uncapped: this says when the notice ended, which is a different
+        # question from what it may charge (`charged_end`, applied by the caller)
         return "paired", paired_end(lift, start)
     if row["status"] != "Open":
         return "closed_no_signal", None
@@ -251,30 +253,38 @@ def boil_notice_fate(row, lifts, now):
 
 
 def paired_end(lift, start):
-    """Where a paired lift puts the end of the notice it closes.
+    """When a paired lift says the notice actually stood until.
 
-    Clamped at both ends, and both clamps carry weight. Below, because multi-pin
-    publishing is not chronologically tidy and a lift can be stamped before the
-    issue it lifts. Above, because CAP_DAYS is the ceiling on what one notice may
-    charge whatever its end signal says — every other branch of `resolve_case`
-    caps, including an observed `completion_update`, and a paired lift is not a
-    stronger signal than that.
+    Clamped below to `start` only: multi-pin publishing is not chronologically
+    tidy, so a lift can be stamped before the issue it lifts, and a notice may
+    not end before it began. Deliberately *not* capped — this is a statement
+    about the world, and the lift is direct evidence for it. `charged_end` caps
+    what that span may charge; `Case.in_force` carries this one, so the health
+    marker can stand on the evidence while the arithmetic stays bounded.
+    """
+    return max(lift, start)
 
-    Without the upper clamp, pairing a notice *raises* what it accrues: an
-    unpaired notice stops at the cap (a boil notice past it is dropped outright),
-    so finding its lift — strictly better evidence, and evidence that the thing
-    ended — would charge more rather than less. That inversion is the bug, not
-    the length. The exposure is real and not only in the consumption class: on
-    the 2026-08-18 snapshot Whiddy Island had been Open 1,460 days and Dursey
-    Island 740, but so had the Carrignagower boil notice at 590 days and
-    Poulnagunogue at 405. Any one of their lifts landing would have repainted
-    every collected month in that county as a quality event carrying a health
-    marker.
+
+def charged_end(end, start):
+    """The furthest a notice may charge from `start`, whatever its end signal.
+
+    CAP_DAYS is a ceiling on one notice's contribution, not a claim about how
+    long it ran: an observed `completion_update` is capped, the open-and-accruing
+    branch is capped, an imputed span is capped. A paired lift is not stronger
+    evidence than a completion update, so it gets no exemption either.
+
+    Without this, pairing a notice *raised* what it accrued: an unpaired notice
+    stops at the cap (a boil notice past it is dropped outright), so finding its
+    lift — better evidence, and evidence that the thing ended — charged more
+    rather than less. That inversion was the bug, not the length. The exposure is
+    real and not only in the consumption class: on the 2026-08-18 snapshot Whiddy
+    Island had been Open 1,460 days and Dursey Island 740, but so had the
+    Carrignagower boil notice at 590 days and Poulnagunogue at 405.
 
     Capping costs nothing on the snapshot this was written against: one notice
     pairs, and it spans 0.00 days.
     """
-    return min(max(lift, start), start + timedelta(days=CAP_DAYS))
+    return min(end, start + timedelta(days=CAP_DAYS))
 
 
 def collect_lifts(rows):
@@ -786,6 +796,12 @@ class Case(NamedTuple):
     has_end: bool
     observed_end: bool
     rec: str = "none"  # recurrence outcome, for the build report
+    # When the notice actually stood, as opposed to what it charges. They differ
+    # only for a lift paired past CAP_DAYS: the charge is capped, but the lift is
+    # evidence the notice was in force to the end of it, and the health marker
+    # answers to the evidence rather than to the accrual ceiling. Empty means
+    # "same as intervals", which is every other case.
+    in_force: tuple = ()
     # No usable end signal, so the interval is a SpanTable estimate rather than
     # anything the notice said. Deliberately separate from has_end, which stays
     # False: that is what keeps these out of the published median without
@@ -795,6 +811,11 @@ class Case(NamedTuple):
     @property
     def county(self):
         return self.row["county"]
+
+    @property
+    def marker_intervals(self):
+        """The intervals the health marker stands over — see `in_force`."""
+        return self.in_force or self.intervals
 
     @property
     def is_open(self):
@@ -838,6 +859,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
     observed_end = has_end and r["end_source"] in OBSERVED_END_SOURCES
     rec = "none"
     imputed = False
+    in_force = ()  # empty: the charged intervals are the in-force ones
     # where the disruption interval opens. Publication for everything with an
     # end signal, but an imputed negative-span case is anchored to the end it
     # does know and runs backwards from there, so the two come apart. `start`
@@ -856,6 +878,8 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         if end is None:
             # closed with no lift: token footprint, as for any no-signal case
             end = start + timedelta(seconds=1)
+        elif outcome == "paired":
+            in_force, end = [(start, end)], charged_end(end, start)
     elif not has_end:
         # A do-not-consume notice cannot state its own end either — the lift is a
         # separate case, exactly as for a boil notice — so pairing one is strictly
@@ -883,9 +907,11 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
             else None
         )
         if lift is not None:
-            # a lift is a real, observed end, not a schedule — but still capped
-            # like every other end signal here; see paired_end
+            # a lift is a real, observed end, not a schedule. What it charges is
+            # capped like every other end signal; when it says the notice stood
+            # until is not — see charged_end and Case.in_force.
             end = paired_end(lift, start)
+            in_force, end = [(start, end)], charged_end(end, start)
             has_end = observed_end = True
         elif r["status"] == "Open" and start < now and not already_over:
             # ongoing with no inferred end: runs from start until now, capped
@@ -939,6 +965,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         observed_end=observed_end,
         rec=rec,
         imputed=imputed,
+        in_force=tuple(in_force),
     )
 
 
@@ -965,7 +992,12 @@ class Region:
         # an event any of whose pins had to be estimated is not one the site can
         # claim it observed.
         self.imputed = defaultdict(lambda: defaultdict(bool))
-        self.knock_refs = set()
+        # ref -> the intervals its knocking pins were *in force* over, which is
+        # the charged interval for all but a lift paired past the cap. Kept apart
+        # from `iv` so the marker is not silently bounded by an accrual ceiling:
+        # grade() already records that a health notice's importance is not
+        # measured in person-hours, and a cap is a person-hours instrument.
+        self.knock_iv = defaultdict(list)
         self.open_now = {}  # ref -> case (dedups multi-pin events)
         self.resolved = {}  # ref -> case, for cases observed to close
 
@@ -978,7 +1010,7 @@ class Region:
         self.observed_end[sev][ref] |= case.observed_end
         self.imputed[sev][ref] |= case.imputed
         if knocks_grade(case.row):
-            self.knock_refs.add(ref)
+            self.knock_iv[ref].extend(case.marker_intervals)
         r = case.row
         if case.is_open:
             self.open_now.setdefault(
@@ -1015,6 +1047,9 @@ class Region:
             sev: {ref: merge(iv) for ref, iv in self.iv[sev].items()} for sev in SEV_ORDER
         }
 
+    def knock_events(self):
+        return {ref: merge(iv) for ref, iv in self.knock_iv.items()}
+
     def event_pop(self, cap_pop):
         return {
             sev: {ref: min(sum(s.values()), cap_pop) for ref, s in self.sas[sev].items()}
@@ -1034,7 +1069,7 @@ def region_month(region, pop, ym, now):
     eff_hi, eff_lo = min(hi, now), max(lo, COLLECTION_START)
     events, epop = region.events(), region.event_pop(pop)
 
-    counts, person_s, health_n = {}, 0.0, 0
+    counts, person_s = {}, 0.0
     for sev in SEV_ORDER:
         n = 0
         for ref, iv in events[sev].items():
@@ -1043,11 +1078,18 @@ def region_month(region, pop, ym, now):
                 n += 1
                 if sev == "outage":
                     person_s += secs * epop[sev].get(ref, 0)
-                # health-relevant quality notices — boil water, do not drink, do
-                # not consume. Published beside the grade rather than inside it.
-                if sev == "quality" and ref in region.knock_refs:
-                    health_n += 1
         counts[sev] = n
+
+    # Health-relevant quality notices — boil water, do not drink, do not consume
+    # — published beside the grade rather than inside it. Counted over the months
+    # each notice was *in force*, not the months it charged: a lift paired past
+    # CAP_DAYS caps what its notice charges, and reading the marker off that
+    # interval dropped the warning from months the lift itself proves the notice
+    # was standing. See Region.knock_iv.
+    health_n = sum(
+        1 for iv in region.knock_events().values()
+        if union_seconds(iv, eff_lo, eff_hi) > 0
+    )
 
     period_s = max((eff_hi - eff_lo).total_seconds(), 1.0)
     availability = 100.0 * (1 - person_s / (pop * period_s))

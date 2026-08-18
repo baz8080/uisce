@@ -26,10 +26,11 @@ def site_case(**overrides):
     """A row as `load_cases` hands one to `site.py`, with a plain closed burst
     main as the default.
 
-    Lives here rather than in a test module because three suites need the same
-    shape and `tests/` shares code through this file — see the `from conftest
-    import ...` in test_pipeline.py and test_replay_closed_at.py. A second copy
-    is how the shape drifts from `pipeline.CASE_COLUMNS` one column at a time.
+    Lives here rather than in a test module because test_site.py and
+    test_eval_overlap.py need the same shape and `tests/` shares code through
+    this file — see the `from conftest import ...` in test_pipeline.py and
+    test_replay_closed_at.py. A second copy is how the shape drifts from
+    `pipeline.CASE_COLUMNS` one column at a time.
     """
     base = {
         "id": 1,
