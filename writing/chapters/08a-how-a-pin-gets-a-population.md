@@ -1,5 +1,5 @@
 # 8a. How a pin gets a population
-*~11 min read · PR #23, first half · 25 July 2026*
+*~10 min read · PR #23, first half · 25 July 2026*
 
 *Where we are:* the site grades every county-month (chapter 5a) and can now say which month a
 case closed (chapter 7). But "Kildare 99.25%" is not an answer to *is Leixlip worse than
