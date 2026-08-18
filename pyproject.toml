@@ -23,6 +23,7 @@ uisce-eval-sample-fresh = "uisce.eval_end_time:sample_fresh"
 uisce-eval-score = "uisce.eval_end_time:score"
 uisce-eval-replay = "uisce.eval_replay:run"
 uisce-review-recurrence = "uisce.eval_recurrence:review"
+uisce-eval-overlap = "uisce.eval_overlap:run"
 uisce-score-recurrence = "uisce.eval_recurrence:score"
 uisce-replay-closed-at = "uisce.replay_closed_at:run"
 

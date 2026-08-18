@@ -10,8 +10,9 @@ Per county and calendar month the generator computes:
 - a median notice-to-completion time over events whose end was *observed*
   (an "works are now complete" update), excluding those whose only end signal
   was a schedule — see the notice_to_end_seconds docstring in build.py
-- an A-F grade from availability, knocked one step by any active
-  boil-water / do-not-drink / do-not-consume notice
+- an A-F grade from availability alone; an active boil-water / do-not-drink /
+  do-not-consume notice is published beside the grade (health_n) rather than
+  folded into it — see grade() for why the knock was removed
 
 Each county then breaks down into the named Census settlements its cases fall
 in, plus one bucket for everything outside a settlement. A town gets the same
@@ -42,6 +43,7 @@ from uisce.config import (
     BASE_URL,
     DB_PATH,
     DUBLIN,
+    OBSERVED_END_SOURCES,
     RECURRING,
     SA_POP_PATH,
     SA_TOWNS_PATH,
@@ -61,12 +63,6 @@ COLLECTION_START = datetime(2026, 4, 20, tzinfo=timezone.utc)
 # Notice-to-end spans above this are capped; the genuinely long events
 # (conservation restrictions) are classed degraded and never accrue anyway.
 CAP_DAYS = 14
-
-# An end signal only supports a claim about how long works actually took when
-# it is an observed completion. Scheduled ends still accrue disruption time
-# (a stated plan is the best interval available) but are kept out of the
-# published median, which would otherwise mix a plan with an observation.
-OBSERVED_END_SOURCES = {"completion_update"}
 
 # Smallest number of observed completions a work_category needs before its own
 # median is used to impute a missing span; below this it falls back to the
@@ -105,7 +101,17 @@ SEV_ORDER = ["outage", "quality", "degraded", "maintenance"]
 
 QUALITY_CATS = {"boil_notice_issued", "consumption_notice_issued", "discolouration"}
 DEGRADED_CATS = {"water_conservation", "low_pressure"}
-IGNORE_CATS = {"boil_notice_lifted", "consumption_notice_lifted"}  # a lift is good news
+# The lift category that ends each kind of standing notice. Both kinds are
+# published the same way: the issue cannot state its own end, and the lift
+# arrives as a separate case with a fresh reference_num. Pairing consults only
+# the matching kind, so a boil notice can never be closed by a do-not-consume
+# lift that happens to name the same scheme.
+LIFT_OF = {
+    "boil_notice_issued": "boil_notice_lifted",
+    "consumption_notice_issued": "consumption_notice_lifted",
+}
+
+IGNORE_CATS = set(LIFT_OF.values())  # a lift is good news, not an event
 
 # Boil notices are the weakest class in the dataset: only 1 of 23 has a real end
 # (see boil_notice_fate and notes/boil-notices.md). Setting this to True drops the
@@ -158,7 +164,14 @@ def classify(row, recurring=False):
         return None
     if IGNORE_BOIL_NOTICES and cat == "boil_notice_issued":
         return None
-    if row["do_not_drink"] or row["boil_water_notice"] or cat in QUALITY_CATS:
+    # Category only: the feed's do_not_drink / boil_water_notice flags were tested
+    # here too, and measured 2026-08-18 to add nothing. boil_water_notice appears
+    # on the two boil categories and nowhere else; do_not_drink adds only 9 cases
+    # on unrelated categories (burst mains, mains repairs, a new connection) whose
+    # descriptions say nothing about drinking water at all. Reading them promoted
+    # ordinary outages to quality, where they accrued no downtime, and painted a
+    # drinking-water marker no notice supported. See notes/data-quality.md.
+    if cat in QUALITY_CATS:
         return "quality"
     if cat in DEGRADED_CATS or row["water_restrictions"] or row["reduced_pressure"]:
         return "degraded"
@@ -169,9 +182,9 @@ def classify(row, recurring=False):
 
 
 def knocks_grade(row):
-    return bool(
-        row["do_not_drink"] or row["boil_water_notice"] or row["work_category"] in KNOCK_CATS
-    )
+    """Whether a case raises the health marker. Category only — see classify for
+    why the feed's two health flags are not read."""
+    return row["work_category"] in KNOCK_CATS
 
 
 def ended_by_publication(row):
@@ -201,41 +214,130 @@ def boil_notice_fate(row, lifts, now):
     lift as a *separate* case. So the LLM extraction is structurally irrelevant here
     and no prompt version will change that — the only real end signal is a paired lift.
 
-    Returns (outcome, end):
-      "paired"  — a matching lift was found; `end` is the real end of the notice.
+    Returns (outcome, fate), where `fate` is None or an (in_force, end) pair —
+    the intervals the health marker stands over and the end the notice may charge
+    to. They differ only for a lift paired past the cap; `()` means "same as the
+    charged interval". One shape for every outcome, so a caller never has to ask
+    which one it got.
+      "paired"  — a matching lift was found; `in_force` carries the real end and
+                  `end` is that end capped (see charged_end).
       "accrue"  — no lift, but the notice is younger than CAP_DAYS, so status='Open'
                   is still plausible; `end` runs to now.
       "exclude" — no lift and older than CAP_DAYS. The feed's status is known to go
                   stale (case 221165 has been 'Open' since 2025-11-13 and its own
                   description says it was lifted), so accruing these fabricates
-                  downtime that never happened. `end` is None; drop the case.
+                  downtime that never happened. `fate` is None; drop the case.
 
     See notes/boil-notices.md for the measurements behind this.
     """
     start = parse_dt(row["start_date"])
-    lift = paired_lift(lifts, row["county"], row["location"], start)
-    if lift is not None:
-        return "paired", max(lift, start)
+    # No ended_by_publication guard, unlike the do-not-consume pairing in
+    # resolve_case, and the asymmetry is deliberate rather than missed: it can
+    # only fire on a case carrying an extracted end, and this class never has
+    # one — end_source was `not_found` for all 35 on file at 2026-08-18, and
+    # structurally so, because the end is published as a different case rather
+    # than in this notice's text. Adding the guard would mean a
+    # fourth outcome and a rewrite of TestBoilNoticeFate's fixture (which does
+    # carry an end, unlike anything real) to protect against zero cases. If a
+    # prompt version ever starts extracting ends here, add it then.
+    pairing = lift_pairing(row, lifts, start)
+    if pairing is not None:
+        return "paired", pairing
     if row["status"] != "Open":
         return "closed_no_signal", None
     if now - start > timedelta(days=CAP_DAYS):
         return "exclude", None
-    return "accrue", min(now, start + timedelta(days=CAP_DAYS))
+    # clamped to start, as the paired branch above clamps an early lift. An
+    # advance-dated notice — the feed publishes these, and the front end already
+    # prints "from" rather than "since" for them — would otherwise accrue from a
+    # future start back to now. The clipped county arithmetic never sees the
+    # negative span, but the area history prints it as "-240h so far".
+    return "accrue", ((), max(min(now, start + timedelta(days=CAP_DAYS)), start))
 
 
-def paired_lift(lifts, county, location, start):
-    """Earliest boil-notice lift matching this notice's scheme, or None.
+def lift_pairing(row, lifts, start):
+    """(in-force intervals, charged end) for a notice a lift closes, else None.
+
+    The only place the pairing key is built and the two clamps applied, because
+    the two classes that pair are published alike and have already drifted apart
+    once here: the cap reached one branch and not the other, and a lift beyond it
+    charged its whole span. What still differs between them is what happens when
+    nothing pairs, and that stays with each caller.
+    """
+    cat = row["work_category"]
+    if cat not in LIFT_OF:
+        return None
+    lift = paired_lift(lifts, (row["county"], LIFT_OF[cat]), row["location"], start)
+    if lift is None:
+        return None
+    end = paired_end(lift, start)
+    return [(start, end)], charged_end(end, start)
+
+
+def paired_end(lift, start):
+    """When a paired lift says the notice actually stood until.
+
+    Clamped below to `start` only: multi-pin publishing is not chronologically
+    tidy, so a lift can be stamped before the issue it lifts, and a notice may
+    not end before it began. Deliberately *not* capped — this is a statement
+    about the world, and the lift is direct evidence for it. `charged_end` caps
+    what that span may charge; `Case.in_force` carries this one, so the health
+    marker can stand on the evidence while the arithmetic stays bounded.
+    """
+    return max(lift, start)
+
+
+def charged_end(end, start):
+    """The furthest a notice may charge from `start`, whatever its end signal.
+
+    CAP_DAYS is a ceiling on one notice's contribution, not a claim about how
+    long it ran: an observed `completion_update` is capped, the open-and-accruing
+    branch is capped, an imputed span is capped. A paired lift is not stronger
+    evidence than a completion update, so it gets no exemption either.
+
+    Without this, pairing a notice *raised* what it accrued: an unpaired notice
+    stops at the cap (a boil notice past it is dropped outright), so finding its
+    lift — better evidence, and evidence that the thing ended — charged more
+    rather than less. That inversion was the bug, not the length. The exposure is
+    real and not only in the consumption class: on the 2026-08-18 snapshot Whiddy
+    Island had been Open 1,460 days and Dursey Island 740, but so had the
+    Carrignagower boil notice at 590 days and Poulnagunogue at 405.
+
+    Capping costs nothing on the snapshot this was written against: one notice
+    pairs, and it spans 0.00 days.
+    """
+    return min(end, start + timedelta(days=CAP_DAYS))
+
+
+def collect_lifts(rows):
+    """{(county, lift category): [(scheme, when)]} — the pairing index.
+
+    Built in one place because three callers need it identically (build_site and
+    both eval commands); three copies of this loop is how the key shape drifts.
+    """
+    lifts = defaultdict(list)
+    for r in rows:
+        if r["work_category"] in IGNORE_CATS:
+            lifts[(r["county"], r["work_category"])].append(
+                (norm_scheme(r["location"]), parse_dt(r["start_date"]))
+            )
+    return lifts
+
+
+def paired_lift(lifts, key, location, start):
+    """Earliest lift matching this notice's scheme, or None.
 
     Lift notices arrive as separate cases with fresh reference_nums, so the
-    pairing key is county + normalised scheme name. Multi-pin publishing is
-    not chronologically tidy, so a lift up to 2 days before the issue pin's
-    start still counts.
+    pairing key is (county, lift category) + normalised scheme name. The
+    category half is what stops a boil notice pairing with a do-not-consume
+    lift for the same scheme. Multi-pin publishing is not chronologically
+    tidy, so a lift up to 2 days before the issue pin's start still counts.
     """
-    key = norm_scheme(location)
-    if not key:
+    scheme = norm_scheme(location)
+    if not scheme:
         return None
     candidates = [
-        dt for k, dt in lifts.get(county, []) if k == key and dt >= start - timedelta(days=2)
+        dt for k, dt in lifts.get(key, []) if k == scheme and dt >= start - timedelta(days=2)
     ]
     return min(candidates) if candidates else None
 
@@ -716,6 +818,12 @@ class Case(NamedTuple):
     has_end: bool
     observed_end: bool
     rec: str = "none"  # recurrence outcome, for the build report
+    # When the notice actually stood, as opposed to what it charges. They differ
+    # only for a lift paired past CAP_DAYS: the charge is capped, but the lift is
+    # evidence the notice was in force to the end of it, and the health marker
+    # answers to the evidence rather than to the accrual ceiling. Empty means
+    # "same as intervals", which is every other case.
+    in_force: tuple = ()
     # No usable end signal, so the interval is a SpanTable estimate rather than
     # anything the notice said. Deliberately separate from has_end, which stays
     # False: that is what keeps these out of the published median without
@@ -725,6 +833,11 @@ class Case(NamedTuple):
     @property
     def county(self):
         return self.row["county"]
+
+    @property
+    def marker_intervals(self):
+        """The intervals the health marker stands over — see `in_force`."""
+        return self.in_force or self.intervals
 
     @property
     def is_open(self):
@@ -768,6 +881,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
     observed_end = has_end and r["end_source"] in OBSERVED_END_SOURCES
     rec = "none"
     imputed = False
+    in_force = ()  # empty: the charged intervals are the in-force ones
     # where the disruption interval opens. Publication for everything with an
     # end signal, but an imputed negative-span case is anchored to the end it
     # does know and runs backwards from there, so the two come apart. `start`
@@ -777,17 +891,44 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
 
     if r["work_category"] == "boil_notice_issued":
         # This class never ends itself; boil_notice_fate owns the whole decision.
-        outcome, end = boil_notice_fate(r, lifts, now)
+        outcome, fate = boil_notice_fate(r, lifts, now)
         if outcome == "exclude":
             return None
         # a lift is a real, observed event, not a schedule
         has_end = outcome == "paired"
         observed_end = has_end
-        if end is None:
+        if fate is None:
             # closed with no lift: token footprint, as for any no-signal case
             end = start + timedelta(seconds=1)
+        else:
+            in_force, end = fate
     elif not has_end:
-        if r["status"] == "Open" and start < now and not ended_by_publication(r):
+        # A do-not-consume notice cannot state its own end either — the lift is a
+        # separate case, exactly as for a boil notice — so pairing one is strictly
+        # more information than running to the cap.
+        #
+        # The staleness *exclusion* boil notices take is deliberately NOT applied
+        # here. The case that justified it (221165) sat 'Open' while its own text
+        # said the notice "is now lifted with immediate effect" — the text
+        # contradicted the status. No do-not-consume notice on file does that:
+        # Whiddy Island and Dursey Island both read as genuine, unlifted notices
+        # naming a specific water-quality failure. Dropping them would remove a
+        # live drinking-water warning on an assumption rather than on evidence.
+        # See notes/statuspage-methodology.md.
+        #
+        # `already_over` gates the pairing and the accrual below it alike, which
+        # is why it is read once here rather than inside the second branch only.
+        # A notice whose own text reported an end before it was even published
+        # did not then run on until some later lift, so pairing it to one would
+        # fabricate precisely the downtime ended_by_publication exists to refuse.
+        # The lift is still a real lift; it just ends a notice already over.
+        already_over = ended_by_publication(r)
+        pairing = None if already_over else lift_pairing(r, lifts, start)
+        if pairing is not None:
+            # a lift is a real, observed end, not a schedule
+            in_force, end = pairing
+            has_end = observed_end = True
+        elif r["status"] == "Open" and start < now and not already_over:
             # ongoing with no inferred end: runs from start until now, capped
             end = min(now, start + cap)
         else:
@@ -839,6 +980,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         observed_end=observed_end,
         rec=rec,
         imputed=imputed,
+        in_force=tuple(in_force),
     )
 
 
@@ -865,7 +1007,12 @@ class Region:
         # an event any of whose pins had to be estimated is not one the site can
         # claim it observed.
         self.imputed = defaultdict(lambda: defaultdict(bool))
-        self.knock_refs = set()
+        # ref -> the intervals its knocking pins were *in force* over, which is
+        # the charged interval for all but a lift paired past the cap. Kept apart
+        # from `iv` so the marker is not silently bounded by an accrual ceiling:
+        # grade() already records that a health notice's importance is not
+        # measured in person-hours, and a cap is a person-hours instrument.
+        self.knock_iv = defaultdict(list)
         self.open_now = {}  # ref -> case (dedups multi-pin events)
         self.resolved = {}  # ref -> case, for cases observed to close
 
@@ -878,7 +1025,7 @@ class Region:
         self.observed_end[sev][ref] |= case.observed_end
         self.imputed[sev][ref] |= case.imputed
         if knocks_grade(case.row):
-            self.knock_refs.add(ref)
+            self.knock_iv[ref].extend(case.marker_intervals)
         r = case.row
         if case.is_open:
             self.open_now.setdefault(
@@ -915,6 +1062,9 @@ class Region:
             sev: {ref: merge(iv) for ref, iv in self.iv[sev].items()} for sev in SEV_ORDER
         }
 
+    def knock_events(self):
+        return {ref: merge(iv) for ref, iv in self.knock_iv.items()}
+
     def event_pop(self, cap_pop):
         return {
             sev: {ref: min(sum(s.values()), cap_pop) for ref, s in self.sas[sev].items()}
@@ -934,7 +1084,7 @@ def region_month(region, pop, ym, now):
     eff_hi, eff_lo = min(hi, now), max(lo, COLLECTION_START)
     events, epop = region.events(), region.event_pop(pop)
 
-    counts, person_s, health_n = {}, 0.0, 0
+    counts, person_s = {}, 0.0
     for sev in SEV_ORDER:
         n = 0
         for ref, iv in events[sev].items():
@@ -943,11 +1093,27 @@ def region_month(region, pop, ym, now):
                 n += 1
                 if sev == "outage":
                     person_s += secs * epop[sev].get(ref, 0)
-                # health-relevant quality notices — boil water, do not drink, do
-                # not consume. Published beside the grade rather than inside it.
-                if sev == "quality" and ref in region.knock_refs:
-                    health_n += 1
         counts[sev] = n
+
+    # Health-relevant quality notices — boil water, do not drink, do not consume
+    # — published beside the grade rather than inside it. Counted over the months
+    # each notice was *in force*, not the months it charged: a lift paired past
+    # CAP_DAYS caps what its notice charges, and reading the marker off that
+    # interval dropped the warning from months the lift itself proves the notice
+    # was standing. See Region.knock_iv.
+    knock = region.knock_events()
+    health_n = sum(
+        1 for iv in knock.values() if union_seconds(iv, eff_lo, eff_hi) > 0
+    )
+    # How many of those are standing *right now*. A right-now snapshot on a
+    # per-month figure, like `open_now` on the county: the same value on every
+    # month, and only the month the snapshot belongs to may read it. It exists
+    # because health_n alone cannot separate "a notice is in force" from "a
+    # notice was in force at some point this month" — and the front end was
+    # saying "the water may not be safe to drink" for the second.
+    # inclusive of `e`: an ongoing notice accrues to exactly `now` (see
+    # resolve_case), so a half-open test reports the live ones as not standing
+    health_now = sum(1 for iv in knock.values() if any(s <= now <= e for s, e in iv))
 
     period_s = max((eff_hi - eff_lo).total_seconds(), 1.0)
     availability = 100.0 * (1 - person_s / (pop * period_s))
@@ -959,6 +1125,7 @@ def region_month(region, pop, ym, now):
         # active health notices, published beside the grade rather than folded
         # into it — see grade()
         "health_n": health_n,
+        "health_now": health_now,
         # for the caller to pop: grading off the rounded, clamped figure would
         # flip a county sitting a thousandth under a threshold
         "avail_raw": availability,
@@ -1359,6 +1526,17 @@ def _county_open_html(cdata, shown=COUNTY_OPEN_SHOWN):
     )
 
 
+def _avail_text(month):
+    """Availability as the county page prints it, clamped the way the app's
+    availText clamps it: a month that lost person-time never rounds up to a clean
+    hundred, which reads as a claim the page is not making. Keyed on person_h, as
+    in the app, so a footprint too small to round to an hour still shows plain."""
+    availability = month["availability"]
+    if month["person_h"]:
+        availability = min(availability, 99.999)
+    return f"{availability:.3f}%"
+
+
 def _county_summary_html(county, cdata, n_areas, n_events, months):
     """The opening paragraph and the current-state line."""
     pop = cdata["pop"]
@@ -1378,14 +1556,17 @@ def _county_summary_html(county, cdata, n_areas, n_events, months):
     if latest:
         m = cdata["months"][latest]
         health = ""
-        if m["health_n"]:
+        # health_now, not health_n: this line says "This month", and a notice
+        # lifted on the 3rd is not an active warning on the 25th. The month's
+        # own count is in the table below, where it is a record and reads as one.
+        if m["health_now"]:
             health = (
-                f' <span class="health">{m["health_n"]} active health '
-                f'notice{"" if m["health_n"] == 1 else "s"}</span>'
+                f' <span class="health">{m["health_now"]} active health '
+                f'notice{"" if m["health_now"] == 1 else "s"}</span>'
             )
         parts.append(
             f'<p class="now">This month: grade <strong>{m["grade"]}</strong>, '
-            f'{m["availability"]:.3f}% supply availability, '
+            f'{_avail_text(m)} supply availability, '
             f'{m["clear_days"]} of {m["days_elapsed"]} elapsed days with no notice.'
             f'{health}</p>'
         )
@@ -1403,7 +1584,7 @@ def _county_months_html(cdata, months):
         rows.append(
             f'<tr><th scope="row">{ym}</th>'
             f'<td class="g g-{m["grade"]}">{m["grade"]}</td>'
-            f'<td>{m["availability"]:.3f}%</td>'
+            f'<td>{_avail_text(m)}</td>'
             f'<td>{ev["outage"]}</td><td>{ev["quality"]}</td>'
             f'<td>{ev["degraded"]}</td><td>{ev["maintenance"]}</td>'
             f'<td>{m["person_h"]:,}</td></tr>'
@@ -1594,10 +1775,7 @@ def recurrence_report(cases, pin_tags=None):
 def build_site(rows, sa_index, now, towns=None):
     months = month_list(COLLECTION_START, now)
 
-    lifts = defaultdict(list)
-    for r in rows:
-        if r["work_category"] == "boil_notice_lifted":
-            lifts[r["county"]].append((norm_scheme(r["location"]), parse_dt(r["start_date"])))
+    lifts = collect_lifts(rows)
 
     counties = defaultdict(Region)
     county_towns = defaultdict(lambda: defaultdict(Region))

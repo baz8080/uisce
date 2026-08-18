@@ -13,11 +13,18 @@
   :root {
     color-scheme: light;
     --page: #f9f9f7; --surface: #fcfcfb;
-    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #6e6c66;
     --grid: #e1e0d9; --border: rgba(11,11,11,0.10);
-    --good: #0ca30c; --warning: #fab219; --serious: #ec835a;
-    --critical: #d03b3b; --maint: #2a78d6;
+    --good: #087f08; --warning: #fab219; --serious: #ec835a;
+    --critical: #d03b3b; --maint: #1e62b8;
     --cell-empty: #e8e7e1;
+    /* Text-safe shades: the status hues above are tuned for fills, and most
+       are too light (or too dark, per mode) to carry 4.5:1 text. *-text is
+       the same hue at a contrast that passes as text on page and surface;
+       --serious-deep is a serious fill dark enough to carry white text. */
+    --good-text: #0a7c0a; --warning-text: #8a6001;
+    --serious-text: #b34a20; --serious-deep: #b34a20;
+    --critical-text: #d03b3b;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -27,6 +34,9 @@
       --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
       --maint: #3987e5;
       --cell-empty: #2c2c2a;
+      --good-text: #3dbd3d; --warning-text: #fab219;
+      --serious-text: #ec835a;
+      --critical-text: #e05252;
     }
   }
   * { box-sizing: border-box; margin: 0; }
@@ -53,7 +63,7 @@
   .banner strong { font-weight: 650; }
   .banner .meta { color: var(--muted); font-size: 13px; margin-left: auto; }
   /* an overdue build is the only non-routine thing the stamp ever says */
-  .banner .meta .stale { color: var(--critical); font-weight: 600; }
+  .banner .meta .stale { color: var(--critical-text); font-weight: 600; }
 
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0; }
   .tile {
@@ -64,7 +74,9 @@
   .tile .k { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
 
   .controls { display: flex; gap: 8px; align-items: center; margin: 22px 0 10px; flex-wrap: wrap; }
-  .months { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+  /* wraps: one tab is added per collected month, and by five tabs the strip
+     is already wider than a 390px phone */
+  .months { display: flex; flex-wrap: wrap; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
   .months button {
     border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 13.5px;
     padding: 5px 12px; border-radius: 6px; cursor: pointer;
@@ -88,7 +100,7 @@
      seventh entry in a wrapped row of swatches it read as a sixth colour. */
   .healthkey {
     display: flex; align-items: center; gap: 7px; margin: -8px 0 14px;
-    font-size: 12.5px; color: var(--serious);
+    font-size: 12.5px; color: var(--serious-text);
   }
   .basis { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
   .natheading { font-size: 15px; font-weight: 650; margin: 30px 0 0; }
@@ -112,16 +124,19 @@
     display: grid; place-items: center;
     color: #fff; font-weight: 700; font-size: 14px;
   }
-  .g-A { background: var(--good); } .g-B { background: color-mix(in srgb, var(--good) 60%, var(--warning)); }
+  /* B and D join C in dark lettering: their mid-range fills can't carry
+     4.5:1 white text (B ≈2.9:1, D 2.6:1), and A/F keep white on ends dark
+     enough to hold it */
+  .g-A { background: var(--good); } .g-B { background: color-mix(in srgb, var(--good) 60%, var(--warning)); color: #1a1a19 !important; }
   .g-C { background: var(--warning); color: #1a1a19 !important; }
-  .g-D { background: var(--serious); } .g-F { background: var(--critical); }
+  .g-D { background: var(--serious); color: #1a1a19 !important; } .g-F { background: var(--critical); }
   /* an active health notice sits beside the letter, not inside it: the grade
      measures supply availability, and whether the water is safe to drink is a
      different question that a letter cannot answer */
   .healthmark {
     flex: none; display: inline-grid; place-items: center;
     width: 20px; height: 20px; border-radius: 50%;
-    background: var(--serious); color: #fff; font-size: 12px; font-weight: 700;
+    background: var(--serious-deep); color: #fff; font-size: 12px; font-weight: 700;
     cursor: help;
   }
   .chead .healthmark { width: 24px; height: 24px; font-size: 13.5px; }
@@ -251,14 +266,14 @@
     display: inline-block; margin-top: 5px; padding: 1px 7px; border-radius: 999px;
     font-size: 11.5px; border: 1px solid;
   }
-  .badge.confirmed { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
-  .badge.partial { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, transparent); }
+  .badge.confirmed { color: var(--good-text); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+  .badge.partial { color: var(--warning-text); border-color: color-mix(in srgb, var(--warning) 45%, transparent); }
   .badge.sched { color: var(--muted); border-color: var(--border); }
   /* An event that never reported an end is not the same claim as one still
      accruing to the cap, so it does not borrow the scheduled badge's look. */
   .badge.none { color: var(--muted); border-color: transparent;
                 background: color-mix(in srgb, var(--muted) 12%, transparent); }
-  .badge.health { color: var(--serious); border-color: color-mix(in srgb, var(--serious) 45%, transparent); }
+  .badge.health { color: var(--serious-text); border-color: color-mix(in srgb, var(--serious) 45%, transparent); }
   @media (max-width: 480px) {
     .toprow { grid-template-columns: 22px 1fr; }
     .toprow .ph { grid-column: 2; text-align: left; margin-top: 4px; }
@@ -484,8 +499,24 @@ const LEGEND = `
 // The seventh legend entry, promoted to its own line and its own colour. As a
 // swatch among five others it was the least noticeable thing on the page and the
 // only one about drinking water.
-const HEALTH_KEY =
-  `<span class="healthmark sm">!</span> means an active boil-water or do-not-drink notice — open the county for details.`;
+//
+// Scoped to the month on screen, always. The mark is month-scoped like the grade
+// and the percentage — viewing May shows what was active in May — but the copy
+// said "active", which a reader lands on as *now*. That is a live drinking-water
+// warning the site is not making, and it was wrong on the current month too: a
+// notice lifted on the 3rd still marks the month on the 25th. The legend cannot
+// know which counties are still standing, so it makes the weaker, true claim and
+// leaves "right now" to the per-county mark, which does know (health_now).
+//
+// All three kinds named, not two: the mark is raised by KNOCK_CATS, which
+// includes consumption_notice_issued, and this line is the only always-visible
+// explanation of it — the fuller wording is in a title=, which never fires on a
+// touchscreen.
+function healthKey() {
+  return `<span class="healthmark sm">!</span> marks a boil-water, do-not-drink` +
+    ` or do-not-consume notice active in ${monthLabel(curMonth)}` +
+    ` — open the county for details.`;
+}
 
 // The reader is looking at two different clocks at once: the grade and the
 // percentage are the selected month's, "open now" is live. Nothing said so, and
@@ -540,27 +571,40 @@ function freshness(iso) {
 // do-not-consume notice is shown next to it rather than folded into it, so a
 // county graded D with unsafe water reads as exactly that, instead of as an F
 // indistinguishable from a county that lost supply.
-function healthTitle(n) {
-  return `${n === 1 ? "An active" : n + " active"} boil-water, do-not-drink or do-not-consume ` +
-    `${n === 1 ? "notice" : "notices"} — the water may not be safe to drink. ` +
-    `Separate from the grade, which measures supply availability.`;
+// "the water may not be safe to drink" is a claim about *now*, so it is made
+// only where one is still standing. isLatest() alone was not enough: health_n
+// counts notices active at any point in the month, so on the live month a notice
+// lifted on the 3rd went on warning about the water on the 25th. health_now is
+// the right-now count, and where it is zero the mark is a record of the month.
+function healthTitle(m) {
+  const live = isLatest() && (m.health_now || 0) > 0;
+  const n = live ? m.health_now : (m.health_n || 0);
+  const what = `boil-water, do-not-drink or do-not-consume ${n === 1 ? "notice" : "notices"}`;
+  return live
+    ? `${n === 1 ? "An active" : n + " active"} ${what} — the water may not be safe ` +
+      `to drink. Separate from the grade, which measures supply availability.`
+    : `${n === 1 ? "A" : n} ${what} active in ${monthLabel(curMonth)}. ` +
+      `Separate from the grade, which measures supply availability.`;
 }
 
 function healthMark(m) {
-  const n = m.health_n || 0;
-  if (!n) return "";
-  return `<span class="healthmark" title="${healthTitle(n)}">!</span>`;
+  if (!(m.health_n || 0)) return "";
+  return `<span class="healthmark" title="${healthTitle(m)}">!</span>`;
 }
 
 // The county view has room for words, and the "!" alone put the site's only
 // drinking-water warning behind a hover — which on a phone is nowhere at all.
 function healthPill(m) {
-  const n = m.health_n || 0;
-  if (!n) return "";
+  if (!(m.health_n || 0)) return "";
+  // same live/record split as healthTitle, and the same three kinds: this pill
+  // said "boil-water or do-not-drink" while its own tooltip named all three
+  const live = isLatest() && (m.health_now || 0) > 0;
+  const n = live ? m.health_now : m.health_n;
+  const when = live ? "in effect" : `active in ${monthLabel(curMonth)}`;
   const what = n === 1
-    ? "Boil-water or do-not-drink notice in effect"
-    : `${n} drinking-water notices in effect`;
-  return `<span class="badge health" title="${healthTitle(n)}">${what}</span>`;
+    ? `Boil-water, do-not-drink or do-not-consume notice ${when}`
+    : `${n} drinking-water notices ${when}`;
+  return `<span class="badge health" title="${healthTitle(m)}">${what}</span>`;
 }
 
 function monthLabel(ym) { return MONTH_NAMES[ym.slice(5)] + " " + ym.slice(0, 4); }
@@ -585,12 +629,21 @@ function isLatest() { return curMonth === LATEST; }
 // `current` is the month actually on screen, which is curMonth everywhere except
 // the top ten, whose month list omits the in-progress month curMonth defaults to
 function monthTabs(onclick, months, current) {
-  return (months || D.months).map(m =>
-    `<button class="${m === (current || curMonth) ? "on" : ""}" onclick="${onclick}('${m}')">${monthLabel(m)}</button>`).join("");
+  // aria-pressed carries the .on state to screen readers, which otherwise
+  // hear five identical buttons with no way to tell which month is showing
+  return (months || D.months).map(m => {
+    const on = m === (current || curMonth);
+    return `<button class="${on ? "on" : ""}" aria-pressed="${on}" onclick="${onclick}('${m}')">${monthLabel(m)}</button>`;
+  }).join("");
 }
 
+// The in-progress month always reads a little worse than it will settle at:
+// an open notice with no reported end accrues to now, and some of those ends
+// never arrive at all (the text simply doesn't state one). Saying so here beats
+// a separate caveat line, and it stays true whether or not inference is current.
 function partialNote() {
-  return curMonth === today.slice(0, 7) ? "Partial month — in progress." :
+  return curMonth === today.slice(0, 7)
+    ? "Partial month — in progress. Notices that haven't reported an end yet count as ongoing, so the figures will move as the month progresses." :
     curMonth === D.months[0] ? "This site started collecting on 20 April 2026, so April is a part-month." : "";
 }
 
@@ -661,7 +714,7 @@ function renderOverview() {
   document.getElementById("months").innerHTML = monthTabs("setMonth");
   document.getElementById("partialNote").textContent = partialNote();
   document.getElementById("legend").innerHTML = LEGEND;
-  document.getElementById("healthKey").innerHTML = HEALTH_KEY;
+  document.getElementById("healthKey").innerHTML = healthKey();
   document.getElementById("basis").innerHTML = basisNote();
 
   // national tiles

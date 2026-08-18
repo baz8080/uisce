@@ -232,6 +232,25 @@ The schedule (`.github/workflows/build.yml`) is two crons 6h apart; scheduled ru
 
 The flag is set on 7,345 of 7,553 cases (97%) — including installations, investigations, and flushing works. Any "which cases actually cut supply" logic has to come from `work_category` + `work_type`, not this flag (the status site's severity classes in [statuspage-methodology.md](statuspage-methodology.md) do exactly that).
 
+## The two health flags are not signals either (measured 2026-08-18)
+
+`water_outage` is not the only feed boolean that carries no information. Both health flags were being read by `classify` and `knocks_grade` ahead of the category, and both were measured against the notice text:
+
+| Flag | Cases | Text supports it | Verdict |
+|---|---|---|---|
+| `boil_water_notice` | 81 | **81 (100%)** | Reliable, and entirely **redundant** — it appears on `boil_notice_issued` (35) and `boil_notice_lifted` (46) and on no other category, ever |
+| `do_not_drink` | 19 | **10 (53%)** | Redundant where it is right, and **wrong** on the other 9 |
+
+The 9 unsupported `do_not_drink` cases are spread across `burst_main` (2), `mains_repair` (2), `low_pressure`, `reservoir_interruption`, `mains_rehabilitation`, `new_connection` and `water_conservation`. Their descriptions are ordinary supply-disruption boilerplate — "repairs to a burst water main may cause supply disruptions… allow 3-4 hours for your supply to fully return" — with no mention of boiling, drinking or safety. Every one of the 10 legitimate flagged cases is already a `consumption_notice_*` or `boil_notice_*` category, so the flags never identified a case the category did not.
+
+**Found by reading the site rather than the code:** Donegal carried a health marker on May. It was case 232423, titled *"Low Pressure - Donegal"*.
+
+The flag was doing damage in two directions at once. Because `classify` tests quality before the hard categories, a flagged burst main became a **quality** event — and only outages accrue availability downtime, so five burst mains and mains repairs were charging **nothing**. Meanwhile `knocks_grade` painted a drinking-water warning on eight county-months that no notice text supported.
+
+**Resolution: both flags dropped from `classify` and `knocks_grade`, which now read `work_category` alone.** Measured effect on the published site: 8 county-months change, **0 change grade**, national person-hours 79,745,765 → 79,819,755 (**+0.09%**), and 9 false health markers disappear. The correction runs in both directions — outages that should always have accrued now do, and warnings that were never justified are gone.
+
+**The rejected alternative was to keep the flags but require the description to corroborate them** (a regex for "boil water notice", "do not consume", "do not drink"). It gives byte-identical results on every case on file — tested against both a loose and a tight pattern, which agree on all 100 flagged cases — so it buys nothing today, and it trades a category lookup for a prose match that can rot. Worth revisiting only if the feed ever puts a *supported* health flag on a non-health category, which has not happened once in 9,762 cases.
+
 ## Duration outliers are categorical, not statistical
 
 Every inferred duration above 30 days belongs to `water_conservation` (real 40–87-day restriction events) or a reservoir interruption; sub-minute durations are notices published after the works were already complete. Trimming by percentile would delete real events while keeping misclassified ones — the right move is to classify by category and cap only as a backstop.

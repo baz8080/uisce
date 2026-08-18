@@ -30,14 +30,13 @@ from uisce.site import (
     SmallAreaIndex,
     case_ref,
     classify,
+    collect_lifts,
     describes_recurrence,
     event_windows,
     load_cases,
     merge,
     month_bounds,
     month_list,
-    norm_scheme,
-    parse_dt,
     recurring_events,
     resolve_case,
     union_seconds,
@@ -65,10 +64,7 @@ def consequential(db_path=DB_PATH, now=None):
         rows = load_cases(conn)
         descriptions = dict(conn.execute("SELECT id, description FROM cases"))
 
-    lifts = defaultdict(list)
-    for r in rows:
-        if r["work_category"] == "boil_notice_lifted":
-            lifts[r["county"]].append((norm_scheme(r["location"]), parse_dt(r["start_date"])))
+    lifts = collect_lifts(rows)
     shared = event_windows(rows)
     recurring = recurring_events(rows, shared)
 

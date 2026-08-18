@@ -17,10 +17,13 @@
   :root {
     color-scheme: light;
     --page: #f9f9f7; --surface: #fcfcfb;
-    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #6e6c66;
     --grid: #e1e0d9; --border: rgba(11,11,11,0.10);
-    --good: #0ca30c; --warning: #fab219; --serious: #ec835a;
-    --critical: #d03b3b; --maint: #2a78d6;
+    --good: #087f08; --warning: #fab219; --serious: #ec835a;
+    --critical: #d03b3b; --maint: #1e62b8;
+    /* text-safe serious, per mode: the fill hue is too light for 4.5:1 text
+       on the light page and --serious-deep is a fill dark enough for white */
+    --serious-text: #b34a20; --serious-deep: #b34a20;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -29,6 +32,7 @@
       --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
       --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
       --maint: #3987e5;
+      --serious-text: #ec835a;
     }
   }
   * { box-sizing: border-box; margin: 0; }
@@ -46,7 +50,7 @@
   .back { display: inline-block; color: var(--muted); text-decoration: none;
           font-size: 13px; margin-bottom: 14px; }
   .back:hover { color: var(--ink); }
-  .health { color: var(--serious); font-weight: 600; }
+  .health { color: var(--serious-text); font-weight: 600; }
 
   nav {
     margin: 18px 0 8px; padding: 10px 12px; border-radius: 8px; line-height: 2;
@@ -71,11 +75,12 @@
   thead th { color: var(--muted); font-weight: 500; font-size: 12.5px; text-align: right; }
   tbody th { text-align: left; font-weight: 500; }
   td.g { font-weight: 700; color: #fff; text-align: center; width: 1%; }
-  .g-A { background: var(--good); } .g-B { background: color-mix(in srgb, var(--good) 60%, var(--warning)); }
-  /* td.g-C, not .g-C: `td.g` above is the more specific selector and would keep
-     the letter white on amber. site.html reaches for !important here instead. */
+  .g-A { background: var(--good); } td.g-B { background: color-mix(in srgb, var(--good) 60%, var(--warning)); color: #1a1a19; }
+  /* td.g-C (and B, D), not .g-C: `td.g` above is the more specific selector
+     and would keep the letter white — and white fails 4.5:1 on all three
+     mid-range fills. site.html reaches for !important here instead. */
   td.g-C { background: var(--warning); color: #1a1a19; }
-  .g-D { background: var(--serious); } .g-F { background: var(--critical); }
+  td.g-D { background: var(--serious); color: #1a1a19; } .g-F { background: var(--critical); }
 
   ul.notices { list-style: none; margin-top: 10px; }
   ul.notices li { padding: 8px 0; border-bottom: 1px solid var(--grid);
@@ -85,9 +90,16 @@
   .sev { display: inline-block; padding: 1px 7px; border-radius: 999px;
          font-size: 11.5px; font-weight: 600; color: #fff; vertical-align: 1px; }
   .sev-outage { background: var(--critical); }
-  .sev-quality { background: var(--serious); }
+  /* the deep serious fill: the base --serious is a 2.6:1 background for the
+     pill's white lettering */
+  .sev-quality { background: var(--serious-deep); }
   .sev-degraded { background: var(--warning); color: #1a1a19; }
   .sev-maintenance { background: var(--maint); }
+  /* dark-mode maint blue holds only 3.6:1 against white, so the pill goes
+     dark-lettered like sev-degraded rather than dulling the blue */
+  @media (prefers-color-scheme: dark) {
+    .sev-maintenance { color: #1a1a19; }
+  }
   .more { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
 
   /* the directory's row treatment, so an area reads the same on both pages */

@@ -3,6 +3,8 @@ import re
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, time, timedelta, timezone
 
+from conftest import site_case as _case
+
 from uisce.config import BASE_URL
 from uisce.site import (
     CAP_DAYS,
@@ -44,41 +46,6 @@ def _dt(iso):
     return datetime.fromisoformat(iso).astimezone(UTC)
 
 
-def _case(**overrides):
-    base = {
-        "id": 1,
-        "county": "Carlow",
-        "work_category": "burst_main",
-        "work_type": "Unplanned",
-        "status": "Closed",
-        "title": "Burst Water Main - Carlow",
-        "reference_num": "CAR00000001",
-        "start_date": "2026-05-01T00:00:00+00:00",
-        "location": "Somewhere",
-        # read only by describes_recurrence; the default says nothing about a
-        # repeating window, so a case is non-recurring unless a test says so
-        "description": "Works may cause supply disruptions to Somewhere, Co. Carlow.",
-        "closed_at": None,
-        "full_lat": 52.836,
-        "full_lon": -6.926,
-        "boil_water_notice": 0,
-        "do_not_drink": 0,
-        "water_restrictions": 0,
-        "reduced_pressure": 0,
-        "notice_to_end_seconds": 86400.0,
-        "end_source": "completion_update",
-        "end_local_date": "2026-05-02",
-        "end_local_time": "00:00",
-        # prompt v3; NULL on every v2 record, which reads as "not recurring"
-        "end_recurrence": None,
-        "end_window_open": None,
-        "end_window_close": None,
-        "end_window_first_date": None,
-    }
-    base.update(overrides)
-    return base
-
-
 # one Small Area of 1,000 people sitting right on the test pin
 SA_INDEX = SmallAreaIndex([(52.836, -6.926, "SA1", 1000)])
 NOW = datetime(2026, 5, 10, tzinfo=UTC)
@@ -101,9 +68,22 @@ class TestClassify:
         assert classify(_case(work_category="leak_detection")) == "maintenance"
 
     def test_quality_beats_works_and_lift_notices_are_ignored(self):
-        assert classify(_case(boil_water_notice=1)) == "quality"
+        assert classify(_case(work_category="boil_notice_issued")) == "quality"
         assert classify(_case(work_category="discolouration")) == "quality"
         assert classify(_case(work_category="boil_notice_lifted")) is None
+
+    def test_the_feed_health_flags_do_not_override_the_category(self):
+        """Measured 2026-08-18: both flags are redundant with the category, and
+        do_not_drink is additionally wrong on 9 cases whose descriptions never
+        mention drinking water. Reading them turned ordinary burst mains into
+        quality events, where they accrued no downtime at all."""
+        assert classify(_case(work_category="burst_main", do_not_drink=1)) == "outage"
+        assert classify(_case(work_category="burst_main", boil_water_notice=1)) == "outage"
+        assert classify(_case(work_category="mains_repair", work_type=None,
+                              do_not_drink=1)) == "outage"
+        # the categories still carry it, which is the whole point
+        assert classify(_case(work_category="consumption_notice_issued",
+                              do_not_drink=0)) == "quality"
 
     def test_restriction_flags_are_degraded(self):
         assert classify(_case(work_category=None, work_type=None, reduced_pressure=1)) == "degraded"
@@ -130,7 +110,7 @@ class TestClassify:
         """A nightly leak-detection round is still works, not a restriction."""
         assert classify(_case(work_category="leak_detection"), recurring=True) == "maintenance"
         assert classify(_case(work_category="essential_works"), recurring=True) == "maintenance"
-        assert classify(_case(boil_water_notice=1), recurring=True) == "quality"
+        assert classify(_case(work_category="boil_notice_issued"), recurring=True) == "quality"
 
     def test_the_notice_text_can_correct_the_feed_to_low_pressure(self):
         """Two Reservoir Interruption notices describe only low pressure. The
@@ -161,14 +141,15 @@ class TestBoilNoticeFate:
         return _case(**(defaults | overrides))
 
     def test_paired_lift_gives_the_real_end(self):
-        lifts = {"Carlow": [("somewhere", _dt("2026-05-04T09:00:00+00:00"))]}
-        outcome, end = boil_notice_fate(self._notice(), lifts, NOW)
+        lifts = {("Carlow", "boil_notice_lifted"):
+                 [("somewhere", _dt("2026-05-04T09:00:00+00:00"))]}
+        outcome, (_, end) = boil_notice_fate(self._notice(), lifts, NOW)
         assert outcome == "paired"
         assert end == _dt("2026-05-04T09:00:00+00:00")
 
     def test_recent_unpaired_notice_still_accrues(self):
         """9 days old at NOW: 'Open' is plausible, so it runs to now."""
-        outcome, end = boil_notice_fate(self._notice(), {}, NOW)
+        outcome, (_, end) = boil_notice_fate(self._notice(), {}, NOW)
         assert outcome == "accrue"
         assert end == NOW
 
@@ -184,8 +165,9 @@ class TestBoilNoticeFate:
     def test_stale_notice_with_a_lift_is_still_paired(self):
         """Exclusion must not beat a real end signal."""
         old = self._notice(start_date="2026-01-01T00:00:00+00:00")
-        lifts = {"Carlow": [("somewhere", _dt("2026-01-05T00:00:00+00:00"))]}
-        outcome, end = boil_notice_fate(old, lifts, NOW)
+        lifts = {("Carlow", "boil_notice_lifted"):
+                 [("somewhere", _dt("2026-01-05T00:00:00+00:00"))]}
+        outcome, (_, end) = boil_notice_fate(old, lifts, NOW)
         assert outcome == "paired"
         assert end == _dt("2026-01-05T00:00:00+00:00")
 
@@ -195,10 +177,44 @@ class TestBoilNoticeFate:
 
     def test_lift_before_the_pin_start_clamps_to_start(self):
         """Multi-pin lifts publish untidily; a negative duration must not result."""
-        lifts = {"Carlow": [("somewhere", _dt("2026-04-30T00:00:00+00:00"))]}
-        outcome, end = boil_notice_fate(self._notice(), lifts, NOW)
+        lifts = {("Carlow", "boil_notice_lifted"):
+                 [("somewhere", _dt("2026-04-30T00:00:00+00:00"))]}
+        outcome, (_, end) = boil_notice_fate(self._notice(), lifts, NOW)
         assert outcome == "paired"
         assert end == _dt("2026-05-01T00:00:00+00:00")
+
+    def test_a_late_lift_reports_the_real_end_uncapped(self):
+        """`boil_notice_fate` answers when the notice ended, which is a different
+        question from what it may charge. The cap is the caller's (`charged_end`),
+        so this reports the lift itself — which is what lets the health marker
+        stand on the evidence while the arithmetic stays bounded."""
+        lifts = {("Carlow", "boil_notice_lifted"):
+                 [("somewhere", _dt("2026-05-21T00:00:00+00:00"))]}
+        outcome, (in_force, end) = boil_notice_fate(self._notice(), lifts, NOW)
+        assert outcome == "paired"
+        # the marker stands to the lift itself, 20 days out...
+        assert in_force == [(_dt("2026-05-01T00:00:00+00:00"),
+                             _dt("2026-05-21T00:00:00+00:00"))]
+        # ...while the charge stops at the cap
+        assert end == _dt("2026-05-01T00:00:00+00:00") + timedelta(days=CAP_DAYS)
+
+    def test_a_lift_of_the_other_kind_never_pairs(self):
+        """A do-not-consume lift for the same scheme is a different notice's end;
+        pairing across kinds would close a boil notice a lift never mentioned."""
+        lifts = {("Carlow", "consumption_notice_lifted"):
+                 [("somewhere", _dt("2026-05-04T09:00:00+00:00"))]}
+        outcome, _ = boil_notice_fate(self._notice(), lifts, NOW)
+        assert outcome == "accrue"
+
+    def test_an_advance_dated_notice_never_accrues_backwards(self):
+        """The other end of the same clamp. The feed publishes notices dated ahead
+        of publication and leaves them 'Open'; min(now, start + cap) alone puts the
+        end before the start, which the clipped county arithmetic never sees but
+        the area history prints as "-240h so far"."""
+        future = self._notice(start_date="2026-05-20T00:00:00+00:00")
+        outcome, (_, end) = boil_notice_fate(future, {}, NOW)
+        assert outcome == "accrue"
+        assert end == _dt("2026-05-20T00:00:00+00:00")
 
 
 class TestGrade:
@@ -245,12 +261,17 @@ class TestSchemePairing:
         assert norm_scheme(None) == ""
 
     def test_paired_lift_matches_scheme_within_tolerance(self):
-        lifts = {"Tipperary": [("ardfinnan", _dt("2026-06-23T10:00"))]}
+        key = ("Tipperary", "boil_notice_lifted")
+        lifts = {key: [("ardfinnan", _dt("2026-06-23T10:00"))]}
         start = _dt("2026-06-07T00:00")
-        assert paired_lift(lifts, "Tipperary", "Ardfinnan PWS", start) is not None
+        assert paired_lift(lifts, key, "Ardfinnan PWS", start) is not None
         # a lift long before the issue is a different, older notice
-        early = {"Tipperary": [("ardfinnan", _dt("2026-05-01T00:00"))]}
-        assert paired_lift(early, "Tipperary", "Ardfinnan PWS", start) is None
+        early = {key: [("ardfinnan", _dt("2026-05-01T00:00"))]}
+        assert paired_lift(early, key, "Ardfinnan PWS", start) is None
+        # a do-not-consume lift naming the same scheme is a different notice's end
+        other = {("Tipperary", "consumption_notice_lifted"):
+                 [("ardfinnan", _dt("2026-06-23T10:00"))]}
+        assert paired_lift(other, key, "Ardfinnan PWS", start) is None
 
 
 class TestSmallAreaIndex:
@@ -430,6 +451,187 @@ class TestBuildSite:
         # the notice is reported beside the grade, not inside it
         assert month["grade"] == "A"
         assert month["health_n"] == 1
+
+    def test_open_consumption_notice_is_closed_by_its_paired_lift(self):
+        """Do-not-consume notices are published exactly like boil notices: the
+        issue never states its own end and the lift is a separate case with a
+        fresh reference_num. Before this they could never be paired at all and
+        ran to the 14-day cap regardless of a lift sitting right there."""
+        issue = _case(
+            work_category="consumption_notice_issued",
+            do_not_drink=1,
+            status="Open",
+            notice_to_end_seconds=None,
+            # as all 7 on file are: the end is a different case, so there is
+            # nothing in this notice's own text for the extraction to find
+            end_source="not_found",
+            end_local_date=None,
+            location="Coolineagh Public Water Supply",
+            reference_num="COR1",
+        )
+        lift = _case(
+            id=99,
+            work_category="consumption_notice_lifted",
+            status="Closed",
+            notice_to_end_seconds=None,
+            end_source="not_found",
+            end_local_date=None,
+            location="Coolineagh PWS",
+            reference_num="COR2",
+            start_date="2026-05-03T00:00:00+00:00",
+        )
+        month = build_site([issue, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["events"]["quality"] == 1
+        assert month["days"][1][0] == "quality"  # May 2: active
+        assert month["days"][4][0] == ""  # May 5: lifted
+        assert month["health_n"] == 1
+
+    def test_a_long_running_consumption_notice_is_capped_at_its_lift(self):
+        """The class where this bites hardest: Whiddy Island has been Open since
+        2022 and Dursey since 2024, and their capped intervals predate collection
+        precisely because the cap holds. An uncapped paired lift would drag one
+        of them forward over every month on the site at once."""
+        issue = _case(
+            work_category="consumption_notice_issued",
+            status="Open",
+            notice_to_end_seconds=None,
+            end_source="not_found",
+            end_local_date=None,
+            start_date="2026-04-21T00:00:00+00:00",
+            location="Whiddy Island",
+            reference_num="COR1",
+        )
+        lift = _case(
+            id=99,
+            work_category="consumption_notice_lifted",
+            status="Closed",
+            notice_to_end_seconds=None,
+            end_source="not_found",
+            end_local_date=None,
+            location="Whiddy Island",
+            reference_num="COR2",
+            start_date="2026-05-09T00:00:00+00:00",
+        )
+        months = build_site([issue, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]
+        # 21 April + 14 days runs out on 5 May, not on the 9th the lift is stamped
+        coloured = sum(1 for m in months.values() for d in m["days"] if d[0] == "quality")
+        assert coloured == CAP_DAYS
+        assert months["2026-05"]["days"][8][0] == ""  # May 9: past the cap
+
+    def test_the_cap_bounds_the_arithmetic_but_not_the_health_marker(self):
+        """The other half of the cap. Capping what a notice charges must not
+        quietly withdraw the drinking-water warning from months its own lift
+        proves it was standing — the grade was unbundled from the health notice
+        exactly because a person-hours instrument is the wrong one for it. Here
+        the lift lands two months out: the charge stops at 14 days, the marker
+        does not."""
+        issue = _case(
+            work_category="consumption_notice_issued",
+            status="Open",
+            notice_to_end_seconds=None,
+            end_source="not_found",
+            end_local_date=None,
+            start_date="2026-05-01T00:00:00+00:00",
+            location="Whiddy Island",
+            reference_num="COR1",
+        )
+        lift = _case(
+            id=99,
+            work_category="consumption_notice_lifted",
+            status="Closed",
+            notice_to_end_seconds=None,
+            end_source="not_found",
+            end_local_date=None,
+            location="Whiddy Island",
+            reference_num="COR2",
+            start_date="2026-07-05T00:00:00+00:00",
+        )
+        july = datetime(2026, 7, 15, tzinfo=UTC)
+        months = build_site([issue, lift], SA_INDEX, july)["counties"]["Carlow"]["months"]
+        # in force 1 May - 5 July per the lift, so every one of those months
+        # carries the marker
+        assert [months[ym]["health_n"] for ym in ("2026-05", "2026-06", "2026-07")] == [1, 1, 1]
+        # but the charge still stops at the cap: 14 days in May, nothing after
+        coloured = sum(1 for m in months.values() for d in m["days"] if d[0] == "quality")
+        assert coloured == CAP_DAYS
+        assert months["2026-06"]["events"] == {
+            "outage": 0, "quality": 0, "degraded": 0, "maintenance": 0
+        }
+
+    def test_a_notice_already_over_at_publication_does_not_take_a_later_lift(self):
+        """A lift is only an end for a notice that was still running. This one's
+        own text reported an end before it was published (`lifted_immediate`), so
+        pairing it to a lift eight days later would invent the eight days — the
+        fabrication ended_by_publication exists to refuse. It keeps the token
+        footprint instead, and the lift still ends whatever it really ended."""
+        issue = _case(
+            work_category="consumption_notice_issued",
+            status="Open",
+            notice_to_end_seconds=None,
+            end_source="lifted_immediate",
+            location="Somewhere",
+            reference_num="COR1",
+        )
+        lift = _case(
+            id=99,
+            work_category="consumption_notice_lifted",
+            status="Closed",
+            notice_to_end_seconds=None,
+            end_source="not_found",
+            end_local_date=None,
+            location="Somewhere",
+            reference_num="COR2",
+            start_date="2026-05-09T00:00:00+00:00",
+        )
+        months = build_site([issue, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]
+        coloured = sum(1 for m in months.values() for d in m["days"] if d[0] == "quality")
+        assert coloured == 1  # publication day only, not through to the lift
+        assert months["2026-05"]["days"][7][0] == ""  # May 8: never reached
+
+    def test_health_now_separates_a_standing_notice_from_a_lifted_one(self):
+        """health_n counts notices active at any point in the month, which the
+        front end was reading as "right now" — a notice lifted on the 3rd went on
+        saying the water may not be safe on the 25th. health_now is the live
+        count. It is inclusive of the interval end because an ongoing notice
+        accrues to exactly `now`, and a half-open test calls those lifted."""
+        base = dict(work_category="consumption_notice_issued", status="Open",
+                    notice_to_end_seconds=None, end_source="not_found",
+                    end_local_date=None, reference_num="COR1")
+        standing = _case(**base, start_date="2026-05-05T00:00:00+00:00")
+        month = build_site([standing], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert (month["health_n"], month["health_now"]) == (1, 1)
+
+        # same notice, lifted on the 3rd: still a fact about May, not about now
+        lifted = _case(**base, start_date="2026-05-01T00:00:00+00:00")
+        lift = _case(id=99, work_category="consumption_notice_lifted", status="Closed",
+                     notice_to_end_seconds=None, end_source="not_found",
+                     end_local_date=None, reference_num="COR2",
+                     start_date="2026-05-03T00:00:00+00:00")
+        month = build_site([lifted, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert (month["health_n"], month["health_now"]) == (1, 0)
+
+    def test_an_unpaired_consumption_notice_is_not_excluded_as_stale(self):
+        """The deliberate half-measure. Boil notices older than CAP_DAYS with no
+        lift are dropped, because case 221165 sat 'Open' while its own text said
+        it had been lifted — status contradicted by evidence. No do-not-consume
+        notice on file does that: Whiddy Island (Open since 2022) names a real,
+        unlifted water-quality failure. So these keep accruing to the cap and
+        keep their marker, rather than vanishing on an assumption."""
+        stale = _case(
+            work_category="consumption_notice_issued",
+            do_not_drink=1,
+            status="Open",
+            notice_to_end_seconds=None,
+            end_source="not_found",
+            end_local_date=None,
+            start_date="2026-05-01T00:00:00+00:00",
+            reference_num="COR1",
+        )
+        month = build_site([stale], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["events"]["quality"] == 1
+        assert month["health_n"] == 1
+        # still accruing, which is the half of the boil policy that was not taken
+        assert month["days"][8][0] == "quality"  # May 9, well past a token footprint
 
     def test_days_before_collection_start_are_no_data(self):
         site = build_site([_case()], SA_INDEX, NOW)
@@ -1341,8 +1543,20 @@ class TestHealthNotices:
         assert month["events"]["quality"] == 1
         assert month["health_n"] == 0
 
-    def test_a_do_not_drink_flag_raises_it_whatever_the_category(self):
+    def test_a_feed_flag_alone_no_longer_raises_the_marker(self):
+        """The inverse of what this pinned before. A burst main carrying the
+        feed's do_not_drink flag but no drinking-water language in its text is a
+        burst main: it accrues as an outage and raises no marker. Nine such cases
+        were painting a warning across eight county-months (2026-08-18)."""
         rows = [_case(work_category="burst_main", do_not_drink=1)]
+        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["health_n"] == 0
+        assert month["events"]["outage"] == 1
+
+    def test_a_consumption_notice_still_raises_the_marker(self):
+        """Dropping the flags must not cost a real notice its marker: every
+        legitimate flagged case on file is already one of these categories."""
+        rows = [_case(work_category="consumption_notice_issued", do_not_drink=0)]
         month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["health_n"] == 1
 
@@ -1647,6 +1861,19 @@ class TestIndexablePages:
         ]
         assert [p for p in pages if beacon not in (tmp_path / p).read_text()] == []
 
+    def test_a_month_that_lost_person_time_never_prints_a_clean_hundred(self, tmp_path):
+        """The app's availText clamps this and the static page has to match: a
+        county that lost person-time must not round up to "100.000%", which reads
+        as a claim the page is not making. A one-hour, 1,000-person burst against
+        Dublin's population rounds there at three decimals."""
+        self._write(tmp_path, [_case(
+            county="Dublin", reference_num="DUB00000001",
+            notice_to_end_seconds=3600.0, end_local_time="01:00",
+        )])
+        page = (tmp_path / "c" / "dublin.html").read_text()
+        assert "99.999% supply availability" in page
+        assert "100.000% supply availability" not in page
+
     def test_an_empty_county_page_still_renders_and_says_so(self, tmp_path):
         """A county with no notice is a page a search result can still land on,
         so it has to be a document rather than a stack trace."""
@@ -1775,7 +2002,7 @@ class TestPayloadShape:
             "days", "clear_days", "days_elapsed", "grade", "events", "person_h",
             "period_h", "availability",
             "health_n", "median_completion_h", "completed_n", "median_scheduled_h",
-            "scheduled_n", "median_pooled_h", "imputed_n",
+            "scheduled_n", "median_pooled_h", "imputed_n", "health_now",
         }
 
     def test_the_top_row_keys_are_unchanged(self):
