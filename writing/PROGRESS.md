@@ -21,8 +21,8 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 08b | Where you actually live | #23–25 | drafted | 2,491 |
 | 09a | Eighteen nights in a trench coat | #26–27 | drafted | 1,913 |
 | 09b | The title is not the severity | #28–31 | drafted | 2,117 |
-| 10 | For a reader, not an analyst | #32–36 | todo | |
-| 11 | Be findable | #37–39 | todo | |
+| 10 | For a reader, not an analyst | #31(last), #32–36 | drafted | 1,900 |
+| 11 | Be findable | #37–39 | drafted | 1,050 |
 | 12 | Put a number on what you don't know | #40–41 | todo | |
 | 13 | Closing + glossary | — | todo (final pass) | |
 
@@ -112,6 +112,18 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
   backfill; expansion now numerically inert. #30/#31 review 2/9, concept box "review the
   consequential calls"; text+model detection; grade thresholds checked (one letter). Worked
   example: Donegal event 2,540,854 → 949,824 → 0. Ends: correct but unreadable → Ch 10.
+- **10** Opens with the health-knock unbundling (PR #31 last commit): the 8-of-78 table, ratio
+  0.01, Tipperary's three invisible notices; concept box "beside the grade, not inside it".
+  PR #32 per-area history + 1,836-area directory; sharded h/<county>.js; 801 false 0.0 h
+  suppressed; concept box "listed under every area, charged once" (220 of 1,830 → all; 6 KB gz);
+  15 withdrawn. PR #34 three wrong figures — worked example Cavan 27/31 → 3/6; 100.00% clamp;
+  vocabulary; hover-only content; freshness ladder argument. PR #36 [hidden] regression. Ends:
+  can't be found → Ch 11.
+- **11** Custom-domain question → the real problem: 2 indexable URLs; concept box why a
+  JS-routed SPA is invisible (fragment never sent). PR #37 26 county pages, sitemap/robots/
+  canonical, 2→28 / 73,087→383,714 / 1→28. The retraction of #25's pushState (kept for
+  back/forward). Worked example: what a crawler saw before/after. #38/#39 tidy-ups. Ends: →
+  Ch 12, events counted as zero.
 
 ## Open threads
 
@@ -123,7 +135,34 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 
 ## Next session
 
-**Ch 10 + Ch 11** (light pair). Ch 10 "For a reader, not an analyst" (PRs #32–#36, 5–6 Aug):
+**Ch 12 "Put a number on what you don't know"** (PRs #40–#41, 15–18 Aug — the last drafting
+session). Read: this file → `README.md` → `outline.md` Ch 12 → `sources/ch12.md` (~5.2k words)
+→ `notes/statuspage-methodology.md` "An event with no usable end is charged a typical span"
+(~280–310), "Known limitations" (~311–323), "Radius sensitivity" (~226–229), and the "Do-not-
+consume notices got the pairing" + "A paired lift is capped" sections (~34–80, skim) →
+`notes/data-quality.md` "The two health flags are not signals either" and "Duration outliers
+are categorical" (grep headings) → `src/uisce/site.py` `SpanTable` (~545–608), `grade` docstring
+(read already in Ch 5) → `src/uisce/eval_overlap.py` docstring/`overlap_by_month`. Cover: #40
+imputation (204 of 4,473 outage events on 1-s footprint, 200 negative-span + 4 not_found;
+category medians mains_repair 7.5 h vs pump_repair 43.7 h; MIN_CATEGORY_N 15; Kaplan–Meier 13.9
+vs naive 13.4 h; +2.3–4.4%/month, four county-months drop a grade; five-month before/after grid;
+first_start_date schema v3 with COALESCE not MIN); #41 three cold reviews (WCAG contrast 3.35/
+2.87/2.64/1.79:1; do_not_drink wrong on 9 of 19 → flags dropped from classify; DNC pairing not
+exclusion; paired lift capped for charge, uncapped for marker; overlap probe 3.6% per-pin wrong
+→ 2.0% per-event, 1.58M of 80.3M, left uncorrected). Also fold in radius sensitivity (rank corr
+0.93/0.91 at 300 m, 0.90/0.86 at 1 km; 48 of 52 county-months change letter — tie to Ch 8a's
+1,966 / 3,255 / 8,440 for the Leixlip pin) and grade calibration to 78 county-months
+(p10/median/p90 98.9/99.6/99.87; cuts at 97/76/33/10th pct — Ch 5a and 9b promised this).
+Concept boxes: imputation vs exclusion (a total has no NULL); censoring / Kaplan–Meier in one
+paragraph; overlap double-counting; grades are letters about an assumption. Worked examples:
+one negative-span outage event charged its category median; the Leixlip pin at three radii;
+overlap of two events over one Small Area (toy). Diagrams (SVG): two events over one SA with
+overlap hatched; three concentric circles 300/500/1000 m with populations 1,966/3,255/8,440;
+maybe the 78-county-month distribution with five lines (optional). Then update ledger; the
+following session is the FINAL PASS (intro, closing, glossary, continuity read, [verify]
+sweep). Register figures. Commit.
+
+_Superseded brief (done):_ **Ch 10 + Ch 11** (light pair). Ch 10 "For a reader, not an analyst" (PRs #32–#36, 5–6 Aug):
 per-area incident history + directory (1,836 areas; 220 of 1,830 with no history because
 multi-area events named once; 764 multi-area; 6 KB gz; 801 false 0.0 h; h/<county>.js shards
 1.5 MB/183 KB), legend icon (#33), plain-language rewrite (#34: Cavan 27/31 clear days on 6 Aug;
@@ -248,6 +287,7 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
+- 2026-08-18 · Session 9 · drafted Ch 10 (1,900 w) and Ch 11 (1,050 w).
 - 2026-08-18 · Session 8 · drafted Ch 9a (1,913 w) and 9b (2,117 w); SVGs recurring-window,
   pins-to-event; reconciled 144.0 h / 6,596 people.
 - 2026-08-18 · Session 7 · drafted Ch 8b (2,491 w); SVG straddle; reconciled PR #23's Kildare

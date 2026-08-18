@@ -193,7 +193,14 @@ Chapters quote from here rather than re-deriving; a missing figure is written in
 | Cavan clear days | "27/31" shown on 6 Aug when 6 days had happened | PR #34, 6 Aug |
 | Methodology paragraph | 2,600 chars → seven sections | PR #34 |
 | Health knock vs real harm | 0.45 pp band vs 0.003–0.012 pp; ~100× ; grade mix A2 B16 C31 D19 F10 → A2 B17 C34 D18 F7 | notes/statuspage-methodology.md "The health notice was unbundled" |
+| Health knock table | Cork Jul D→F 142 people 336 h 0.011 pp; Dublin Jul C→D 5,374 / 24 h / 0.012 pp; Donegal Jul D→F 204 / 7 h / 0.001 pp; Kildare Jul D→F 359 / 2 h / 0.000 pp; Monaghan Jul B→C 190 / <1 h / 0.000 pp; band 0.45 pp (0.30 for B→C); median ratio 0.01; knock set 8 of 78; marker on 10 | notes/statuspage-methodology.md "The health notice was unbundled" (PR #31 last commit, 2 Aug) |
+| History payload | 7,525 events / 1.8 MB; `h/*.js` 1,846,326 raw / 200,924 gz; median county 5 KB gz, Dublin 23 KB; data.js 691,493 / 90,162 unchanged; index.html +11 KB; areas.html 292,975 / 32,707 | PR #32 |
+| History listing fix | 1,610 → 1,830 of 1,830 areas; shards 1,555,611 → 1,819,550 raw, 183 → 189 KB gz; 764 multi-area events; 128 of 7,525 UNPLACED; 64 open no-signal events capped; 15 withdrawn (0.2%); MEA00113409 3→4 pins | PR #32 |
+| Cavan clear days | 27/31 shown on 6 Aug → 3/6 (4 bad of 6 elapsed); 100.00% beside 114 person-hours → 99.99% clamp | PR #34 |
+| Mobile regression | at 375 px: overviewHidden true, overviewDisplay flex, height 3846, countyViewTop 3988; fix `[hidden]{display:none!important}` | PR #36 |
+| Tests | 318 (#32), 322 (#34), 339 (#37) | PRs |
 | Indexable URLs | 2 → 28; static text 73,087 → 383,714 chars; analytics pages 1 → 28 | PR #37, 6 Aug |
+| PR #39 size | +113/−233 | gh |
 
 ### Ch 12
 | Figure | Value | Source |
