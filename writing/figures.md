@@ -216,3 +216,12 @@ Chapters quote from here rather than re-deriving; a missing figure is written in
 | Grade calibration | 78 settled county-months; p10 ≈ 98.9%, median ≈ 99.6%, p90 ≈ 99.87%; cuts at 97th/76th/33rd/10th pct; robustness: −11.8% person-hours moved one county-month (Waterford May D→C) | notes/statuspage-methodology.md grade section |
 | Health notice on grade removed | Tipperary July: three active notices, none shown | notes/statuspage-methodology.md |
 | Health marker on 2026-08-18 build | Galway 2/2, Mayo 1/1 standing; Monaghan 1/0 record only | notes/statuspage-methodology.md |
+| Imputation population | 204 of 4,473: 200 negative-span, 4 not_found; 29 open no-signal censored; 102 of 204 mains_repair | PR #40 |
+| Closed_at calibration | start→closed_at median 80.8 h vs 70.1 h overshoot → ~10.7 h implied vs 16.9 h observed | notes/statuspage-methodology.md 2026-08-15 |
+| Imputation effect table | Apr/May/Jun/Jul/Aug: median 7.1/12.6/15.8/12.5→12.7/15.2; imputed_n 23/39/53/58/43; ph +2.9/+3.4/+2.4/+2.3/+4.4%; availability −0.0118/−0.0154/−0.0130/−0.0144/−0.0200 pp; Limerick Apr B→C, Mayo May C→D, Monaghan Aug C→D, Offaly Aug B→C (−0.179 pp); 5 events leak 0.2 h | PR #40 |
+| Health-flag drop effect | 8 county-months change, 0 grades; national ph 79,745,765 → 79,819,755 (+0.09%); 9 false markers gone; boil_water_notice 100% redundant | PR #41 |
+| Month tabs | overflow at six tabs by 42 px on 390 px, arriving 1 Sep 2026 | PR #41 |
+| Overlap first run | 3.6% = 2.77M of 77.2M, 3.0–5.1%/month; corrected 2.0% = 1.58M of 80.3M, 0.5–2.5% | PR #41; notes "Known limitations" |
+| Radius × Leixlip pin | 300 m 1,966 → ≈28,900 ph; 500 m 3,255 → ≈47,900; 1 km 8,440 → ≈124,200 (× 14.72 h) | Ch 8a measurement × arithmetic |
+| Overlap toy | 400 people; A 08–16, B 13–21; 6,400 vs 5,200; 1,200 = 23% | illustrative |
+| Tests | 354 (#40), 367 (#41) | PRs |

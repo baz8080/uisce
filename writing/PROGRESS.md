@@ -23,7 +23,7 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 09b | The title is not the severity | #28–31 | drafted | 2,117 |
 | 10 | For a reader, not an analyst | #31(last), #32–36 | drafted | 2,085 |
 | 11 | Be findable | #37–39 | drafted | 1,034 |
-| 12 | Put a number on what you don't know | #40–41 | todo | |
+| 12 | Put a number on what you don't know | #40–41 | drafted | 2,600 |
 | 13 | Closing + glossary | — | todo (final pass) | |
 
 ## Chapter summaries (3 lines each, added when drafted)
@@ -124,6 +124,16 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
   canonical, 2→28 / 73,087→383,714 / 1→28. The retraction of #25's pushState (kept for
   back/forward). Worked example: what a crawler saw before/after. #38/#39 tidy-ups. Ends: →
   Ch 12, events counted as zero.
+- **12** PR #40: concept box "a median can abstain, a total cannot"; population 200/4/29;
+  SpanTable rules; why median still excludes; concept box censoring/KM (13.9 vs 13.4; ~10.7 vs
+  16.9); effect table, four county-months, the 0.2 h leak; Ofwat analogue + deviation;
+  first_start_date COALESCE; schema declared once; CLAUDE.md's origin. PR #41: contrast; health
+  flags not signals (do_not_drink 9/19; 8 cm, 0 grades, 9 markers); DNC half-policy (Whiddy);
+  overlap concept box, 3.6% → 2.0% and the lesson (SVG overlap-double-count). Radius
+  sensitivity (0.93/0.91; 48/52) + concept box "letters about an assumption" (SVG
+  radius-sensitivity with Leixlip 1,966/3,255/8,440); thresholds fitted to 78 county-months
+  (97/76/33/10th pct), checked and left. Worked examples: no-end event 7.5 h; Leixlip at three
+  radii; overlap toy. Ends: where the repo stands on 18 Aug 2026.
 
 ## Open threads
 
@@ -135,7 +145,34 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 
 ## Next session
 
-**Ch 12 "Put a number on what you don't know"** (PRs #40–#41, 15–18 Aug — the last drafting
+**FINAL PASS** (1–2 sessions). Everything is drafted (16 posts). Do, in order:
+1. Write `chapters/00-intro.md` (~1,200 w): the question; what the site is today (one paragraph
+   with today's Leixlip/Naas figures from Ch 8b); how it was built — AI-assisted, named here
+   once and not again (see the Co-Authored-By trailers in the source packs: Sonnet 4.6 → Sonnet
+   5 → Opus 4.8 → Opus 5 → Fable 5 across June–August; Barry directed, reviewed, labelled the
+   eval rounds and the recurrence review by hand); how to read the series (chapters standalone;
+   concept boxes; every number sourced; wrong turns kept); the vocabulary table lifted from
+   `README.md`.
+2. Write `chapters/13-closing.md` (~1,500 w): return to the question with Ch 8b's answer; what
+   the site can say and what it cannot (start is publication → floor; closed_at is a floor
+   owned by the operator's 75.7 h lag; 2.0% overlap; the 500 m assumption; the letters are about
+   an assumption; imputed events; scheduled ends accrue an announced interval); the settled-
+   decisions table from `CLAUDE.md` recast as "what we learned" in plain language; a glossary
+   built from every concept box (grep `> \*\*Concept:` across chapters — ~30 boxes).
+3. Continuity read of all 16 posts (~40k tokens): fix cross-references ("chapter 12" promises
+   made in Ch 3/5a/6/8a — check each landed), terminology against the fixed vocabulary
+   (case/pin/event; area/settlement/LEA/ED; person-hours; availability; health marker), read
+   times vs `wc -w`/230, and any `[verify:` markers (grep; there should be none — confirm).
+   Known nits to check: Ch 3 says "chapter 6" for the minimum-start rejection (correct); Ch 5a
+   says "chapter 12" for calibration (landed); Ch 8a says "chapter 12" for radius (landed);
+   Ch 7 says "chapter 9" for the twice-daily reason (landed in 9a's aside); Ch 4's "guard tests"
+   phrasing predates the payload guards (fine as forward statement).
+4. Update `PROGRESS.md` statuses to `reviewed`; add a one-line "how to publish" note (each
+   chapter is a standalone post; diagrams are relative links under `diagrams/`).
+5. Commit. Optionally: a diagram-polish pass later, and README.md in the repo root could gain
+   one line pointing at `writing/`.
+
+_Superseded brief (done):_ **Ch 12 "Put a number on what you don't know"** (PRs #40–#41, 15–18 Aug — the last drafting
 session). Read: this file → `README.md` → `outline.md` Ch 12 → `sources/ch12.md` (~5.2k words)
 → `notes/statuspage-methodology.md` "An event with no usable end is charged a typical span"
 (~280–310), "Known limitations" (~311–323), "Radius sensitivity" (~226–229), and the "Do-not-
@@ -287,6 +324,8 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
+- 2026-08-18 · Session 10 · drafted Ch 12 (2,600 w); SVGs overlap-double-count,
+  radius-sensitivity. All 16 posts drafted.
 - 2026-08-18 · Session 9 · drafted Ch 10 (2,085 w) and Ch 11 (1,034 w).
 - 2026-08-18 · Session 8 · drafted Ch 9a (1,913 w) and 9b (2,117 w); SVGs recurring-window,
   pins-to-event; reconciled 144.0 h / 6,596 people.
