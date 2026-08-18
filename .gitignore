@@ -220,3 +220,6 @@ __marimo__/
 out/
 .idea/
 .DS_Store
+
+# Claude Code: project config is shared, personal overrides are not
+.claude/settings.local.json
