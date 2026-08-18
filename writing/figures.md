@@ -117,6 +117,13 @@ Chapters quote from here rather than re-deriving; a missing figure is written in
 | Closure recovery | 7,613 closed; 1,816 (24%) recovered by replay; 5,797 unrecoverable | PR #21 |
 | Cases opening and closing within one build gap | 12% | PR #21 |
 | Release asset growth at daily builds | ~7 GB/yr | PR #22 |
+| Snapshots replayed | 10 releases, 30 Jun – 20 Jul 2026 | PR #21 |
+| Daily-cadence re-measure | 18 of 933 (1.9%) never seen open; observed close vs inferred completion median +75.7 h, p25 +57.2 h, p90 +85.2 h, 97% > 24 h (n = 484); twice-daily → ~1.1% at best | notes/data-quality.md "Re-measured 2026-07-31" |
+| closed_at coverage today | 4,303 of 10,130 non-Open cases | measured 18 Aug 2026 (verified Y) |
+| closed_at by day (replay era) | 6 Jul 304 · 8 Jul 113 · 10 Jul 209 · 15 Jul 363 · 17 Jul 365 · 20 Jul 399 (Mon/Wed/Fri) | measured 18 Aug 2026 (verified Y) |
+| KLD00118059 lifecycle | published Sun 9 Aug 21:16Z; first_seen Mon 10 Aug 12:01:46Z; complete 13:00 local; closed_at Thu 13 Aug 12:02:06Z → 72 h 02 m after completion | measured 18 Aug 2026 (verified Y) |
+| Tests at PR #21 | 142 (+27) | PR #21 |
+| Geocode cache at PR #21 | ~8k entries | PR #21 |
 
 ### Ch 8
 | Figure | Value | Source |

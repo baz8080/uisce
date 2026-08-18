@@ -16,7 +16,7 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 05a | A website, and a number that is fair to Cork | #16 | drafted | 1,694 |
 | 05b | An honest number on the model | #16–17 | drafted | 2,024 |
 | 06 | Say what you actually measured | #18–20 | drafted | 2,090 |
-| 07 | Record the moment a case closes | #21–22 | todo | |
+| 07 | Record the moment a case closes | #21–22 | drafted | 2,050 |
 | 08a | How a pin gets a population | #23 | todo | |
 | 08b | Where you actually live | #23–25 | todo | |
 | 09 | Not everything is an outage | #26–31 | todo | |
@@ -71,6 +71,14 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
   kept); create_db double column. PR #20 Pages deploy. Worked examples: case 237573 (−5 h 04 m)
   and a toy pooled-median list. SVG observed-vs-scheduled. Concept boxes: floor vs estimate;
   why pooling two populations lies. Ends: nobody can say which month a case closed → Ch 7.
+- **07** "49 open now" on a historic month; closed_at stamped in the upsert — observation time,
+  NULL ambiguous, a floor (12% under Mon/Wed/Fri); closed_at values pile up on build days
+  (304/363/365/399). Schema v2 via the additive-only ladder (0.7 ms). Feed probe (0/8,155);
+  replay of 10 release snapshots recovers 1,816 of 7,613 (24%) — Ch 2's accident pays. PR #22
+  daily builds; re-measured 31 Jul: 1.9% never seen open, but utility closes cases a median
+  75.7 h late — the floor's owner is the operator. Worked example KLD00118059's five days
+  (72 h lag). SVG build-gap-timeline. Concept boxes: observation vs event time; additive-only
+  migration ladder. Ends: closed_at's first use is Ch 8.
 
 ## Open threads
 
@@ -82,7 +90,22 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 
 ## Next session
 
-**Ch 7** (PRs #21–#22: `closed_at`, schema v2 and the additive-only migration ladder, replaying
+**Ch 8a "How a pin gets a population"** (PR #23, first half — the chapter Barry most needs).
+Read: this file → `README.md` → `outline.md` Ch 8 concepts 1–3 → `sources/ch08.md` (~4.5k
+words; PR #23 body + commits, incl. the "Kildare 99.25% hid…" commit) →
+`notes/population-data-sources.md` (whole, ~1.4k words) → `src/uisce/site.py` ~415–470
+(`SmallAreaIndex`, `_near`, `affected`) → `src/uisce/towns.py` `resolve_settlements` (~145) and
+the header comments 21–50. Cover: the four Census files and their join keys; Small Areas
+(18,919 → 5,149,139 exactly); pin → SAs by centroid distance within 500 m, else nearest within
+8 km, 0.01° grid hash; SA → named area is an attribute lookup; the retracted point-in-polygon
+version (37 MB, 54 settlements missing, 187/789 >10% short, Doneraile 214 vs 857). Worked
+examples: Leixlip 56 SAs → 16,733 exact; a real pin's 500 m circle listing its SAs (write a
+~15-line script using `SmallAreaIndex` against KLD00118059's coordinates 53.3627, −6.506 —
+one-off, register the result). Diagrams (SVG): circle over centroid dots; polygon-vs-attribute
+on Doneraile. Leave tiers/homing/straddle/Kildare table for 8b. Register figures. Update this
+file. Commit.
+
+_Superseded brief (done):_ **Ch 7** (PRs #21–#22: `closed_at`, schema v2 and the additive-only migration ladder, replaying
 release DBs to recover 1,816 of 7,613 closures, 12% of cases open+close inside one build gap →
 daily builds). Read: this file → `README.md` → `outline.md` Ch 7 → `sources/ch07.md` (~2.2k
 words) → `notes/data-quality.md` "`closed_at` is a floor" (line ~209) and its "Re-measured
@@ -126,6 +149,8 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
+- 2026-08-18 · Session 5 · drafted Ch 7 (2,050 w); SVG build-gap-timeline; measured closed_at
+  distribution and KLD00118059 lifecycle.
 - 2026-08-18 · Session 4 · drafted Ch 6 (2,090 w); SVG observed-vs-scheduled.
 - 2026-08-18 · Session 3 · drafted Ch 5a (1,694 w) and 5b (2,024 w) — Ch 5 split as the length
   rule intends; first SVG diagram.
