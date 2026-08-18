@@ -174,7 +174,8 @@ class TestBoilNoticeFate:
         return _case(**(defaults | overrides))
 
     def test_paired_lift_gives_the_real_end(self):
-        lifts = {"Carlow": [("somewhere", _dt("2026-05-04T09:00:00+00:00"))]}
+        lifts = {("Carlow", "boil_notice_lifted"):
+                 [("somewhere", _dt("2026-05-04T09:00:00+00:00"))]}
         outcome, end = boil_notice_fate(self._notice(), lifts, NOW)
         assert outcome == "paired"
         assert end == _dt("2026-05-04T09:00:00+00:00")
@@ -197,7 +198,8 @@ class TestBoilNoticeFate:
     def test_stale_notice_with_a_lift_is_still_paired(self):
         """Exclusion must not beat a real end signal."""
         old = self._notice(start_date="2026-01-01T00:00:00+00:00")
-        lifts = {"Carlow": [("somewhere", _dt("2026-01-05T00:00:00+00:00"))]}
+        lifts = {("Carlow", "boil_notice_lifted"):
+                 [("somewhere", _dt("2026-01-05T00:00:00+00:00"))]}
         outcome, end = boil_notice_fate(old, lifts, NOW)
         assert outcome == "paired"
         assert end == _dt("2026-01-05T00:00:00+00:00")
@@ -208,10 +210,19 @@ class TestBoilNoticeFate:
 
     def test_lift_before_the_pin_start_clamps_to_start(self):
         """Multi-pin lifts publish untidily; a negative duration must not result."""
-        lifts = {"Carlow": [("somewhere", _dt("2026-04-30T00:00:00+00:00"))]}
+        lifts = {("Carlow", "boil_notice_lifted"):
+                 [("somewhere", _dt("2026-04-30T00:00:00+00:00"))]}
         outcome, end = boil_notice_fate(self._notice(), lifts, NOW)
         assert outcome == "paired"
         assert end == _dt("2026-05-01T00:00:00+00:00")
+
+    def test_a_lift_of_the_other_kind_never_pairs(self):
+        """A do-not-consume lift for the same scheme is a different notice's end;
+        pairing across kinds would close a boil notice a lift never mentioned."""
+        lifts = {("Carlow", "consumption_notice_lifted"):
+                 [("somewhere", _dt("2026-05-04T09:00:00+00:00"))]}
+        outcome, _ = boil_notice_fate(self._notice(), lifts, NOW)
+        assert outcome == "accrue"
 
     def test_an_advance_dated_notice_never_accrues_backwards(self):
         """The other end of the same clamp. The feed publishes notices dated ahead
@@ -268,12 +279,17 @@ class TestSchemePairing:
         assert norm_scheme(None) == ""
 
     def test_paired_lift_matches_scheme_within_tolerance(self):
-        lifts = {"Tipperary": [("ardfinnan", _dt("2026-06-23T10:00"))]}
+        key = ("Tipperary", "boil_notice_lifted")
+        lifts = {key: [("ardfinnan", _dt("2026-06-23T10:00"))]}
         start = _dt("2026-06-07T00:00")
-        assert paired_lift(lifts, "Tipperary", "Ardfinnan PWS", start) is not None
+        assert paired_lift(lifts, key, "Ardfinnan PWS", start) is not None
         # a lift long before the issue is a different, older notice
-        early = {"Tipperary": [("ardfinnan", _dt("2026-05-01T00:00"))]}
-        assert paired_lift(early, "Tipperary", "Ardfinnan PWS", start) is None
+        early = {key: [("ardfinnan", _dt("2026-05-01T00:00"))]}
+        assert paired_lift(early, key, "Ardfinnan PWS", start) is None
+        # a do-not-consume lift naming the same scheme is a different notice's end
+        other = {("Tipperary", "consumption_notice_lifted"):
+                 [("ardfinnan", _dt("2026-06-23T10:00"))]}
+        assert paired_lift(other, key, "Ardfinnan PWS", start) is None
 
 
 class TestSmallAreaIndex:
@@ -452,6 +468,53 @@ class TestBuildSite:
         assert month["days"][4][0] == ""  # May 5: lifted
         # the notice is reported beside the grade, not inside it
         assert month["grade"] == "A"
+        assert month["health_n"] == 1
+
+    def test_open_consumption_notice_is_closed_by_its_paired_lift(self):
+        """Do-not-consume notices are published exactly like boil notices: the
+        issue never states its own end and the lift is a separate case with a
+        fresh reference_num. Before this they could never be paired at all and
+        ran to the 14-day cap regardless of a lift sitting right there."""
+        issue = _case(
+            work_category="consumption_notice_issued",
+            do_not_drink=1,
+            status="Open",
+            notice_to_end_seconds=None,
+            location="Coolineagh Public Water Supply",
+            reference_num="COR1",
+        )
+        lift = _case(
+            id=99,
+            work_category="consumption_notice_lifted",
+            status="Closed",
+            notice_to_end_seconds=None,
+            location="Coolineagh PWS",
+            reference_num="COR2",
+            start_date="2026-05-03T00:00:00+00:00",
+        )
+        month = build_site([issue, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["events"]["quality"] == 1
+        assert month["days"][1][0] == "quality"  # May 2: active
+        assert month["days"][4][0] == ""  # May 5: lifted
+        assert month["health_n"] == 1
+
+    def test_an_unpaired_consumption_notice_is_not_excluded_as_stale(self):
+        """The deliberate half-measure. Boil notices older than CAP_DAYS with no
+        lift are dropped, because case 221165 sat 'Open' while its own text said
+        it had been lifted — status contradicted by evidence. No do-not-consume
+        notice on file does that: Whiddy Island (Open since 2022) names a real,
+        unlifted water-quality failure. So these keep accruing to the cap and
+        keep their marker, rather than vanishing on an assumption."""
+        stale = _case(
+            work_category="consumption_notice_issued",
+            do_not_drink=1,
+            status="Open",
+            notice_to_end_seconds=None,
+            start_date="2026-05-01T00:00:00+00:00",
+            reference_num="COR1",
+        )
+        month = build_site([stale], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["events"]["quality"] == 1
         assert month["health_n"] == 1
 
     def test_days_before_collection_start_are_no_data(self):

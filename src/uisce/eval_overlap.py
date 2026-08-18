@@ -32,13 +32,12 @@ from uisce.site import (
     COUNTY_POP,
     SmallAreaIndex,
     case_ref,
+    collect_lifts,
     event_windows,
     load_cases,
     merge,
     month_bounds,
     month_list,
-    norm_scheme,
-    parse_dt,
     recurring_events,
     resolve_case,
     union_seconds,
@@ -52,10 +51,7 @@ def overlap_by_month(rows, sa_index, now):
     signals — so "published" here is the same accrual the site ships, restricted
     to the only class that accrues.
     """
-    lifts = defaultdict(list)
-    for r in rows:
-        if r["work_category"] == "boil_notice_lifted":
-            lifts[r["county"]].append((norm_scheme(r["location"]), parse_dt(r["start_date"])))
+    lifts = collect_lifts(rows)
     shared = event_windows(rows)
     recurring = recurring_events(rows, shared)
 

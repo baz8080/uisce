@@ -101,7 +101,17 @@ SEV_ORDER = ["outage", "quality", "degraded", "maintenance"]
 
 QUALITY_CATS = {"boil_notice_issued", "consumption_notice_issued", "discolouration"}
 DEGRADED_CATS = {"water_conservation", "low_pressure"}
-IGNORE_CATS = {"boil_notice_lifted", "consumption_notice_lifted"}  # a lift is good news
+# The lift category that ends each kind of standing notice. Both kinds are
+# published the same way: the issue cannot state its own end, and the lift
+# arrives as a separate case with a fresh reference_num. Pairing consults only
+# the matching kind, so a boil notice can never be closed by a do-not-consume
+# lift that happens to name the same scheme.
+LIFT_OF = {
+    "boil_notice_issued": "boil_notice_lifted",
+    "consumption_notice_issued": "consumption_notice_lifted",
+}
+
+IGNORE_CATS = set(LIFT_OF.values())  # a lift is good news, not an event
 
 # Boil notices are the weakest class in the dataset: only 1 of 23 has a real end
 # (see boil_notice_fate and notes/boil-notices.md). Setting this to True drops the
@@ -216,7 +226,8 @@ def boil_notice_fate(row, lifts, now):
     See notes/boil-notices.md for the measurements behind this.
     """
     start = parse_dt(row["start_date"])
-    lift = paired_lift(lifts, row["county"], row["location"], start)
+    key = (row["county"], LIFT_OF[row["work_category"]])
+    lift = paired_lift(lifts, key, row["location"], start)
     if lift is not None:
         return "paired", max(lift, start)
     if row["status"] != "Open":
@@ -231,19 +242,35 @@ def boil_notice_fate(row, lifts, now):
     return "accrue", max(min(now, start + timedelta(days=CAP_DAYS)), start)
 
 
-def paired_lift(lifts, county, location, start):
-    """Earliest boil-notice lift matching this notice's scheme, or None.
+def collect_lifts(rows):
+    """{(county, lift category): [(scheme, when)]} — the pairing index.
+
+    Built in one place because three callers need it identically (build_site and
+    both eval commands); three copies of this loop is how the key shape drifts.
+    """
+    lifts = defaultdict(list)
+    for r in rows:
+        if r["work_category"] in IGNORE_CATS:
+            lifts[(r["county"], r["work_category"])].append(
+                (norm_scheme(r["location"]), parse_dt(r["start_date"]))
+            )
+    return lifts
+
+
+def paired_lift(lifts, key, location, start):
+    """Earliest lift matching this notice's scheme, or None.
 
     Lift notices arrive as separate cases with fresh reference_nums, so the
-    pairing key is county + normalised scheme name. Multi-pin publishing is
-    not chronologically tidy, so a lift up to 2 days before the issue pin's
-    start still counts.
+    pairing key is (county, lift category) + normalised scheme name. The
+    category half is what stops a boil notice pairing with a do-not-consume
+    lift for the same scheme. Multi-pin publishing is not chronologically
+    tidy, so a lift up to 2 days before the issue pin's start still counts.
     """
-    key = norm_scheme(location)
-    if not key:
+    scheme = norm_scheme(location)
+    if not scheme:
         return None
     candidates = [
-        dt for k, dt in lifts.get(county, []) if k == key and dt >= start - timedelta(days=2)
+        dt for k, dt in lifts.get(key, []) if k == scheme and dt >= start - timedelta(days=2)
     ]
     return min(candidates) if candidates else None
 
@@ -795,7 +822,28 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
             # closed with no lift: token footprint, as for any no-signal case
             end = start + timedelta(seconds=1)
     elif not has_end:
-        if r["status"] == "Open" and start < now and not ended_by_publication(r):
+        # A do-not-consume notice cannot state its own end either — the lift is a
+        # separate case, exactly as for a boil notice — so pairing one is strictly
+        # more information than running to the cap.
+        #
+        # The staleness *exclusion* boil notices take is deliberately NOT applied
+        # here. The case that justified it (221165) sat 'Open' while its own text
+        # said the notice "is now lifted with immediate effect" — the text
+        # contradicted the status. No do-not-consume notice on file does that:
+        # Whiddy Island and Dursey Island both read as genuine, unlifted notices
+        # naming a specific water-quality failure. Dropping them would remove a
+        # live drinking-water warning on an assumption rather than on evidence.
+        # See notes/statuspage-methodology.md.
+        lift = (
+            paired_lift(lifts, (r["county"], LIFT_OF[r["work_category"]]), r["location"], start)
+            if r["work_category"] in LIFT_OF
+            else None
+        )
+        if lift is not None:
+            # a lift is a real, observed end, not a schedule
+            end = max(lift, start)
+            has_end = observed_end = True
+        elif r["status"] == "Open" and start < now and not ended_by_publication(r):
             # ongoing with no inferred end: runs from start until now, capped
             end = min(now, start + cap)
         else:
@@ -1613,10 +1661,7 @@ def recurrence_report(cases, pin_tags=None):
 def build_site(rows, sa_index, now, towns=None):
     months = month_list(COLLECTION_START, now)
 
-    lifts = defaultdict(list)
-    for r in rows:
-        if r["work_category"] == "boil_notice_lifted":
-            lifts[r["county"]].append((norm_scheme(r["location"]), parse_dt(r["start_date"])))
+    lifts = collect_lifts(rows)
 
     counties = defaultdict(Region)
     county_towns = defaultdict(lambda: defaultdict(Region))
