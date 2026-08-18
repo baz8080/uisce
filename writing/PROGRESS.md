@@ -13,7 +13,8 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 02 | Let a robot do it every week | #5–6 | drafted | 1,034 |
 | 03 | Ask a local model what the notice actually says | #8–13 | drafted | 2,231 |
 | 04 | Make it a real project | #14–15 | drafted | 1,296 |
-| 05 | A website, and an honest number on the model | #16–17 | todo | |
+| 05a | A website, and a number that is fair to Cork | #16 | drafted | 1,930 |
+| 05b | An honest number on the model | #16–17 | drafted | 1,900 |
 | 06 | Say what you actually measured | #18–20 | todo | |
 | 07 | Record the moment a case closes | #21–22 | todo | |
 | 08a | How a pin gets a population | #23 | todo | |
@@ -49,6 +50,19 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
   circuit breaker, dedupe −15% calls, timeout 120 s). PR #15 work_category (26 slugs) and
   work_type 31%→89% by title rules; today 90.4%, 16 uncategorised. Concept boxes: what a test
   suite buys; a title is a category, not a severity (→ Ch 9). Ends: next the Census, Ch 5.
+- **05a** Cork May uptime 2% → person-hours and SAIDI-style availability (~99.2%); Small Areas
+  within 500 m (details deferred to Ch 8a); four classes, outage-only accrues (investigation
+  was ~8%); events by reference_num, intervals and footprints unioned; A–F thresholds stated,
+  calibration deferred to Ch 12; Ofwat 99.999% not comparable; page claims "announced
+  disruptions and time-to-fix". Worked example Drogheda 23.8 h × 23,169 = 551,427 ph → Louth
+  May 99.469% (C) alone; vs Drogheda's own 44,135 → 98.3% (foreshadows Ch 8). SVG diagram
+  person-hours-rectangle. Concept boxes: person-hours; population-weighted availability.
+- **05b** Round 1 stratified 114: 71.9% raw / 82.8% duration-feeding; error taxonomy;
+  lifted_immediate excluded. pv2: skip-logic bug (bump re-read nothing), replay harness, ruler
+  defects (~4 pts, four labels amended), 81→99/114, 99/99. Round 2 uniform 120/120; rule of
+  three → ≥97.5%. Corpus 7,892 re-read, date_only 55→0, no fabrications. Boil-notice staleness
+  (Cork May F→D) and no-better-start (toggle rejected). Concept boxes: stratified sample;
+  replay vs hold-out. Ends: the metric gets renamed → Ch 6.
 
 ## Open threads
 
@@ -60,7 +74,18 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 
 ## Next session
 
-**Ch 5** (heavy — first site, person-hours, availability, grades, the model eval). Read: this
+**Ch 6** (PRs #18–#20: rename to notice_to_end, observed 17.0 h vs scheduled 5.4 h vs pooled
+9.3 h, the 532-case negative-span family and ~101k fabricated Kildare person-hours, deploy to
+Pages). Read: this file → `README.md` → `outline.md` Ch 6 → `sources/ch06.md` (~2k words) →
+`notes/statuspage-methodology.md` "The published time metric is notice → observed completion"
+(line ~324) → `notes/data-quality.md` "Measured 2026-07-20: ends preceding publication are 532
+cases" (grep the heading; the rejected minimum-start rule is there — Ch 3 promised it).
+Worked example: the median arithmetic with the three n's; maybe a real negative-span case.
+Diagram: two histograms "measured" vs "promised" (SVG, simple). Continuity: Ch 5b ended
+"three days later the site changed what it called the number"; Ch 1 said end_date "reads like
+a system default". Register figures. Update this file. Commit.
+
+_Superseded brief (done):_ **Ch 5** (heavy — first site, person-hours, availability, grades, the model eval). Read: this
 file → `README.md` → `outline.md` Ch 5 → `sources/ch05.md` (~3.4k words) →
 `notes/statuspage-methodology.md` "Why not plain uptime?" and "Severity classes" →
 `notes/end-time-eval.md` "Workflow", "Labelling guide", and the 2026-07-18/19 results → `site.py`
@@ -81,6 +106,8 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
+- 2026-08-18 · Session 3 · drafted Ch 5a (1,930 w) and 5b (1,900 w) — Ch 5 split as the length
+  rule intends; first SVG diagram.
 - 2026-08-18 · Session 2 · drafted Ch 3 (2,231 w) and Ch 4 (1,296 w); pulled prompt v1/v2 diffs
   and KLD00118059's inferred row; category counts measured.
 - 2026-08-18 · Session 1 · drafted Ch 1 (1,934 w) and Ch 2 (1,034 w); measured 10,610 cases /

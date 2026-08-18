@@ -75,6 +75,21 @@ Chapters quote from here rather than re-deriving; a missing figure is written in
 | Drogheda reservoir interruption | 23.8 h → 551,427 person-hours | notes/statuspage-methodology.md |
 | Grade thresholds | A ≥ 99.9, B ≥ 99.75, C ≥ 99.45, D ≥ 99.0, else F | `site.py:grade` |
 | County populations used as denominators | Cork 584,156 · Kildare 246,977 · Dublin 1,458,154 (Census 2022) | `site.py:COUNTY_POP` |
+| Louth population | 139,703; May 2026 = 744 h → 103,939,032 person-hours possible; Drogheda event alone → 99.469% (C); against Drogheda's 44,135 → ~98.3% | `site.py:COUNTY_POP`; arithmetic (Ch 5a) |
+| Drogheda event affected population | ≈ 23,169 (551,427 ÷ 23.8) | derived |
+| Investigation share pre-split | 4,090 h vs 27,128 h burst mains, May–Jun 2026 (~8%) | notes/statuspage-methodology.md "Severity classes" |
+| `water_outage` flag | set on 97% of cases | same |
+| Feed deletions | none since collection began (~2026-04-20), checked 16 Jul | PR #16 commit |
+| Tests at PR #16 | 86 | PR #16 |
+| Round 1 per-class | completion_update 37/40 · scheduled_end_with_time 27/30 · not_found 18/20 · date_only 0/9 · lifted_immediate 0/15 = 82/114 | notes/end-time-eval.md 2026-07-18 |
+| Round 1 error taxonomy | 7 completion-precedence failures (worst 8 days early); 8 recurring-window date-only; 2 single-digit-day time drops | same |
+| Skip-logic bug | prompt bump re-inferred 0; fixed → 7,552 flagged | PR #17 commit |
+| Label defects | 4 rows amended, ~4 points; truth_for fallback bug | PR #17 |
+| Fresh-round cost | ~120 calls ≈ 5 min vs 7,552 calls ≈ 4.2 h | PR #17 commit |
+| Round 2 mix | 67% completion_update; two classes zero rows | PR #17 |
+| pv1→pv2 corpus | 7,552 inferred under both; 15 apparent time-fabrications all real (12 "midday", 3 Irish) | PR #17 commit |
+| Boil-notice staleness | 22 open notices, 8 older than cap, one Open since 2025-11-13; ~37 merged days quality time, 5 counties; Cork May F→D, Donegal Apr C→B; 1 of 23 pairs | PR #17 commit |
+| Start-basis toggle | 55% of descriptions state a start; Unplanned n=1,512 median −0.8 h (21% published after); Planned n=2,094 +0.1 h (51%) | PR #17 commit; notes/data-quality.md "Resolved 2026-07-20" |
 
 ### Ch 6
 | Figure | Value | Source |
