@@ -200,6 +200,16 @@ class TestBoilNoticeFate:
         assert outcome == "paired"
         assert end == _dt("2026-05-01T00:00:00+00:00")
 
+    def test_an_advance_dated_notice_never_accrues_backwards(self):
+        """The other end of the same clamp. The feed publishes notices dated ahead
+        of publication and leaves them 'Open'; min(now, start + cap) alone puts the
+        end before the start, which the clipped county arithmetic never sees but
+        the area history prints as "-240h so far"."""
+        future = self._notice(start_date="2026-05-20T00:00:00+00:00")
+        outcome, end = boil_notice_fate(future, {}, NOW)
+        assert outcome == "accrue"
+        assert end == _dt("2026-05-20T00:00:00+00:00")
+
 
 class TestGrade:
     def test_thresholds(self):
@@ -1646,6 +1656,19 @@ class TestIndexablePages:
             f"c/{county_slug(c)}.html" for c in counties
         ]
         assert [p for p in pages if beacon not in (tmp_path / p).read_text()] == []
+
+    def test_a_month_that_lost_person_time_never_prints_a_clean_hundred(self, tmp_path):
+        """The app's availText clamps this and the static page has to match: a
+        county that lost person-time must not round up to "100.000%", which reads
+        as a claim the page is not making. A one-hour, 1,000-person burst against
+        Dublin's population rounds there at three decimals."""
+        self._write(tmp_path, [_case(
+            county="Dublin", reference_num="DUB00000001",
+            notice_to_end_seconds=3600.0, end_local_time="01:00",
+        )])
+        page = (tmp_path / "c" / "dublin.html").read_text()
+        assert "99.999% supply availability" in page
+        assert "100.000% supply availability" not in page
 
     def test_an_empty_county_page_still_renders_and_says_so(self, tmp_path):
         """A county with no notice is a page a search result can still land on,

@@ -42,6 +42,7 @@ from uisce.config import (
     BASE_URL,
     DB_PATH,
     DUBLIN,
+    OBSERVED_END_SOURCES,
     RECURRING,
     SA_POP_PATH,
     SA_TOWNS_PATH,
@@ -61,12 +62,6 @@ COLLECTION_START = datetime(2026, 4, 20, tzinfo=timezone.utc)
 # Notice-to-end spans above this are capped; the genuinely long events
 # (conservation restrictions) are classed degraded and never accrue anyway.
 CAP_DAYS = 14
-
-# An end signal only supports a claim about how long works actually took when
-# it is an observed completion. Scheduled ends still accrue disruption time
-# (a stated plan is the best interval available) but are kept out of the
-# published median, which would otherwise mix a plan with an observation.
-OBSERVED_END_SOURCES = {"completion_update"}
 
 # Smallest number of observed completions a work_category needs before its own
 # median is used to impute a missing span; below this it falls back to the
@@ -220,7 +215,12 @@ def boil_notice_fate(row, lifts, now):
         return "closed_no_signal", None
     if now - start > timedelta(days=CAP_DAYS):
         return "exclude", None
-    return "accrue", min(now, start + timedelta(days=CAP_DAYS))
+    # clamped to start, as the paired branch above clamps an early lift. An
+    # advance-dated notice — the feed publishes these, and the front end already
+    # prints "from" rather than "since" for them — would otherwise accrue from a
+    # future start back to now. The clipped county arithmetic never sees the
+    # negative span, but the area history prints it as "-240h so far".
+    return "accrue", max(min(now, start + timedelta(days=CAP_DAYS)), start)
 
 
 def paired_lift(lifts, county, location, start):
@@ -1359,6 +1359,17 @@ def _county_open_html(cdata, shown=COUNTY_OPEN_SHOWN):
     )
 
 
+def _avail_text(month):
+    """Availability as the county page prints it, clamped the way the app's
+    availText clamps it: a month that lost person-time never rounds up to a clean
+    hundred, which reads as a claim the page is not making. Keyed on person_h, as
+    in the app, so a footprint too small to round to an hour still shows plain."""
+    availability = month["availability"]
+    if month["person_h"]:
+        availability = min(availability, 99.999)
+    return f"{availability:.3f}%"
+
+
 def _county_summary_html(county, cdata, n_areas, n_events, months):
     """The opening paragraph and the current-state line."""
     pop = cdata["pop"]
@@ -1385,7 +1396,7 @@ def _county_summary_html(county, cdata, n_areas, n_events, months):
             )
         parts.append(
             f'<p class="now">This month: grade <strong>{m["grade"]}</strong>, '
-            f'{m["availability"]:.3f}% supply availability, '
+            f'{_avail_text(m)} supply availability, '
             f'{m["clear_days"]} of {m["days_elapsed"]} elapsed days with no notice.'
             f'{health}</p>'
         )
@@ -1403,7 +1414,7 @@ def _county_months_html(cdata, months):
         rows.append(
             f'<tr><th scope="row">{ym}</th>'
             f'<td class="g g-{m["grade"]}">{m["grade"]}</td>'
-            f'<td>{m["availability"]:.3f}%</td>'
+            f'<td>{_avail_text(m)}</td>'
             f'<td>{ev["outage"]}</td><td>{ev["quality"]}</td>'
             f'<td>{ev["degraded"]}</td><td>{ev["maintenance"]}</td>'
             f'<td>{m["person_h"]:,}</td></tr>'

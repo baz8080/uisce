@@ -17,6 +17,14 @@ DUBLIN = ZoneInfo("Europe/Dublin")
 # build.py (which projects and lints it) and site.py (which expands it).
 RECURRING = "daily"
 
+# end_source values whose end is *observed* (works reported done) rather than
+# *scheduled* (a plan that may or may not have been met). Only an observed end
+# supports a claim about how long works actually took: scheduled ends still
+# accrue disruption time, since a stated plan is the best interval available,
+# but they stay out of the published median, which would otherwise mix a plan
+# with an observation. See notes/statuspage-methodology.md.
+OBSERVED_END_SOURCES = {"completion_update"}
+
 DB_PATH = Path("out/uisce.db")
 CASES_RAW_PATH = Path("out/cases.json")
 CASES_MAPPED_PATH = Path("out/cases_mapped.json")

@@ -7,11 +7,6 @@ from uisce.config import DB_PATH, DUBLIN, JSONL_PATH, RECURRING
 
 NO_END_SIGNAL_SOURCES = {"not_found", "lifted_immediate"}
 
-# end_source values whose end is *observed* (works reported done) rather than
-# *scheduled* (a plan that may or may not have been met). Only these support a
-# claim about how long something actually took; see notes/statuspage-methodology.md.
-OBSERVED_END_SOURCES = {"completion_update"}
-
 
 def create_table(conn):
     conn.execute("DROP TABLE IF EXISTS inferred_cases")

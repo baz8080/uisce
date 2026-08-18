@@ -1,8 +1,8 @@
 # uisce
 
-Download, transform, and geocode [Uisce Éireann](https://www.water.ie/) (Irish Water) supply and works notices, and infer each notice's end time from its text with a local LLM. The result is a single SQLite database, rebuilt by CI three times a week and published as a GitHub release, plus a statuspage-style static site with per-county supply availability and A–F grades.
+Download, transform, and geocode [Uisce Éireann](https://www.water.ie/) (Irish Water) supply and works notices, and infer each notice's end time from its text with a local LLM. The result is a single SQLite database, rebuilt by CI twice a day and published as a GitHub release, plus a statuspage-style static site with per-county supply availability and A–F grades.
 
-The [website that this repo generates](https://baz8080.github.io/uisce/) is deployed twice a day.
+The [website that this repo generates](https://baz8080.github.io/uisce/) is deployed by the same builds.
 
 **What the time figures mean.** This project does not measure outage duration and cannot: the feed never records when supply was actually lost. What it measures is the span from **when a notice was published** to **the end that notice reports** (`notice_to_end_seconds`), and the site publishes the subset where that end is an observed "works are now complete" update rather than a schedule. That published median is a floor on true length. The availability percentages are not: about one disruption in twenty reports no usable end, and since 2026-08-15 those are charged the typical observed span for their kind of works rather than counted as zero — a total has to put a number on every event, and omitting one asserts it lasted no time at all. See [notes/data-quality.md](notes/data-quality.md) and [notes/statuspage-methodology.md](notes/statuspage-methodology.md).
 
@@ -122,7 +122,7 @@ uv run pytest
 uv run ruff check
 ```
 
-CI lints and tests on every push. The `Build DB` workflow runs the pipeline daily and publishes the refreshed DB as a release. The cadence is not just freshness: the gap between builds is the resolution of `cases.closed_at`, and a case that opens and closes within one gap is never observed open at all.
+CI lints and tests on every push. The `Build DB` workflow runs the pipeline twice a day and publishes the refreshed DB as a release. The cadence is not just freshness: the gap between builds is the resolution of `cases.closed_at`, and a case that opens and closes within one gap is never observed open at all — see [notes/data-quality.md](notes/data-quality.md) ("Twice-daily builds: why, and why not three") for the measured tradeoff.
 
 ## Interesting APIs
 
