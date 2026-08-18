@@ -1,5 +1,5 @@
 # 12. Put a number on what you don't know
-*~12 min read · PRs #40–#41 · 15–18 August 2026 (with a probe from 16 July)*
+*~11 min read · PRs #40–#41 · 15–18 August 2026 (with a probe from 16 July)*
 
 *Where we are:* the site is correct in the ways chapters 5–9 made it, readable (chapter 10), and
 findable (chapter 11). This last stretch of work — so far — is about the numbers the site had

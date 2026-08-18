@@ -23,7 +23,7 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 09b | The title is not the severity | #28–31 | drafted | 2,117 |
 | 10 | For a reader, not an analyst | #31(last), #32–36 | drafted | 2,085 |
 | 11 | Be findable | #37–39 | drafted | 1,034 |
-| 12 | Put a number on what you don't know | #40–41 | drafted | 2,600 |
+| 12 | Put a number on what you don't know | #40–41 | drafted | 2,623 |
 | 13 | Closing + glossary | — | todo (final pass) | |
 
 ## Chapter summaries (3 lines each, added when drafted)
@@ -324,7 +324,7 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
-- 2026-08-18 · Session 10 · drafted Ch 12 (2,600 w); SVGs overlap-double-count,
+- 2026-08-18 · Session 10 · drafted Ch 12 (2,623 w); SVGs overlap-double-count,
   radius-sensitivity. All 16 posts drafted.
 - 2026-08-18 · Session 9 · drafted Ch 10 (2,085 w) and Ch 11 (1,034 w).
 - 2026-08-18 · Session 8 · drafted Ch 9a (1,913 w) and 9b (2,117 w); SVGs recurring-window,
