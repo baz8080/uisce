@@ -36,6 +36,7 @@ with the evidence that closed them.
 | gemma-4-12b-qat over qwen3.5-9b for end-time extraction; prompt version is at v3. | model-and-runtime-benchmarks.md, end-time-eval.md |
 | Geography is CSO Census settlements, not the feed's `location` string (3,866 distinct values, fragments badly, carries no population). | statuspage-methodology.md — "The county drill-down" (2026-07-25) |
 | Overlapping events double-count person-hours by **2.0%** nationally, left uncorrected. Re-measure with `uv run uisce-eval-overlap`. | statuspage-methodology.md — "Known limitations" (2026-08-18) |
+| The design layer (tokens, base CSS, row/bar/card, JS helpers) is shared with esb and lifts via `../statusui`, **vendored** under `src/uisce/ui/` — edit upstream, then `scripts/sync-ui.sh`; never edit the copy. `site.css` and the inline blocks are this site's own. | frontend-notes.md — "Shared with esb and lifts" (2026-08-19); statusui's README for what is shared |
 
 ## Conventions
 
