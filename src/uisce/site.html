@@ -160,8 +160,16 @@
   /* The list caption is a hover affordance: on touch a tap on a cell bubbles to
      the row and navigates, so there is nothing for it to show — and at ~9px a
      cell is far under any usable touch target. Don't reserve the strip. The
-     county page's own bar keeps its readout: nothing navigates there. */
-  @media (hover: none) { .row .daycap { display: none; } }
+     county page's own bar keeps its readout: nothing navigates there.
+     Hidden only while *empty*: iPadOS reports hover:none (and pointer:coarse,
+     any-hover:none) even with a trackpad attached, yet hovers still fire, so a
+     strip that hides outright would take the caption away from exactly the
+     pointer that can use it. Once filled it shows, at the cost of a one-time
+     17px growth of that row on those devices. */
+  @media (hover: none) { .row .daycap:empty { display: none; } }
+  /* the one-line cue that the bars respond, above the list; nothing to cue on
+     touch, where a tap navigates */
+  @media (hover: none) { .hoverhint { display: none; } }
   /* counts stack on the left, availability sits to their right and centred
      across both lines; the counts line is longer than the percentage, so
      putting it first is what keeps the column from overflowing */
@@ -530,9 +538,12 @@ function healthKey() {
 // The reader is looking at two different clocks at once: the grade and the
 // percentage are the selected month's, "open now" is live. Nothing said so, and
 // an A beside "5 open now" reads as a contradiction rather than two timeframes.
+// The bars answer to a hover now that their tooltips are gone; one sentence
+// here says so, rather than a placeholder in each of the 26 strips below.
 function basisNote() {
   return `Grades and percentages are for <b>${monthLabel(curMonth)}</b>.` +
-    (isLatest() ? ` &ldquo;Open now&rdquo; is live, whatever month you are viewing.` : "");
+    (isLatest() ? ` &ldquo;Open now&rdquo; is live, whatever month you are viewing.` : "") +
+    ` <span class="hoverhint">Hover a day in a bar for its detail.</span>`;
 }
 
 // "data to 2026-08-05 22:07 UTC" asked every reader to do timezone arithmetic to
@@ -691,7 +702,8 @@ function bindDayCaption() {
     if (!cell) return;
     // a list cell's readout is inside its own .row; the county page's big bar
     // sits directly in a .card
-    const cap = cell.closest(".row, .card").querySelector(".daycap");
+    const host = cell.closest(".row, .card");
+    const cap = host && host.querySelector(".daycap");
     if (cap) cap.textContent = cell.dataset.cap;
   };
   document.addEventListener("click", show);
