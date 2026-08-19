@@ -334,14 +334,9 @@ const LEGEND = `
 // know which counties are still standing, so it makes the weaker, true claim and
 // leaves "right now" to the per-county mark, which does know (health_now).
 //
-// "Boil-water or do-not-drink", not the category's full three kinds: a lay
-// reader hears do-not-consume as do-not-drink, and naming all three ran this
-// line to three lines on a phone. Not "water quality issue" either — the
-// legend beside this line already uses "Water quality notice" for the whole
-// orange category, discolouration included, and the mark exists to say
-// something stronger than that. The mark is raised by KNOCK_CATS, and this
-// line is the only always-visible explanation of it — the fuller wording is
-// in a title=, which never fires on a touchscreen.
+// KNOCK_CATS raises the mark for three notice kinds; do-not-consume folds
+// into do-not-drink here to keep the line short. Not "water quality issue":
+// the legend uses that phrase for the whole orange category.
 function healthKey() {
   return `<span class="healthmark sm">!</span> marks a boil-water or do-not-drink` +
     ` notice active in ${monthLabelLong(curMonth)} — open the county for details.`;
@@ -510,7 +505,6 @@ function render() {
     chl.innerHTML = `<a href="c/${county.toLowerCase()}.html" style="color:inherit">See every notice ever recorded for ${esc(county)}</a>`;
   }
   RENDER[view]();
-  // the strip scrolls now, so bring the selected tab back on-screen
   revealMonthTab(document.getElementById(VIEW_EL[view]).querySelector(".months"));
 }
 
