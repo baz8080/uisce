@@ -62,8 +62,55 @@ The review reported the tab strip already overflowing a 390px phone at five tabs
 
 Collection began 2026-04-20, so the sixth tab arrives **1 September 2026** and the overflow with it. `flex-wrap: wrap` on `.months` fixes it at every count. Shipped ahead of the fault rather than after it.
 
+**Superseded 2026-08-19**: wrap was the stopgap, not the answer — see "The iPhone review
+pass" below. The strip scrolls horizontally now.
+
 ### Left open
 
 The *fills* still fail the 3:1 non-text threshold against the light page — `--warning` 1.74:1, `--serious` 2.50:1 — which matters for the legend swatches, where the colour itself is the meaning rather than a backdrop for a letter. The review checked `--maint` against this threshold but not the others. Not addressed here: changing the fills reaches the bars and the county grid, which is a bigger visual decision than a text-contrast fix.
 
 Also noted and not taken: the overview is entirely JS-rendered with no `<noscript>` fallback (the county pages are static, so the content exists — it is the pointer that is missing); the health mark explains itself only through `title=`, which never fires on touch; and the sort `<select>` has no programmatic label. The first needs a wording decision, the other two touch generated markup the tests pin.
+
+## The iPhone review pass 2026-08-19
+
+An owner review on a 390px iPhone. Everything below was verified against fixture-built
+before/after screenshots (touch-emulated Chromium, 390×844 and 1280px, both colour schemes).
+
+**The month strip scrolls instead of wrapping** (statusui). At five tabs the strip was already
+two rows on a phone; wrapped, twelve tabs measured three to four rows sitting above the county
+list. Now `.months` is a single `overflow-x: auto` row — hidden scrollbar, edge shadows that
+appear only where more tabs lie (surface-coloured covers with `background-attachment: local`
+hide the pinned shadows at rest), and a new `revealMonthTab()` scrolls the selected tab back
+into view after each render, via `scrollLeft` because `scrollIntoView()` also scrolls the page.
+At twelve simulated months: one row, 1,095px of tabs in a 356px strip, page `scrollWidth`
+still exactly the viewport. Alternatives rejected: a "recent + older" split is two controls
+where readers overwhelmingly want the current month anyway, and a `<select>` loses one-tap
+adjacency between neighbouring months. The top-ten view's tabs sat bare in `.controls` with no
+`.months` pill at all; they are wrapped now, so all three strips behave alike.
+
+**Day captions no longer pop in on touch** (statusui). PR #44's `(hover: none)` +
+`:empty` gate hid the list strip on phones — but iOS fires `pointerover` on the touch that
+starts a scroll or a tap, the delegated listener filled the strip, and once non-empty the
+`:empty` gate no longer matched: the caption appeared and grew the row 17px, exactly what the
+gate existed to stop. `bindDayCaption` now ignores `pointerover` with `pointerType: "touch"`.
+The click path is untouched, so the county cards' "Tap a day for detail." still works, and an
+iPad trackpad (which reports `hover: none` but hovers as `pointerType: "mouse"`) still fills
+the strip — the exception PR #44 was built around.
+
+**The phone column owns its rhythm** (statusui). Under 640px `#overview` is a flex column, so
+the desktop margins stopped collapsing and the section gaps landed wherever they fell:
+measured 22/6/14/14/18/30/16px down the page, the 6 being uisce's `.healthkey` desktop margin
+(`-4px`, tuned to sit under `.legend`) applying after the mobile reorder had moved it under
+`.controls`. The column now zeroes its children's vertical margins and spaces them itself:
+`gap: 12px`, plus `margin-top: 12px` where a section starts (`.controls`, `#list`, `.legend`,
+`.natheading`). Measured after: 24/12/12/24/24/24/12/12. Desktop is untouched.
+
+**Copy cut to what a phone can carry** (this repo): the subtitle is one sentence plus the
+county prompt ("Uisce Éireann water outages, restrictions and works. Pick your county for
+details." — "outages and events" was considered and rejected, "events" carries nothing);
+"Partial month — in progress" reads "Month in progress."; the health key names two notice
+kinds, not three ("do-not-consume" folds into "do-not-drink" for a lay reader — but not
+"water quality issue", which would collide with the legend's "Water quality notice" category,
+and the mark exists to say something stronger); and "What this measures" went behind a footer
+disclosure like its two siblings — `id="method"` stays on the methodology block, which
+`openMethod()` and two links target.

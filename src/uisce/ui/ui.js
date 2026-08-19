@@ -47,6 +47,19 @@ function monthTabs(months, current, fn) {
   }).join("");
 }
 
+// The strip scrolls instead of wrapping, so after a re-render the selected
+// tab may sit off-screen. scrollLeft, not scrollIntoView(): the latter can
+// scroll the page too, which on a re-render yanks the reader up the page.
+function revealMonthTab(strip) {
+  var on = strip && strip.querySelector("button.on");
+  if (!on) return;
+  var s = strip.getBoundingClientRect();
+  var b = on.getBoundingClientRect();
+  var pad = 16;
+  if (b.left < s.left + pad) strip.scrollLeft += b.left - s.left - pad;
+  else if (b.right > s.right - pad) strip.scrollLeft += b.right - s.right + pad;
+}
+
 // describe(cell, date) -> [cls, caption, qualify]; a day in `partial` gets the
 // part-day suffix unless qualify is false. data-cap feeds the .daycap readout;
 // no title — it would repeat that, late, and never on a phone.
@@ -63,8 +76,13 @@ function dayCells(cells, ym, describe, partial) {
 
 // One delegated listener at the document, because the bars re-render on every
 // route and month change. pointerover covers a mouse; click covers touch.
+// Touch pointerover is ignored: a finger is never hovering — on a phone it
+// fires on scroll-starts and on the tap that navigates, filling the strip
+// that (hover: none) hides while empty. An iPad trackpad also reports
+// hover:none, but its hovers arrive as pointerType "mouse" and still fill.
 function bindDayCaption() {
   var show = function (e) {
+    if (e.type === "pointerover" && e.pointerType === "touch") return;
     var cell = e.target.closest(".bar i[data-cap]");
     if (!cell) return;
     var host = cell.closest(".row, .card");
