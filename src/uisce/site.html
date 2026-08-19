@@ -153,6 +153,13 @@
   /* The bar's whole meaning used to live in title attributes, which a phone
      never shows. Fixed height so filling it does not reflow the card. */
   .daycap { margin-top: 8px; font-size: 12.5px; color: var(--ink-2); min-height: 1.45em; }
+  /* inside .row, so the row's hover, click and focus ring cover it */
+  .row .daycap { grid-column: 1 / -1; margin: -4px 0 0; font-size: 12px; }
+  /* On touch a tap on a cell navigates, so hide the strip — but only while
+     empty: iPadOS reports hover:none even with a trackpad, and a hover there
+     still fills it. */
+  @media (hover: none) { .row .daycap:empty { display: none; } }
+  @media (hover: none) { .hoverhint { display: none; } }
   /* counts stack on the left, availability sits to their right and centred
      across both lines; the counts line is longer than the percentage, so
      putting it first is what keeps the column from overflowing */
@@ -521,9 +528,11 @@ function healthKey() {
 // The reader is looking at two different clocks at once: the grade and the
 // percentage are the selected month's, "open now" is live. Nothing said so, and
 // an A beside "5 open now" reads as a contradiction rather than two timeframes.
+// one hover cue above the list, not a placeholder in every strip
 function basisNote() {
   return `Grades and percentages are for <b>${monthLabel(curMonth)}</b>.` +
-    (isLatest() ? ` &ldquo;Open now&rdquo; is live, whatever month you are viewing.` : "");
+    (isLatest() ? ` &ldquo;Open now&rdquo; is live, whatever month you are viewing.` : "") +
+    ` <span class="hoverhint">Hover a day in a bar for its detail.</span>`;
 }
 
 // "data to 2026-08-05 22:07 UTC" asked every reader to do timezone arithmetic to
@@ -658,13 +667,12 @@ function availText(a, personH) {
   return (personH ? Math.min(a, 99.99) : a).toFixed(2) + "%";
 }
 
-// Each cell carries its caption twice: `title` for a mouse, `data-cap` for the
-// readout under the bar. A title alone made the whole bar decorative on a phone,
-// which is where most of this site is read.
+// data-cap feeds the .daycap readout; no title — it would repeat that, late,
+// and never on a phone
 function dayCells(days) {
   return days.map(([s, pct], i) => {
     const date = `${curMonth}-${String(i + 1).padStart(2, "0")}`;
-    const cell = (cls, cap) => `<i class="${cls}" title="${cap}" data-cap="${cap}"></i>`;
+    const cell = (cls, cap) => `<i class="${cls}" data-cap="${cap}"></i>`;
     if (date > today) return cell("future", `${date}: still to come`);
     if (s === "nd") return cell("future", `${date}: before this site started collecting`);
     const intensity = !s ? "" : pct < 0.5 ? "n1" : pct < 2 ? "n2" : "";
@@ -679,7 +687,8 @@ function bindDayCaption() {
   const show = e => {
     const cell = e.target.closest(".bar i[data-cap]");
     if (!cell) return;
-    const cap = cell.closest(".card, #overview").querySelector(".daycap");
+    const host = cell.closest(".row, .card");
+    const cap = host && host.querySelector(".daycap");
     if (cap) cap.textContent = cell.dataset.cap;
   };
   document.addEventListener("click", show);
@@ -780,15 +789,14 @@ function renderOverview() {
     // "open" is a right-now snapshot of status='Open', not a property of the
     // selected month — say so, or it reads as "open during July"
     const openBadge = isLatest() && c.open_total ? `<b>${c.open_total}</b><span>open now</span>` : "";
-    const towns = Object.values(c.towns).filter(t => t.months[curMonth]).length;
-    const hint = towns ? `${towns} ${towns === 1 ? "area" : "areas"} affected — open for the breakdown` : "open for detail";
     // the name is a real anchor, as the area rows already are: the row-level
     // onclick alone left every county unreachable by keyboard and unannounced
     // as interactive, and killed middle-click and open-in-new-tab
     const href = `#county/${encodeURIComponent(name)}`;
     const jump = `goCounty('${encodeURIComponent(name)}')`;
+    // no row title either: it would surface over the bar in place of the readout
     return `<div class="county">
-      <div class="row" onclick="${jump}" title="${name}: ${hint}">
+      <div class="row" onclick="${jump}">
         <div class="cname"><span class="gradechip g-${m.grade}">${m.grade}</span>${healthMark(m)}<a href="${href}" onclick="${jump}; return false;">${name}</a></div>
         <div class="bar">${dayCells(m.days)}</div>
         <div class="stats">
@@ -797,6 +805,7 @@ function renderOverview() {
           </div>
           <b class="pct">${availText(m.availability, m.person_h)}</b>
         </div>
+        <div class="daycap"></div>
       </div>
     </div>`;
   }).join("");
