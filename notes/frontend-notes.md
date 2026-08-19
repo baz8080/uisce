@@ -2,6 +2,34 @@
 
 Notes on `site.html` / `areas.html` / `county.html`, kept here so the reasoning isn't lost to chat history. See [how-it-works.md](how-it-works.md) for how the three pages fit together.
 
+## Shared with esb and lifts since 2026-08-19: the design layer lives in `statusui`
+
+The three status sites are deliberately look-alike, and every UI fix had been ported three
+times by hand — and not always: the 2026-08-18 contrast pass below never reached esb. The
+tokens, base rules, the row/bar/card components and the small browser helpers are now one set
+of files in `../statusui` (GitHub `baz8080/statusui`), **vendored** under `src/uisce/ui/` and
+inlined into each page at build by `statusui.assemble()` (`page_html` in `site.py`). The pages
+stay single-file: a search-result landing still costs one request.
+
+Vendoring, not a submodule or a package, was the choice: the sites stay clone-and-build, each
+site's PR shows the real CSS diff, and esb/lifts keep their empty `dependencies`. Drift is
+guarded by `tests/test_ui_vendored.py`, which compares the copy to `../statusui/ui` when that
+checkout is present and skips otherwise — the same convention as `../esb-data`.
+
+**To change the shared UI:** edit in `statusui`, commit, then `scripts/sync-ui.sh` here and in
+each sibling; `uv run pytest`; commit. If a site needed more than the sync, that was a site
+change and belongs in its own block. What is shared and what is deliberately per-site is listed
+in statusui's README; the short rule is that a rule goes upstream when two sites want it and
+none wants it different, and becomes a custom property the moment one does.
+
+What this site gave up in the unification: month tabs abbreviate to "Aug 2026" like the
+siblings (the strip was wrapping on a phone anyway — see the overflow table below), the county
+view's grade chip is the shared 32px, and the footer disclosures take the shared arrow. The
+name collisions were renamed here rather than upstream: `plural` → `pl` (ours returns the word,
+the shared one the count and word), `monthLabel` → `monthLabelLong`, and `dayCells` takes a
+`describe()` for our `[severity, share]` cells. `test_site_css.py` parses the assembled page now,
+since the template alone no longer carries the rules it guards.
+
 ## Fixed 2026-08-06: `hidden` needs `!important`, or an author `display` wins
 
 Both pages are hand-written HTML that switch views on and off with the `hidden` attribute. The UA stylesheet's rule for it is a plain `display: none`, which any author `display` on the same element outranks — the element then stays on screen while the page believes it is gone.
