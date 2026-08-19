@@ -153,22 +153,12 @@
   /* The bar's whole meaning used to live in title attributes, which a phone
      never shows. Fixed height so filling it does not reflow the card. */
   .daycap { margin-top: 8px; font-size: 12.5px; color: var(--ink-2); min-height: 1.45em; }
-  /* On the county list the caption is a third grid row *inside* .row, so the
-     row's hover band, click target and focus ring already cover it. Putting it
-     beside the row (as esb did) left the hover grey stopping above the text. */
+  /* inside .row, so the row's hover, click and focus ring cover it */
   .row .daycap { grid-column: 1 / -1; margin: -4px 0 0; font-size: 12px; }
-  /* The list caption is a hover affordance: on touch a tap on a cell bubbles to
-     the row and navigates, so there is nothing for it to show — and at ~9px a
-     cell is far under any usable touch target. Don't reserve the strip. The
-     county page's own bar keeps its readout: nothing navigates there.
-     Hidden only while *empty*: iPadOS reports hover:none (and pointer:coarse,
-     any-hover:none) even with a trackpad attached, yet hovers still fire, so a
-     strip that hides outright would take the caption away from exactly the
-     pointer that can use it. Once filled it shows, at the cost of a one-time
-     17px growth of that row on those devices. */
+  /* On touch a tap on a cell navigates, so hide the strip — but only while
+     empty: iPadOS reports hover:none even with a trackpad, and a hover there
+     still fills it. */
   @media (hover: none) { .row .daycap:empty { display: none; } }
-  /* the one-line cue that the bars respond, above the list; nothing to cue on
-     touch, where a tap navigates */
   @media (hover: none) { .hoverhint { display: none; } }
   /* counts stack on the left, availability sits to their right and centred
      across both lines; the counts line is longer than the percentage, so
@@ -538,8 +528,7 @@ function healthKey() {
 // The reader is looking at two different clocks at once: the grade and the
 // percentage are the selected month's, "open now" is live. Nothing said so, and
 // an A beside "5 open now" reads as a contradiction rather than two timeframes.
-// The bars answer to a hover now that their tooltips are gone; one sentence
-// here says so, rather than a placeholder in each of the 26 strips below.
+// one hover cue above the list, not a placeholder in every strip
 function basisNote() {
   return `Grades and percentages are for <b>${monthLabel(curMonth)}</b>.` +
     (isLatest() ? ` &ldquo;Open now&rdquo; is live, whatever month you are viewing.` : "") +
@@ -678,10 +667,8 @@ function availText(a, personH) {
   return (personH ? Math.min(a, 99.99) : a).toFixed(2) + "%";
 }
 
-// Each cell carries its caption in `data-cap`, shown in the `.daycap` readout
-// under the bar the moment the pointer reaches it. There is deliberately no
-// `title`: it would say the same thing a second time, after a delay, and never
-// fire at all on a phone — which is where most of this site is read.
+// data-cap feeds the .daycap readout; no title — it would repeat that, late,
+// and never on a phone
 function dayCells(days) {
   return days.map(([s, pct], i) => {
     const date = `${curMonth}-${String(i + 1).padStart(2, "0")}`;
@@ -700,8 +687,6 @@ function bindDayCaption() {
   const show = e => {
     const cell = e.target.closest(".bar i[data-cap]");
     if (!cell) return;
-    // a list cell's readout is inside its own .row; the county page's big bar
-    // sits directly in a .card
     const host = cell.closest(".row, .card");
     const cap = host && host.querySelector(".daycap");
     if (cap) cap.textContent = cell.dataset.cap;
@@ -809,8 +794,7 @@ function renderOverview() {
     // as interactive, and killed middle-click and open-in-new-tab
     const href = `#county/${encodeURIComponent(name)}`;
     const jump = `goCounty('${encodeURIComponent(name)}')`;
-    // no title on the row either: hovering the bar would surface it after a
-    // delay, on top of the readout that is already answering the question
+    // no row title either: it would surface over the bar in place of the readout
     return `<div class="county">
       <div class="row" onclick="${jump}">
         <div class="cname"><span class="gradechip g-${m.grade}">${m.grade}</span>${healthMark(m)}<a href="${href}" onclick="${jump}; return false;">${name}</a></div>
