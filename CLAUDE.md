@@ -4,6 +4,15 @@ A static status site for Uisce Éireann water disruption notices, built from an 
 `notes/` carries ~33k tokens of measured findings and settled decisions across 10 files — too much
 to read wholesale, which is why the important ones are indexed here.
 
+## The UI is shared — change it upstream
+
+`src/uisce/ui/` is a **vendored copy** of [`../statusui`](https://github.com/baz8080/statusui)
+(`ui/UPSTREAM` names the commit): the tokens, base CSS, row/bar/card components and the JS
+helpers that uisce, esb and lifts all use, inlined into every page at build. Edit it there,
+then `scripts/sync-ui.sh` here — `tests/test_ui_vendored.py` fails if the copy is edited in
+place. This site's own rules are `src/uisce/site.css` and the inline blocks in the three
+templates; the shared/per-site rule is in statusui's CLAUDE.md.
+
 ## Before you change how any published number is computed
 
 Read the relevant section of [notes/data-quality.md](notes/data-quality.md) and
