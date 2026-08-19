@@ -7,11 +7,13 @@ small — it reads the two files it is pointed at, not CSS in general.
 
 import re
 
-from uisce.site import AREAS_HTML, SITE_HTML
+from uisce.site import AREAS_HTML, SITE_HTML, page_html
 
 
 def _stylesheet(path):
-    css = "\n".join(re.findall(r"<style>(.*?)</style>", path.read_text(), re.S))
+    # the page as built, with the shared base.css and site.css inlined: the
+    # template alone carries only this page's own rules
+    css = "\n".join(re.findall(r"<style>(.*?)</style>", page_html(path, {}), re.S))
     return re.sub(r"/\*.*?\*/", "", css, flags=re.S)
 
 

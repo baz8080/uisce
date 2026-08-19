@@ -10,126 +10,22 @@
 <meta property="og:type" content="website">
 <link rel="canonical" href="<!--CANONICAL-->">
 <style>
-  :root {
-    color-scheme: light;
-    --page: #f9f9f7; --surface: #fcfcfb;
-    --ink: #0b0b0b; --ink-2: #52514e; --muted: #6e6c66;
-    --grid: #e1e0d9; --border: rgba(11,11,11,0.10);
-    --good: #087f08; --warning: #fab219; --serious: #ec835a;
-    --critical: #d03b3b; --maint: #1e62b8;
-    --cell-empty: #e8e7e1;
-    /* Text-safe shades: the status hues above are tuned for fills, and most
-       are too light (or too dark, per mode) to carry 4.5:1 text. *-text is
-       the same hue at a contrast that passes as text on page and surface;
-       --serious-deep is a serious fill dark enough to carry white text. */
-    --good-text: #0a7c0a; --warning-text: #8a6001;
-    --serious-text: #b34a20; --serious-deep: #b34a20;
-    --critical-text: #d03b3b;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      color-scheme: dark;
-      --page: #0d0d0d; --surface: #1a1a19;
-      --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
-      --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
-      --maint: #3987e5;
-      --cell-empty: #2c2c2a;
-      --good-text: #3dbd3d; --warning-text: #fab219;
-      --serious-text: #ec835a;
-      --critical-text: #e05252;
-    }
-  }
-  * { box-sizing: border-box; margin: 0; }
-  /* !important keeps `hidden` meaning hidden whatever display a future layout
-     rule sets — the UA's own [hidden] rule is a plain `display: none` that any
-     author `display` outranks. See notes/frontend-notes.md for the bug this
-     fixed. */
-  [hidden] { display: none !important; }
-  body {
-    background: var(--page); color: var(--ink);
-    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
-    padding: 24px 16px 64px;
-  }
-  .wrap { max-width: 880px; margin: 0 auto; }
-  header h1 { font-size: 22px; font-weight: 650; }
-  header .sub { color: var(--ink-2); margin-top: 4px; font-size: 14px; }
-  header .sub2 { color: var(--muted); margin-top: 3px; font-size: 12.5px; }
-  .banner {
-    margin: 20px 0; padding: 14px 18px; border-radius: 8px;
-    background: var(--surface); border: 1px solid var(--border);
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  }
-  .banner .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
-  .banner strong { font-weight: 650; }
-  .banner .meta { color: var(--muted); font-size: 13px; margin-left: auto; }
-  /* an overdue build is the only non-routine thing the stamp ever says */
-  .banner .meta .stale { color: var(--critical-text); font-weight: 600; }
-
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0; }
-  .tile {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; padding: 12px 14px;
-  }
-  .tile .v { font-size: 24px; font-weight: 650; }
-  .tile .k { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
-
-  .controls { display: flex; gap: 8px; align-items: center; margin: 22px 0 10px; flex-wrap: wrap; }
-  /* wraps: one tab is added per collected month, and by five tabs the strip
-     is already wider than a 390px phone */
-  .months { display: flex; flex-wrap: wrap; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
-  .months button {
-    border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 13.5px;
-    padding: 5px 12px; border-radius: 6px; cursor: pointer;
-  }
-  .months button.on { background: var(--grid); color: var(--ink); font-weight: 600; }
+<!--UI-CSS-->
+<!--SITE-CSS-->
   .controls select {
     margin-left: auto; font: inherit; font-size: 13.5px; color: var(--ink);
     background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px;
   }
   .partial-note { font-size: 12.5px; color: var(--muted); width: 100%; }
 
-  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 10px 0 18px; font-size: 12.5px; color: var(--ink-2); }
-  /* direct children only: an entry may contain a swatch that is itself a span
-     (the health mark), and an unscoped `.legend span` would beat `.healthmark`
-     on specificity and lay its "!" out as a flex row instead of centring it */
-  .legend > span { display: inline-flex; align-items: center; gap: 6px; }
-  .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
-
   /* Lifted out of the colour legend onto its own line: it is the one thing on
      this page that bears on whether the water is safe to drink, and as the
      seventh entry in a wrapped row of swatches it read as a sixth colour. */
   .healthkey {
-    display: flex; align-items: center; gap: 7px; margin: -8px 0 14px;
+    display: flex; align-items: center; gap: 7px; margin: -4px 0 14px;
     font-size: 12.5px; color: var(--serious-text);
   }
-  .basis { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
-  .natheading { font-size: 15px; font-weight: 650; margin: 30px 0 0; }
 
-  .county {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; margin-bottom: 8px; overflow: hidden;
-  }
-  .row {
-    display: grid; grid-template-columns: 150px 1fr 200px; gap: 14px;
-    padding: 12px 16px; align-items: center; cursor: pointer;
-  }
-  .row:hover { background: color-mix(in srgb, var(--grid) 35%, transparent); }
-  .cname { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14.5px; }
-  .cname a { color: inherit; text-decoration: none; }
-  /* the row is the click target, so the focus ring belongs around the row */
-  .cname a:focus-visible { outline: none; }
-  .row:has(a:focus-visible) { outline: 2px solid var(--ink-2); outline-offset: -2px; }
-  .gradechip {
-    width: 26px; height: 26px; border-radius: 6px; flex: none;
-    display: grid; place-items: center;
-    color: #fff; font-weight: 700; font-size: 14px;
-  }
-  /* B and D join C in dark lettering: their mid-range fills can't carry
-     4.5:1 white text (B ≈2.9:1, D 2.6:1), and A/F keep white on ends dark
-     enough to hold it */
-  .g-A { background: var(--good); } .g-B { background: color-mix(in srgb, var(--good) 60%, var(--warning)); color: #1a1a19 !important; }
-  .g-C { background: var(--warning); color: #1a1a19 !important; }
-  .g-D { background: var(--serious); color: #1a1a19 !important; } .g-F { background: var(--critical); }
   /* an active health notice sits beside the letter, not inside it: the grade
      measures supply availability, and whether the water is safe to drink is a
      different question that a letter cannot answer */
@@ -141,8 +37,8 @@
   }
   .chead .healthmark { width: 24px; height: 24px; font-size: 13.5px; }
   .healthmark.sm { width: 15px; height: 15px; font-size: 10px; }
-  .bar { display: flex; gap: 2px; height: 28px; }
-  .bar i { flex: 1; border-radius: 2px; background: var(--good); min-width: 3px; }
+
+  /* day cells by severity, shaded by how much of the county was affected */
   .bar i.outage { background: var(--critical); }
   .bar i.quality { background: var(--serious); }
   .bar i.degraded { background: var(--warning); }
@@ -150,75 +46,13 @@
   .bar i.future { background: var(--cell-empty); }
   .bar i.n1 { opacity: 0.40; }
   .bar i.n2 { opacity: 0.70; }
-  /* The bar's whole meaning used to live in title attributes, which a phone
-     never shows. Fixed height so filling it does not reflow the card. */
-  .daycap { margin-top: 8px; font-size: 12.5px; color: var(--ink-2); min-height: 1.45em; }
-  /* inside .row, so the row's hover, click and focus ring cover it */
-  .row .daycap { grid-column: 1 / -1; margin: -4px 0 0; font-size: 12px; }
-  /* On touch a tap on a cell navigates, so hide the strip — but only while
-     empty: iPadOS reports hover:none even with a trackpad, and a hover there
-     still fills it. */
-  @media (hover: none) { .row .daycap:empty { display: none; } }
-  @media (hover: none) { .hoverhint { display: none; } }
-  /* counts stack on the left, availability sits to their right and centred
-     across both lines; the counts line is longer than the percentage, so
-     putting it first is what keeps the column from overflowing */
-  .stats {
-    display: grid; grid-template-columns: 100px auto; justify-content: end;
-    align-items: center; column-gap: 10px;
-    text-align: right; font-size: 13px; color: var(--ink-2); white-space: nowrap;
-    /* proportional digits make "99.14%" narrower than "98.53%", which shifts
-       the auto-sized percentage column and drags the counts with it */
-    font-variant-numeric: tabular-nums;
-  }
-  /* numerals right-aligned in their own fixed column, labels left-aligned in
-     theirs, so both edges line up down the whole page. Aligning the block as a
-     whole (either side) leaves one of the two ragged, since counts run 1-3
-     digits. Fixed widths, not auto: each row is its own grid, so auto would
-     size per-row and reintroduce the ragging. */
-  .stats .counts {
-    display: grid; grid-template-columns: 26px auto; column-gap: 5px;
-    line-height: 1.4;
-  }
-  .stats .counts b { text-align: right; }
-  .stats .counts span { text-align: left; }
   .stats .pct { font-size: 14.5px; }
-  .stats b { color: var(--ink); font-weight: 650; }
 
-  /* Narrow screens can't carry name + bar + stats on one line: the fixed 150px
-     and 200px columns alone exceed the viewport, and the county card clips the
-     overflow, so the stats disappear entirely. Drop the bar onto its own line
-     and let name and stats share the first. */
   @media (max-width: 640px) {
-    .row {
-      grid-template-columns: 1fr auto;
-      grid-template-areas: "name stats" "bar bar";
-      gap: 10px 12px;
-      padding: 12px 14px;
-    }
-    .cname { grid-area: name; min-width: 0; }
-    .stats { grid-area: stats; }
-    .bar { grid-area: bar; }
-
-    /* The five-swatch legend wraps to five lines on a phone and pushes the
-       county rows off a second screen. It is reference material — you consult
-       it once a bar confuses you — so it goes below the bars it describes. The
-       drinking-water key stays above: that one is a warning, not a key. */
-    #overview { display: flex; flex-direction: column; }
-    /* margins do not collapse in a flex column, so the banner's own bottom
-       margin would stack with the controls' top margin */
-    #overview > .banner { order: 1; margin-bottom: 0; }
-    #overview > .controls { order: 2; }
+    /* the drinking-water key stays above the list: that one is a warning, not a key */
     #overview > .healthkey { order: 3; }
-    #overview > .basis { order: 4; }
-    #overview > #list { order: 5; }
-    #overview > .legend { order: 6; margin: 18px 0 0; }
-    #overview > .natheading { order: 7; }
-    #overview > .tiles { order: 8; }
-    #overview > #topLink { order: 9; }
+    #overview > #topLink { order: 8; }
   }
-
-  .row .chev { color: var(--muted); font-size: 16px; }
 
   .drow { display: flex; gap: 18px; flex-wrap: wrap; color: var(--ink-2); margin-bottom: 8px; font-size: 13.5px; }
   .drow b { color: var(--ink); }
@@ -230,25 +64,13 @@
   .s-degraded { background: var(--warning); } .s-maintenance { background: var(--maint); }
 
   /* ---- county drill-down ---- */
-  .back {
-    display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px;
-    color: var(--ink-2); font-size: 13.5px; text-decoration: none;
-  }
-  .back:hover { color: var(--ink); }
-  .chead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .chead h2 { font-size: 21px; font-weight: 650; }
   .chead .pop { color: var(--muted); font-size: 13px; }
-  .card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; padding: 14px 16px; margin-bottom: 10px;
-  }
   .card > h3 {
     font-size: 14px; font-weight: 650; margin-bottom: 4px;
     display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
   }
   .card > h3 .n { color: var(--muted); font-weight: 400; font-size: 12.5px; }
   .note { color: var(--muted); font-size: 12.5px; margin-bottom: 10px; }
-  .bar.tall { height: 40px; }
 
   .toplink {
     display: inline-block; margin-bottom: 14px; font-size: 13.5px;
@@ -266,7 +88,6 @@
   .toprow .rank { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
   .toprow .t { font-size: 14.5px; font-weight: 600; }
   .toprow .m { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
-  .toprow .m a { color: inherit; }
   .toprow .ph { text-align: right; font-weight: 650; font-size: 15px; white-space: nowrap; }
   .toprow .ph span { display: block; color: var(--muted); font-weight: 400; font-size: 11.5px; }
   .badge {
@@ -366,22 +187,16 @@
     .incident .m { margin-left: 0; white-space: normal; flex-basis: 100%; }
   }
 
-  footer { margin-top: 28px; color: var(--muted); font-size: 12.5px; }
-  footer p { margin-top: 6px; }
   /* The methodology was one 2,600-character paragraph carrying nine separate
      topics. Every sentence is worth keeping and none of it was findable. */
   .method { margin-top: 12px; border-top: 1px solid var(--border); }
-  .method summary {
-    cursor: pointer; padding: 8px 0; color: var(--ink-2); font-weight: 600;
-    list-style-position: inside;
-  }
+  .method summary { padding: 8px 0; }
   .method summary:hover { color: var(--ink); }
   .method h4 { font-size: 12.5px; color: var(--ink-2); margin-top: 12px; }
   .method > p:last-child { margin-top: 12px; }
   .method .grades { list-style: none; margin: 6px 0 0; padding: 0;
                     display: flex; gap: 14px; flex-wrap: wrap; }
   .method .grades li { display: inline-flex; align-items: center; gap: 6px; }
-  footer a { color: inherit; }
 </style>
 <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "38aafde3cd5b407fbeda43cd3fc4a66c"}'></script><!-- End Cloudflare Web Analytics -->
 </head>
@@ -477,12 +292,13 @@
 
 <script src="data.js"></script>
 <script>
+<!--UI-JS-->
+</script>
+<script>
 const D = window.UISCE_DATA;
 const SEVLABEL = { outage: "Supply disruption", quality: "Water quality notice",
                    degraded: "Restrictions / low pressure", maintenance: "Works (planned / non-disruptive)",
                    "": "No announced disruption" };
-const MONTH_NAMES = {"01":"January","02":"February","03":"March","04":"April","05":"May","06":"June",
-                     "07":"July","08":"August","09":"September","10":"October","11":"November","12":"December"};
 const LATEST = D.months[D.months.length - 1];
 let curMonth = LATEST;
 let sortBy = "name";
@@ -521,7 +337,7 @@ const LEGEND = `
 // touchscreen.
 function healthKey() {
   return `<span class="healthmark sm">!</span> marks a boil-water, do-not-drink` +
-    ` or do-not-consume notice active in ${monthLabel(curMonth)}` +
+    ` or do-not-consume notice active in ${monthLabelLong(curMonth)}` +
     ` — open the county for details.`;
 }
 
@@ -530,7 +346,7 @@ function healthKey() {
 // an A beside "5 open now" reads as a contradiction rather than two timeframes.
 // one hover cue above the list, not a placeholder in every strip
 function basisNote() {
-  return `Grades and percentages are for <b>${monthLabel(curMonth)}</b>.` +
+  return `Grades and percentages are for <b>${monthLabelLong(curMonth)}</b>.` +
     (isLatest() ? ` &ldquo;Open now&rdquo; is live, whatever month you are viewing.` : "") +
     ` <span class="hoverhint">Hover a day in a bar for its detail.</span>`;
 }
@@ -592,7 +408,7 @@ function healthTitle(m) {
   return live
     ? `${n === 1 ? "An active" : n + " active"} ${what} — the water may not be safe ` +
       `to drink. Separate from the grade, which measures supply availability.`
-    : `${n === 1 ? "A" : n} ${what} active in ${monthLabel(curMonth)}. ` +
+    : `${n === 1 ? "A" : n} ${what} active in ${monthLabelLong(curMonth)}. ` +
       `Separate from the grade, which measures supply availability.`;
 }
 
@@ -609,16 +425,15 @@ function healthPill(m) {
   // said "boil-water or do-not-drink" while its own tooltip named all three
   const live = isLatest() && (m.health_now || 0) > 0;
   const n = live ? m.health_now : m.health_n;
-  const when = live ? "in effect" : `active in ${monthLabel(curMonth)}`;
+  const when = live ? "in effect" : `active in ${monthLabelLong(curMonth)}`;
   const what = n === 1
     ? `Boil-water, do-not-drink or do-not-consume notice ${when}`
     : `${n} drinking-water notices ${when}`;
   return `<span class="badge health" title="${healthTitle(m)}">${what}</span>`;
 }
 
-function monthLabel(ym) { return MONTH_NAMES[ym.slice(5)] + " " + ym.slice(0, 4); }
-function plural(n, one, many) { return n === 1 ? one : (many || one + "s"); }
-function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+// the word alone, for sentences that already carry the number
+function pl(n, one, many) { return n === 1 ? one : (many || one + "s"); }
 
 // One argument of an inline onclick, as a JS string literal safe in a
 // double-quoted attribute. The site's older handlers wrap their argument in
@@ -634,17 +449,6 @@ function jsArg(s) { return esc(JSON.stringify(String(s))); }
 // snapshot belongs to. `resolved` is the one thing that *does* carry a month,
 // via cases.closed_at, so a past month is not left with nothing to say.
 function isLatest() { return curMonth === LATEST; }
-
-// `current` is the month actually on screen, which is curMonth everywhere except
-// the top ten, whose month list omits the in-progress month curMonth defaults to
-function monthTabs(onclick, months, current) {
-  // aria-pressed carries the .on state to screen readers, which otherwise
-  // hear five identical buttons with no way to tell which month is showing
-  return (months || D.months).map(m => {
-    const on = m === (current || curMonth);
-    return `<button class="${on ? "on" : ""}" aria-pressed="${on}" onclick="${onclick}('${m}')">${monthLabel(m)}</button>`;
-  }).join("");
-}
 
 // The in-progress month always reads a little worse than it will settle at:
 // an open notice with no reported end accrues to now, and some of those ends
@@ -667,33 +471,16 @@ function availText(a, personH) {
   return (personH ? Math.min(a, 99.99) : a).toFixed(2) + "%";
 }
 
-// data-cap feeds the .daycap readout; no title — it would repeat that, late,
-// and never on a phone
-function dayCells(days) {
-  return days.map(([s, pct], i) => {
-    const date = `${curMonth}-${String(i + 1).padStart(2, "0")}`;
-    const cell = (cls, cap) => `<i class="${cls}" data-cap="${cap}"></i>`;
-    if (date > today) return cell("future", `${date}: still to come`);
-    if (s === "nd") return cell("future", `${date}: before this site started collecting`);
-    const intensity = !s ? "" : pct < 0.5 ? "n1" : pct < 2 ? "n2" : "";
-    const label = s ? `${SEVLABEL[s]} · about ${pct < 0.1 ? "<0.1" : pct.toFixed(1)}% of the county` : SEVLABEL[s];
-    return cell(`${s} ${intensity}`, `${date}: ${label}`);
-  }).join("");
+// one cell for the shared dayCells: [class, caption]. Cells are [severity,
+// share] pairs rather than a packed string, and there is no part-day note.
+function describeCell([s, pct], date) {
+  if (date > today) return ["future", `${date}: still to come`];
+  if (s === "nd") return ["future", `${date}: before this site started collecting`];
+  const intensity = !s ? "" : pct < 0.5 ? "n1" : pct < 2 ? "n2" : "";
+  const label = s ? `${SEVLABEL[s]} · about ${pct < 0.1 ? "<0.1" : pct.toFixed(1)}% of the county` : SEVLABEL[s];
+  return [`${s} ${intensity}`, `${date}: ${label}`];
 }
-
-// Delegated once, at the document, because every bar is re-rendered on each
-// route change and month switch. pointerenter covers a mouse; click covers touch.
-function bindDayCaption() {
-  const show = e => {
-    const cell = e.target.closest(".bar i[data-cap]");
-    if (!cell) return;
-    const host = cell.closest(".row, .card");
-    const cap = host && host.querySelector(".daycap");
-    if (cap) cap.textContent = cell.dataset.cap;
-  };
-  document.addEventListener("click", show);
-  document.addEventListener("pointerover", show);
-}
+function bar(days) { return dayCells(days, curMonth, describeCell); }
 
 function incident(o, when) {
   return `<div class="incident">
@@ -720,7 +507,7 @@ function render() {
 }
 
 function renderOverview() {
-  document.getElementById("months").innerHTML = monthTabs("setMonth");
+  document.getElementById("months").innerHTML = monthTabs(D.months, curMonth, "setMonth");
   document.getElementById("partialNote").textContent = partialNote();
   document.getElementById("legend").innerHTML = LEGEND;
   document.getElementById("healthKey").innerHTML = healthKey();
@@ -743,7 +530,7 @@ function renderOverview() {
     : `${nat.completed_n || 0} notices confirmed complete` +
       (nat.scheduled_n ? ` · ${nat.scheduled_n} had only a scheduled end` : "") +
       (nat.imputed_n ? ` · ${nat.imputed_n} never reported one` : "");
-  document.getElementById("natHeading").textContent = `The national picture in ${monthLabel(curMonth)}`;
+  document.getElementById("natHeading").textContent = `The national picture in ${monthLabelLong(curMonth)}`;
   document.getElementById("tiles").innerHTML = `
     <div class="tile"><div class="v">${availText(natAvail, personH)}</div><div class="k">of people's time with no outage announced</div></div>
     <div class="tile"><div class="v">${ev}</div><div class="k">announced supply disruptions</div></div>
@@ -759,21 +546,21 @@ function renderOverview() {
   document.getElementById("sensNote").textContent =
     (nat.median_pooled_h == null || nat.median_completion_h == null || !nat.imputed_n)
       ? ""
-      : `Including them for ${monthLabel(curMonth)} would put the figure at `
+      : `Including them for ${monthLabelLong(curMonth)} would put the figure at `
         + `${nat.median_pooled_h}h rather than ${nat.median_completion_h}h.`;
 
   // the top ten is a finished-month list, so on the in-progress month this
   // deliberately points at a different month than the one on screen
   const topYm = TOP_MONTHS.length ? topMonth() : null;
   document.getElementById("topLink").innerHTML = topYm
-    ? `<a class="toplink" href="#top" onclick="go('#top'); return false;">The ten largest disruptions of ${monthLabel(topYm)} →</a>`
+    ? `<a class="toplink" href="#top" onclick="go('#top'); return false;">The ten largest disruptions of ${monthLabelLong(topYm)} →</a>`
     : "";
 
   const nF = worst.filter(w => w[1].grade === "F").length;
   const dot = nF > 8 ? "var(--critical)" : nF > 3 ? "var(--serious)" : nF > 0 ? "var(--warning)" : "var(--good)";
   document.getElementById("banner").innerHTML =
     `<span class="dot" style="background:${dot}"></span>
-     <strong>${monthLabel(curMonth)}${isPartial() ? " so far" : ""}:</strong> ${ev} announced outages · typical outage ${natFix} · ${nF} ${nF === 1 ? "county" : "counties"} graded F
+     <strong>${monthLabelLong(curMonth)}${isPartial() ? " so far" : ""}:</strong> ${ev} announced outages · typical outage ${natFix} · ${nF} ${nF === 1 ? "county" : "counties"} graded F
      <span class="meta">${freshness(D.generated_iso)}</span>`;
 
   // county rows
@@ -795,13 +582,13 @@ function renderOverview() {
     const href = `#county/${encodeURIComponent(name)}`;
     const jump = `goCounty('${encodeURIComponent(name)}')`;
     // no row title either: it would surface over the bar in place of the readout
-    return `<div class="county">
+    return `<div class="place">
       <div class="row" onclick="${jump}">
         <div class="cname"><span class="gradechip g-${m.grade}">${m.grade}</span>${healthMark(m)}<a href="${href}" onclick="${jump}; return false;">${name}</a></div>
-        <div class="bar">${dayCells(m.days)}</div>
+        <div class="bar">${bar(m.days)}</div>
         <div class="stats">
           <div class="counts">
-            <b>${m.events.outage}</b><span>${plural(m.events.outage, "disruption")}</span>${openBadge}
+            <b>${m.events.outage}</b><span>${pl(m.events.outage, "disruption")}</span>${openBadge}
           </div>
           <b class="pct">${availText(m.availability, m.person_h)}</b>
         </div>
@@ -840,7 +627,7 @@ function townRows(c) {
     // history shards, and every comparator reads only the first three
     .map(([code, t]) => [t, t.months[curMonth], open[code] || 0, code]);
   rows.sort(TOWN_SORTS[townSort]);
-  if (!rows.length) return `<div class="note">Nothing was announced anywhere in the county in ${monthLabel(curMonth)}.</div>`;
+  if (!rows.length) return `<div class="note">Nothing was announced anywhere in the county in ${monthLabelLong(curMonth)}.</div>`;
 
   const num = (v, label) => `<td class="${v ? "" : "z"}" data-label="${label}">${v ? `<b>${v}</b>` : "0"}</td>`;
   const body = rows.map(([t, m, openNow, code]) => {
@@ -908,7 +695,7 @@ function openSection(c) {
   named.sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
   const when = o => `${o.since > today ? "from" : "since"} ${o.since}`;
   return `<div class="card">
-    <h3>Open right now <span class="n">${c.open_total} ${plural(c.open_total, "notice")}</span></h3>
+    <h3>Open right now <span class="n">${c.open_total} ${pl(c.open_total, "notice")}</span></h3>
     <div class="note">Notices Uisce Éireann still shows as open right now — this list does not change with the month you are viewing. Some are advance warning of planned works; a few were never taken down.</div>
     ${named.length ? named.map(([name, cases]) => `<div class="tgroup">
         <div class="tname">${esc(name)}</div>
@@ -922,12 +709,12 @@ function resolvedSection(c) {
   const r = c.resolved[curMonth];
   const shown = r ? r.cases : [];
   return `<div class="card">
-    <h3>Notices that closed in ${monthLabel(curMonth)} <span class="n">${r ? r.n : 0} ${plural(r ? r.n : 0, "notice")}</span></h3>
+    <h3>Notices that closed in ${monthLabelLong(curMonth)} <span class="n">${r ? r.n : 0} ${pl(r ? r.n : 0, "notice")}</span></h3>
     <div class="note">This is the one figure here that really belongs to a past month. A notice is recorded as closed the first time a check finds it gone, so these dates are approximate and only go back to July 2026 — and a notice that opens and closes between two checks never appears at all. Read it as a minimum, not a full list.</div>
     ${shown.length
       ? shown.map(o => incident(o, o => `opened ${o.since} · closed ${o.closed}`)).join("") +
         (r.n > shown.length ? `<div class="incident" style="color:var(--muted)">…and ${r.n - shown.length} more</div>` : "")
-      : `<div class="note" style="margin:0">No notice was seen to close in ${monthLabel(curMonth)}.</div>`}
+      : `<div class="note" style="margin:0">No notice was seen to close in ${monthLabelLong(curMonth)}.</div>`}
   </div>`;
 }
 
@@ -943,28 +730,28 @@ function renderCounty() {
       ${healthPill(m)}
     </div>
     <div class="controls">
-      <div class="months">${monthTabs("setMonth")}</div>
+      <div class="months">${monthTabs(D.months, curMonth, "setMonth")}</div>
       ${note ? `<div class="partial-note">${note}</div>` : ""}
     </div>
 
     <div class="card">
       <div class="drow">
         <span><b>${availText(m.availability, m.person_h)}</b> of people's time with no outage announced</span>
-        <span><b>${m.events.outage}</b> supply ${plural(m.events.outage, "disruption")} (<b>${m.person_h.toLocaleString()}</b> person-hours)</span>
+        <span><b>${m.events.outage}</b> supply ${pl(m.events.outage, "disruption")} (<b>${m.person_h.toLocaleString()}</b> person-hours)</span>
         ${m.events.outage === 0 ? "" : `<span>${m.median_completion_h == null
           ? `none of them has reported completion yet`
           : `typical time from notice to &ldquo;works complete&rdquo; <b>${m.median_completion_h}h</b> (${m.completed_n} confirmed complete${m.scheduled_n ? `, ${m.scheduled_n} scheduled only` : ""}${m.imputed_n ? `, ${m.imputed_n} never reported an end` : ""})`}</span>`}
-        <span><b>${m.events.maintenance}</b> planned ${plural(m.events.maintenance, "work item", "works")}</span>
-        <span><b>${m.events.quality}</b> quality ${plural(m.events.quality, "notice")}</span>
+        <span><b>${m.events.maintenance}</b> planned ${pl(m.events.maintenance, "work item", "works")}</span>
+        <span><b>${m.events.quality}</b> quality ${pl(m.events.quality, "notice")}</span>
         <span><b>${m.clear_days}</b>/${m.days_elapsed} clear days${isPartial() ? " so far" : ""}</span>
       </div>
-      <div class="bar tall">${dayCells(m.days)}</div>
+      <div class="bar tall">${bar(m.days)}</div>
       <div class="daycap">Tap a day for detail.</div>
       <div class="legend" style="margin:12px 0 0">${LEGEND}</div>
     </div>
 
     <div class="card">
-      <h3>Areas with notices in ${monthLabel(curMonth)}</h3>
+      <h3>Areas with notices in ${monthLabelLong(curMonth)}</h3>
       <div class="note">Each notice pin is placed in the Census 2022 area its affected population centres on: the settlement it is in, or — for the roughly 40% of the network that runs between towns rather than through one — the countryside of the surrounding Electoral Division, shown as <em>Around&nbsp;…</em> to keep it distinct from the town of the same name. The Census counts a city and its suburbs as <em>one</em> settlement, Dublin's being a single area of 1.26 million, so any settlement above 50,000 is broken into its Local Electoral Areas instead. Availability is measured against each area's <em>own</em> population, so a burst covering a whole village reads far worse than the same event does in the county figure above; that is what the breakdown is for, and it is why there are no letter grades at this level — the A–F thresholds are calibrated to county-months and would mislead against a village-sized denominator. <b>Select an area</b> to see every notice ever published there, or <a href="areas.html" style="color:inherit">browse every area on the site</a>.</div>
       ${townRows(c)}
     </div>
@@ -1015,10 +802,10 @@ function renderTop() {
   document.getElementById("topview").innerHTML = `
     <a class="back" href="#" onclick="go(''); return false;">← All counties</a>
     <div class="chead"><h2>The ten largest disruptions</h2>
-      <span class="pop">${monthLabel(ym)} · by person-hours</span></div>
-    <div class="controls">${monthTabs("setMonth", TOP_MONTHS, ym)}</div>
+      <span class="pop">${monthLabelLong(ym)} · by person-hours</span></div>
+    <div class="controls">${monthTabs(TOP_MONTHS, ym, "setMonth")}</div>
     <div class="card">
-      <p class="lede">These ten account for <b>${share}%</b> of all the disruption in ${monthLabel(ym)},
+      <p class="lede">These ten account for <b>${share}%</b> of all the disruption in ${monthLabelLong(ym)},
         measured as people × hours — out of ${national ? fmtPersonH(national) : 0} nationally.${startedNote}</p>
       <div class="note">Only hard supply disruptions are ranked — bursts, reservoir, treatment-plant and
         pump-station interruptions, and unplanned repairs. Restrictions, low pressure and quality notices
@@ -1053,26 +840,11 @@ window.UISCE_HISTORY = HISTORY;   // each shard assigns straight into it
 const HISTORY_STATE = {};         // county -> "loading" | "ok" | "error"
 
 function loadHistory(name) {
-  if (HISTORY_STATE[name]) return;   // already loading, loaded, or failed
-  HISTORY_STATE[name] = "loading";
-  const el = document.createElement("script");
-  // A query string on a file:// URL is part of the path, so cache-busting there
-  // would 404 the shard that this whole mechanism exists to keep loadable.
-  el.src = "h/" + name.toLowerCase() + ".js" +
-    (location.protocol === "file:" ? "" : "?v=" + encodeURIComponent(D.generated));
-  let settled = false;
-  const settle = () => {
-    if (settled) return;
-    settled = true;
-    // onload alone is not success: a file served but blocked, or truncated,
-    // loads without assigning anything
-    HISTORY_STATE[name] = HISTORY[name] ? "ok" : "error";
+  if (HISTORY_STATE[name] === "ok") return;
+  loadShard(HISTORY_STATE, name, "h/" + name.toLowerCase() + ".js" + cacheBust(D),
+    () => !!HISTORY[name],
     // the reader may have moved on while it was in flight
-    if (view === "area" && areaCounty === name) render();
-  };
-  el.onload = el.onerror = settle;
-  setTimeout(settle, 10000);
-  document.head.appendChild(el);
+    () => { if (view === "area" && areaCounty === name) render(); });
 }
 
 // A duration is only ever a floor: every span is measured from when the notice
@@ -1125,7 +897,7 @@ function historyBody(name) {
     if (e.start.slice(0, 7) !== ym) {
       ym = e.start.slice(0, 7);
       const n = events.filter(x => x.start.slice(0, 7) === ym).length;
-      out += `<div class="hmonth">${monthLabel(ym)} <span>· ${n} notice${n === 1 ? "" : "s"}</span></div>`;
+      out += `<div class="hmonth">${monthLabelLong(ym)} <span>· ${n} notice${n === 1 ? "" : "s"}</span></div>`;
     }
     out += historyRow(e);
   }

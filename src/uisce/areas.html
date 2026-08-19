@@ -7,38 +7,8 @@
 <meta name="description" content="Every Irish town, settlement and rural area Uisce Éireann has published a water supply or works notice for, county by county, with the number of notices each has seen.">
 <link rel="canonical" href="<!--CANONICAL-->">
 <style>
-  /* Standalone, so it repeats site.html's tokens rather than importing them.
-     Deliberate: this page is loaded on its own and a shared stylesheet would be
-     a second request on both pages to save a kilobyte on one. Keep the two
-     :root blocks in step by hand — they are the only duplication here. */
-  :root {
-    color-scheme: light;
-    --page: #f9f9f7; --surface: #fcfcfb;
-    --ink: #0b0b0b; --ink-2: #52514e; --muted: #6e6c66;
-    --grid: #e1e0d9; --border: rgba(11,11,11,0.10);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      color-scheme: dark;
-      --page: #0d0d0d; --surface: #1a1a19;
-      --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
-      --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
-    }
-  }
-  * { box-sizing: border-box; margin: 0; }
-  body {
-    background: var(--page); color: var(--ink);
-    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
-    padding: 24px 16px 64px;
-  }
-  .wrap { max-width: 880px; margin: 0 auto; }
-  a { color: inherit; }
-  header h1 { font-size: 22px; font-weight: 650; }
-  header .sub { color: var(--ink-2); margin-top: 4px; font-size: 14px; }
-  .back { display: inline-block; color: var(--muted); text-decoration: none;
-          font-size: 13px; margin-bottom: 14px; }
-  .back:hover { color: var(--ink); }
-
+<!--UI-CSS-->
+<!--SITE-CSS-->
   /* The jump nav sticks, because the whole point of one long document is that
      you can Ctrl+F it — and having scrolled to Wicklow you still want Cork. */
   nav {
@@ -58,20 +28,6 @@
   section h2 { font-size: 16px; font-weight: 650; padding-bottom: 6px;
                border-bottom: 1px solid var(--grid); }
   section h2 span { color: var(--muted); font-weight: 400; font-size: 13px; }
-  ul { list-style: none; columns: 2; column-gap: 28px; margin-top: 8px; }
-  li { break-inside: avoid; display: flex; align-items: baseline; gap: 6px;
-       padding: 3px 0; font-size: 13.5px; }
-  /* an author `display` beats the UA stylesheet's [hidden] rule, so the search
-     could set li.hidden all it liked and every row stayed on screen */
-  li[hidden] { display: none; }
-  li a { text-decoration: none; border-bottom: 1px solid var(--border); }
-  li a:hover { border-bottom-color: currentColor; }
-  /* the dotted leader carries the eye across to the count in a two-column list */
-  li .fill { flex: 1; border-bottom: 1px dotted var(--grid); min-width: 8px; }
-  li .n { color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  li .p { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums;
-          min-width: 92px; text-align: right; white-space: nowrap; }
-  li.unplaced a { color: var(--muted); }
 
   /* Search. 1,836 areas behind a jump nav is not findable by anyone who does
      not already know their county — and knowing the county is the thing a
@@ -86,12 +42,11 @@
   /* On a phone the nav wraps to six lines and eats the screen, so it scrolls
      away with the page instead of pinning to the top of it. */
   @media (max-width: 640px) {
-    ul { columns: 1; }
     nav { position: static; max-height: none; }
     section { scroll-margin-top: 12px; }
   }
 
-  footer { margin-top: 40px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+  footer { margin-top: 40px; line-height: 1.6; }
   footer p + p { margin-top: 8px; }
 </style>
 <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "38aafde3cd5b407fbeda43cd3fc4a66c"}'></script><!-- End Cloudflare Web Analytics -->
