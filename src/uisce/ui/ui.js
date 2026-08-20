@@ -58,6 +58,18 @@ function revealMonthTab(strip) {
   else if (b.right > s.right - pad) strip.scrollLeft += b.right - s.right + pad;
 }
 
+// A rotate or window resize narrows the strip without re-rendering it, which
+// leaves the selected tab stranded off the end. Hidden views measure zero, and
+// re-render before they are shown anyway.
+function bindMonthReveal() {
+  window.addEventListener("resize", function () {
+    var strips = document.querySelectorAll(".months");
+    for (var i = 0; i < strips.length; i++) {
+      if (strips[i].clientWidth) revealMonthTab(strips[i]);
+    }
+  });
+}
+
 // describe(cell, date) -> [cls, caption, qualify]; a day in `partial` gets the
 // part-day suffix unless qualify is false. data-cap feeds the .daycap readout;
 // no title — it would repeat that, late, and never on a phone.

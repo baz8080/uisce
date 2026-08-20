@@ -334,12 +334,13 @@ const LEGEND = `
 // know which counties are still standing, so it makes the weaker, true claim and
 // leaves "right now" to the per-county mark, which does know (health_now).
 //
-// KNOCK_CATS raises the mark for three notice kinds; do-not-consume folds
-// into do-not-drink here to keep the line short. Not "water quality issue":
-// the legend uses that phrase for the whole orange category.
+// All three kinds named: every do-not-consume notice in the feed is titled as
+// one, and this is the mark's only always-visible explanation. Not "water
+// quality issue" either — the legend uses that for the whole orange category.
 function healthKey() {
-  return `<span class="healthmark sm">!</span> marks a boil-water or do-not-drink` +
-    ` notice active in ${monthLabelLong(curMonth)} — open the county for details.`;
+  return `<span class="healthmark sm">!</span> marks a boil-water, do-not-drink` +
+    ` or do-not-consume notice active in ${monthLabelLong(curMonth)}` +
+    ` — open the county for details.`;
 }
 
 // The reader is looking at two different clocks at once: the grade and the
@@ -986,6 +987,7 @@ document.getElementById("sort").addEventListener("change", e => { sortBy = e.tar
 window.addEventListener("hashchange", route);
 window.addEventListener("popstate", route);
 bindDayCaption();
+bindMonthReveal();
 route();
 </script>
 </body>

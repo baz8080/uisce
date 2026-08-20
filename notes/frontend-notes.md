@@ -108,9 +108,25 @@ measured 22/6/14/14/18/30/16px down the page, the 6 being uisce's `.healthkey` d
 **Copy cut to what a phone can carry** (this repo): the subtitle is one sentence plus the
 county prompt ("Uisce Éireann water outages, restrictions and works. Pick your county for
 details." — "outages and events" was considered and rejected, "events" carries nothing);
-"Partial month — in progress" reads "Month in progress."; the health key names two notice
-kinds, not three ("do-not-consume" folds into "do-not-drink" for a lay reader — but not
-"water quality issue", which would collide with the legend's "Water quality notice" category,
-and the mark exists to say something stronger); and "What this measures" went behind a footer
+"Partial month — in progress" reads "Month in progress."; and "What this measures" went behind a footer
 disclosure like its two siblings — `id="method"` stays on the methodology block, which
 `openMethod()` and two links target.
+
+**Reverted 2026-08-20: the health key names all three kinds again.** Shortening it to
+"boil-water or do-not-drink" was measured against the archive after the fact and is wrong:
+of the 42 notices that raise the mark, 35 are `boil_notice_issued` and 7 are
+`consumption_notice_issued` — every one of those 7 titled "Do Not Consume Notice" — and no
+notice in the feed has ever said "drink". The short line named a kind the site has never
+seen and dropped the only other kind it marks, on the mark's one always-visible explanation,
+while `healthPill`, `healthTitle`, the methodology and the area badge all named three. It is
+the same fault the pill comment at `healthKey`'s neighbour already records being fixed once.
+Folding for a lay reader is fine where the fold is true; here the generic term was the one
+that does not occur.
+
+**Fixed 2026-08-20: `revealMonthTab()` did not survive a rotate** (statusui). It runs only
+from `render()`, which nothing calls on resize, so a narrowing viewport left `scrollLeft`
+measured against the old width: at 851px the strip fits with "Aug 2026" at x 352–439 and
+`scrollLeft` 0; at 375px that is a 341px strip still at 0, with the selected tab entirely out
+of view while the page below shows August. `bindMonthReveal()` (statusui `0567472`) binds one
+resize listener that reveals the tab in every laid-out `.months`; hidden views measure zero
+and are skipped, since they re-render before they are shown.
