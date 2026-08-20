@@ -1,4 +1,4 @@
-/* This site's own rules, inlined after the shared base.css (src/uisce/ui) in
+/* This site's own rules, inlined after statusui's shared base.css in
    index.html, areas.html and the county pages. */
 :root { --row-cols: 150px 1fr 200px; --stats-cols: 100px auto; }
 

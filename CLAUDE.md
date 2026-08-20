@@ -6,12 +6,13 @@ to read wholesale, which is why the important ones are indexed here.
 
 ## The UI is shared — change it upstream
 
-`src/uisce/ui/` is a **vendored copy** of [`../statusui`](https://github.com/baz8080/statusui)
-(`ui/UPSTREAM` names the commit): the tokens, base CSS, row/bar/card components and the JS
-helpers that uisce, esb and lifts all use, inlined into every page at build. Edit it there,
-then `scripts/sync-ui.sh` here — `tests/test_ui_vendored.py` fails if the copy is edited in
-place. This site's own rules are `src/uisce/site.css` and the inline blocks in the three
-templates; the shared/per-site rule is in statusui's CLAUDE.md.
+The tokens, base CSS, row/bar/card components and the JS helpers that uisce, esb and lifts
+all use come from [`../statusui`](https://github.com/baz8080/statusui), a **uv git dependency
+pinned in `uv.lock`** and inlined into every page at build by `statusui.assemble()`. Edit it
+there, push, then `../statusui/rollout.sh` bumps the pin in all three sites and opens the
+PRs; to try an unpushed change here, `uv run --with-editable ../statusui uisce-site`. This
+site's own rules are `src/uisce/site.css` and the inline blocks in the three templates; the
+shared/per-site rule is in statusui's CLAUDE.md.
 
 ## Before you change how any published number is computed
 
@@ -45,7 +46,7 @@ with the evidence that closed them.
 | gemma-4-12b-qat over qwen3.5-9b for end-time extraction; prompt version is at v3. | model-and-runtime-benchmarks.md, end-time-eval.md |
 | Geography is CSO Census settlements, not the feed's `location` string (3,866 distinct values, fragments badly, carries no population). | statuspage-methodology.md — "The county drill-down" (2026-07-25) |
 | Overlapping events double-count person-hours by **2.0%** nationally, left uncorrected. Re-measure with `uv run uisce-eval-overlap`. | statuspage-methodology.md — "Known limitations" (2026-08-18) |
-| The design layer (tokens, base CSS, row/bar/card, JS helpers) is shared with esb and lifts via `../statusui`, **vendored** under `src/uisce/ui/` — edit upstream, then `scripts/sync-ui.sh`; never edit the copy. `site.css` and the inline blocks are this site's own. | frontend-notes.md — "Shared with esb and lifts" (2026-08-19); statusui's README for what is shared |
+| The design layer (tokens, base CSS, row/bar/card, JS helpers) is shared with esb and lifts via `../statusui`, a **uv git dependency pinned in `uv.lock`** — edit upstream, then `../statusui/rollout.sh` bumps all three sites. Vendored copies were tried first and drifted within a day. `site.css` and the inline blocks are this site's own. | frontend-notes.md — "the vendored copy became a pinned uv git dependency" (2026-08-20); statusui's README for what is shared |
 
 ## Conventions
 
