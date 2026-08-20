@@ -12,7 +12,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v9.0.0
         with:
-          enable-caching: true
+          enable-cache: true
           prune-cache: true
 
       - name: Install dependencies
