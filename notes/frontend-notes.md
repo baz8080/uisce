@@ -5,12 +5,13 @@ Notes on `site.html` / `areas.html` / `county.html`, kept here so the reasoning 
 ## 2026-08-20: the vendored copy became a pinned uv git dependency
 
 One day of the vendored mechanism was enough to show its cost: a shared fix meant a sync,
-test, commit and PR in each of three repos, and the sites still drifted — esb and lifts were
-synced to statusui `f248ac3` while this site sat at `c9f8beb`, five UI commits behind, with
-nothing failing to say so (the byte-compare only fires against the checkout you happen to
-have). `statusui` is now a real package: `pyproject.toml` declares it with a
-`[tool.uv.sources]` git source and `uv.lock` pins the commit, so what the build used is
-recorded and CI-visible, not stamped in a file by a script.
+test, commit and PR in each of three repos, and the sites drifted anyway — esb and lifts were
+synced to statusui `f248ac3` while this site's main sat at `c9f8beb`, five UI commits behind,
+with nothing failing to say so (the byte-compare only fires against the checkout you happen
+to have; the catch-up sync eventually arrived buried in the iPhone-review PR below).
+`statusui` is now a real package: `pyproject.toml` declares it with a `[tool.uv.sources]` git
+source and `uv.lock` pins the commit, so what the build used is recorded and CI-visible, not
+stamped in a file by a script.
 
 **To change the shared UI:** edit in `../statusui`, test there, push, then run
 `../statusui/rollout.sh` — it bumps the pin in all three sites, runs each site's tests, and
@@ -20,9 +21,9 @@ opens the three PRs. To try an unpushed statusui change here first:
 shared JS global stayed, as `tests/test_ui_globals.py` reading the installed package.
 
 The pages are unchanged: `statusui.assemble()` still inlines the shared CSS/JS at build, so a
-search-result landing still costs one request. The adoption bump itself carried the five
-missed commits (scrolling month strip, tie-up tenths rounding, resize re-reveal) — the first
-rollout was the drift repair.
+search-result landing still costs one request. The pin lands at the statusui commit whose
+content the last vendored sync already carried, so the switch itself changes nothing but the
+shared files' header comments.
 
 ## Shared with esb and lifts since 2026-08-19: the design layer lives in `statusui`
 
@@ -87,8 +88,71 @@ The review reported the tab strip already overflowing a 390px phone at five tabs
 
 Collection began 2026-04-20, so the sixth tab arrives **1 September 2026** and the overflow with it. `flex-wrap: wrap` on `.months` fixes it at every count. Shipped ahead of the fault rather than after it.
 
+**Superseded 2026-08-19**: wrap was the stopgap, not the answer — see "The iPhone review
+pass" below. The strip scrolls horizontally now.
+
 ### Left open
 
 The *fills* still fail the 3:1 non-text threshold against the light page — `--warning` 1.74:1, `--serious` 2.50:1 — which matters for the legend swatches, where the colour itself is the meaning rather than a backdrop for a letter. The review checked `--maint` against this threshold but not the others. Not addressed here: changing the fills reaches the bars and the county grid, which is a bigger visual decision than a text-contrast fix.
 
 Also noted and not taken: the overview is entirely JS-rendered with no `<noscript>` fallback (the county pages are static, so the content exists — it is the pointer that is missing); the health mark explains itself only through `title=`, which never fires on touch; and the sort `<select>` has no programmatic label. The first needs a wording decision, the other two touch generated markup the tests pin.
+
+## The iPhone review pass 2026-08-19
+
+An owner review on a 390px iPhone. Everything below was verified against fixture-built
+before/after screenshots (touch-emulated Chromium, 390×844 and 1280px, both colour schemes).
+
+**The month strip scrolls instead of wrapping** (statusui). At five tabs the strip was already
+two rows on a phone; wrapped, twelve tabs measured three to four rows sitting above the county
+list. Now `.months` is a single `overflow-x: auto` row — hidden scrollbar, edge shadows that
+appear only where more tabs lie (surface-coloured covers with `background-attachment: local`
+hide the pinned shadows at rest), and a new `revealMonthTab()` scrolls the selected tab back
+into view after each render, via `scrollLeft` because `scrollIntoView()` also scrolls the page.
+At twelve simulated months: one row, 1,095px of tabs in a 356px strip, page `scrollWidth`
+still exactly the viewport. Alternatives rejected: a "recent + older" split is two controls
+where readers overwhelmingly want the current month anyway, and a `<select>` loses one-tap
+adjacency between neighbouring months. The top-ten view's tabs sat bare in `.controls` with no
+`.months` pill at all; they are wrapped now, so all three strips behave alike.
+
+**Day captions no longer pop in on touch** (statusui). PR #44's `(hover: none)` +
+`:empty` gate hid the list strip on phones — but iOS fires `pointerover` on the touch that
+starts a scroll or a tap, the delegated listener filled the strip, and once non-empty the
+`:empty` gate no longer matched: the caption appeared and grew the row 17px, exactly what the
+gate existed to stop. `bindDayCaption` now ignores `pointerover` with `pointerType: "touch"`.
+The click path is untouched, so the county cards' "Tap a day for detail." still works, and an
+iPad trackpad (which reports `hover: none` but hovers as `pointerType: "mouse"`) still fills
+the strip — the exception PR #44 was built around.
+
+**The phone column owns its rhythm** (statusui). Under 640px `#overview` is a flex column, so
+the desktop margins stopped collapsing and the section gaps landed wherever they fell:
+measured 22/6/14/14/18/30/16px down the page, the 6 being uisce's `.healthkey` desktop margin
+(`-4px`, tuned to sit under `.legend`) applying after the mobile reorder had moved it under
+`.controls`. The column now zeroes its children's vertical margins and spaces them itself:
+`gap: 12px`, plus `margin-top: 12px` where a section starts (`.controls`, `#list`, `.legend`,
+`.natheading`). Measured after: 24/12/12/24/24/24/12/12. Desktop is untouched.
+
+**Copy cut to what a phone can carry** (this repo): the subtitle is one sentence plus the
+county prompt ("Uisce Éireann water outages, restrictions and works. Pick your county for
+details." — "outages and events" was considered and rejected, "events" carries nothing);
+"Partial month — in progress" reads "Month in progress."; and "What this measures" went behind a footer
+disclosure like its two siblings — `id="method"` stays on the methodology block, which
+`openMethod()` and two links target.
+
+**Reverted 2026-08-20: the health key names all three kinds again.** Shortening it to
+"boil-water or do-not-drink" was measured against the archive after the fact and is wrong:
+of the 42 notices that raise the mark, 35 are `boil_notice_issued` and 7 are
+`consumption_notice_issued` — every one of those 7 titled "Do Not Consume Notice" — and no
+notice in the feed has ever said "drink". The short line named a kind the site has never
+seen and dropped the only other kind it marks, on the mark's one always-visible explanation,
+while `healthPill`, `healthTitle`, the methodology and the area badge all named three. It is
+the same fault the pill comment at `healthKey`'s neighbour already records being fixed once.
+Folding for a lay reader is fine where the fold is true; here the generic term was the one
+that does not occur.
+
+**Fixed 2026-08-20: `revealMonthTab()` did not survive a rotate** (statusui). It runs only
+from `render()`, which nothing calls on resize, so a narrowing viewport left `scrollLeft`
+measured against the old width: at 851px the strip fits with "Aug 2026" at x 352–439 and
+`scrollLeft` 0; at 375px that is a 341px strip still at 0, with the selected tab entirely out
+of view while the page below shows August. `bindMonthReveal()` (statusui `0567472`) binds one
+resize listener that reveals the tab in every laid-out `.months`; hidden views measure zero
+and are skipped, since they re-render before they are shown.
