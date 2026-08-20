@@ -47,6 +47,29 @@ function monthTabs(months, current, fn) {
   }).join("");
 }
 
+// scrollLeft rather than scrollIntoView(), which can scroll the page too.
+function revealMonthTab(strip) {
+  var on = strip && strip.querySelector("button.on");
+  if (!on) return;
+  var s = strip.getBoundingClientRect();
+  var b = on.getBoundingClientRect();
+  var pad = 16;
+  if (b.left < s.left + pad) strip.scrollLeft += b.left - s.left - pad;
+  else if (b.right > s.right - pad) strip.scrollLeft += b.right - s.right + pad;
+}
+
+// A rotate or window resize narrows the strip without re-rendering it, which
+// leaves the selected tab stranded off the end. Hidden views measure zero, and
+// re-render before they are shown anyway.
+function bindMonthReveal() {
+  window.addEventListener("resize", function () {
+    var strips = document.querySelectorAll(".months");
+    for (var i = 0; i < strips.length; i++) {
+      if (strips[i].clientWidth) revealMonthTab(strips[i]);
+    }
+  });
+}
+
 // describe(cell, date) -> [cls, caption, qualify]; a day in `partial` gets the
 // part-day suffix unless qualify is false. data-cap feeds the .daycap readout;
 // no title — it would repeat that, late, and never on a phone.
@@ -63,8 +86,11 @@ function dayCells(cells, ym, describe, partial) {
 
 // One delegated listener at the document, because the bars re-render on every
 // route and month change. pointerover covers a mouse; click covers touch.
+// Touch pointerover is dropped: it fires on scroll-starts and on taps,
+// filling the strip that (hover: none) hides while empty.
 function bindDayCaption() {
   var show = function (e) {
+    if (e.type === "pointerover" && e.pointerType === "touch") return;
     var cell = e.target.closest(".bar i[data-cap]");
     if (!cell) return;
     var host = cell.closest(".row, .card");

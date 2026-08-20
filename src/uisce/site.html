@@ -204,7 +204,7 @@
 <div class="wrap">
   <header>
     <h1>Irish Water Supply Disruptions</h1>
-    <div class="sub">Where Uisce Éireann has announced water outages, restrictions and works — county by county, town by town. Pick your county to see your area.</div>
+    <div class="sub">Uisce Éireann water outages, restrictions and works. Pick your county for details.</div>
     <div class="sub2">Independent. Not affiliated with Uisce Éireann.</div>
   </header>
 
@@ -242,7 +242,10 @@
   <footer>
     <p><a href="areas.html" style="color:inherit">Every area with a notice</a> — a full directory of the 1,800-odd Census areas on this site, each linking to its incident history.</p>
     <p id="countyHistoryLink" hidden></p>
-    <p><b>What this measures.</b> This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. Every duration is counted from when a notice was published — for an unplanned burst the water was already off before that. The headline &ldquo;works complete&rdquo; time is a <b>minimum</b>: it counts only the notices that reported one. The availability percentages are a <b>best estimate</b>, because a total has to put a number on every disruption, including the ones that never reported an end.</p>
+    <details class="method">
+      <summary>What this measures</summary>
+      <p>This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. Every duration is counted from when a notice was published — for an unplanned burst the water was already off before that. The headline &ldquo;works complete&rdquo; time is a <b>minimum</b>: it counts only the notices that reported one. The availability percentages are a <b>best estimate</b>, because a total has to put a number on every disruption, including the ones that never reported an end.</p>
+    </details>
 
     <details class="method" id="method">
       <summary>How these numbers are worked out</summary>
@@ -331,10 +334,9 @@ const LEGEND = `
 // know which counties are still standing, so it makes the weaker, true claim and
 // leaves "right now" to the per-county mark, which does know (health_now).
 //
-// All three kinds named, not two: the mark is raised by KNOCK_CATS, which
-// includes consumption_notice_issued, and this line is the only always-visible
-// explanation of it — the fuller wording is in a title=, which never fires on a
-// touchscreen.
+// All three kinds named: every do-not-consume notice in the feed is titled as
+// one, and this is the mark's only always-visible explanation. Not "water
+// quality issue" either — the legend uses that for the whole orange category.
 function healthKey() {
   return `<span class="healthmark sm">!</span> marks a boil-water, do-not-drink` +
     ` or do-not-consume notice active in ${monthLabelLong(curMonth)}` +
@@ -456,7 +458,7 @@ function isLatest() { return curMonth === LATEST; }
 // a separate caveat line, and it stays true whether or not inference is current.
 function partialNote() {
   return curMonth === today.slice(0, 7)
-    ? "Partial month — in progress. Notices that haven't reported an end yet count as ongoing, so the figures will move as the month progresses." :
+    ? "Month in progress. Notices without a reported end count as ongoing, so figures will move." :
     curMonth === D.months[0] ? "This site started collecting on 20 April 2026, so April is a part-month." : "";
 }
 
@@ -504,6 +506,7 @@ function render() {
     chl.innerHTML = `<a href="c/${county.toLowerCase()}.html" style="color:inherit">See every notice ever recorded for ${esc(county)}</a>`;
   }
   RENDER[view]();
+  revealMonthTab(document.getElementById(VIEW_EL[view]).querySelector(".months"));
 }
 
 function renderOverview() {
@@ -803,7 +806,7 @@ function renderTop() {
     <a class="back" href="#" onclick="go(''); return false;">← All counties</a>
     <div class="chead"><h2>The ten largest disruptions</h2>
       <span class="pop">${monthLabelLong(ym)} · by person-hours</span></div>
-    <div class="controls">${monthTabs(TOP_MONTHS, ym, "setMonth")}</div>
+    <div class="controls"><div class="months">${monthTabs(TOP_MONTHS, ym, "setMonth")}</div></div>
     <div class="card">
       <p class="lede">These ten account for <b>${share}%</b> of all the disruption in ${monthLabelLong(ym)},
         measured as people × hours — out of ${national ? fmtPersonH(national) : 0} nationally.${startedNote}</p>
@@ -984,6 +987,7 @@ document.getElementById("sort").addEventListener("change", e => { sortBy = e.tar
 window.addEventListener("hashchange", route);
 window.addEventListener("popstate", route);
 bindDayCaption();
+bindMonthReveal();
 route();
 </script>
 </body>
