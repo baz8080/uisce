@@ -15,6 +15,7 @@ import html
 import json
 import math
 import unicodedata
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -79,6 +80,12 @@ def half_up(x):
     return math.floor(x + 0.5)
 
 
+def tenth(x):
+    # JS toFixed rounds a tie up, "%.1f" goes to even, and x * 10 can cross a tie
+    # that neither side sees; Decimal(float) is the double both are looking at.
+    return Decimal(x).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+
+
 def days(n):
     if n < 2:
         return "1 day"
@@ -92,7 +99,7 @@ def hours(h, days_fmt=None):
     if h < 1:
         return f"{half_up(h * 60)} min"
     if h < 48:
-        return f"{h:.1f} h" if h < 10 else f"{half_up(h)} h"
+        return f"{tenth(h)} h" if h < 10 else f"{half_up(h)} h"
     n = half_up(h / 24)
     if days_fmt:
         return days_fmt(n)
