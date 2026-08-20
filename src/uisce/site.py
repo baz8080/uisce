@@ -38,6 +38,8 @@ from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import quote
 
+import statusui
+
 from uisce.build import reported_end_utc
 from uisce.config import (
     BASE_URL,
@@ -49,7 +51,6 @@ from uisce.config import (
     SA_TOWNS_PATH,
     SITE_DIR,
 )
-from uisce.ui import statusui
 
 SITE_HTML = Path(__file__).parent / "site.html"
 AREAS_HTML = Path(__file__).parent / "areas.html"
@@ -60,7 +61,7 @@ CANONICAL_MARKER = "<!--CANONICAL-->"
 
 
 def page_html(template, markers):
-    """A template with the shared UI (src/uisce/ui) and site.css inlined, then its markers."""
+    """A template with the shared statusui CSS/JS and site.css inlined, then its markers."""
     markers = dict(markers, **{"SITE-CSS": SITE_CSS.read_text()})
     return statusui.assemble(template.read_text(), markers)
 

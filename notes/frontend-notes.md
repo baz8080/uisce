@@ -2,7 +2,33 @@
 
 Notes on `site.html` / `areas.html` / `county.html`, kept here so the reasoning isn't lost to chat history. See [how-it-works.md](how-it-works.md) for how the three pages fit together.
 
+## 2026-08-20: the vendored copy became a pinned uv git dependency
+
+One day of the vendored mechanism was enough to show its cost: a shared fix meant a sync,
+test, commit and PR in each of three repos, and the sites drifted anyway — esb and lifts were
+synced to statusui `f248ac3` while this site's main sat at `c9f8beb`, five UI commits behind,
+with nothing failing to say so (the byte-compare only fires against the checkout you happen
+to have; the catch-up sync eventually arrived buried in the iPhone-review PR below).
+`statusui` is now a real package: `pyproject.toml` declares it with a `[tool.uv.sources]` git
+source and `uv.lock` pins the commit, so what the build used is recorded and CI-visible, not
+stamped in a file by a script.
+
+**To change the shared UI:** edit in `../statusui`, test there, push, then run
+`../statusui/rollout.sh` — it bumps the pin in all three sites, runs each site's tests, and
+opens the three PRs. To try an unpushed statusui change here first:
+`uv run --with-editable ../statusui uisce-site`. The vendored tree (`src/uisce/ui/`),
+`scripts/sync-ui.sh` and the byte-compare went; the guard that no page script redeclares a
+shared JS global stayed, as `tests/test_ui_globals.py` reading the installed package.
+
+The pages are unchanged: `statusui.assemble()` still inlines the shared CSS/JS at build, so a
+search-result landing still costs one request. The pin lands at the statusui commit whose
+content the last vendored sync already carried, so the switch itself changes nothing but the
+shared files' header comments.
+
 ## Shared with esb and lifts since 2026-08-19: the design layer lives in `statusui`
+
+*(Mechanism superseded 2026-08-20, above: the vendored copy is now a pinned git dependency.
+The what-is-shared split and the renames below still hold.)*
 
 The three status sites are deliberately look-alike, and every UI fix had been ported three
 times by hand — and not always: the 2026-08-18 contrast pass below never reached esb. The

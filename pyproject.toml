@@ -8,6 +8,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pyproj>=3.7.2",
     "requests>=2.34.2",
+    "statusui",
 ]
 
 [project.scripts]
@@ -30,6 +31,10 @@ uisce-replay-closed-at = "uisce.replay_closed_at:run"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# Pinned to a commit in uv.lock; ../statusui/rollout.sh moves the pin.
+[tool.uv.sources]
+statusui = { git = "https://github.com/baz8080/statusui" }
 
 [dependency-groups]
 dev = [

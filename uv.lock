@@ -201,6 +201,11 @@ wheels = [
 ]
 
 [[package]]
+name = "statusui"
+version = "0.1.0"
+source = { git = "https://github.com/baz8080/statusui#da21d4f2dbd35d04566e5dc414fcd97cb4c03877" }
+
+[[package]]
 name = "uisce"
 version = "1.0.0"
 source = { editable = "." }
@@ -208,6 +213,7 @@ dependencies = [
     { name = "pyproj" },
     { name = "python-dotenv" },
     { name = "requests" },
+    { name = "statusui" },
 ]
 
 [package.dev-dependencies]
@@ -221,6 +227,7 @@ requires-dist = [
     { name = "pyproj", specifier = ">=3.7.2" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "requests", specifier = ">=2.34.2" },
+    { name = "statusui", git = "https://github.com/baz8080/statusui" },
 ]
 
 [package.metadata.requires-dev]
