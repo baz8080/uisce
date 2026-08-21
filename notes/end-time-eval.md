@@ -106,6 +106,28 @@ contain a time-like string. Clean.
 
 Labelled CSV: `data/eval/end_time_sample_2026-07-19_gemma-4-12b-qat_pv2.csv`.
 
+### 2026-08-21 — gemma-4-12b-qat, prompt v3, N = 120 (0 unsure) — and the rules-v1 truth gate
+
+| end_source | correct | incorrect | accuracy |
+|---|---|---|---|
+| completion_update | 74 | 0 | 100% |
+| scheduled_end_with_time | 39 | 0 | 100% |
+| not_found | 7 | 0 | 100% |
+| **total** | **120** | **0** | **100%** |
+
+Drawn with `uisce-eval-sample-fresh` (uniform, seed 42, unseen cases) as the out-of-sample
+check on the rules-first hybrid ([rules-vs-llm-end-times.md](rules-vs-llm-end-times.md)).
+pv3's second perfect uniform round, with the same reading as round 2's: no errors detectable
+at this sample size, 95% lower bound ~97.5%.
+
+The round's second purpose was the rules truth gate, and it passed: replaying `rules-v1`
+against these labels scores **110/110 correct on answered rows (0 wrong emissions) at
+110/120 (91.7%) coverage** — abstentions were the 7 `not_found` rows (never emitted, by
+design) and 3 completion updates with unparseable headers. None of these 120 cases was used
+to derive or tune any rule pattern.
+
+Labelled CSV: `data/eval/end_time_sample_2026-08-21_gemma-4-12b-qat_pv3.csv`.
+
 ### 2026-07-19 — pv2 replay against round 1 (regression check, not a labelled round)
 
 Replay re-runs a prompt over round 1's descriptions and scores against round 1's human
