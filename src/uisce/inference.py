@@ -5,6 +5,8 @@ import sqlite3
 from datetime import datetime, timezone
 
 from uisce.config import DB_PATH, JSONL_PATH, make_session
+from uisce.rules import RULES_VERSION
+from uisce.rules import extract as rules_extract
 
 MODEL_URL = "http://localhost:1234/v1/chat/completions"
 MODEL_NAME = "gemma-4-12b-qat"
@@ -133,8 +135,10 @@ def hash_description(description):
 
 
 def get_last_hash_by_case_id(jsonl_path):
-    """Latest (description_hash, prompt_version) per case. A case is up to date only
-    when both still match, so bumping PROMPT_VERSION re-infers the whole corpus."""
+    """Latest (description_hash, prompt_version, model) per case. A case is up
+    to date only when the hash and version still match AND its record came from
+    a current extractor, so bumping PROMPT_VERSION re-infers the whole corpus
+    while bumping RULES_VERSION re-runs only the rules-produced cases."""
     if not jsonl_path.exists():
         return {}
     latest = {}
@@ -147,9 +151,19 @@ def get_last_hash_by_case_id(jsonl_path):
             if current is None or record["inferred_at"] > current["inferred_at"]:
                 latest[record["case_id"]] = record
     return {
-        case_id: (record["description_hash"], record.get("prompt_version"))
+        case_id: (record["description_hash"], record.get("prompt_version"),
+                  record.get("model"))
         for case_id, record in latest.items()
     }
+
+
+def _is_current(state, description):
+    if state is None:
+        return False
+    digest, version, model = state
+    return (digest == hash_description(description)
+            and version == PROMPT_VERSION
+            and model in (MODEL_NAME, RULES_VERSION))
 
 
 def get_cases_needing_inference(db_path, last_state_by_case_id, force=False):
@@ -161,9 +175,7 @@ def get_cases_needing_inference(db_path, last_state_by_case_id, force=False):
     cases = [
         row
         for row in cur
-        if force
-        or last_state_by_case_id.get(row["id"])
-        != (hash_description(row["description"]), PROMPT_VERSION)
+        if force or not _is_current(last_state_by_case_id.get(row["id"]), row["description"])
     ]
     conn.close()
     return cases
@@ -192,12 +204,13 @@ def parse_response(response_text):
     return result
 
 
-def build_record(case_id, description, start_date, result, inferred_at=None):
+def build_record(case_id, description, start_date, result, model=MODEL_NAME,
+                 inferred_at=None):
     return {
         "case_id": case_id,
         "description_hash": hash_description(description),
         "start_date": start_date,
-        "model": MODEL_NAME,
+        "model": model,
         "prompt_version": PROMPT_VERSION,
         "notes": result.get("notes"),
         "end_source": result.get("end_source"),
@@ -219,31 +232,54 @@ def run(argv=None):
                         help="re-infer every case, even if description and prompt version match")
     parser.add_argument("--limit", type=int, default=None,
                         help="stop after N cases (useful on slow local hardware)")
+    parser.add_argument("--rules-only", action="store_true",
+                        help="answer what the rules cover and leave the rest for a run with "
+                             "a local LLM (what CI does, having no model)")
     args = parser.parse_args(argv)
 
     last_state_by_case_id = get_last_hash_by_case_id(JSONL_PATH)
     cases = get_cases_needing_inference(DB_PATH, last_state_by_case_id, force=args.force)
     if args.limit is not None:
         cases = cases[: args.limit]
-    print(f"{len(cases)} cases to process (prompt v{PROMPT_VERSION}, model {MODEL_NAME})")
+    print(f"{len(cases)} cases to process ({RULES_VERSION} first, "
+          f"falling back to {MODEL_NAME} prompt v{PROMPT_VERSION})")
 
-    session = make_session()
+    # Rules first, LLM fallback (notes/rules-vs-llm-end-times.md). The session
+    # is only opened on the first abstention, so a run the rules fully cover
+    # never needs LM Studio at all.
+    session = None
     results_by_hash = {}
+    counts = {RULES_VERSION: 0, MODEL_NAME: 0}
+    left_for_llm = 0
 
     with open(JSONL_PATH, "a") as out:
         for i, case in enumerate(cases):
             try:
                 description_hash = hash_description(case["description"])
 
-                # Multi-pin events share one description; infer it once.
-                result = results_by_hash.get(description_hash)
-                if result is None:
-                    raw = call_llm(session, case["start_date"], case["description"])
-                    result = parse_response(raw)
-                    results_by_hash[description_hash] = result
+                # Multi-pin events share one description; extract it once.
+                cached = results_by_hash.get(description_hash)
+                if cached is None:
+                    result = rules_extract(case["start_date"], case["description"])
+                    if result is not None:
+                        model = RULES_VERSION
+                    elif args.rules_only:
+                        left_for_llm += 1
+                        continue
+                    else:
+                        if session is None:
+                            session = make_session()
+                        raw = call_llm(session, case["start_date"], case["description"])
+                        result = parse_response(raw)
+                        model = MODEL_NAME
+                    results_by_hash[description_hash] = (result, model)
+                else:
+                    result, model = cached
+                counts[model] += 1
 
                 record = build_record(
-                    case["id"], case["description"], case["start_date"], result
+                    case["id"], case["description"], case["start_date"], result,
+                    model=model,
                 )
 
                 out.write(json.dumps(record) + "\n")
@@ -253,3 +289,6 @@ def run(argv=None):
             except Exception as e:
                 print(f"Failed case {case['id']}: {e}")
                 out.flush()
+    print(f"{counts[RULES_VERSION]} cases answered by {RULES_VERSION}, "
+          f"{counts[MODEL_NAME]} by {MODEL_NAME}"
+          + (f", {left_for_llm} left for the LLM" if args.rules_only else ""))

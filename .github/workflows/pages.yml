@@ -1,0 +1,62 @@
+name: Build site
+
+on:
+  push:
+    branches: [main]
+  # A push made with GITHUB_TOKEN fires no push event, so a data build has to
+  # hand over explicitly once it has published the refreshed DB.
+  workflow_run:
+    workflows: ["Build DB"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Queue rather than cancel: two deploys racing would publish whichever finished
+# second, which is not necessarily the newer data.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+          prune-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      # The site is a projection of the published DB, so a UI change deploys
+      # from the latest release without re-reading the feed. The freshness
+      # banner follows the DB, not this build's clock.
+      - name: Download the published DB
+        run: gh release download --pattern "uisce.db" --dir out/
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build site
+        run: uv run uisce-site
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: out/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -29,7 +29,6 @@ import csv
 import html
 import json
 import math
-import re
 import sqlite3
 import statistics
 from collections import Counter, defaultdict
@@ -37,6 +36,8 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import quote
+
+import statusui
 
 from uisce.build import reported_end_utc
 from uisce.config import (
@@ -48,13 +49,21 @@ from uisce.config import (
     SA_POP_PATH,
     SA_TOWNS_PATH,
     SITE_DIR,
+    describes_recurrence,
 )
 
 SITE_HTML = Path(__file__).parent / "site.html"
 AREAS_HTML = Path(__file__).parent / "areas.html"
 COUNTY_HTML = Path(__file__).parent / "county.html"
+SITE_CSS = Path(__file__).parent / "site.css"
 AREAS_MARKER = "<!--AREAS-->"
 CANONICAL_MARKER = "<!--CANONICAL-->"
+
+
+def page_html(template, markers):
+    """A template with the shared statusui CSS/JS and site.css inlined, then its markers."""
+    markers = dict(markers, **{"SITE-CSS": SITE_CSS.read_text()})
+    return statusui.assemble(template.read_text(), markers)
 
 # The feed was first snapshotted on 2026-04-20; earlier days are unobserved
 # (the ArcGIS source only retains recent notices).
@@ -664,17 +673,6 @@ def _parse_date(value):
 def case_ref(row):
     """The key that groups a multi-pin publication into one event."""
     return row["reference_num"] or f"id:{row['id']}"
-
-
-# The wording the feed uses for a window repeating over a range of dates.
-RECURRENCE_TEXT = re.compile(
-    r"\b(daily|nightly|each night|every night|each day|overnight (?:from|between))\b", re.I
-)
-
-
-def describes_recurrence(description):
-    """Whether a notice's own text announces a repeating window."""
-    return bool(RECURRENCE_TEXT.search(re.sub(r"<[^>]+>", " ", description or "")))
 
 
 def recurring_events(rows, windows):
@@ -1450,7 +1448,7 @@ def _area_index_html(index):
             f'<section id="c-{county_slug(county)}" data-county="{html.escape(county)}">'
             f'<h2>Co. {html.escape(county)} <span>· {len(areas)} areas · '
             f'<a href="c/{county_slug(county)}.html">county page</a></span></h2>'
-            f'<ul>{_area_items(county, areas)}</ul></section>'
+            f'<ul class="areas">{_area_items(county, areas)}</ul></section>'
         )
     return f"<nav>{nav}</nav>\n{''.join(sections)}"
 
@@ -1772,7 +1770,10 @@ def recurrence_report(cases, pin_tags=None):
     return lines
 
 
-def build_site(rows, sa_index, now, towns=None):
+def build_site(rows, sa_index, now, towns=None, data_as_of=None):
+    # data_as_of is when the feed was last read; the site can be rebuilt without
+    # a data build, so the freshness banner must not follow the build clock
+    data_as_of = data_as_of or now
     months = month_list(COLLECTION_START, now)
 
     lifts = collect_lifts(rows)
@@ -1867,6 +1868,7 @@ def build_site(rows, sa_index, now, towns=None):
         # banner can say "4 hours ago" rather than make the reader do timezone
         # arithmetic. The human-readable one above stays, in the footer.
         "generated_iso": now.strftime("%Y-%m-%dT%H:%M:00Z"),
+        "data_as_of_iso": data_as_of.strftime("%Y-%m-%dT%H:%M:00Z"),
         "months": months,
         "counties": {},
         "national": {},
@@ -2006,6 +2008,12 @@ def build_site(rows, sa_index, now, towns=None):
     return site
 
 
+def data_horizon(conn):
+    """The last instant the pipeline read the feed, or None on an empty DB."""
+    (last_seen,) = conn.execute("SELECT MAX(last_seen) FROM cases").fetchone()
+    return parse_dt(last_seen) if last_seen else None
+
+
 def load_cases(conn):
     conn.row_factory = sqlite3.Row
     return conn.execute(
@@ -2029,22 +2037,6 @@ def load_cases(conn):
 
 HISTORY_DIR = "h"
 COUNTY_DIR = "c"
-
-
-def _sitemap_xml(paths, lastmod):
-    """A sitemap over the pages, not the payload. data.js and the shards are
-    fetched by the app, never landed on, and listing them would invite a crawler
-    to index 26 files of JSON as if they were documents."""
-    urls = "".join(
-        f"<url><loc>{html.escape(f'{BASE_URL}/{p}')}</loc>"
-        f"<lastmod>{lastmod}</lastmod></url>"
-        for p in paths
-    )
-    return (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-        f"{urls}</urlset>\n"
-    )
 
 
 def write_site(site, site_dir, towns=None):
@@ -2075,11 +2067,7 @@ def write_site(site, site_dir, towns=None):
     data = "window.UISCE_DATA = " + json.dumps(site) + ";"
     site_dir.mkdir(parents=True, exist_ok=True)
     (site_dir / "data.js").write_text(data)
-    # substituted rather than copied, now that it carries a canonical — the
-    # treatment areas.html has always had
-    (site_dir / "index.html").write_text(
-        SITE_HTML.read_text().replace(CANONICAL_MARKER, f"{BASE_URL}/")
-    )
+    (site_dir / "index.html").write_text(page_html(SITE_HTML, {"CANONICAL": f"{BASE_URL}/"}))
 
     shard_dir = site_dir / HISTORY_DIR
     shard_dir.mkdir(exist_ok=True)
@@ -2102,10 +2090,9 @@ def write_site(site, site_dir, towns=None):
     pages = ["", "areas.html"]
     if towns is not None:
         index = area_index(history, towns)
-        page = (
-            AREAS_HTML.read_text()
-            .replace(AREAS_MARKER, _area_index_html(index))
-            .replace(CANONICAL_MARKER, f"{BASE_URL}/areas.html")
+        page = page_html(
+            AREAS_HTML,
+            {"AREAS": _area_index_html(index), "CANONICAL": f"{BASE_URL}/areas.html"},
         )
         (site_dir / "areas.html").write_text(page)
         index_bytes = len(page.encode())
@@ -2118,7 +2105,6 @@ def write_site(site, site_dir, towns=None):
         county_dir = site_dir / COUNTY_DIR
         county_dir.mkdir(exist_ok=True)
         by_county = dict(index)
-        template = COUNTY_HTML.read_text()
         all_counties = sorted(site["counties"])
         for county in all_counties:
             slug = county_slug(county)
@@ -2127,31 +2113,30 @@ def write_site(site, site_dir, towns=None):
             body = county_page_html(
                 county, site["counties"][county], areas, events, site["months"], all_counties
             )
-            page = (
-                template.replace(
-                    "<!--TITLE-->",
-                    html.escape(f"Co. {county} water supply disruptions — Uisce Éireann notices"),
-                )
-                .replace(
-                    "<!--DESC-->",
-                    html.escape(
+            page = page_html(
+                COUNTY_HTML,
+                {
+                    "TITLE": html.escape(
+                        f"Co. {county} water supply disruptions — Uisce Éireann notices"
+                    ),
+                    "DESC": html.escape(
                         f"Water outages, boil notices, restrictions and works announced by "
                         f"Uisce Éireann in Co. {county} — {len(events):,} notices across "
                         f"{len(areas):,} areas, updated twice daily."
                     ),
-                )
-                .replace(CANONICAL_MARKER, f"{BASE_URL}/{COUNTY_DIR}/{slug}.html")
-                .replace("<!--BODY-->", body)
+                    "CANONICAL": f"{BASE_URL}/{COUNTY_DIR}/{slug}.html",
+                    "BODY": body,
+                },
             )
             (county_dir / f"{slug}.html").write_text(page)
             county_bytes += len(page.encode())
             pages.append(f"{COUNTY_DIR}/{slug}.html")
         n_county_pages = len(all_counties)
 
-    (site_dir / "sitemap.xml").write_text(_sitemap_xml(pages, site["generated_iso"]))
-    (site_dir / "robots.txt").write_text(
-        f"User-agent: *\nAllow: /\nSitemap: {BASE_URL}/sitemap.xml\n"
-    )
+    # a sitemap over the pages, not the payload: data.js and the shards are
+    # fetched by the app, never landed on
+    (site_dir / "sitemap.xml").write_text(statusui.sitemap(BASE_URL, pages, site["generated_iso"]))
+    (site_dir / "robots.txt").write_text(statusui.robots(BASE_URL))
     return (
         len(data.encode()),
         shard_bytes,
@@ -2167,7 +2152,8 @@ def run():
     towns = TownLookup.from_csv(SA_TOWNS_PATH, sa_index.pop)
     with sqlite3.connect(DB_PATH) as conn:
         rows = load_cases(conn)
-    site = build_site(rows, sa_index, datetime.now(timezone.utc), towns)
+        data_as_of = data_horizon(conn)
+    site = build_site(rows, sa_index, datetime.now(timezone.utc), towns, data_as_of)
 
     # a diagnostic for the build log, not for the page
     for line in site.pop("recurrence_report"):

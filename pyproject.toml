@@ -8,6 +8,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pyproj>=3.7.2",
     "requests>=2.34.2",
+    "statusui",
 ]
 
 [project.scripts]
@@ -22,6 +23,7 @@ uisce-eval-sample = "uisce.eval_end_time:sample"
 uisce-eval-sample-fresh = "uisce.eval_end_time:sample_fresh"
 uisce-eval-score = "uisce.eval_end_time:score"
 uisce-eval-replay = "uisce.eval_replay:run"
+uisce-eval-rules-shadow = "uisce.eval_rules_shadow:run"
 uisce-review-recurrence = "uisce.eval_recurrence:review"
 uisce-eval-overlap = "uisce.eval_overlap:run"
 uisce-score-recurrence = "uisce.eval_recurrence:score"
@@ -30,6 +32,10 @@ uisce-replay-closed-at = "uisce.replay_closed_at:run"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# Pinned to a commit in uv.lock; ../statusui/rollout.sh moves the pin.
+[tool.uv.sources]
+statusui = { git = "https://github.com/baz8080/statusui" }
 
 [dependency-groups]
 dev = [

@@ -3,6 +3,7 @@ import sqlite3
 
 import pytest
 
+from uisce import inference
 from uisce.inference import (
     MODEL_NAME,
     PROMPT_VERSION,
@@ -12,6 +13,7 @@ from uisce.inference import (
     hash_description,
     parse_response,
 )
+from uisce.rules import RULES_VERSION
 
 
 def write_jsonl(path, records):
@@ -30,6 +32,7 @@ class TestGetLastHashByCaseId:
                 "inferred_at": inferred_at,
                 "description_hash": description_hash,
                 "prompt_version": PROMPT_VERSION,
+                "model": MODEL_NAME,
             }
 
         write_jsonl(
@@ -41,8 +44,8 @@ class TestGetLastHashByCaseId:
             ],
         )
         assert get_last_hash_by_case_id(jsonl) == {
-            1: ("new", PROMPT_VERSION),
-            2: ("only", PROMPT_VERSION),
+            1: ("new", PROMPT_VERSION, MODEL_NAME),
+            2: ("only", PROMPT_VERSION, MODEL_NAME),
         }
 
     def test_blank_lines_are_skipped(self, tmp_path):
@@ -52,9 +55,10 @@ class TestGetLastHashByCaseId:
             "inferred_at": "2026-06-01T00:00:00+00:00",
             "description_hash": "h",
             "prompt_version": PROMPT_VERSION,
+            "model": MODEL_NAME,
         }
         jsonl.write_text("\n" + json.dumps(record) + "\n\n")
-        assert get_last_hash_by_case_id(jsonl) == {1: ("h", PROMPT_VERSION)}
+        assert get_last_hash_by_case_id(jsonl) == {1: ("h", PROMPT_VERSION, MODEL_NAME)}
 
     def test_records_predating_prompt_version_read_as_none(self, tmp_path):
         jsonl = tmp_path / "inferred.jsonl"
@@ -62,7 +66,7 @@ class TestGetLastHashByCaseId:
             jsonl,
             [{"case_id": 1, "inferred_at": "2026-06-01T00:00:00+00:00", "description_hash": "h"}],
         )
-        assert get_last_hash_by_case_id(jsonl) == {1: ("h", None)}
+        assert get_last_hash_by_case_id(jsonl) == {1: ("h", None, None)}
 
 
 class TestGetCasesNeedingInference:
@@ -88,8 +92,8 @@ class TestGetCasesNeedingInference:
             ],
         )
         last_state = {
-            1: (hash_description("unchanged text"), PROMPT_VERSION),
-            2: (hash_description("previous version of text"), PROMPT_VERSION),
+            1: (hash_description("unchanged text"), PROMPT_VERSION, MODEL_NAME),
+            2: (hash_description("previous version of text"), PROMPT_VERSION, MODEL_NAME),
         }
 
         cases = get_cases_needing_inference(db, last_state)
@@ -99,13 +103,33 @@ class TestGetCasesNeedingInference:
     def test_prompt_version_bump_reinfers_unchanged_descriptions(self, tmp_path):
         """A prompt edit must re-infer the corpus; keying on the hash alone re-inferred nothing."""
         db = self._make_db(tmp_path, [(1, "2026-06-01", "unchanged text")])
-        stale = {1: (hash_description("unchanged text"), PROMPT_VERSION - 1)}
+        stale = {1: (hash_description("unchanged text"), PROMPT_VERSION - 1, MODEL_NAME)}
 
         assert [c["id"] for c in get_cases_needing_inference(db, stale)] == [1]
 
+    def test_rules_version_bump_reselects_only_rules_cases(self, tmp_path):
+        """Bumping RULES_VERSION re-runs the rules-produced cases and leaves the
+        LLM's alone — the model in the record is part of the staleness key."""
+        db = self._make_db(
+            tmp_path,
+            [(1, "2026-06-01", "rules text"), (2, "2026-06-01", "llm text")],
+        )
+        state = {
+            1: (hash_description("rules text"), PROMPT_VERSION, "rules-v0"),
+            2: (hash_description("llm text"), PROMPT_VERSION, MODEL_NAME),
+        }
+
+        assert [c["id"] for c in get_cases_needing_inference(db, state)] == [1]
+
+    def test_current_rules_records_are_current(self, tmp_path):
+        db = self._make_db(tmp_path, [(1, "2026-06-01", "rules text")])
+        state = {1: (hash_description("rules text"), PROMPT_VERSION, RULES_VERSION)}
+
+        assert get_cases_needing_inference(db, state) == []
+
     def test_force_reinfers_everything(self, tmp_path):
         db = self._make_db(tmp_path, [(1, "2026-06-01", "unchanged text")])
-        current = {1: (hash_description("unchanged text"), PROMPT_VERSION)}
+        current = {1: (hash_description("unchanged text"), PROMPT_VERSION, MODEL_NAME)}
 
         assert get_cases_needing_inference(db, current) == []
         assert [c["id"] for c in get_cases_needing_inference(db, current, force=True)] == [1]
@@ -144,6 +168,16 @@ def test_build_record_shape():
     }
 
 
+def test_build_record_stamps_the_extractor_that_answered():
+    record = build_record(7, "desc", "2026-04-28T00:00:00+00:00",
+                          {"end_source": "completion_update"}, model=RULES_VERSION)
+
+    assert record["model"] == RULES_VERSION
+    # prompt_version is stamped regardless: it names the semantics the rules
+    # mirror, and it keeps the PROMPT_VERSION-bump re-run covering everything.
+    assert record["prompt_version"] == PROMPT_VERSION
+
+
 def test_a_model_reply_missing_the_window_fields_still_builds_a_record():
     """The v3 fields are read with .get(), so a reply that omits them — an older
     model, a truncated response — yields NULLs rather than crashing the run. NULL
@@ -152,6 +186,99 @@ def test_a_model_reply_missing_the_window_fields_still_builds_a_record():
 
     assert record["recurrence"] is None
     assert record["window_open"] is None
+
+
+class TestHybridRun:
+    """run() is rules first, LLM fallback (notes/rules-vs-llm-end-times.md)."""
+
+    TEMPLATED = ("**Update 10:15am 18/05/2026** Works are now complete and supply "
+                 "should have returned to all the affected areas.")
+    UNTEMPLATED = "We are investigating reports of supply disruptions."
+
+    def _wire(self, tmp_path, monkeypatch, rows):
+        db = tmp_path / "test.db"
+        conn = sqlite3.connect(db)
+        conn.execute(
+            "CREATE TABLE cases (id INTEGER PRIMARY KEY, start_date TEXT, description TEXT)"
+        )
+        conn.executemany("INSERT INTO cases VALUES (?, ?, ?)", rows)
+        conn.commit()
+        conn.close()
+        jsonl = tmp_path / "inferred.jsonl"
+        monkeypatch.setattr(inference, "DB_PATH", db)
+        monkeypatch.setattr(inference, "JSONL_PATH", jsonl)
+        return jsonl
+
+    def test_rules_covered_run_never_touches_the_llm(self, tmp_path, monkeypatch):
+        jsonl = self._wire(
+            tmp_path, monkeypatch, [(1, "2026-05-18T08:00:00+00:00", self.TEMPLATED)]
+        )
+
+        def no_session():
+            raise AssertionError("a fully rules-covered run must not open a session")
+
+        monkeypatch.setattr(inference, "make_session", no_session)
+        inference.run([])
+
+        [record] = [json.loads(line) for line in jsonl.read_text().splitlines()]
+        assert record["model"] == RULES_VERSION
+        assert record["prompt_version"] == PROMPT_VERSION
+        assert record["end_source"] == "completion_update"
+        assert (record["local_date"], record["local_time"]) == ("2026-05-18", "10:15")
+
+    def test_rules_only_skips_abstentions_without_touching_the_llm(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        jsonl = self._wire(
+            tmp_path, monkeypatch,
+            [(1, "2026-05-18T08:00:00+00:00", self.TEMPLATED),
+             (2, "2026-05-18T08:00:00+00:00", self.UNTEMPLATED)],
+        )
+
+        def no_session():
+            raise AssertionError("--rules-only must never open a session")
+
+        monkeypatch.setattr(inference, "make_session", no_session)
+        inference.run(["--rules-only"])
+
+        [record] = [json.loads(line) for line in jsonl.read_text().splitlines()]
+        assert (record["case_id"], record["model"]) == (1, RULES_VERSION)
+        assert "1 left for the LLM" in capsys.readouterr().out
+
+    def test_abstention_falls_back_to_the_llm(self, tmp_path, monkeypatch):
+        jsonl = self._wire(
+            tmp_path, monkeypatch, [(1, "2026-05-18T08:00:00+00:00", self.UNTEMPLATED)]
+        )
+        monkeypatch.setattr(inference, "make_session", lambda: object())
+        monkeypatch.setattr(
+            inference, "call_llm",
+            lambda session, start_date, description: '{"end_source": "not_found"}',
+        )
+        inference.run([])
+
+        [record] = [json.loads(line) for line in jsonl.read_text().splitlines()]
+        assert record["model"] == MODEL_NAME
+        assert record["end_source"] == "not_found"
+
+    def test_multi_pin_dedupe_still_extracts_once(self, tmp_path, monkeypatch):
+        jsonl = self._wire(
+            tmp_path, monkeypatch,
+            [(1, "2026-05-18T08:00:00+00:00", self.UNTEMPLATED),
+             (2, "2026-05-18T08:00:00+00:00", self.UNTEMPLATED)],
+        )
+        calls = []
+        monkeypatch.setattr(inference, "make_session", lambda: object())
+
+        def counting_llm(session, start_date, description):
+            calls.append(description)
+            return '{"end_source": "not_found"}'
+
+        monkeypatch.setattr(inference, "call_llm", counting_llm)
+        inference.run([])
+
+        records = [json.loads(line) for line in jsonl.read_text().splitlines()]
+        assert [r["case_id"] for r in records] == [1, 2]
+        assert len(calls) == 1
 
 
 class TestParseResponse:

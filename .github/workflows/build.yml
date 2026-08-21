@@ -20,8 +20,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 # Guards against a manual dispatch landing on top of a scheduled run — two
 # overlapping runs would silently discard one's closed_at observations. Queue
@@ -39,7 +37,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v9.0.0
         with:
-          enable-caching: true
+          enable-cache: true
           prune-cache: true
 
       - name: Install dependencies
@@ -71,6 +69,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # The rules answer the templated ~93% here; the abstentions wait for a
+      # local run with the LLM. See notes/rules-vs-llm-end-times.md.
+      - name: Infer end times by rules
+        run: uv run uisce-infer --rules-only
+
       - name: Build inferred cases table
         run: uv run uisce-build-inferred
 
@@ -84,21 +87,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build site
-        run: uv run uisce-site
-
-      - name: Upload site artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: out/site
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+      # After the publish, so the committed JSONL never references a case the
+      # latest release lacks (uisce-build-inferred refuses that combination).
+      # Rebase before pushing: a local LLM run may have appended meanwhile, and
+      # .gitattributes merges the two appends rather than conflicting.
+      - name: Commit the inferred end times
+        run: |
+          git add data/inferred_end_times.jsonl
+          if git diff --cached --quiet; then
+            echo "no new inferences to commit"
+            exit 0
+          fi
+          git -c user.name="uisce-ci" -c user.email="uisce-ci@users.noreply.github.com" \
+            commit -q -m "Infer end times by rules, $(date -u +%Y-%m-%d) build"
+          git pull -q --rebase origin main
+          git push -q origin HEAD:main

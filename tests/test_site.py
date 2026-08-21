@@ -1,5 +1,6 @@
 import json
 import re
+import sqlite3
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, time, timedelta, timezone
 
@@ -24,6 +25,7 @@ from uisce.site import (
     county_events,
     county_slug,
     daily_windows,
+    data_horizon,
     describes_recurrence,
     event_windows,
     grade,
@@ -1983,9 +1985,32 @@ class TestPayloadShape:
         site.pop("history")
         return site
 
+    def test_the_freshness_stamp_follows_the_data_not_the_build_clock(self):
+        site = build_site(
+            [_case()], SA_INDEX, AFTER_MAY, TOWNS,
+            data_as_of=datetime(2026, 6, 14, 18, 30, tzinfo=UTC),
+        )
+        assert site["data_as_of_iso"] == "2026-06-14T18:30:00Z"
+        assert site["generated_iso"] == "2026-06-15T00:00:00Z"
+
+    def test_the_freshness_stamp_defaults_to_the_build_clock(self):
+        site = self._site()
+        assert site["data_as_of_iso"] == site["generated_iso"]
+
+    def test_data_horizon_is_the_latest_sighting(self):
+        conn = sqlite3.connect(":memory:")
+        conn.execute("CREATE TABLE cases (id INTEGER PRIMARY KEY, last_seen TEXT)")
+        assert data_horizon(conn) is None
+        conn.executemany(
+            "INSERT INTO cases VALUES (?, ?)",
+            [(1, "2026-08-20T21:10:00+00:00"), (2, "2026-08-10T18:09:25+00:00")],
+        )
+        assert data_horizon(conn) == datetime(2026, 8, 20, 21, 10, tzinfo=UTC)
+
     def test_the_top_level_keys_are_unchanged(self):
         assert set(self._site()) == {
-            "generated", "generated_iso", "months", "counties", "national", "top"
+            "generated", "generated_iso", "data_as_of_iso", "months", "counties",
+            "national", "top",
         }
 
     def test_the_county_keys_are_unchanged(self):

@@ -1,0 +1,3 @@
+# Append-only log with two writers (CI by rules, a local run for the LLM residue);
+# build.py keeps the latest record per case by inferred_at, so order is irrelevant.
+data/inferred_end_times.jsonl merge=union

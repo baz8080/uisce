@@ -1,6 +1,7 @@
 """Shared paths and constants. Paths are relative to the working directory,
 matching how the scripts have always been run (from the repo root)."""
 
+import re
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -16,6 +17,20 @@ DUBLIN = ZoneInfo("Europe/Dublin")
 # The only recurrence value the extraction may claim. Shared vocabulary between
 # build.py (which projects and lints it) and site.py (which expands it).
 RECURRING = "daily"
+
+# The wording the feed uses for a window repeating over a range of dates.
+# Shared between site.py (severity classification) and rules.py (which
+# abstains on it — the window *values* are what needed a language model, see
+# site.py:recurring_events); rules.py importing it from site.py would invert
+# the pipeline's direction, same as DUBLIN and RECURRING above.
+RECURRENCE_TEXT = re.compile(
+    r"\b(daily|nightly|each night|every night|each day|overnight (?:from|between))\b", re.I
+)
+
+
+def describes_recurrence(description):
+    """Whether a notice's own text announces a repeating window."""
+    return bool(RECURRENCE_TEXT.search(re.sub(r"<[^>]+>", " ", description or "")))
 
 # end_source values whose end is *observed* (works reported done) rather than
 # *scheduled* (a plan that may or may not have been met). Only an observed end

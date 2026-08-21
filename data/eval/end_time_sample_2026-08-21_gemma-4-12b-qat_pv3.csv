@@ -1,0 +1,905 @@
+case_id,county,title,start_date,model,prompt_version,model_end_source,model_local_date,model_local_time,human_verdict,human_end_source,human_local_date,human_local_time,human_notes,description
+235367,Limerick,Burst Water Main – Limerick,2026-06-08T18:38:36+00:00,gemma-4-12b-qat,3,completion_update,2026-06-09,11:14,correct,,,,,"<b>**Update 11:14am 9/06/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>Repairs to a burst water main may cause supply disruptions to Tournafulla, Knocknasnaa, Cratloe, Mount Mahon, Templeglantine, Abbeyfeale and surrounding areas in Co. Limerick. <br><br>
+Works are scheduled to take place until 11:55pm on 08 June. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: LIM00113529. <br><br>LA01"
+232048,Westmeath,Essential Maintenance Works - Westmeath,2026-04-29T17:36:51+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-04-30,04:00,correct,,,,,"Essential maintenance works may cause supply disruptions to Bonnavalley, Garrycastle, Dublin Road, Ardnaglug, Athlone and surrounding areas in Co. Westmeath. <br><br>
+
+Works are scheduled to take place from 10pm on 29 April until 4am on 30 April. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WME00110895. <br><br>
+
+LA01"
+234813,Waterford,Investigation Works - Waterford,2026-06-01T17:09:21+00:00,gemma-4-12b-qat,3,not_found,,,correct,,,,,"We are investigating reports of supply disruptions affecting Ardsallagh, Kinsalebeg, Youghal and surrounding areas in Co. Waterford. <br><br>
+
+More information to follow.<br><br>
+"
+237799,Roscommon,New Connection Works – Roscommon,2026-07-07T11:49:35+00:00,gemma-4-12b-qat,3,completion_update,2026-07-08,09:31,correct,,,,,"<b>**Update 9:31am 8/07/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>New connection works may cause supply disruptions to The Spinney, Antogher Road, Antogher Court, Abbeytown and surrounding areas in Co. Roscommon. <br><br>
+Works are scheduled to take place from 10am until 5pm on 07 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: ROS00115407. <br><br>LA01"
+232043,Galway,Burst Water Main - Galway,2026-04-27T16:53:59+00:00,gemma-4-12b-qat,3,completion_update,2026-04-27,23:00,correct,,,,,"<b>**Update 11:00pm 27/04/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>Seans go mbeidh cur isteach ar an soláthar uisce i An Droim, Maigh Cuilinn agus ceantair áitiúla i gContae Gaillimh de bharr deisúcháin an príobhphíoba atá réabtha.<br><br>
+
+<b>Meastar go mbeidh críoch leis an obair seo ag a 8in ar an 27ú Aibreán.</b><br><br>
+
+Is féidir an uimhir uathúil seo a thabhairt má tá ceist agat maidir leis an gcur isteach: GAC00110843.<br><br>
+
+Repairs to a burst water main may cause supply disruptions to Drum, Moycullen and surrounding areas in Galway City.<br><br>
+
+<b>Works are now scheduled to take place until 8pm on 27 April.</b><br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return.<br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: GAC00110843<br><br>
+
+LA01<br><br>"
+239439,Longford,Burst Water Main - Longford,2026-07-19T22:55:14+00:00,gemma-4-12b-qat,3,completion_update,2026-07-21,11:41,correct,,,,,"<b>**Update 11:41am 21/07/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>A repair to a burst water main may cause supply disruptions to Lisryan, Castlenugent, Ardnagullion, Lismacaffrey, Coolamber and surrounding areas in Co.Longford.  <br><br>
+
+Works are scheduled to take place until 11am on 20 July. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: LON00116655 . <br><br>
+
+LA01"
+235922,Tipperary,Mains Repair Works – Tipperary,2026-06-18T13:38:55+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-06-18,17:00,correct,,,,,"Mains repair works may cause supply disruptions to N24, Ballydine, Ballynoran, Carrick-on-Suir and surrounding areas in Co. Tipperary. <br><br>
+Works are scheduled to take place from 11am until 5pm on 18 June. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: TIP00113968. <br><br>LA01"
+235980,Louth,Hydrant Repair Works – Louth,2026-06-16T09:07:36+00:00,gemma-4-12b-qat,3,completion_update,2026-06-17,09:49,correct,,,,,"<b>**Update 9:49am 17/6/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</b><br><br>Hydrant repair works may cause supply disruptions to Ballsgrove, Drogheda and surrounding areas in Co. Louth. <br><br>
+Works are scheduled to take place from 9:30am until 1pm on 16 June. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: LOU00114010. <br><br>LA01"
+237413,Cork,Mains Repair Works – Cork,2026-07-08T11:41:53+00:00,gemma-4-12b-qat,3,completion_update,2026-07-08,16:10,correct,,,,,"<b>**Update 4:10pm 8/7/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</b><br><br>Mains repair works may cause supply disruptions to Thomas Davis St, William O'Brien St, Mallow Rd & Muddy Hill, Mallow and surrounding areas in Co. Cork. <br><br>
+Works are scheduled to take place from 9am until 1pm on 08 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: COR00115095. <br><br>LA01"
+242286,Meath,Essential Works – Meath,2026-08-25T14:26:44+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-08-25,17:00,correct,,,,,"These works are part of the National Leak Reduction Programme.<br><br>
+Essential maintenance works may cause supply disruptions to Enfield, Johnstown Road and surrounding areas in Co. Meath. <br><br>
+Works are scheduled to take place from 9am until 5pm on 25 August. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: MEA00118927. <br><br>LA01"
+241960,Laois,Burst Water Main – Laois,2026-08-18T08:09:25+00:00,gemma-4-12b-qat,3,completion_update,2026-08-18,11:50,correct,,,,,"<strong>**Update 11:50am 18/08/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</strong><br><br>Repairs to a burst water main may cause supply disruptions to Oldmill, Stradbally and surrounding areas in Co. Laois. <br><br>
+Works are scheduled to take place from 8:50am until 1:05pm on 18 August. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: LAO00118674. <br><br>LA01"
+238355,Cork,Burst Water Main – Cork,2026-07-10T10:51:50+00:00,gemma-4-12b-qat,3,completion_update,2026-07-10,17:10,correct,,,,,"<strong>**Update 5:10pm 10/07/2026**<br><br>
+
+Works are now complete, and supply should begin to return to all affected properties.</strong><br><br>Repairs to a burst water main may cause supply disruptions to Rea, Berrings and surrounding areas in Co. Cork. <br><br>
+Works are scheduled to take place until 4:45pm on 10 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: COR00115864. <br><br>LA01"
+231168,Waterford,Power Outage - Waterford,2026-04-29T15:37:57+00:00,gemma-4-12b-qat,3,completion_update,2026-04-29,16:35,correct,,,,,"<b>**Update 4:35pm 29/4/2026<br>
+Works are now complete and supply should begin returning to all affected areas</b><br><br>
+
+
+A power outage may cause supply disruptions to Ballyknock, Ballydasoon and surrounding areas in Co. Waterford <br><br>
+
+Works are scheduled to take place from 9am until 5pm on 29 April<br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return<br><br>
+
+Please note of the following reference number and enter it into the search bar should you wish to return for an update: WAT00110233<br><br>"
+239402,Kildare,Burst Water Main – Kildare,2026-07-19T11:18:37+00:00,gemma-4-12b-qat,3,completion_update,2026-07-21,04:50,correct,,,,,"<strong>**Update 4:50am 21/07/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</strong><br><br>Repairs to a burst water main may cause supply disruptions to Lackagh, Monasterevin and surrounding areas in Co. Kildare. <br><br>
+Works are scheduled to take place until 3pm on 19 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KLD00116628. <br><br>LA01"
+240510,Waterford,Under Investigation – Waterford,2026-07-30T16:53:09+00:00,gemma-4-12b-qat,3,not_found,,,correct,,,,,"We are investigating reports of supply disruptions affecting Ballyduff, Glenbeg, Cloonbeg and surrounding areas in Co. Waterford. <br><br>
+Crews are working to restore supply as soon as possible. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WAT00117507. <br><br>WF01"
+241610,Donegal,New Connection Works – Donegal,2026-08-17T15:17:38+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-08-17,16:00,correct,,,,,"New connection works may cause supply disruptions to St Patrick's Road Buncrana and surrounding areas in Co. Donegal. <br><br>
+Works are scheduled to take place from midday until 4pm on 17 August. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DON00118389. <br><br>LA01"
+232770,Kerry,Burst Water Main – Kerry,2026-05-07T10:00:24+00:00,gemma-4-12b-qat,3,completion_update,2026-05-07,16:27,correct,,,,,"<b>**4:27in 07/05/2026 - Tá críoch leis an obair se o anois, agus beidh an soláthar uisce ar ais chomh luath agus is féidir.**</b><br><br>
+Seans go mbeidh cur isteach ar an soláthar uisce i Ballydavid agus ceantair áitiúla i gContae Chiarraí de bharr deisúcháin an príomhphíoba atá réabtha. <br><br>
+Beidh an obair seo ar siúl ó 10:50rn go dtí 3:15in ar an 07ú Bealtaine. <br><br>
+Is féidir an uimhir uathúil seo a thabhairt má tá ceist agat maidir leis an gcur isteach: KER00111472. <br><br><b>**Update 4:27pm 07/05/2026**<br><br>
+Works are now complete and supply should begin to return to all affected areas.</b><br><br>
+Repairs to a burst water main may cause supply disruptions to Ballydavid and surrounding areas in Co. Kerry. <br><br>
+Works are scheduled to take place from 10:50am until 3:15pm on 07 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KER00111472. <br><br>"
+239851,Cork,Burst Water Main – Cork,2026-07-23T09:19:21+00:00,gemma-4-12b-qat,3,completion_update,2026-07-24,12:52,correct,,,,,"<b>**Update 12:52pm 24/07/2026**<br><br>
+ 
+Works are now complete and supply should begin to return to all affected areas. </b><br><br>Repairs to a burst water main may cause supply disruptions to Donoughmore and surrounding areas in Co. Cork. <br><br>
+Works are scheduled to take place until 5pm on 23 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: COR00116994. <br><br>LA01"
+236756,Kerry,Mains Repair Works – Kerry,2026-06-24T10:01:36+00:00,gemma-4-12b-qat,3,completion_update,2026-06-24,15:02,correct,,,,,"<b>**Update 3:02pm 24/6/2026**<br><br>
+
+Works are now complete and supply should begin to return to all affected properties.</b><br><br>Mains repair works may cause supply disruptions to Reaboy, Gneeveguilla and surrounding areas in Co. Kerry. <br><br>
+Works are scheduled to take place until 3:20pm on 24 June. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KER00114594. <br><br>LA01"
+238475,Mayo,Burst Water Main – Mayo,2026-07-11T11:32:16+00:00,gemma-4-12b-qat,3,completion_update,2026-07-13,09:20,correct,,,,,"<b>**Update 9:20am 13/07/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>
+
+Repairs to a burst water main may cause supply disruptions to Bonniconlon and surrounding areas in Co. Mayo. <br><br>
+Works are scheduled to take place until 6pm on 12 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: MAY00115952. <br><br>LA01"
+231138,Dublin,Valve Installation Works - Dublin,2026-04-24T11:00:26+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-04-24,16:00,correct,,,,,"Valve installation works may cause supply disruptions to Rowlagh Avenue, Lucan and surrounding areas in Dublin 22. <br><br>
+
+Works are scheduled to take place from 10am until 4pm on 24 April. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return.  <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: SDU00110206   <br><br>
+
+LA01"
+239168,Tipperary,Burst Water Main – Tipperary,2026-07-16T20:00:03+00:00,gemma-4-12b-qat,3,completion_update,2026-07-17,12:45,correct,,,,,"<b>**Update 12:45pm 17/07/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all affected areas. </b><br><br>Repairs to a burst water main may cause supply disruptions to Ballycahill, Thurles and surrounding areas in Co. Tipperary.<br><br>
+
+<b>Works are scheduled to take place until 12pm on 17 July.</b><br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return.<br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: TIP00116453.<br><br>LA01"
+233486,Kerry,Burst Water Main – Kerry,2026-05-18T08:52:30+00:00,gemma-4-12b-qat,3,completion_update,2026-05-18,15:30,correct,,,,,"<b>**Update 3:30pm 18/05/2026**<br><br>
+ 
+Works are now complete and supply should start returning to all the affected areas.</b><br><br>
+
+Repairs to a burst water main may cause supply disruptions to Cloonmore, Rathpoogh Milltown and surrounding areas in Co. Kerry. <br><br>
+Works are scheduled to take place until 4:30pm on 18 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KER00112061. <br><br>"
+236279,Kerry,Essential Works – Kerry,2026-06-23T15:41:31+00:00,gemma-4-12b-qat,3,completion_update,2026-06-24,09:45,correct,,,,,"<strong>**Update 9:45am 24/06/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</strong><br><br>Essential maintenance works may cause supply disruptions to Tralee, Oakpark Road, Racecourse Road, Racecourse Lawn, Bill Kinnerk Road, Clash Road, Laurel Court, Derrylea, Muing, Woodlands, Oakvilla Avenue, Oakpark Demesne, River Walk, Killeen Road, Oakley Park, Chestnut Drive, Batemans Green, Oakridge Drive, Kileen Wood, Kileen Court, Cul Doire, Cois Coille, Killeen Heights and surrounding areas in Co. Kerry. <br><br>
+Works are scheduled to take place from 10pm on 23 June until 2am on 24 June. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KER00114243. <br><br>LA01"
+232102,Roscommon,Burst Water Main - Roscommon,2026-04-28T11:07:46+00:00,gemma-4-12b-qat,3,completion_update,2026-04-28,16:30,correct,,,,,"<strong>**Update 4:30pm 28/04/2026**<br><br>
+
+Works are now complete, and supply should begin to return to all affected properties.</strong><br><br>Repairs to a burst water main may cause supply disruptions to Kilteevan and surrounding areas in Co. Roscommon.<br><br>
+
+Works are scheduled to take place until 4:15pm on 28 April.<br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return.<br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: ROS00110938.<br><br>
+
+LA01"
+240487,Limerick,Burst Water Main – Limerick,2026-07-30T13:40:02+00:00,gemma-4-12b-qat,3,completion_update,2026-07-30,16:01,correct,,,,,"<b>**Update 4:01pm 30/07/2026**<br><br>
+ 
+Works are now complete and supply should start returning to all the affected areas.</b><br><br>Repairs to a burst water main may cause supply disruptions to Galvone and surrounding areas in Co. Limerick. <br><br>
+Works are scheduled to take place from 1:45pm until 6pm on 30 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: LIM00117494. <br><br>LA01"
+233843,Sligo,Burst Water Main – Sligo,2026-05-21T10:45:04+00:00,gemma-4-12b-qat,3,completion_update,2026-05-22,10:35,correct,,,,,"<strong>**Update 10:35am 22/05/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</strong><br><br>Repairs to a burst water main may cause supply disruptions to Annagh, Drimina, Tubbercurry and surrounding areas in Co. Sligo. <br><br>
+Works are scheduled to take place until 6pm on 21 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: SLI00112337. <br><br>LA01"
+232569,Cork,Essential Works – Cork,2026-05-06T09:37:47+00:00,gemma-4-12b-qat,3,completion_update,2026-05-06,16:37,correct,,,,,"<b>**Update 4:37pm 6/05/2026**<br><br>
+ 
+Works are now complete and supply should start returning to all the affected areas.</b><br><br>Essential maintenance works may cause supply disruptions to Allihies Village and surrounding areas in Co. Cork. <br><br>
+Works are scheduled to take place from 9am until 2pm on 06 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: COR00111310. <br><br>"
+240750,Waterford,Mains Repair Works – Waterford,2026-08-07T09:10:48+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-08-07,14:00,correct,,,,,"These works are part of the National Leak Reduction Programme.<br><br>
+Mains repair works may cause supply disruptions to Ballybeg and surrounding areas in Co. Waterford. <br><br>
+Works are scheduled to take place from 10am until 2pm on 07 August. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WAT00117669. <br><br>LA01"
+239948,Wicklow,Burst Water Main - Wicklow,2026-07-23T21:13:38+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-07-24,02:30,correct,,,,,"Repairs to a burst water main may cause supply disruptions to Emoclew, Fernhill, Woodlands, The Maples, Wexford Road, Meadowvale, Knockanrahan and surrounding areas in Co. Wicklow.<br><br>
+
+Works are scheduled to take place until 2:30am on 24 July.<br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return.<br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WIC00117078.<br><br>
+
+LA01"
+240790,Mayo,Burst Water Main - Mayo,2026-08-04T13:34:58+00:00,gemma-4-12b-qat,3,completion_update,2026-08-04,16:44,correct,,,,,"<b>**Update 4:44pm 4/08/2026**<br><br>
+ 
+Works are now complete and supply should start returning to all the affected areas.</b><br><br>Repairs to a burst water main may cause supply disruptions to Milebush, Castlebar and surrounding areas in Co. Mayo. <br><br>
+
+Works are scheduled to take place until 5pm on 4 August. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: MAY00117701. <br><br>
+
+LA01"
+240842,Dublin,Leak Detection Works – Dublin,2026-08-05T08:40:37+00:00,gemma-4-12b-qat,3,completion_update,2026-08-06,13:35,correct,,,,,"<b>**Update 1:35pm 6/08/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>
+
+Leak detection works may cause supply disruptions to Clondalkin and surrounding areas in Co. Dublin. <br><br>
+Works are scheduled to take place from 11pm on 05 August until 6am on 06 August. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: SDU00117742. <br><br>LA01"
+237564,Waterford,Pump Installation Works – Waterford,2026-07-07T14:49:43.503000+00:00,gemma-4-12b-qat,3,completion_update,2026-07-07,15:03,correct,,,,,"<b>**Update 3:03pm 7/7/2026**<br><br>
+
+Works are now complete and supply should begin to return to all affected properties.</b><br><br>Pump installation works may cause supply disruptions to Lismore and surrounding areas in Co. Waterford. <br><br>
+<b>Works are scheduled to take place from 10am until 3pm on 07 July. </b><br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WAT00115214. <br><br>LA01"
+241759,Sligo,Mains Repair Works – Sligo,2026-08-18T14:31:24+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-08-18,14:00,correct,,,,,"These works are part of the National Leak Reduction Programme.<br><br>
+Mains repair works may cause supply disruptions to Cloonaughill, Charlestown and surrounding areas in Co. Sligo. <br><br>
+Works are scheduled to take place from 10am until 2pm on 18 August. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: SLI00118514. <br><br>LA01"
+235900,Kerry,Water Conservation Restrictions – Kerry,2026-06-15T09:55:31+00:00,gemma-4-12b-qat,3,completion_update,2026-06-15,15:20,correct,,,,,"<strong>**Update 3:20pm 15/06/2026**<br><br>
+
+Works are now complete, and supply should begin to return to all affected properties.</strong><br><br>Seans go mbeidh cur isteach ar an soláthar uisce i Beenbawn agus ceantair áitiúla i gContae Chiarraí de bharr deisúcháin riachtanach. <br><br>
+Beidh an obair seo ar siúl ó 11rn go dtí 3:25in ar an 15ú Meitheamh. <br><br>
+Is féidir an uimhir uathúil seo a thabhairt má tá ceist agat maidir leis an gcur isteach: KER00113949. <br><br>LA01Water conservation restrictions may cause supply disruptions to Beenbawn and surrounding areas in Co. Kerry. <br><br>
+Works are scheduled to take place from 11am until 3:25pm on 15 June. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KER00113949. <br><br>LA01"
+238078,Waterford,Water Conservation/Restrictions - Waterford,2026-07-08T20:11:54.004000+00:00,gemma-4-12b-qat,3,completion_update,2026-07-09,09:21,correct,,,,,"<b>**Update 9:21am 9/7/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</b><br><br>Water conservation/restrictions may cause supply disruptions to  Ballyduff and surrounding areas in Co. Waterford. <br><br>
+
+Works are scheduled to take place until 6am on 9 July. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WAT00115640. <br><br>
+
+LA01"
+233660,Donegal,Essential Works – Donegal,2026-05-20T11:46:38+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-05-21,07:00,correct,,,,,"Essential maintenance works may cause supply disruptions to Pound Street, Woodlawn, The Glebe, Glebehollow, Ard Gréine, Gleann Na Greine, Stranorlar and surrounding areas in Co. Donegal. <br><br>
+Works are scheduled to take place from 9pm on 20 May until 7am on 21 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DON00112194. <br><br>"
+237519,Dublin,Essential Works – Dublin,2026-07-11T10:35:55.034000+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-07-11,17:00,correct,,,,,"Essential maintenance works may cause supply disruptions to Barrow St, Curran, Ringsend and surrounding areas in Co. Dublin. <br><br>
+Works are scheduled to take place from 9am until 5pm on 11 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DCC00115175. <br><br>LA01"
+235927,Sligo,Valve Repair Works – Sligo,2026-06-15T14:09:57+00:00,gemma-4-12b-qat,3,completion_update,2026-06-16,11:43,correct,,,,,"<b>**Update 11:43am 16/06/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>Valve repair works may cause supply disruptions to Rinbaun, Ballinacarrow and surrounding areas in Co. Sligo. <br><br>
+Works are scheduled to take place from 2:45pm until 4pm on 15 June. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: SLI00113971. <br><br>LA01"
+233646,Meath,Burst Water Main – Meath,2026-05-19T11:01:36+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-05-19,13:00,correct,,,,,"Repairs to a burst water main may cause supply disruptions to Bettystown, Laytown and surrounding areas in Co. Meath. <br><br>
+Works are scheduled to take place until 1pm on 19 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: MEA00112183. <br><br>"
+232787,Meath,Essential Works – Meath,2026-05-12T11:13:10+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-05-12,16:00,correct,,,,,"Essential maintenance works may cause supply disruptions to Trim, Butterstream Manor and surrounding areas in Co. Meath. <br><br>
+
+Works are scheduled to take place from 10am until 4pm on 12 May. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: MEA00111489. <br><br>"
+232378,Kerry,Essential Works – Kerry,2026-05-01T11:16:14+00:00,gemma-4-12b-qat,3,completion_update,2026-05-01,14:16,correct,,,,,"<b> **2:16in 01/05/2026** <br><br> 
+
+Tá críoch leis an obair se o anois, agus beidh an soláthar uisce ar ais chomh luath agus is féidir. </b><br><br><br>
+
+<b> **Update 2:16pm 01/05/2026** <br><br> 
+
+Works are now complete, and supply should begin to return to all affected properties. </b><br><br><br>
+
+Oibreacha riachtanacha ag cur isteach ar an soláthar uisce i Ladycross Dingle Ballymore agus ceantair áitiúla i gContae Chiarraí. <br><br>
+Beidh an obair ar siúl ó 11:54rn go dtí 4:20in ar an 01ú Bealtaine. <br><br>
+Moltar 3–4 uair an chloig a cheadú tar éis an ama athchóirithe sula bhfillfidh an soláthar go hiomlán. <br><br>
+Is féidir an uimhir thagartha seo a úsáid chun nuashonrú a fháil: KER00111176. <br><br>Essential maintenance works may cause supply disruptions to Ladycross Dingle Ballymore and surrounding areas in Co. Kerry. <br><br>
+Works are scheduled to take place from 11:54am until 4:20pm on 01 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KER00111176. <br><br>"
+241813,Mayo,Under Investigation – Mayo,2026-08-15T10:49:05+00:00,gemma-4-12b-qat,3,completion_update,2026-08-17,12:27,correct,,,,,"<b>**Update 12:27pm 17/08/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all affected areas. </b><br><br>We are investigating reports of supply disruptions affecting Shrule and surrounding areas in Co. Mayo. <br><br>
+Crews are working to restore supply as soon as possible. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: MAY00118554. <br><br>WF01"
+235715,Kerry,Power Outage – Kerry,2026-06-12T09:07:12+00:00,gemma-4-12b-qat,3,completion_update,2026-06-12,15:54,correct,,,,,"<b>**3:54in 12/06/2026 - Tá críoch leis an obair se o anois, agus beidh an soláthar uisce ar ais chomh luath agus is féidir.**</b><br><br>
+Seans go mbeidh cur isteach ar an soláthar uisce i Lios Póil, Lios Deargáin, Baile an Bhúlaeraigh  agus ceantair áitiúla i gContae Chiarraí de bharr deisúcháin riachtanach. <br><br>
+Beidh an obair seo ar siúl ó 9rn go dtí 4in ar an 12ú Meitheamh. <br><br>
+Is féidir an uimhir uathúil seo a thabhairt má tá ceist agat maidir leis an gcur isteach: KER00113808. <br><br>
+
+<b>**Update 3:54pm 12/06/2026**<br><br>
+ 
+Works are now complete and supply should start returning to all the affected areas.</b><br><br>A power outage may cause supply disruptions to Lios Póil, Lisdargan, Ballybowler and surrounding areas in Co. Kerry. <br><br>
+Works are scheduled to take place from 9am until 4pm on 12 June. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KER00113808. <br><br>LA01"
+239204,Cork,Essential Maintenance Works - Cork,2026-07-22T09:23:21+00:00,gemma-4-12b-qat,3,completion_update,2026-07-23,11:30,correct,,,,,"<strong>**Update 11:30am 23/07/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</strong><br><br>As part of the National Leakage Reduction Programme, essential maintenance works may cause supply disruptions to Bridge Street, Skibbereen and surrounding areas in Co. Cork. <br><br>
+
+A traffic management plan will be in place for the duration of the works. <br><br>
+
+Works are scheduled to take place from 1pm until 5pm on 22 July. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the reference number and enter it into the search bar should you wish to return for an update: COR00116481. <br><br>
+
+LA01"
+237023,Leitrim,Essential Works – Leitrim,2026-06-29T10:14:14.744000+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-06-30,15:00,correct,,,,,"As part of the National Leakage Reduction Programme, essential maintenance works may cause supply disruptions to Kilboderry, Carrick-on-shannon Co. Leitrim and surrounding areas in Co. Leitrim. <br><br>
+<b>Works are now scheduled to take place until 3pm on 30 June. </b><br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: LEI00114799. <br><br>LA01"
+234964,Dublin,Burst Water Main - Dublin,2026-06-03T19:00:00+00:00,gemma-4-12b-qat,3,completion_update,2026-06-04,18:13,correct,,,,,"<b>**Update 6:13pm 4/06/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>Repairs to a burst water main may cause supply disruptions to Scholars Town and surrounding areas in Co. Dublin.<br><br>
+
+Works are scheduled to take place until midnight on 03 June.<br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return.<br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: SDU00113196.<br><br>
+
+LA01"
+235794,Dublin,Valve Installation Works – Dublin,2026-06-18T14:46:28+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-06-18,17:00,correct,,,,,"Valve installation works may cause supply disruptions to Killiney Heath, Dun Laoghaire and surrounding areas in Co. Dublin. <br><br>
+Works are scheduled to take place from 9am until 5pm on 18 June. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DLR00113879. <br><br>LA01"
+240483,Dublin,Burst Water Main - Dublin,2026-07-30T13:14:59+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-07-31,02:00,correct,,,,,"Repairs to a burst water main may cause supply disruptions to The Park, Carrickmines and surrounding areas in Co. Dublin. <br><br>
+
+Works are scheduled to take place from 9pm on 30 July until 2am on 31 July. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DLR00117489. <br><br>
+
+LA01"
+237664,Donegal,Reservoir Interruption – Donegal,2026-07-04T13:55:01.794000+00:00,gemma-4-12b-qat,3,completion_update,2026-07-06,14:44,correct,,,,,"<b>**Update 2:44pm 6/07/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>A reservoir interruption may cause supply disruptions to Malin Head, Ballygorman, Umgall, Ardmalin and surrounding areas in Co. Donegal. <br><br>
+Works are scheduled to take place from 10pm on 04 July until 7am on 06 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DON00115303. <br><br>LA01"
+232972,Galway,Under Investigation – Galway,2026-05-10T14:54:59+00:00,gemma-4-12b-qat,3,not_found,,,correct,,,,,"We are investigating reports of supply disruptions affecting Kilcoran, Toberbrackan, Roevehagh, Clarinbridge, Ballinderreen and surrounding areas in Co. Galway. <br><br>
+Crews are working to restore supply as soon as possible. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: GAL00111623. <br><br>"
+239900,Mayo,Burst Water Main - Mayo,2026-07-23T13:26:09+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-07-23,19:00,correct,,,,,"Repairs to a burst water main may cause supply disruptions to Clare Road, Quarry Road, Swinford and surrounding areas in Co. Mayo. <br><br>
+
+Works are scheduled to take place until 7pm on 23 July. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: MAY0017035. <br><br>
+
+LA01"
+241374,Tipperary,Water Conservation Restrictions – Tipperary,2026-08-11T12:25:41+00:00,gemma-4-12b-qat,3,completion_update,2026-08-12,09:42,correct,,,,,"<b>**Update 9:42am 12/08/2026**<br><br>
+ 
+Works are now complete and supply should start returning to all the affected areas.</b><br><br>Water conservation restrictions may cause supply disruptions to Rearcross Village, Lackamore and surrounding areas in Co. Tipperary. <br><br>
+Works are scheduled to take place from 4:30pm on 11 August until 8:30am on 12 August. <br><br>
+An alternative water supply will be available at Rearcross Church from 4:30pm on 11 August until 9am on 12 August.<br><br>
+ 
+Úisce Eireann make every effort to ensure that the alternative drinking water supply provided, including the tanker / bowser, and dispensing tap, are adequately disinfected.  However as it is not practical to provide sterilised containers for the public to transport drinking water from the tanker to their homes, we cannot guarantee that any containers used by the public do not negatively impact or contaminate the drinking water. Therefore, as a precautionary measure, it is recommended that any members of the public who obtain water from a tanker or bowser boil the water before use.<br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: TIP00118187. <br><br>LA01"
+237361,Dublin,Mains Repair Works - Dublin,2026-07-02T07:39:18.724000+00:00,gemma-4-12b-qat,3,completion_update,2026-07-02,09:48,correct,,,,,"<b>**Update 9:48am 02/07/2026**<br><br>
+ 
+Works are now complete and supply should begin to return to all affected areas. </b><br><br>Mains repair works may cause supply disruptions to Coolevin, Ashlawn Park, Ballybrack and surrounding areas in Co. Dublin. <br><br>
+
+Works are scheduled to take place from 10am until 3pm on 2 July. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DLR00115055. <br><br>
+
+LA01"
+232472,Dublin,Burst Water Main - Dublin,2026-05-02T10:28:20+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-05-02,18:00,correct,,,,,"Repairs to a burst water main may cause supply disruptions to Ballough, Lusk and surrounding areas in Co. Dublin. <br><br>
+
+Works are scheduled to take place until 6pm on 2 May. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: FIN00111243  <br><br>
+
+LA01"
+232389,Dublin,Burst Water Main – Dublin,2026-05-01T11:50:29+00:00,gemma-4-12b-qat,3,completion_update,2026-05-01,16:51,correct,,,,,"<b>**Update 4:51pm 01/05/2026**<br><br>
+
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>Repairs to a burst water main may cause supply disruptions to Verbena Park and surrounding areas in Co. Dublin. <br><br>
+
+Works are scheduled to take place until 1pm on 1 May. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: FIN00111185. <br><br>"
+241457,Cork,Mains Repair Works – Cork,2026-08-17T13:50:04+00:00,gemma-4-12b-qat,3,completion_update,2026-08-17,10:57,correct,,,,,"<b>**Update 10:57am 17/08/2026**<br><br>
+ 
+Works are now complete and supply should start returning to all the affected areas.</b><br><br>Mains repair works may cause supply disruptions to Bandon, Riverbank, North Main Street and surrounding areas in Co. Cork. <br><br>
+Works are scheduled to take place from 10am until 2pm on 17 August. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: COR00118263. <br><br>LA01"
+238096,Wicklow,Burst Water Mains - Wicklow,2026-07-08T04:46:59+00:00,gemma-4-12b-qat,3,completion_update,2026-07-09,12:01,correct,,,,,"<b>**Update 12:01pm 9/7/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</b><br><br>Repairs to a burst water main may cause supply disruptions to Saint Patricks Road, Saint Patricks Valley, Holly Grove, Springfield and surrounding areas in Co. Wicklow. <br><br>
+ 
+Works are scheduled to take place until 9am on 9 July. <br><br>
+ 
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+ 
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WIC00115651. <br><br>
+ 
+LA01"
+233153,Kilkenny,Meter Installation Works - Kilkenny,2026-05-14T21:37:27+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-05-15,02:00,correct,,,,,"Meter installation works may cause supply disruptions to McDonagh Junction and surrounding areas in Co. Kilkenny . <br><br>
+
+Works are scheduled to take place from 10pm on 14 May until 2am on 15 May. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KIL00111781  . <br><br>
+
+LA01"
+239915,Dublin,Burst Water Main – Dublin,2026-07-23T14:30:00+00:00,gemma-4-12b-qat,3,completion_update,2026-07-24,11:32,correct,,,,,"<b>**Update 11:32am 24/07/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>
+
+Repairs to a burst water main may cause supply disruptions to Tyrellstown, Kilmartin Estate, Kilmartin and surrounding areas in Co. Dublin. <br><br>
+Works are scheduled to take place from 3pm until 10pm on 23 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: FIN00117052. <br><br>LA01"
+240717,Tipperary,Water Treatment Plant Interruption – Tipperary,2026-08-03T16:13:09+00:00,gemma-4-12b-qat,3,completion_update,2026-08-04,07:55,correct,,,,,"<b>**Update 7:55am 04/08/2026**<br><br>
+
+These works are now complete and the supply should begin to return to all affected areas.</b><br><br>
+A water treatment plant interruption may cause supply disruptions to Roscrea and surrounding areas in Co. Tipperary. <br><br>
+Works are scheduled to take place until 11am on 04 August. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: TIP00117641. <br><br>LA01"
+239177,Donegal,Burst Water Main – Donegal,2026-07-17T21:21:10+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-07-17,06:00,correct,,,,,"Repairs to a burst water main may cause intermittent supply disruptions to Stranorlar, Killygordon and surrounding areas in Co. Donegal.<br><br>
+
+Works are scheduled to take place from Midnight until 6am on 17 July.<br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return.<br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DON00116462.<br><br>LA01"
+232599,Donegal,Essential Works – Donegal,2026-05-05T12:11:31+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-05-06,03:00,correct,,,,,"Essential maintenance works may cause supply disruptions to Lismaonaghan Road, Oldtown and surrounding areas in Co. Donegal. <br><br>
+Works are scheduled to take place from 11pm on 05 May until 3am on 06 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DON00111338. <br><br>"
+234057,Tipperary,Burst Water Main – Tipperary,2026-05-24T07:35:45+00:00,gemma-4-12b-qat,3,completion_update,2026-05-25,15:45,correct,,,,,"<strong>**Update 3:45pm 25/05/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</strong><br><br>Repairs to a burst water main may cause supply disruptions to Coosane, Birdhill and surrounding areas in Co. Tipperary. <br><br>
+Works are scheduled to take place until 1pm on 24 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: TIP00112520. <br><br>LA01"
+239288,Galway,Meter Installation - Galway,2026-07-22T14:53:43+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-07-22,18:00,correct,,,,,"Meter installation works may cause supply disruptions to Cregmore and surrounding areas in Co Galway. <br><br>
+
+Works are scheduled to take place from 10am until 6pm on 22 July. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: GAL00116540. <br><br>
+LA01"
+233143,Cork,Mains Repair Works – Cork,2026-05-12T15:17:46+00:00,gemma-4-12b-qat,3,completion_update,2026-05-13,15:26,correct,,,,,"<b>**Update 3:26pm 13/05/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>
+Mains repair works may cause supply disruptions to Banduff Road, Rathcooney Low, Hillside, Ard Na Greine, Lus na Meala, Barnavara Crescent and surrounding areas in Co. Cork. <br><br>
+<b> Works are now scheduled to take place until 9pm on 12 May. </b><br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: COR00111773. <br><br>"
+241845,Dublin,Burst Water Main – Dublin,2026-08-16T11:21:52+00:00,gemma-4-12b-qat,3,completion_update,2026-08-17,11:49,correct,,,,,"<b>**Update 11:49am 17/08/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all affected areas. </b><br><br>Repairs to a burst water main may cause supply disruptions to Garters Lane, Saggart and surrounding areas in Co. Dublin. <br><br>
+Works are scheduled to take place until 5pm on 16 August. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: SDU00118586. <br><br>LA01"
+237429,Limerick,Burst Water Main – Limerick,2026-07-01T14:01:05.384000+00:00,gemma-4-12b-qat,3,completion_update,2026-07-02,09:20,correct,,,,,"<b>**Update 9:20am 02/07/2026**<br><br>
+ 
+Works are now complete and supply should begin to return to all affected areas. </b><br><br>Repairs to a burst water main may cause supply disruptions to Moyross and surrounding areas in Co. Limerick. <br><br>
+Works are scheduled to take place until 6:15pm on 01 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: LIM00115107. <br><br>LA01"
+234955,Sligo,Burst Water Main – Sligo,2026-06-03T15:50:11+00:00,gemma-4-12b-qat,3,completion_update,2026-06-04,13:00,correct,,,,,"<strong>**Update 1:00pm 04/06/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</strong><br><br>Repairs to a burst water main may cause supply disruptions to Collooney, Drumfin & and surrounding areas in Co. Sligo. <br><br>
+Works are scheduled to take place from 4:30pm until 8:45pm on 03 June. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: SLI00113190. <br><br>LA01"
+242216,Galway,Mains Repair Works – Galway,2026-08-25T10:52:54+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-08-25,18:00,correct,,,,,"As part of the National Leakage Reduction Programme, mains repair works may cause supply disruptions to St Mary's Road and surrounding areas in Co. Galway. <br><br>
+Works are scheduled to take place from 10am until 6pm on 25 August. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: GAC00118870. <br><br>LA01"
+233757,Wexford,Power Outage – Wexford,2026-05-20T13:16:25+00:00,gemma-4-12b-qat,3,completion_update,2026-05-20,09:30,correct,,,,,"<strong>**Update 9:30am 20/05/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</strong><br><br>A power outage may cause supply disruptions to Castlemoyle and surrounding areas in Co. Wexford. <br><br>
+Works are scheduled to take place until 5pm on 20 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WEX00112271. <br><br>"
+238530,Tipperary,Under Investigation – Tipperary,2026-07-12T12:35:14+00:00,gemma-4-12b-qat,3,completion_update,2026-07-13,14:06,correct,,,,,"<b>**Update 2:06pm 13/07/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>
+
+We are investigating reports of supply disruptions affecting Wallers-lot, Hills-lot, Price's-lot, Rosegreen, Cashel and surrounding areas in Co. Tipperary. <br><br>
+Crews are working to restore supply as soon as possible. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: TIP00115988. <br><br>WF01"
+236528,Galway,Essential Works – Galway,2026-06-24T10:17:38+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-06-24,18:00,correct,,,,,"These works are part of the National Leak Reduction Programme.<br><br>
+Essential maintenance works may cause supply disruptions to Orancourt, Oranhill, Oranmore and surrounding areas in Co. Galway. <br><br>
+Works are scheduled to take place from 11:30am until 6pm on 24 June. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: GAL00114421. <br><br>LA01"
+240225,Dublin,Hydrant Installation Works - Dublin,2026-07-28T07:49:30+00:00,gemma-4-12b-qat,3,completion_update,2026-07-28,16:24,correct,,,,,"<b>**Update 4:24pm 28/07/2026**<br><br>
+ 
+Works are now complete and supply should start returning to all the affected areas.</b><br><br>As part of the National Leakage Reduction Programme, hydrant installation works may cause supply disruptions to Gracefield Road, Artane and surrounding areas in Dublin 5. <br><br>
+ 
+Works are scheduled to take place until 2pm on 28 July. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DCC00117285. <br><br>
+
+LA01"
+236798,Wexford,Low Pressure – Wexford,2026-06-24T15:21:08+00:00,gemma-4-12b-qat,3,completion_update,2026-06-25,09:22,correct,,,,,"<b>**Update 9:22am 25/06/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>
+
+Essential maintenance works may cause low pressure and supply disruptions to Burkstown, Campile, Killesk, Great Island, Priest Hagart, Horeswood, Lower Arthurstown and surrounding areas in Co. Wexford. <br><br>
+Works are scheduled to take place from 4pm until 8:15pm on 24 June. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WEX00114630. <br><br>LA01"
+234152,Donegal,Burst Water Main - Donegal,2026-05-25T13:27:32+00:00,gemma-4-12b-qat,3,completion_update,2026-05-25,17:15,correct,,,,,"<b>**Update 5:15pm 25/05/2026**<br><br>
+ 
+Works are now complete and supply should start returning to all the affected areas.</b><br><br>
+
+Seans go mbeidh cur isteach ar an soláthar uisce i An Tearmann, Leitir Ceanainn agus ceantair áitiúla i gContae Dún na nGall de bharr deisúcháin an príobhphíoba atá réabtha.<br><br>
+
+Meastar go mbeidh críoch leis an obair seo ag a 5in ar an 25ú Bealtaine.<br><br>
+
+Is féidir an uimhir uathúil seo a thabhairt má tá ceist agat maidir leis an gcur isteach: DON00112578.<br><br>
+
+Repairs to a burst water main may cause supply disruptions to Termon, Letterkenny and surrounding areas in Co. Donegal. <br><br>
+
+Works are scheduled to take place until 5pm on 25 May. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DON00112578. <br><br>
+
+LA01"
+234734,Kerry,Water Conservation Restrictions – Kerry,2026-05-29T15:18:30+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-05-30,07:30,correct,,,,,"Water conservation restrictions may cause supply disruptions to Glounaguillagh, Tullig, Tooreennasliggaun, Quybaun, Ballintleave, Dooks, Knockaunglass, Knockaunroe, Caragh and surrounding areas in Co. Kerry. <br><br>
+Works are scheduled to take place from 10pm on 29 May until 7:30am on 30 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KER00113011. <br><br>LA01"
+234965,Kilkenny,Burst Water Main - Kilkenny,2026-06-03T15:00:00+00:00,gemma-4-12b-qat,3,completion_update,2026-06-04,09:37,correct,,,,,"<b>**Update 9:37am 4/06/2026**<br><br>
+ 
+Works are now complete and supply should start returning to all the affected areas.</b><br><br>
+
+Repairs to a burst water main may cause supply disruptions to Castlecomer, Ardra, Coolbaun and surrounding areas in Co. Kilkenny.<br><br>
+
+Works are scheduled to take place until 11am on 04 June.<br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return.<br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KIL00113197.<br><br>
+
+LA01"
+231743,Mayo,Low Pressure - Mayo,2026-04-24T16:01:25+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-04-24,22:00,correct,,,,,"Essential works may cause low pressure and supply disruption to Knockmore and surrounding areas in Co. Mayo.<br><br>
+
+<b>Works are now scheduled to take place from 8am until 10pm on 24 April.<br><br></b>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: MAY00110695.<br><br>
+
+LA01"
+239310,Limerick,Power Outage – Limerick,2026-07-22T15:56:07+00:00,gemma-4-12b-qat,3,completion_update,2026-07-23,10:35,correct,,,,,"<strong>**Update 10:35am 23/07/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</strong><br><br>A power outage may cause supply disruptions to Roxboro Road, Kennedy Park, Rathbane, Janesboro and surrounding areas in Co. Limerick. <br><br>
+Works are scheduled to take place from 10pm on 22 July until 3am on 23 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: LIM00116559. <br><br>LA01"
+233911,Donegal,Valve Installation Works - Donegal,2026-05-28T15:42:38+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-05-28,16:00,correct,,,,,"As part of the National Leakage Reduction Programme, valve installation works may cause supply disruptions to Cooley, Glencrow and surrounding areas in Co. Donegal. <br><br>
+
+Works are scheduled to take place from 2pm until 4pm on 28 May. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DON00112393. <br><br>
+
+LA01"
+235831,Cork,Burst Water Main – Cork,2026-06-13T09:03:20+00:00,gemma-4-12b-qat,3,completion_update,2026-06-15,09:25,correct,,,,,"<b>**Update 9:25am 15/06/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>
+
+Repairs to a burst water main may cause supply disruptions to Tower, Blarney and surrounding areas in Co. Cork. <br><br>
+<b>Works are now scheduled to take place until 6pm on 13 June. <br><br></b>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: COR00113903. <br><br>LA01"
+236969,Kerry,Investigation Works - Kerry,2026-06-25T17:39:14+00:00,gemma-4-12b-qat,3,not_found,,,correct,,,,,"We are investigating reports of supply disruptions affecting Kit Ahern Road, Ballybunion and surrounding areas in Co. Kerry. <br><br>
+
+More information to follow.<br><br>"
+238719,Wexford,Mains Repair Works – Wexford,2026-07-14T08:53:25+00:00,gemma-4-12b-qat,3,completion_update,2026-07-15,09:41,correct,,,,,"<b>**Update 09:41am 15/07/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>As part of the National Leakage Reduction Programme, mains repair works may cause supply disruptions to Fort Commons, Mullanour, Forrestry Road, New Line Road, Redshire Road, N25, Larkinstown and surrounding areas in Co. Wexford. <br><br>
+Works are scheduled to take place until 3pm on 14 July. <br><br>
+A traffic management plan will be in place for the duration of these works.<br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WEX00116119. <br><br>LA01"
+234877,Dublin,Mains Repair Works – Dublin,2026-06-03T08:19:33+00:00,gemma-4-12b-qat,3,completion_update,2026-06-03,15:32,correct,,,,,"<b>**Update 3:32pm 03/06/2026**<br><br>
+ 
+Works are now complete and supply should begin to return to all affected areas. </b><br><br>Mains repair works may cause supply disruptions to Stillorgan, Allen Park Road and surrounding areas in Co. Dublin. <br><br>
+Works are scheduled to take place from 10am until 2:30pm on 03 June. <br><br>
+A traffic management plan will be in place for the duration of these works.<br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DLR00113121. <br><br>LA01"
+238237,Donegal,Hydrant Installation Works – Donegal,2026-07-14T14:43:18+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-07-14,14:00,correct,,,,,"Hydrant installation works may cause supply disruptions to Old Courthouse, Justice Walsh Road, Letterkenny and surrounding areas in Co. Donegal. <br><br>
+Works are scheduled to take place from 10am until 2pm on 14 July. <br><br>
+Supply may take 2-3 hours to fully return to all affected properties. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DON00115776. <br><br>LA01"
+242147,Meath,Burst Water Main – Meath,2026-08-20T07:13:38+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-08-20,21:00,correct,,,,,"Repairs to a burst water main may cause low pressure and supply disruptions to Skryne, Macetown, Rathoath and surrounding areas in Co. Meath. <br><br>
+<b>Works are now scheduled to take place until 9pm on 20 August. </b><br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: MEA00118816. <br><br>LA01"
+236915,Kildare,Essential Works – Kildare,2026-06-29T13:45:38+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-06-30,17:00,correct,,,,,"As part of the National Leakage Reduction Programme, essential maintenance works may cause supply disruptions to Rathangan,  Mountprospect, Tullylost and surrounding areas in Co. Kildare. <br><br>
+Works are scheduled to take place from 9am on 29 June until 5pm on 30 June. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KLD00114726. <br><br>LA01"
+233025,Cork,Leak Detection Works – Cork,2026-05-13T16:04:48+00:00,gemma-4-12b-qat,3,completion_update,2026-05-15,13:20,correct,,,,,"<strong>**Update 1:20pm 15/05/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</strong><br><br>Leak detection works may cause supply disruptions to Ballynoe, Cobh and surrounding areas in Co. Cork. <br><br>
+Works are scheduled to take place from 11:30pm on 13 May until 5:30am on 14 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: COR00111673. <br><br>LA01"
+232850,Wexford,Burst Water Main - Wexford,2026-05-07T20:07:41+00:00,gemma-4-12b-qat,3,completion_update,2026-05-08,11:04,correct,,,,,"<b>**Update 11:04am 08/05/2026**<br><br>
+
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>Repairs to a burst water main may cause supply disruptions to Summerhill, Wexford town and surrounding areas in Co. Wexford. <br><br>
+
+A traffic management plan will be in place for the duration of the works. <br><br>
+
+Works are scheduled to take place until 10pm on 7 May. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WEX00111535 . <br><br>
+
+LA01"
+234438,Kerry,Water Conservation Restrictions – Kerry,2026-05-27T14:59:06+00:00,gemma-4-12b-qat,3,completion_update,2026-05-28,10:47,correct,,,,,"<b>**Update 10:47am 28/05/2026**<br><br>
+
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>Water conservation restrictions may cause supply disruptions to Aghadoe, Two Mile Road, Cromane, Killarney and surrounding areas in Co. Kerry. <br><br>
+Works are scheduled to take place from 10pm on 27 May until 6:30am on 28 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KER00112790. <br><br>LA01"
+240769,Cork,Mains Repair Works – Cork,2026-08-04T11:01:21+00:00,gemma-4-12b-qat,3,completion_update,2026-08-04,14:05,correct,,,,,"<b>**Update 2:05pm 4/08/2026**<br><br>
+ 
+Works are now complete and supply should start returning to all the affected areas.</b><br><br>As part of the National Leakage Reduction Programme, mains repair works may cause supply disruptions to Adrigole and surrounding areas in Co. Cork. <br><br>
+Works are scheduled to take place from 12pm until 2pm on 04 August. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: COR00117687. <br><br>LA01"
+234683,Tipperary,Essential Works – Tipperary,2026-05-29T10:25:33+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-05-29,17:00,correct,,,,,"Essential maintenance works may cause supply disruptions to Dundrum and surrounding areas in Co. Tipperary. <br><br>
+Works are scheduled to take place until 5pm on 29 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: TIP00112977. <br><br>LA01"
+237091,Mayo,Mains Repair Works – Mayo,2026-07-02T15:29:39+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-07-03,06:00,correct,,,,,"Mains repair works may cause supply disruptions to Convent Road, Claremorris and surrounding areas in Co. Mayo. <br><br>
+Works are scheduled to take place from 7pm on 02 July until 6am on 03 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: MAY00114851. <br><br>LA01"
+236090,Waterford,Under Investigation – Waterford,2026-06-17T10:06:12+00:00,gemma-4-12b-qat,3,completion_update,2026-06-17,15:03,correct,,,,,"<b>**Update 3:03pm 17/06/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>We are investigating reports of supply disruptions affecting Ballybrusa and surrounding areas in Co. Waterford. <br><br>
+Crews are working to restore supply as soon as possible. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WAT00114103. <br><br>WF01"
+237375,Galway,Burst Water Main - Galway,2026-07-01T08:58:37.365000+00:00,gemma-4-12b-qat,3,completion_update,2026-07-02,13:28,correct,,,,,"<b>**Update 1:28pm 2/07/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>
+
+Seans go mbeidh cur isteach ar an soláthar uisce i Seanadh Gharráin, Bolivia, Leitir Péic, An Spidéal agus ceantair áitiúla i gContae Gaillimh de bharr deisúcháin an príobhphíoba atá réabtha.<br><br>
+
+Meastar go mbeidh críoch leis an obair seo ag a 1:15in ar an 1ú Iúil.<br><br>
+
+Is féidir an uimhir uathúil seo a thabhairt má tá ceist agat maidir leis an gcur isteach: GAL00115069.<br><br>
+
+Repairs to a burst water main may cause supply disruptions to Shannagurraun, Bolivia, Letterpeak, Spiddal and surrounding areas in Co. Galway. <br><br>
+
+Works are scheduled to take place until 1:15pm on 1 July. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: GAL00115069. <br><br>
+
+LA01"
+237321,Roscommon,Essential Works – Roscommon,2026-07-02T13:08:56.839000+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-07-02,17:00,correct,,,,,"Essential maintenance works may cause supply disruptions to Cloonfad East and surrounding areas in Co. Roscommon. <br><br>
+Works are scheduled to take place from 2:10pm until 5pm on 02 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: ROS00115025. <br><br>LA01"
+231992,Carlow,Mains Repair Works - Carlow,2026-04-29T10:31:35+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-04-29,17:00,correct,,,,,"Mains repair works may cause supply disruptions Kilbride and surrounding areas in Co. Carlow.<br><br>
+
+Works are scheduled to take place from 11:30am until 5pm on 29 April.<br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return.<br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: CAR00110854<br><br>
+
+LA01<br><br>"
+231857,Wicklow,Valve Installation Works - Wicklow,2026-04-28T16:10:21+00:00,gemma-4-12b-qat,3,completion_update,2026-04-30,11:00,correct,,,,,"<b>**Update 11:00am 30/04/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>Valve installation works may cause supply disruptions to Chapel Road, Kenmare Heights, Applewood Heights, Grattan Park, Dromont, Eastmount Woods, Riverdale, Delgany and surrounding areas in Co. Wicklow. <br><br>
+
+Works are scheduled to take place from 3pm until 7:15pm on 28 April. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WIC00110779. <br><br>
+
+LA01"
+239097,Offaly,Investigation Works - Offaly,2026-07-16T13:25:56+00:00,gemma-4-12b-qat,3,not_found,,,correct,,,,,"We are currently investigating reports of a supply disruption affecting customers in Daingean and surrounding areas in Co. Offaly. <br><br>
+
+Crews are working to restore supply as soon as possible.<br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: HM1424160726. <br><br>"
+237552,Kerry,Burst Water Main – Kerry,2026-07-02T13:01:38.170000+00:00,gemma-4-12b-qat,3,completion_update,2026-07-02,15:00,correct,,,,,"<b>**Update 3:00pm 2/07/2026**<br><br>
+ 
+Works are now complete and supply should start returning to all the affected areas.</b><br><br>
+
+Repairs to a burst water main may cause supply disruptions to Banemore, Listowel, Lissahane Ballygarrett and surrounding areas in Co. Kerry. <br><br>
+Works are scheduled to take place from 1:45pm until 5pm on 02 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KER00115204. <br><br>LA01"
+234405,Dublin,Essential Works – Dublin,2026-05-27T12:40:53+00:00,gemma-4-12b-qat,3,completion_update,2026-05-28,10:50,correct,,,,,"<b> **Update 10:50am 28/05/2026** <br><br> 
+
+Works are now complete and supply should have returned to all affected areas. </b><br><br><br>
+
+Essential maintenance works may cause supply disruptions to Blanchardstown and surrounding areas in Co. Dublin. <br><br>
+Works are scheduled to take place from 1:30pm until 3:20pm on 27 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: FIN00112768. <br><br>LA01"
+240486,Cork,Burst Water Main - Cork,2026-07-30T13:31:38+00:00,gemma-4-12b-qat,3,completion_update,2026-07-30,17:28,correct,,,,,"<b>**Update 5:28pm 30/7/2026**<br><br>
+
+Works are now complete and supply should begin to return to all affected properties.</b><br><br>Repairs to a burst water main may cause supply disruptions to Carr's Hill View, Carrigaline Road and surrounding areas in Co. Cork. <br><br>
+
+A traffic management plan will be in place for the duration of the works. <br><br>
+
+Works are scheduled to take place until 7pm on 30 July. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: COR00117490. <br><br>
+
+LA01"
+239931,Clare,Mains Repair Works – Clare,2026-07-30T15:28:50+00:00,gemma-4-12b-qat,3,completion_update,2026-07-30,18:43,correct,,,,,"<b>**Update 6:43pm 30/07/2026**<br><br>
+ 
+Works are now complete and supply should start returning to all the affected areas.</b><br><br>
+
+Mains repair works may cause supply disruptions to Kilkee, Castle Field, Dunlicky Road and surrounding areas in Co. Clare. <br><br>
+<b>Works are now scheduled to take place from 10:30am until 4:30pm on 30 July. </b><br><br>
+A traffic management plan will be in place for the duration of these works.<br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: CLA00117065. <br><br>LA01"
+236518,Laois,Investigation Works - Laois,2026-06-22T09:37:49+00:00,gemma-4-12b-qat,3,not_found,,,correct,,,,,"We are investigating reports of supply disruptions affecting Ballybrophy, Borris-in-Ossory and surrounding areas in Co. Laois. <br><br>
+
+More information to follow. <br><br>
+"
+235140,Donegal,Burst Water Main - Donegal,2026-06-05T10:09:21+00:00,gemma-4-12b-qat,3,completion_update,2026-06-05,15:30,correct,,,,,"<strong>**Update 3:30pm 05/06/2026**<br><br>
+
+Works are now complete, and supply should begin to return to all affected properties.</strong><br><br>Repairs to a burst water main may cause supply disruptions to Cavan Lower, Cooladawson, Gortletteragh and surrounding areas in Co. Donegal. <br><br>
+
+Works are scheduled to take place until 3:15pm on 5 June. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: DON00113350. <br><br>
+
+LA01"
+239480,Cork,Burst Water Main – Cork,2026-07-20T11:09:02+00:00,gemma-4-12b-qat,3,completion_update,2026-07-21,11:41,correct,,,,,"<b>**Update 11:41am 21/07/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>Repairs to a burst water main may cause supply disruptions to Ballydivlin, Goleen and surrounding areas in Co. Cork. <br><br>
+Works are scheduled to take place from 12:30pm on 20 July until midday on 21 July. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: COR00116688. <br><br>LA01"
+241093,Kerry,Burst Water Main - Kerry,2026-08-07T09:16:28+00:00,gemma-4-12b-qat,3,completion_update,2026-08-07,12:19,correct,,,,,"<b>**Update 12:19pm 07/08/2026**<br><br>
+ 
+Works are now complete and supply should begin to return to all affected areas. </b><br><br>Repairs to a burst water main may cause supply disruptions to Ardoughter Lower, Ballyduff and surrounding areas in Co. Kerry. <br><br>
+
+Works are scheduled to take place until 2:30pm on 7 August. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KER00117967. <br><br>
+
+LA01"
+242118,Kerry,Burst Water Main - Kerry,2026-08-19T14:09:54+00:00,gemma-4-12b-qat,3,completion_update,2026-08-20,09:12,correct,,,,,"<b>**Update 9:12am 20/08/2026**<br><br>
+ 
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>
+
+Seans go mbeidh cur isteach ar an soláthar uisce i Burnham agus ceantair áitiúla i gContae Ciarraí de bharr deisúcháin an príobhphíoba atá réabtha.<br><br>
+
+Meastar go mbeidh críoch leis an obair seo ag a 6in ar an 19ú Lúnasa.<br><br>
+
+Is féidir an uimhir uathúil seo a thabhairt má tá ceist agat maidir leis an gcur isteach: KER00118792.<br><br>
+
+Repairs to a burst water main may cause supply disruptions to Burnham and surrounding areas in Co. Kerry. <br><br>
+
+Works are scheduled to take place until 6pm on 19 August. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KER00118792. <br><br>
+
+LA01"
+241590,Dublin,Burst Water Main – Dublin,2026-08-18T14:10:25+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-08-18,13:00,correct,,,,,"Repairs to a burst water main may cause supply disruptions to Tallaght, Raheen Crescent and surrounding areas in Co. Dublin. <br><br>
+Works are scheduled to take place from 9am until 1pm on 18 August. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: SDU00118368. <br><br>LA01"
+233473,Tipperary,Mains Rehabilitation Works – Tipperary,2026-05-20T07:25:11+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-05-20,16:00,correct,,,,,"Mains rehabilitation works may cause supply disruptions to Foxhall, Newport and surrounding areas in Co. Tipperary. <br><br>
+
+Works are scheduled to take place from 10am until 4pm on 20 May. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: TIP00112047. <br><br>"
+241992,Limerick,Hydrant Repair Works – Limerick,2026-08-18T09:40:02+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-08-18,17:00,correct,,,,,"Hydrant repair works may cause supply disruptions to Corbally and surrounding areas in Co. Limerick. <br><br>
+Works are scheduled to take place from 10am until 5pm on 18 August. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: LIM00118696. <br><br>LA01"
+232122,Limerick,Investigation Works - Limerick,2026-04-28T14:26:01+00:00,gemma-4-12b-qat,3,not_found,,,correct,,,,,"We are investigating reports of supply disruptions affecting Corbally and surrounding areas in Co. Limerick.<br><br>
+
+More information to follow.
+"
+232208,Wexford,Power Outage - Wexford,2026-05-08T15:26:06+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-05-08,17:00,correct,,,,,"A power outage may cause supply disruptions to Ballymorgan, Tombrack, Ferns and surrounding areas in Co. Wexford. <br><br>
+
+Works are scheduled to take place from 9am until 5pm on 08 May. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WEX00111027. <br><br>"
+235265,Cork,Burst Water Mains - Cork,2026-06-07T20:30:26+00:00,gemma-4-12b-qat,3,completion_update,2026-06-09,11:02,correct,,,,,"<b>**Update 11:02am 09/06/2026**<br><br>
+
+Works are now complete and supply should have returned to all the affected areas.</b><br><br>Repairs to a burst water mains may cause supply disruptions to Canon’s Cross, Temple Hill, Leemount Cross, Lee Road, Carrigyknaveen and surrounding areas in Co. Cork. <br><br>
+
+<b>Works are now scheduled to take place until 10pm on 8 June. </b><br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: COR00113446. <br><br>
+
+LA 01"
+241868,Dublin,Hydrant Installation Works - Dublin,2026-08-19T08:54:40+00:00,gemma-4-12b-qat,3,completion_update,2026-08-20,15:30,correct,,,,,"<strong>**Update 3:30pm 20/08/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</strong><br><br>Hydrant installation works may cause supply disruptions to Melrose Avenue, Lucan and surrounding areas in Dublin 22. <br><br>
+
+Works are scheduled to take place from 10am until 3pm on 19 August. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: SDU00118607. <br><br>
+
+LA01"
+236547,Louth,Mains Repair Works – Louth,2026-06-22T11:35:08+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-06-22,14:15,correct,,,,,"Mains repair works may cause supply disruptions to Baltray Road, Termonfeckin and surrounding areas in Co. Louth. <br><br>
+Works are scheduled to take place from 12:15pm until 2:15pm on 22 June. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: LOU00114436. <br><br>LA01"
+232814,Kerry,Essential Works – Kerry,2026-05-07T12:56:10+00:00,gemma-4-12b-qat,3,completion_update,2026-05-07,16:30,correct,,,,,"<strong>**Update 4:30pm 07/05/2026**<br><br>
+
+Works are now complete and supply should have returned to all affected areas.</strong><br><br>Essential maintenance works may cause supply disruptions to Springmount, Duagh and surrounding areas in Co. Kerry. <br><br>
+Works are scheduled to take place from 1:45pm until 4pm on 07 May. <br><br>
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: KER00111511. <br><br>"
+231292,Waterford,Supply Re-direction - Waterford,2026-04-20T08:00:00+00:00,gemma-4-12b-qat,3,completion_update,2026-04-22,16:54,correct,,,,,"<b>**Update 4:54pm 22/04/2026**<br><br>
+ 
+Works are now complete and supply should begin to return to all affected areas. </b><br><br>A supply re-direction may cause supply disruptions to Hillside Cresent, Hillview, Hillside Close, Kilmacthomas and surrounding areas in Co. Waterford. <br><br>
+
+Works are scheduled to take place from 9am on 20 April until 5pm on 22 April. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: WAT00110328 <br><br>
+
+LA01"
+237000,Meath,Reservoir Interruption - Meath,2026-06-26T08:28:01.981000+00:00,gemma-4-12b-qat,3,scheduled_end_with_time,2026-06-26,10:00,correct,,,,,"A reservoir interruption may cause supply disruptions to Stackallan, Gormalough, Knowth, Grangegeeth, Knockmooney, Newtown, Monknewtown, Dowth, Newgrange, Slane and surrounding areas in Co. Meath. <br><br>
+
+Works are scheduled to take place until 10am on 26 June. <br><br>
+
+We recommend that you allow 3-4 hours after the estimated restoration time for your supply to fully return. <br><br>
+
+Please take note of the following reference number and enter it into the search bar should you wish to return for an update: MEA00114783. <br><br>
+
+LA01"

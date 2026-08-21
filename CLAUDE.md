@@ -4,6 +4,16 @@ A static status site for Uisce Éireann water disruption notices, built from an 
 `notes/` carries ~33k tokens of measured findings and settled decisions across 10 files — too much
 to read wholesale, which is why the important ones are indexed here.
 
+## The UI is shared — change it upstream
+
+The tokens, base CSS, row/bar/card components and the JS helpers that uisce, esb and lifts
+all use come from [`../statusui`](https://github.com/baz8080/statusui), a **uv git dependency
+pinned in `uv.lock`** and inlined into every page at build by `statusui.assemble()`. Edit it
+there, push, then `../statusui/rollout.sh` bumps the pin in all three sites and opens the
+PRs; to try an unpushed change here, `uv run --with-editable ../statusui uisce-site`. This
+site's own rules are `src/uisce/site.css` and the inline blocks in the three templates; the
+shared/per-site rule is in statusui's CLAUDE.md.
+
 ## Before you change how any published number is computed
 
 Read the relevant section of [notes/data-quality.md](notes/data-quality.md) and
@@ -36,6 +46,9 @@ with the evidence that closed them.
 | gemma-4-12b-qat over qwen3.5-9b for end-time extraction; prompt version is at v3. | model-and-runtime-benchmarks.md, end-time-eval.md |
 | Geography is CSO Census settlements, not the feed's `location` string (3,866 distinct values, fragments badly, carries no population). | statuspage-methodology.md — "The county drill-down" (2026-07-25) |
 | Overlapping events double-count person-hours by **2.0%** nationally, left uncorrected. Re-measure with `uv run uisce-eval-overlap`. | statuspage-methodology.md — "Known limitations" (2026-08-18) |
+| The design layer (tokens, base CSS, row/bar/card, JS helpers) is shared with esb and lifts via `../statusui`, a **uv git dependency pinned in `uv.lock`** — edit upstream, then `../statusui/rollout.sh` bumps all three sites. Vendored copies were tried first and drifted within a day. `site.css` and the inline blocks are this site's own. | frontend-notes.md — "the vendored copy became a pinned uv git dependency" (2026-08-20); statusui's README for what is shared |
+| End-time extraction is **rules first, LLM fallback**: `rules.py` answers the templated ~93% (99.99% corpus agreement, 0 wrong emissions on the labelled rounds, 0.6s vs ~11 GPU-hours) and abstains to the LLM for recurring windows, lifts, Irish and everything ambiguous. Rules may only emit `completion_update`/`scheduled_end_with_time`; re-measure with `uv run uisce-eval-rules-shadow`. | rules-vs-llm-end-times.md (2026-08-21) |
+| CI runs `uisce-infer --rules-only` every data build and commits the JSONL to `main`; the LLM residue is run by hand. JSONL stays in this repo (`merge=union`) — a `uisce-data` repo and a release asset were both rejected. | rules-vs-llm-end-times.md — "CI runs the rules half" (2026-08-21) |
 
 ## Conventions
 
@@ -55,7 +68,8 @@ with the evidence that closed them.
 
 ```bash
 uv run uisce-pipeline        # download the feed into out/uisce.db
-uv run uisce-infer           # LLM end-time extraction (needs LM Studio)
+uv run uisce-infer           # end-time extraction: rules first, LLM fallback; CI runs
+                             # --rules-only every build, the residue needs LM Studio
 uv run uisce-build-inferred  # rebuild inferred_cases from the JSONL
 uv run uisce-site            # build out/site/
 uv run pytest

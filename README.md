@@ -2,7 +2,7 @@
 
 Download, transform, and geocode [Uisce Éireann](https://www.water.ie/) (Irish Water) supply and works notices, and infer each notice's end time from its text with a local LLM. The result is a single SQLite database, rebuilt by CI twice a day and published as a GitHub release, plus a statuspage-style static site with per-county supply availability and A–F grades.
 
-The [website that this repo generates](https://baz8080.github.io/uisce/) is deployed by the same builds.
+The [website that this repo generates](https://baz8080.github.io/uisce/) is rebuilt from the latest published DB after every data build and on every push to `main`, so a UI change is live in about a minute without waiting for the next data build.
 
 **What the time figures mean.** This project does not measure outage duration and cannot: the feed never records when supply was actually lost. What it measures is the span from **when a notice was published** to **the end that notice reports** (`notice_to_end_seconds`), and the site publishes the subset where that end is an observed "works are now complete" update rather than a schedule. That published median is a floor on true length. The availability percentages are not: about one disruption in twenty reports no usable end, and since 2026-08-15 those are charged the typical observed span for their kind of works rather than counted as zero — a total has to put a number on every event, and omitting one asserts it lasted no time at all. See [notes/data-quality.md](notes/data-quality.md) and [notes/statuspage-methodology.md](notes/statuspage-methodology.md).
 
@@ -22,11 +22,11 @@ Tables:
 
 Before leaning on `start_date`/`end_date` or per-case counts, read [notes/data-quality.md](notes/data-quality.md) — several fields don't mean what they appear to mean.
 
-The `cases` schema is declared once, in `create_db`, and stamped into `PRAGMA user_version` (`SCHEMA_VERSION`, currently 2). The published DB is downloaded and updated in place each build, so `check_schema_version` runs every time and carries older DBs forward via `MIGRATIONS`.
+The `cases` schema is declared once, in `create_db`, and stamped into `PRAGMA user_version` (`SCHEMA_VERSION`, currently 3). The published DB is downloaded and updated in place each build, so `check_schema_version` runs every time and carries older DBs forward via `MIGRATIONS`.
 
 Migration is deliberately narrow: **additive nullable columns only**, which SQLite applies without rewriting a row. A DB missing any v1 column is refused with instructions to rebuild rather than migrated. That asymmetry is on purpose — the DB is an accumulating archive of a feed with no history, so a rebuild costs every case the feed no longer serves plus the geocode cache. Take a copy before rebuilding.
 
-`cases.closed_at` (v2) records when a build **first observed** a case stop being `Open`. The feed publishes only current status, so this is the sole record of the transition. Two consequences for anyone querying it:
+`cases.closed_at` (v2) records when a build **first observed** a case stop being `Open`. The feed publishes only current status, so this is the sole record of the transition. Three consequences for anyone querying it:
 
 * It is observation time, not event time — resolution is the build cadence.
 * `NULL` is ambiguous: either still open, or closed before the column existed (every case closed prior to v2). Pair it with `status` rather than reading `NULL` as open.
@@ -42,6 +42,8 @@ Locally, against a directory of downloaded snapshots named `<release-tag>.db`:
 uv run uisce-replay-closed-at --snapshots snaps          # dry run
 uv run uisce-replay-closed-at --snapshots snaps --write
 ```
+
+`cases.first_start_date` (v3) stamps the `start_date` seen on the **first download** of a case and never advances it — the feed re-stamps `start_date` in place, so the original is otherwise lost. It is first-observed, not earliest-seen, and nothing computes a published number from it yet; it is an instrument accumulating history. See [notes/data-quality.md](notes/data-quality.md).
 
 ## Running it yourself
 
@@ -87,12 +89,15 @@ The weighting uses Census 2022 Small Area populations (`data/sa_pop.csv`, commit
 
 ## Running inference locally
 
-Duration inference reads each notice and extracts the end-time signal using a local model (currently `gemma-4-12b-qat`) behind an OpenAI-compatible API, e.g. [LM Studio](https://lmstudio.ai/).
+Duration inference reads each notice and extracts the end-time signal: CPU rules first (`src/uisce/rules.py`, which answer the templated ~93% of notices), falling back to a local model (currently `gemma-4-12b-qat`) behind an OpenAI-compatible API, e.g. [LM Studio](https://lmstudio.ai/), for everything the rules abstain on. See [notes/rules-vs-llm-end-times.md](notes/rules-vs-llm-end-times.md) for the measurements behind the split.
 
-1. Start the LLM server on :1234
-2. `gh release download --clobber --pattern "uisce.db" --dir out/`
-3. `uv run uisce-infer` — appends results to `data/inferred_end_times.jsonl` (committed to the repo; only new/changed descriptions are processed)
-4. (Local test only - CI will do this on a schedule) `uv run uisce-build-inferred`
+CI runs the rules half on every data build (`uisce-infer --rules-only`) and commits the results, so the local run only ever has the abstained residue — recurring windows, lifts, Irish, the ambiguous rest — to send to the model.
+
+1. `git pull` — CI appends to `data/inferred_end_times.jsonl`; `.gitattributes` merges a concurrent local append rather than conflicting
+2. Start the LLM server on :1234
+3. `gh release download --clobber --pattern "uisce.db" --dir out/`
+4. `uv run uisce-infer` — appends results to `data/inferred_end_times.jsonl` (committed to the repo; only new/changed descriptions are processed); commit and push
+5. (Local check only — CI rebuilds the table itself) `uv run uisce-build-inferred`
 
 ## Layout
 
@@ -101,7 +106,9 @@ Duration inference reads each notice and extracts the end-time signal using a lo
 ```
 src/uisce/
   pipeline.py    download, map, geocode, load cases   (uisce-pipeline)
-  inference.py   LLM end-time extraction to JSONL      (uisce-infer)
+  inference.py   end-time extraction to JSONL:         (uisce-infer)
+                 rules first, LLM fallback
+  rules.py       CPU rules for the templated majority
   build.py       build inferred_cases from the JSONL   (uisce-build-inferred)
   site.py        generate the static status site       (uisce-site)
   sa_pop.py      fetch Census Small Area populations   (uisce-fetch-sa-pop)
@@ -122,7 +129,7 @@ uv run pytest
 uv run ruff check
 ```
 
-CI lints and tests on every push. The `Build DB` workflow runs the pipeline twice a day and publishes the refreshed DB as a release. The cadence is not just freshness: the gap between builds is the resolution of `cases.closed_at`, and a case that opens and closes within one gap is never observed open at all — see [notes/data-quality.md](notes/data-quality.md) ("Twice-daily builds: why, and why not three") for the measured tradeoff.
+CI lints and tests on every push. The `Build DB` workflow runs the pipeline twice a day and publishes the refreshed DB as a release; the `Build site` workflow then rebuilds the site from it, and also runs on every push to `main` so UI changes deploy on their own. The freshness banner reads the DB's last feed sighting (`data_as_of_iso`), not the site build's clock, so a UI-only deploy cannot mask a failed data build. The cadence is not just freshness: the gap between builds is the resolution of `cases.closed_at`, and a case that opens and closes within one gap is never observed open at all — see [notes/data-quality.md](notes/data-quality.md) ("Twice-daily builds: why, and why not three") for the measured tradeoff.
 
 ## Interesting APIs
 
