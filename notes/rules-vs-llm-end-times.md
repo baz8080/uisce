@@ -138,27 +138,30 @@ the language-understanding tail the model earns its keep on.
   which removes the main cost end-time-eval.md attributes to prompt bumps — for
   the 93%, at least.
 
-## Validation still owed (user-side, needs the GPU)
+## Out-of-sample validation (done 2026-08-21)
 
 The shadow eval measures agreement on cases the LLM has already seen and the
-labelled rounds predate rules-v1, so the clean check is one fresh round:
+labelled rounds predate rules-v1, so the clean check was one fresh round:
 `uv run uisce-eval-sample-fresh` (~5 min of GPU for 120 unseen cases), label it,
 then `uv run uisce-eval-replay --extractor rules --csv <new round>`. Expected:
-0 wrong emissions at ~90% coverage. Worth doing before trusting the hybrid's
-first big incremental run, not worth blocking the merge on.
+0 wrong emissions at ~90% coverage.
 
-**Update, 2026-08-21 (local, GPU):** the fresh uniform round was drawn and
-inferred the same day — `data/eval/end_time_sample_2026-08-21_gemma-4-12b-qat_pv3.csv`,
-120 unseen cases, seed 42. Before any labelling, rules-v1 vs the LLM on those
-fresh cases: **coverage 110/120 (91.7%), agreement 110/110, zero
-disagreements** (completion 71 agree / 3 abstain, scheduled 39/39 answered,
-all 7 not_found abstained). The human labels on that round remain the truth
-gate — label per end-time-eval.md, then
-`uv run uisce-eval-replay --extractor rules --csv <round>` — but the
-agreement evidence now stands on three legs: the 234 labelled rows, the
-10,860-case corpus shadow, and a same-day unseen draw. The first hybrid
-production run the same morning answered 1 of 4 backlog cases with rules and
-fell back to the LLM for the rest, as designed.
+**Drawn and inferred the same day (local, GPU):**
+`data/eval/end_time_sample_2026-08-21_gemma-4-12b-qat_pv3.csv`, 120 unseen
+cases, seed 42. Before any labelling, rules-v1 vs the LLM on those fresh
+cases: **coverage 110/120 (91.7%), agreement 110/110, zero disagreements**
+(completion 71 agree / 3 abstain, scheduled 39/39 answered, all 7 not_found
+abstained). The first hybrid production run the same morning answered 1 of 4
+backlog cases with rules and fell back to the LLM for the rest, as designed.
+
+**Human-labelled the same day, and the truth gate passed:** all 120 rows
+`correct` for the LLM (pv3's second perfect uniform round), and rules-v1
+scored **110/110 on every row it answered — 0 wrong emissions at 91.7%
+coverage**, exactly the expectation above. These 120 cases were never used to
+derive or tune any pattern, which is what retires the overfitting caveat in
+"Rejected alternatives": the evidence now stands on three legs — 354
+human-labelled rows across three rounds (0 wrong emissions on all of them),
+the 10,860-case corpus shadow, and this unseen draw.
 
 ## CI runs the rules half (2026-08-21)
 
