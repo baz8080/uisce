@@ -56,7 +56,9 @@ short essay on one problem.
 | **9a–9b** | *Eighteen nights in a trench coat* · *The title is not the severity* | Recurring windows, events versus pins, and the discovery that the utility uses two titles for one situation. |
 | **10–11** | *For a reader, not an analyst* · *Be findable* | Rewriting for a person on a phone; being visible to a search engine; a retraction. |
 | **12** | *Put a number on what you don't know* | Events charged as zero, the double-count nobody had sized, and the two assumptions examined in public. |
-| **13** | *Closing* | What the site can say, what it cannot, what was learned, and a glossary. |
+| **14** | *One design, three sites* | The look moves into a layer shared with two sibling sites; a phone review; a copy that drifted in a day and became a pinned dependency. |
+| **15** | *Rules first, model second* | Ninety-three per cent of the notices are a template; rules answer those in under a second and the model keeps the rest, and the scheduled build runs the rules half itself. |
+| **16** | *Closing* | What the site can say, what it cannot, what was learned, and a glossary. |
 
 ## How it was built, said once
 

@@ -194,7 +194,8 @@ a number. The radius and the thresholds have their caveats where a reader will m
 health markers that should never have shown are gone, and the grade chips can be read. Three
 things a stranger noticed were true; several things a stranger proposed were measured and
 declined, with the numbers written beside the refusal. That is where the repository stands on
-18 August 2026 — and where this account stops.
+18 August 2026 — and where this account first stopped. Chapters 14 and 15 pick it up three
+days later.
 
 ## Notes
 

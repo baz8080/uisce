@@ -225,3 +225,36 @@ Chapters quote from here rather than re-deriving; a missing figure is written in
 | Radius × Leixlip pin | 300 m 1,966 → ≈28,900 ph; 500 m 3,255 → ≈47,900; 1 km 8,440 → ≈124,200 (× 14.72 h) | Ch 8a measurement × arithmetic |
 | Overlap toy | 400 people; A 08–16, B 13–21; 6,400 vs 5,200; 1,200 = 23% | illustrative |
 | Tests | 354 (#40), 367 (#41) | PRs |
+
+## Chapters 14–15 (added 21 Aug 2026)
+
+| Figure | Value | Source |
+|---|---|---|
+| Day cell width | ~8 px | PR #44 |
+| Caption strip growth when revealed | 17 px | PR #44, #47 |
+| Sibling sites | esb (electricity), lifts | statusui README |
+| PR #45 size | +910/−435; 378 tests | PR #45 |
+| Visible costs of unification | month tabs "Aug 2026"; chip 32 px; footer arrow | PR #45 |
+| Month strip at twelve months | 1,095 px of tabs in a 356 px strip; one row; page scrollWidth = viewport | PR #47, notes "The iPhone review pass 2026-08-19" |
+| Rotate bug | 851 px: "Aug 2026" at x 352–439, scrollLeft 0; 375 px: 341 px strip still 0 | PR #47 |
+| Phone column gaps | 22/6/14/14/18/30/16 → 24/12/12/24/24/24/12/12 px | PR #47 |
+| Health-marker notices | 42 = 35 boil_notice_issued + 7 consumption_notice_issued ("Do Not Consume Notice"); no notice contains "drink" | PR #47, 20 Aug |
+| Vendored drift | main at statusui c9f8beb vs esb/lifts at f248ac3 — five UI commits | PR #48; notes "2026-08-20" |
+| PR #48 size | +77/−616 | PR #48 |
+| PR #49 size | +2/−4; pin 61b642c | PR #49 |
+| Shared layer size | base.css 241 lines, ui.js 142; site.css 23; site.html ~900 non-blank lines | measured 21 Aug 2026 (wc -l) |
+| Tests | 374 (#42/#44), 378 (#45/#47), 439 (#51), 440 (#52) | PRs |
+| LLM floor before rules | 219/219 site-relevant labelled rows, 95% lower bound ~98.3% | notes/rules-vs-llm-end-times.md |
+| Acceptance thresholds | ≥60% coverage; ≥98% agreement; rules-wrong ≤0.3% and ≤ LLM-wrong; 0 wrong emissions | same |
+| Shadow eval | 10,860 hash-stable cases; 92.7% coverage (10,068); 10,067/10,068 agreement; completion 6,670/6,671, scheduled 3,397/3,397 | PR #50 |
+| Pre-freeze disagreements | 4 of 10,075: 237463 (LLM 14:22 vs header 2:42pm), 232976, 236066, 240600 | notes "The four corpus disagreements" |
+| Abstention taxonomy | 792: 381 not_found / 117 completion no header / 108 recurrence / 91 lifts / 27 day lists / 15 Irish / 12 unreadable until / 41 other | same |
+| Labelled rounds | round 1 73/73 at 64.0% (stratified); round 2 110/110 at 91.7%; 354 rows over three rounds | PR #50 |
+| Fresh round 2026-08-21 | 120 unseen, seed 42; LLM 120/120; rules 110/110 at 91.7% (71 completion agree / 3 abstain; 39/39 scheduled; 7 not_found abstained) | notes "Out-of-sample validation" |
+| Runtime | 0.6 s corpus vs ~11 GPU-hours | PR #50 |
+| First hybrid run | 4 backlog: 1 rules (242322), 3 LLM; 241944 self-corrected | PR #50 |
+| KLD00118059 via rules | completion_update 2026-08-10 13:00, header "**Update 1:00pm 10/08/2026**" | measured 21 Aug 2026, `rules.extract` |
+| Rule-of-three bound for 110/110 | ≈ 97.3% | arithmetic |
+| Deploy latency before #51 | up to ~6 h | PR #51 |
+| JSONL on main, 21 Aug | 29,756 records / 10,908 cases; rules-v1 90 records (47 scheduled, 43 completion), 89 latest-per-case; first 08:01 UTC | measured 21 Aug 2026 |
+| JSONL repo cost | ~4 MB packed after 39 commits | notes "CI runs the rules half" |

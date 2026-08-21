@@ -1,8 +1,8 @@
-# 13. Closing: what the site can say, and what it cannot
+# 16. Closing: what the site can say, and what it cannot
 *~10 min read · with a glossary*
 
-*Where we are:* the end of the account, on 18 August 2026, with the repository at pull request
-#41. This chapter returns to the question, sets out plainly what the site can and cannot claim,
+*Where we are:* the end of the account, on 21 August 2026, with the repository at pull request
+#52. Chapters 1–12 were written on 18 August; chapters 14–15 cover the three days after. This chapter returns to the question, sets out plainly what the site can and cannot claim,
 lists what was learned in the form the repository itself keeps it, and collects every concept
 box into a glossary.
 
@@ -84,6 +84,9 @@ list of "things that were measured, and closed". In plain language:
 | Correct the overlap double-count | 2.0%, pessimistic, smaller than the radius error, and it would reach into the arithmetic; measured and left (chapter 12). |
 | Ask the model to do date arithmetic | Hallucinations and infinite loops; let the model read, keep the sums (chapter 3). |
 | Use the faster, smaller model | 40% faster, 61% agreement, and wrong in disqualifying ways (chapter 3). |
+| Keep a copy of the shared design layer in each site | Three copies drifted within a day, five commits apart, with nothing failing to say so; one upstream repository, pinned by commit in each site (chapter 14). |
+| Keep sending every notice to the language model | ~93% of notices are a rigid template; rules answer those with zero wrong emissions on 354 labelled rows and abstain to the model for the rest (chapter 15). |
+| Let rules emit "not found", or handle repeating windows | Absence of a match is evidence about the rules, not the notice; the window values are what needed a model (chapter 15). |
 
 Two conventions sit under all of it and are worth naming last. **Decisions go in the notes,
 dated, with the rejected alternatives and their numbers** — so a future session, human or
@@ -129,9 +132,17 @@ full box and its worked example live.
 - **Censoring, and the check that would have made exclusion dishonest** — Kaplan–Meier and a `closed_at` calibration both say the missing events are shorter, so excluding them from the median is safe (12).
 - **Overlap double-counting** — two events over the same Small Area at the same time count its people twice; measured at 2.0% and left (12).
 - **The grades are letters about an assumption** — read the A–F as calibrated to 500 m; read county ordering as real (12).
+- **A page assembled at build, not fetched at load** — each page is one file with its CSS and JS written in at build time; sharing a design layer means sharing the text the build inlines (14).
+- **Vendor or pin** — a copy is self-contained but silently stale; a pinned dependency records the exact commit the build used (14).
+- **Hover is not touch** — device media queries describe the default pointer, not the one in use; gate on the event actually received (14).
+- **Fix the bar before you measure** — thresholds, comparison precision and what counts as a disagreement are written down before the first run (15).
+- **A rule may abstain but may never guess** — the rules emit two classes only and hand everything else to the model; abstention is the one failure mode (15).
+- **Shadow evaluation, then the truth gate** — agreement with the model on the seen corpus is cheap evidence; a hand-labelled unseen round is the judge (15).
+- **The data clock and the build clock** — "Updated N ago" reads the last feed read, so a UI-only deploy cannot silence the dead-build alarm (15).
+- **Two writers, one append-only file** — append-only plus `merge=union` plus latest-per-case by timestamp lets CI and a laptop both add records safely (15).
 
 ## Notes
 
 - Kildare July 2026 figures: `out/site/data.js` built 18 Aug 2026 14:37Z (chapter 8b).
 - The settled-decisions table paraphrases the repository's `CLAUDE.md` index; each row's evidence is in the `notes/` section that row names.
-- Concept boxes: 32 across chapters 1–12; this glossary lists each once.
+- Concept boxes: 40 across chapters 1–15; this glossary lists each once.

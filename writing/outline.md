@@ -1,4 +1,4 @@
-# Outline — 12 chapters, chronological
+# Outline — 12 chapters, chronological (+ 14–15 added 21 Aug 2026)
 
 Each entry: PRs · thesis (what the site now thinks) · concepts to box · worked example · diagram ·
 reading list beyond `sources/chNN.md`. Read notes *by section heading only* (grep the heading,
@@ -233,3 +233,40 @@ read it. `13-closing.md`: what the site says about Leixlip vs the rest of Kildar
 cannot say (start_date is publication, closed_at is a floor, 2.0% overlap, the radius
 assumption); the settled-decisions table as a "what we learned" appendix; glossary from the
 concept boxes.
+
+## Ch 14 — One design, three sites · #42, #44–#49 · 19–21 Aug (added 21 Aug 2026)
+
+**Thesis.** Three look-alike sites were carrying three copies of one design layer, fixed by hand
+and not always. Hover caption instead of tooltips (#44); the layer moves to `statusui`, first
+vendored (#45) then, after one day showed the copies five commits apart, a uv git dependency
+pinned in `uv.lock` (#48); the 390 px iPhone review (#47: scrolling month strip 1,095 px in
+356 px, touch `pointerover`, rhythm 22/6/14/14/18/30/16 → 24/12/12/24/24/24/12/12, health key
+shortened then reverted on 42 = 35 + 7 and the word "drink" never occurring); first rollout drops
+the status dot (#49). #42 closes the README schema thread.
+
+**Concepts.** *A page assembled at build, not fetched at load* · *vendor or pin* · *hover is not
+touch*.  **Worked examples.** Month strip arithmetic and the 851→375 px rotate; the health-key
+count.  **Diagram.** Mermaid: statusui → pins → single-file pages.
+
+**Reading.** `sources/ch14.md`; `notes/frontend-notes.md` "2026-08-20: the vendored copy became a
+pinned uv git dependency", "Shared with esb and lifts since 2026-08-19", "The iPhone review pass
+2026-08-19"; `../statusui/README.md`.
+
+## Ch 15 — Rules first, model second · #46, #50–#52 · 20–21 Aug (added 21 Aug 2026)
+
+**Thesis.** ~93% of the end-time work is template filling. `rules.py` (rules-v1) emits only
+`completion_update` / `scheduled_end_with_time`, abstains on everything else; acceptance criteria
+fixed before measurement (≥60% coverage / ≥98% agreement / rules-wrong ≤0.3% and ≤ LLM-wrong /
+0 wrong emissions); shadow eval 92.7% / 99.99% (10,068 of 10,860), four disagreements adjudicated
+(237463 is the LLM's transposition), narrowing only, frozen; fresh 120-case round 120/120 LLM,
+110/110 rules at 91.7%; hybrid stamps `model`, staleness keys on it, no backfill; 0.6 s vs ~11
+GPU-hours. #51 site deploys on push, banner on the data clock. #52 CI runs `--rules-only`,
+commits the JSONL, `merge=union`; uisce-data repo and release asset rejected. #46 footnote.
+
+**Concepts.** *Fix the bar before you measure* · *a rule may abstain but may never guess* ·
+*shadow evaluation, then the truth gate* · *the data clock and the build clock* · *two writers,
+one append-only file*.  **Worked examples.** KLD00118059 through `rules.extract`; the acceptance
+table; the four disagreements.  **Diagrams.** Mermaid: rules→LLM; the CI pair.
+
+**Reading.** `sources/ch15.md`; `notes/rules-vs-llm-end-times.md` whole; `src/uisce/rules.py`
+docstring.

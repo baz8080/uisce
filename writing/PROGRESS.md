@@ -24,7 +24,9 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 10 | For a reader, not an analyst | #31(last), #32–36 | reviewed | 2,085 |
 | 11 | Be findable | #37–39 | reviewed | 1,034 |
 | 12 | Put a number on what you don't know | #40–41 | reviewed | 2,623 |
-| 13 | Closing: what the site can say, and what it cannot (+ glossary) | — | reviewed | 2,197 |
+| 14 | One design, three sites | #42, #44–#49 | drafted | 2,765 |
+| 15 | Rules first, model second | #46, #50–#52 | drafted | 2,916 |
+| 16 | Closing: what the site can say, and what it cannot (+ glossary) (was 13) | — | reviewed | 2,197 |
 
 ## Chapter summaries (3 lines each, added when drafted)
 
@@ -134,25 +136,44 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
   radius-sensitivity with Leixlip 1,966/3,255/8,440); thresholds fitted to 78 county-months
   (97/76/33/10th pct), checked and left. Worked examples: no-end event 7.5 h; Leixlip at three
   radii; overlap toy. Ends: where the repo stands on 18 Aug 2026.
+- **14** Three look-alike sites, one design layer. #44 caption strip inside `.row`, tooltips
+  gone, hover-capability gate then hidden-while-empty (iPad trackpad). #45 statusui vendored,
+  `assemble()` inlines at build (concept box), shared/per-site rule, visible costs listed. #47
+  iPhone review: month strip scrolls (1,095 px in 356 px; rotate 851→375 bug), touch
+  `pointerover` (concept box hover≠touch), rhythm, copy; health key shortened then reverted
+  (42 = 35 + 7, no "drink"). #48 one day of vendoring → five commits drift → uv git dep pinned
+  (concept box vendor or pin), rollout.sh. #49 first rollout drops the dot. #42 closes the
+  README schema thread. Mermaid rollout diagram. Ends: sizes 241/142/23 lines, pin 61b642c.
+- **15** Ch 3 benchmarks never asked whether calls needed a model. Concept boxes: fix the bar
+  before you measure (acceptance table); a rule may abstain but never guess (two classes only);
+  shadow eval then truth gate (92.7%/99.99%; four disagreements incl. 237463 LLM-wrong; fresh
+  120: LLM 120/120, rules 110/110 at 91.7%; 354 labelled rows); the hybrid (model stamp,
+  staleness, no backfill; first run 1+3); #51 deploy on push (concept box data clock vs build
+  clock); #52 `--rules-only` in CI, commit as uisce-ci (concept box two writers, merge=union),
+  uisce-data/release asset rejected; #46 footnote. Worked example KLD00118059 via rules.extract
+  = same answer as Ch 3. Two mermaid diagrams. Ends: JSONL 29,756/10,908, 90 rules records.
 
 ## Open threads
 
-- README says `SCHEMA_VERSION` "currently 2"; code says 3 — separate fix, not for the series.
+- ~~README says `SCHEMA_VERSION` "currently 2"; code says 3~~ — fixed by PR #42 (19 Aug), noted in Ch 14.
 - Oldest `start_date` in the DB is `0206-08-10` (mis-typed year in the feed) — a possible
   footnote in Ch 1 or Ch 6 about trusting feed dates.
 - PR #23's Kildare table shows Naas at 25,824; the corrected settlement figure is 26,180. When
   quoting the table say "as published in PR #23" and note the correction once.
 
-## Status: complete (18 Aug 2026)
+## Status: 20 posts; chapters 14–15 drafted 21 Aug 2026, not yet continuity-reviewed
 
-All 18 posts drafted and reviewed. Continuity pass done: no `[verify:` markers; every read time
+Chapters 14–15 were added on 21 Aug 2026 for PRs #42–#52 (the closing moved from 13 to 16;
+intro table, closing settled-rows and glossary updated; 40 concept boxes). Next session: read
+14 and 15 once for continuity (cross-references to chapters 3, 5b, 9a, 12; vocabulary; read
+times), mark `reviewed`. The 18 posts of 18 Aug were drafted and reviewed as below. Continuity pass done: no `[verify:` markers; every read time
 matches wc/230; every forward cross-reference lands (one sharpened: Ch 3 → "chapter 5b");
 vocabulary clean against the fixed table; 32 concept boxes, each in the glossary once.
 
 **How to publish.** Each file in `chapters/` is a standalone post: title, read time, "where we
 are", concept boxes as blockquotes, worked examples, notes. Diagrams are relative links to
 `../diagrams/*.svg` (11 files) and mermaid fences (4) — a blog host needs mermaid support or
-the fences pre-rendered. Publish in file order (00 → 13). For a paper, `figures.md` is the
+the fences pre-rendered. Publish in file order (00 → 16). For a paper, `figures.md` is the
 figure registry and `outline.md` the structure; the settled-decisions table in Ch 13 is the
 discussion section in embryo.
 
@@ -338,6 +359,11 @@ short). For the worked example reuse KLD00118059 from Ch 1: pull its `inferred_c
 chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Commit per chapter.
 
 ## Session log
+
+- 2026-08-21 · Session 12 · merged main into the branch (kept main's JSONL; the branch's 85
+  records were all superseded there); source packs ch14/ch15 (5.4k words); drafted Ch 14
+  (2,765 w) and Ch 15 (2,916 w); closing renumbered 13→16 with three settled rows and eight
+  glossary entries; intro table, outline, figures extended.
 
 - 2026-08-18 · Session 11 (final pass) · wrote 00-intro (1,368 w, AI process named once with
   the trailer counts: Sonnet 4.6 ×5, Sonnet 5 ×13, Opus 4.8 ×17, Opus 5 ×41, Fable 5 ×29) and
