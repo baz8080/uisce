@@ -162,3 +162,12 @@ derive or tune any pattern, which is what retires the overfitting caveat in
 "Rejected alternatives": the evidence now stands on three legs — 354
 human-labelled rows across three rounds (0 wrong emissions on all of them),
 the 10,860-case corpus shadow, and this unseen draw.
+
+## CI runs the rules half (2026-08-21)
+
+`uisce-infer` grew a `--rules-only` flag and `Build DB` runs it every build: the rules answer what they cover, abstentions are counted and left for a local LLM run, and the JSONL is committed back to `main` after the release is published (so it never references a case the latest release lacks). `data/inferred_end_times.jsonl merge=union` in `.gitattributes` lets CI's appends and a local run's appends merge instead of conflicting; `build.py:latest_per_case` keys on `inferred_at`, so the order the union leaves them in does not matter.
+
+Where the JSONL lives was the real question — esb and lifts keep collected data in `*-data` repos. Two alternatives were rejected:
+
+- **A `uisce-data` repo.** The esb/lifts split exists because the Pi is the writer and the raw logs are the source of truth. Here the source of truth (the DB) is already off-repo as a release, and the JSONL is a derived cache of it. A data repo would add a checkout to every workflow and put the JSONL↔DB freshness guard (above) across two repos, for no gain in history or size — the JSONL costs ~4 MB of packed repo after 39 commits.
+- **The JSONL as a release asset beside `uisce.db`.** Two writers on one blob means last upload wins and the other's records are silently lost; git at least conflicts loudly, and `merge=union` resolves it.

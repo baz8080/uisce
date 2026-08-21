@@ -43,6 +43,8 @@ The third is the honest default and the cheapest, but it changes what the page c
 
 Related but distinct (fixed 2026-07-20): open cases whose *extracted* end was nulled for preceding publication used to take the same accrue-to-now branch. Those are not a backlog problem — inference has run and the text says the works ended — and `site.py` now gives them a token footprint instead (`ended_by_publication`; see [data-quality.md](data-quality.md)). The accrue branch is left for cases with genuinely no signal, which is exactly the population the un-inferred backlog feeds.
 
+**Update, 2026-08-21: CI now runs the rules half.** With extraction rules-first ([rules-vs-llm-end-times.md](rules-vs-llm-end-times.md)), `Build DB` runs `uisce-infer --rules-only` every build and commits the JSONL, so the never-inferred backlog is bounded to the abstentions (~7%) rather than every case scraped since the last manual run. The decision above is narrower as a result, not closed: the residue is still open cases accruing to now until someone runs the LLM.
+
 ## The site build is independent of the data build (2026-08-21)
 
 Until 2026-08-21 the site was only deployed by the `Build DB` workflow, so a UI change waited for the next scheduled data build — up to ~6h. The site is a pure projection of the published release DB, so it now has its own workflow (`.github/workflows/pages.yml`, the same shape esb and lifts already used): it downloads the latest release and runs `uisce-site` on every push to `main`, on demand, and via `workflow_run` after each successful data build — the last because a push made with `GITHUB_TOKEN` fires no `push` event.

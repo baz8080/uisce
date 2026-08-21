@@ -226,6 +226,25 @@ class TestHybridRun:
         assert record["end_source"] == "completion_update"
         assert (record["local_date"], record["local_time"]) == ("2026-05-18", "10:15")
 
+    def test_rules_only_skips_abstentions_without_touching_the_llm(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        jsonl = self._wire(
+            tmp_path, monkeypatch,
+            [(1, "2026-05-18T08:00:00+00:00", self.TEMPLATED),
+             (2, "2026-05-18T08:00:00+00:00", self.UNTEMPLATED)],
+        )
+
+        def no_session():
+            raise AssertionError("--rules-only must never open a session")
+
+        monkeypatch.setattr(inference, "make_session", no_session)
+        inference.run(["--rules-only"])
+
+        [record] = [json.loads(line) for line in jsonl.read_text().splitlines()]
+        assert (record["case_id"], record["model"]) == (1, RULES_VERSION)
+        assert "1 left for the LLM" in capsys.readouterr().out
+
     def test_abstention_falls_back_to_the_llm(self, tmp_path, monkeypatch):
         jsonl = self._wire(
             tmp_path, monkeypatch, [(1, "2026-05-18T08:00:00+00:00", self.UNTEMPLATED)]
