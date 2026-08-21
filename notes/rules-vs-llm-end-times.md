@@ -146,3 +146,16 @@ labelled rounds predate rules-v1, so the clean check is one fresh round:
 then `uv run uisce-eval-replay --extractor rules --csv <new round>`. Expected:
 0 wrong emissions at ~90% coverage. Worth doing before trusting the hybrid's
 first big incremental run, not worth blocking the merge on.
+
+**Update, 2026-08-21 (local, GPU):** the fresh uniform round was drawn and
+inferred the same day — `data/eval/end_time_sample_2026-08-21_gemma-4-12b-qat_pv3.csv`,
+120 unseen cases, seed 42. Before any labelling, rules-v1 vs the LLM on those
+fresh cases: **coverage 110/120 (91.7%), agreement 110/110, zero
+disagreements** (completion 71 agree / 3 abstain, scheduled 39/39 answered,
+all 7 not_found abstained). The human labels on that round remain the truth
+gate — label per end-time-eval.md, then
+`uv run uisce-eval-replay --extractor rules --csv <round>` — but the
+agreement evidence now stands on three legs: the 234 labelled rows, the
+10,860-case corpus shadow, and a same-day unseen draw. The first hybrid
+production run the same morning answered 1 of 4 backlog cases with rules and
+fell back to the LLM for the rest, as designed.
