@@ -560,10 +560,8 @@ function renderOverview() {
     : "";
 
   const nF = worst.filter(w => w[1].grade === "F").length;
-  const dot = nF > 8 ? "var(--critical)" : nF > 3 ? "var(--serious)" : nF > 0 ? "var(--warning)" : "var(--good)";
   document.getElementById("banner").innerHTML =
-    `<span class="dot" style="background:${dot}"></span>
-     <strong>${monthLabelLong(curMonth)}${isPartial() ? " so far" : ""}:</strong> ${ev} announced outages · typical outage ${natFix} · ${nF} ${nF === 1 ? "county" : "counties"} graded F
+    `<strong>${monthLabelLong(curMonth)}${isPartial() ? " so far" : ""}:</strong> ${ev} announced outages · typical outage ${natFix} · ${nF} ${nF === 1 ? "county" : "counties"} graded F
      <span class="meta">${freshness(D.generated_iso)}</span>`;
 
   // county rows
