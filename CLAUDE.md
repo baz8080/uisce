@@ -67,7 +67,8 @@ with the evidence that closed them.
 
 ```bash
 uv run uisce-pipeline        # download the feed into out/uisce.db
-uv run uisce-infer           # LLM end-time extraction (needs LM Studio)
+uv run uisce-infer           # end-time extraction: rules first, LLM fallback
+                             # (LM Studio only needed for the abstained residue)
 uv run uisce-build-inferred  # rebuild inferred_cases from the JSONL
 uv run uisce-site            # build out/site/
 uv run pytest
