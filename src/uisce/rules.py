@@ -248,11 +248,11 @@ def extract(start_date, description):
 
     candidates = {}
     for m in scheduled_matches + list(ESTIMATED_END.finditer(newest)):
-            local_time = _match_time(m)
-            local_date = _match_date(m, start_date)
-            if not local_time or not local_date:
-                return None
-            candidates[(local_date, local_time)] = m.group(0).strip()
+        local_time = _match_time(m)
+        local_date = _match_date(m, start_date)
+        if not local_time or not local_date:
+            return None
+        candidates[(local_date, local_time)] = m.group(0).strip()
     if len(candidates) != 1:
         return None
     (local_date, local_time), matched = candidates.popitem()
