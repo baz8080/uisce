@@ -232,6 +232,9 @@ def run(argv=None):
                         help="re-infer every case, even if description and prompt version match")
     parser.add_argument("--limit", type=int, default=None,
                         help="stop after N cases (useful on slow local hardware)")
+    parser.add_argument("--rules-only", action="store_true",
+                        help="answer what the rules cover and leave the rest for a run with "
+                             "a local LLM (what CI does, having no model)")
     args = parser.parse_args(argv)
 
     last_state_by_case_id = get_last_hash_by_case_id(JSONL_PATH)
@@ -247,6 +250,7 @@ def run(argv=None):
     session = None
     results_by_hash = {}
     counts = {RULES_VERSION: 0, MODEL_NAME: 0}
+    left_for_llm = 0
 
     with open(JSONL_PATH, "a") as out:
         for i, case in enumerate(cases):
@@ -259,6 +263,9 @@ def run(argv=None):
                     result = rules_extract(case["start_date"], case["description"])
                     if result is not None:
                         model = RULES_VERSION
+                    elif args.rules_only:
+                        left_for_llm += 1
+                        continue
                     else:
                         if session is None:
                             session = make_session()
@@ -283,4 +290,5 @@ def run(argv=None):
                 print(f"Failed case {case['id']}: {e}")
                 out.flush()
     print(f"{counts[RULES_VERSION]} cases answered by {RULES_VERSION}, "
-          f"{counts[MODEL_NAME]} by {MODEL_NAME}")
+          f"{counts[MODEL_NAME]} by {MODEL_NAME}"
+          + (f", {left_for_llm} left for the LLM" if args.rules_only else ""))

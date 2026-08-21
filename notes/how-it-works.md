@@ -33,7 +33,7 @@ Two committed lookups sit outside the loop, refreshed only when the CSO revises 
 
 ## Flow 2 — end times (`inference.py` → `build.py`)
 
-`uisce-infer` reads each case description and extracts the end-time signal — CPU rules first (`rules.py`, the templated ~93%, see [rules-vs-llm-end-times.md](rules-vs-llm-end-times.md)), asking a local LLM only for the cases the rules abstain on. It decides its own work by comparing each case's description hash, prompt version and extractor against the JSONL, so it is idempotent and only reprocesses changed text; bumping `RULES_VERSION` re-runs just the rules-produced cases. The fallback needs a local model, so the command is run by hand, never in CI — though a run the rules fully cover completes without one.
+`uisce-infer` reads each case description and extracts the end-time signal — CPU rules first (`rules.py`, the templated ~93%, see [rules-vs-llm-end-times.md](rules-vs-llm-end-times.md)), asking a local LLM only for the cases the rules abstain on. It decides its own work by comparing each case's description hash, prompt version and extractor against the JSONL, so it is idempotent and only reprocesses changed text; bumping `RULES_VERSION` re-runs just the rules-produced cases. CI runs it with `--rules-only` on every data build and commits the JSONL; the fallback needs a local model, so the residue is run by hand.
 
 `uisce-build-inferred` rebuilds the `inferred_cases` table from the JSONL, computing `notice_to_end_seconds` per case. It refuses to run if the JSONL references cases the local DB does not have, and prints the never-inferred backlog on every build.
 

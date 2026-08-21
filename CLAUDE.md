@@ -48,6 +48,7 @@ with the evidence that closed them.
 | Overlapping events double-count person-hours by **2.0%** nationally, left uncorrected. Re-measure with `uv run uisce-eval-overlap`. | statuspage-methodology.md — "Known limitations" (2026-08-18) |
 | The design layer (tokens, base CSS, row/bar/card, JS helpers) is shared with esb and lifts via `../statusui`, a **uv git dependency pinned in `uv.lock`** — edit upstream, then `../statusui/rollout.sh` bumps all three sites. Vendored copies were tried first and drifted within a day. `site.css` and the inline blocks are this site's own. | frontend-notes.md — "the vendored copy became a pinned uv git dependency" (2026-08-20); statusui's README for what is shared |
 | End-time extraction is **rules first, LLM fallback**: `rules.py` answers the templated ~93% (99.99% corpus agreement, 0 wrong emissions on the labelled rounds, 0.6s vs ~11 GPU-hours) and abstains to the LLM for recurring windows, lifts, Irish and everything ambiguous. Rules may only emit `completion_update`/`scheduled_end_with_time`; re-measure with `uv run uisce-eval-rules-shadow`. | rules-vs-llm-end-times.md (2026-08-21) |
+| CI runs `uisce-infer --rules-only` every data build and commits the JSONL to `main`; the LLM residue is run by hand. JSONL stays in this repo (`merge=union`) — a `uisce-data` repo and a release asset were both rejected. | rules-vs-llm-end-times.md — "CI runs the rules half" (2026-08-21) |
 
 ## Conventions
 
@@ -67,8 +68,8 @@ with the evidence that closed them.
 
 ```bash
 uv run uisce-pipeline        # download the feed into out/uisce.db
-uv run uisce-infer           # end-time extraction: rules first, LLM fallback
-                             # (LM Studio only needed for the abstained residue)
+uv run uisce-infer           # end-time extraction: rules first, LLM fallback; CI runs
+                             # --rules-only every build, the residue needs LM Studio
 uv run uisce-build-inferred  # rebuild inferred_cases from the JSONL
 uv run uisce-site            # build out/site/
 uv run pytest

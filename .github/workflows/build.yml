@@ -69,6 +69,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # The rules answer the templated ~93% here; the abstentions wait for a
+      # local run with the LLM. See notes/rules-vs-llm-end-times.md.
+      - name: Infer end times by rules
+        run: uv run uisce-infer --rules-only
+
       - name: Build inferred cases table
         run: uv run uisce-build-inferred
 
@@ -81,3 +86,19 @@ jobs:
           || gh release upload "$TAG" out/uisce.db --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # After the publish, so the committed JSONL never references a case the
+      # latest release lacks (uisce-build-inferred refuses that combination).
+      # Rebase before pushing: a local LLM run may have appended meanwhile, and
+      # .gitattributes merges the two appends rather than conflicting.
+      - name: Commit the inferred end times
+        run: |
+          git add data/inferred_end_times.jsonl
+          if git diff --cached --quiet; then
+            echo "no new inferences to commit"
+            exit 0
+          fi
+          git -c user.name="uisce-ci" -c user.email="uisce-ci@users.noreply.github.com" \
+            commit -q -m "Infer end times by rules, $(date -u +%Y-%m-%d) build"
+          git pull -q --rebase origin main
+          git push -q origin HEAD:main

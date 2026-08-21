@@ -91,10 +91,13 @@ The weighting uses Census 2022 Small Area populations (`data/sa_pop.csv`, commit
 
 Duration inference reads each notice and extracts the end-time signal: CPU rules first (`src/uisce/rules.py`, which answer the templated ~93% of notices), falling back to a local model (currently `gemma-4-12b-qat`) behind an OpenAI-compatible API, e.g. [LM Studio](https://lmstudio.ai/), for everything the rules abstain on. See [notes/rules-vs-llm-end-times.md](notes/rules-vs-llm-end-times.md) for the measurements behind the split.
 
-1. Start the LLM server on :1234 (only needed for the abstained residue — a run the rules fully cover never contacts it)
-2. `gh release download --clobber --pattern "uisce.db" --dir out/`
-3. `uv run uisce-infer` — appends results to `data/inferred_end_times.jsonl` (committed to the repo; only new/changed descriptions are processed)
-4. (Local test only - CI will do this on a schedule) `uv run uisce-build-inferred`
+CI runs the rules half on every data build (`uisce-infer --rules-only`) and commits the results, so the local run only ever has the abstained residue — recurring windows, lifts, Irish, the ambiguous rest — to send to the model.
+
+1. `git pull` — CI appends to `data/inferred_end_times.jsonl`; `.gitattributes` merges a concurrent local append rather than conflicting
+2. Start the LLM server on :1234
+3. `gh release download --clobber --pattern "uisce.db" --dir out/`
+4. `uv run uisce-infer` — appends results to `data/inferred_end_times.jsonl` (committed to the repo; only new/changed descriptions are processed); commit and push
+5. (Local check only — CI rebuilds the table itself) `uv run uisce-build-inferred`
 
 ## Layout
 
