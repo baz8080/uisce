@@ -89,9 +89,9 @@ The weighting uses Census 2022 Small Area populations (`data/sa_pop.csv`, commit
 
 ## Running inference locally
 
-Duration inference reads each notice and extracts the end-time signal using a local model (currently `gemma-4-12b-qat`) behind an OpenAI-compatible API, e.g. [LM Studio](https://lmstudio.ai/).
+Duration inference reads each notice and extracts the end-time signal: CPU rules first (`src/uisce/rules.py`, which answer the templated ~93% of notices), falling back to a local model (currently `gemma-4-12b-qat`) behind an OpenAI-compatible API, e.g. [LM Studio](https://lmstudio.ai/), for everything the rules abstain on. See [notes/rules-vs-llm-end-times.md](notes/rules-vs-llm-end-times.md) for the measurements behind the split.
 
-1. Start the LLM server on :1234
+1. Start the LLM server on :1234 (only needed for the abstained residue — a run the rules fully cover never contacts it)
 2. `gh release download --clobber --pattern "uisce.db" --dir out/`
 3. `uv run uisce-infer` — appends results to `data/inferred_end_times.jsonl` (committed to the repo; only new/changed descriptions are processed)
 4. (Local test only - CI will do this on a schedule) `uv run uisce-build-inferred`
@@ -103,7 +103,9 @@ Duration inference reads each notice and extracts the end-time signal using a lo
 ```
 src/uisce/
   pipeline.py    download, map, geocode, load cases   (uisce-pipeline)
-  inference.py   LLM end-time extraction to JSONL      (uisce-infer)
+  inference.py   end-time extraction to JSONL:         (uisce-infer)
+                 rules first, LLM fallback
+  rules.py       CPU rules for the templated majority
   build.py       build inferred_cases from the JSONL   (uisce-build-inferred)
   site.py        generate the static status site       (uisce-site)
   sa_pop.py      fetch Census Small Area populations   (uisce-fetch-sa-pop)

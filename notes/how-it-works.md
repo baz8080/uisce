@@ -33,7 +33,7 @@ Two committed lookups sit outside the loop, refreshed only when the CSO revises 
 
 ## Flow 2 — end times (`inference.py` → `build.py`)
 
-`uisce-infer` reads each case description, asks a local LLM for the end-time signal, and appends a record to the JSONL. It decides its own work by comparing each case's description hash against the JSONL, so it is idempotent and only reprocesses changed text. It needs a local model and is therefore run by hand, never in CI.
+`uisce-infer` reads each case description and extracts the end-time signal — CPU rules first (`rules.py`, the templated ~93%, see [rules-vs-llm-end-times.md](rules-vs-llm-end-times.md)), asking a local LLM only for the cases the rules abstain on. It decides its own work by comparing each case's description hash, prompt version and extractor against the JSONL, so it is idempotent and only reprocesses changed text; bumping `RULES_VERSION` re-runs just the rules-produced cases. The fallback needs a local model, so the command is run by hand, never in CI — though a run the rules fully cover completes without one.
 
 `uisce-build-inferred` rebuilds the `inferred_cases` table from the JSONL, computing `notice_to_end_seconds` per case. It refuses to run if the JSONL references cases the local DB does not have, and prints the never-inferred backlog on every build.
 
@@ -79,6 +79,7 @@ At runtime `SmallAreaIndex` answers "which Small Areas does this pin affect?" by
 | When a settlement is split into electoral areas | `SPLIT_ABOVE_POP` / `MIN_PART_SHARE` in `towns.py` |
 | Anything visual, or the page copy | `site.html` (single file, no build) |
 | The LLM prompt or model | `inference.py`, then re-run inference and rebuild |
+| The rules templates (bump `RULES_VERSION`) | `rules.py`, then `uisce-eval-rules-shadow` + `uisce-eval-replay --extractor rules` before re-running inference |
 
 ## Things that will bite
 
