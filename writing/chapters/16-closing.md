@@ -145,4 +145,4 @@ full box and its worked example live.
 
 - Kildare July 2026 figures: `out/site/data.js` built 18 Aug 2026 14:37Z (chapter 8b).
 - The settled-decisions table paraphrases the repository's `CLAUDE.md` index; each row's evidence is in the `notes/` section that row names.
-- Concept boxes: 40 across chapters 1–15; this glossary lists each once.
+- Concept boxes: 41 across chapters 1–15; this glossary lists each once.

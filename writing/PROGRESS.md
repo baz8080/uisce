@@ -164,7 +164,7 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 ## Status: 20 posts; chapters 14–15 drafted 21 Aug 2026, not yet continuity-reviewed
 
 Chapters 14–15 were added on 21 Aug 2026 for PRs #42–#52 (the closing moved from 13 to 16;
-intro table, closing settled-rows and glossary updated; 40 concept boxes). Next session: read
+intro table, closing settled-rows and glossary updated; 41 concept boxes). Next session: read
 14 and 15 once for continuity (cross-references to chapters 3, 5b, 9a, 12; vocabulary; read
 times), mark `reviewed`. The 18 posts of 18 Aug were drafted and reviewed as below. Continuity pass done: no `[verify:` markers; every read time
 matches wc/230; every forward cross-reference lands (one sharpened: Ch 3 → "chapter 5b");
