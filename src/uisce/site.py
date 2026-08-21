@@ -29,7 +29,6 @@ import csv
 import html
 import json
 import math
-import re
 import sqlite3
 import statistics
 from collections import Counter, defaultdict
@@ -50,6 +49,7 @@ from uisce.config import (
     SA_POP_PATH,
     SA_TOWNS_PATH,
     SITE_DIR,
+    describes_recurrence,
 )
 
 SITE_HTML = Path(__file__).parent / "site.html"
@@ -673,17 +673,6 @@ def _parse_date(value):
 def case_ref(row):
     """The key that groups a multi-pin publication into one event."""
     return row["reference_num"] or f"id:{row['id']}"
-
-
-# The wording the feed uses for a window repeating over a range of dates.
-RECURRENCE_TEXT = re.compile(
-    r"\b(daily|nightly|each night|every night|each day|overnight (?:from|between))\b", re.I
-)
-
-
-def describes_recurrence(description):
-    """Whether a notice's own text announces a repeating window."""
-    return bool(RECURRENCE_TEXT.search(re.sub(r"<[^>]+>", " ", description or "")))
 
 
 def recurring_events(rows, windows):
