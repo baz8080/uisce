@@ -391,7 +391,7 @@ function freshness(iso) {
   // the routine ones do — a warning nobody notices is not a warning
   const d = Math.round(mins / (24 * 60));
   return `<span class="stale">Updated ${d} day${d === 1 ? "" : "s"} ago` +
-    ` — the last build may have failed</span>`;
+    ` — the last data build may have failed</span>`;
 }
 
 // The grade is availability alone. An active boil-water / do-not-drink /
@@ -562,7 +562,7 @@ function renderOverview() {
   const nF = worst.filter(w => w[1].grade === "F").length;
   document.getElementById("banner").innerHTML =
     `<strong>${monthLabelLong(curMonth)}${isPartial() ? " so far" : ""}:</strong> ${ev} announced outages · typical outage ${natFix} · ${nF} ${nF === 1 ? "county" : "counties"} graded F
-     <span class="meta">${freshness(D.generated_iso)}</span>`;
+     <span class="meta">${freshness(D.data_as_of_iso)}</span>`;
 
   // county rows
   const names = Object.keys(D.counties).sort((a, b) => {

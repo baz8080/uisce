@@ -1770,7 +1770,10 @@ def recurrence_report(cases, pin_tags=None):
     return lines
 
 
-def build_site(rows, sa_index, now, towns=None):
+def build_site(rows, sa_index, now, towns=None, data_as_of=None):
+    # data_as_of is when the feed was last read; the site can be rebuilt without
+    # a data build, so the freshness banner must not follow the build clock
+    data_as_of = data_as_of or now
     months = month_list(COLLECTION_START, now)
 
     lifts = collect_lifts(rows)
@@ -1865,6 +1868,7 @@ def build_site(rows, sa_index, now, towns=None):
         # banner can say "4 hours ago" rather than make the reader do timezone
         # arithmetic. The human-readable one above stays, in the footer.
         "generated_iso": now.strftime("%Y-%m-%dT%H:%M:00Z"),
+        "data_as_of_iso": data_as_of.strftime("%Y-%m-%dT%H:%M:00Z"),
         "months": months,
         "counties": {},
         "national": {},
@@ -2002,6 +2006,12 @@ def build_site(rows, sa_index, now, towns=None):
     site["recurrence_report"] = recurrence_report(recurrence, pin_tags)
 
     return site
+
+
+def data_horizon(conn):
+    """The last instant the pipeline read the feed, or None on an empty DB."""
+    (last_seen,) = conn.execute("SELECT MAX(last_seen) FROM cases").fetchone()
+    return parse_dt(last_seen) if last_seen else None
 
 
 def load_cases(conn):
@@ -2142,7 +2152,8 @@ def run():
     towns = TownLookup.from_csv(SA_TOWNS_PATH, sa_index.pop)
     with sqlite3.connect(DB_PATH) as conn:
         rows = load_cases(conn)
-    site = build_site(rows, sa_index, datetime.now(timezone.utc), towns)
+        data_as_of = data_horizon(conn)
+    site = build_site(rows, sa_index, datetime.now(timezone.utc), towns, data_as_of)
 
     # a diagnostic for the build log, not for the page
     for line in site.pop("recurrence_report"):
