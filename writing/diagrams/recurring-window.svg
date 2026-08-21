@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 250" width="640" height="250" font-family="system-ui, sans-serif" font-size="13">
+  <!-- "daily from 10pm until 7am, 9-27 July": charged as one continuous block vs as nightly stripes -->
+  <text x="20" y="28" font-weight="600" fill="#7a3e00">Before: one continuous interval — 385.2 h</text>
+  <rect x="20" y="40" width="576" height="34" fill="#f5d9c8" stroke="#c0623a" stroke-width="1.5"/>
+  <text x="308" y="62" text-anchor="middle" fill="#7a3e00">first pin published … last pin's reported end: every hour charged</text>
+  <text x="20" y="118" font-weight="600" fill="#1f3a5a">After: the window itself — 16 nights × 9 h = 144.0 h</text>
+  <!-- 16 nightly stripes across the same span; each stripe = 9 of 24 h -->
+  <g fill="#cfe3f5" stroke="#3b6ea5" stroke-width="1">
+    <rect x="20" y="130" width="13.5" height="34"/><rect x="56" y="130" width="13.5" height="34"/><rect x="92" y="130" width="13.5" height="34"/><rect x="128" y="130" width="13.5" height="34"/>
+    <rect x="164" y="130" width="13.5" height="34"/><rect x="200" y="130" width="13.5" height="34"/><rect x="236" y="130" width="13.5" height="34"/><rect x="272" y="130" width="13.5" height="34"/>
+    <rect x="308" y="130" width="13.5" height="34"/><rect x="344" y="130" width="13.5" height="34"/><rect x="380" y="130" width="13.5" height="34"/><rect x="416" y="130" width="13.5" height="34"/>
+    <rect x="452" y="130" width="13.5" height="34"/><rect x="488" y="130" width="13.5" height="34"/><rect x="524" y="130" width="13.5" height="34"/><rect x="560" y="130" width="13.5" height="34"/>
+  </g>
+  <line x1="20" y1="180" x2="596" y2="180" stroke="#333"/>
+  <g fill="#333" font-size="11" text-anchor="middle">
+    <text x="26" y="196">9 Jul</text><text x="164" y="196">13 Jul</text><text x="308" y="196">17 Jul</text><text x="452" y="196">21 Jul</text><text x="590" y="196">25 Jul</text>
+  </g>
+  <text x="20" y="225" fill="#333" font-size="12">Same event (DON00115765), same 6,596 people. Charged: 2,540,854 person-hours before → 949,824 after. Each stripe is 10 pm–7 am.</text>
+  <text x="20" y="242" fill="#666" font-size="11">Every day still colours on the day bar — the change reduces the price of the event, not its visibility.</text>
+</svg>

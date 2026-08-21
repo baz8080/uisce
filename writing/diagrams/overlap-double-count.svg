@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 240" width="600" height="240" font-family="system-ui, sans-serif" font-size="13">
+  <!-- two events reaching the same Small Area, overlapping in time: the published sum charges the overlap twice -->
+  <defs><pattern id="h" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#c0392b" stroke-width="2"/></pattern></defs>
+  <text x="20" y="26" font-weight="600" fill="#333">One Small Area (400 people), one day</text>
+  <line x1="60" y1="190" x2="580" y2="190" stroke="#333" stroke-width="1.5"/>
+  <g fill="#333" font-size="11" text-anchor="middle"><text x="60" y="208">00:00</text><text x="190" y="208">06:00</text><text x="320" y="208">12:00</text><text x="450" y="208">18:00</text><text x="580" y="208">24:00</text></g>
+  <!-- event A: 08:00-16:00 -->
+  <rect x="233" y="60" width="174" height="30" fill="#cfe3f5" stroke="#3b6ea5"/>
+  <text x="320" y="80" text-anchor="middle" fill="#1f3a5a" font-size="12">event A · burst main · 08:00–16:00 (8 h)</text>
+  <!-- event B: 13:00-21:00 -->
+  <rect x="342" y="105" width="173" height="30" fill="#f5e6c8" stroke="#b8860b"/>
+  <text x="428" y="125" text-anchor="middle" fill="#7a5a00" font-size="12">event B · mains repair · 13:00–21:00 (8 h)</text>
+  <!-- overlap 13:00-16:00 -->
+  <rect x="342" y="60" width="65" height="75" fill="url(#h)" fill-opacity="0.6"/>
+  <text x="374" y="160" text-anchor="middle" fill="#c0392b" font-size="12" font-weight="600">13:00–16:00 counted twice</text>
+  <text x="20" y="232" fill="#333" font-size="12">Published (per event): 400 × 8 + 400 × 8 = 6,400 person-hours. Exact (union per Small Area): 400 × 13 = 5,200. Overstated by 1,200 (23% here; 2.0% nationally).</text>
+</svg>
