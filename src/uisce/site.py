@@ -1501,9 +1501,7 @@ def county_events(areas_history):
 
 def _fmt_day(iso):
     """'Fri 1 Aug' for readers, with the year appended when it isn't this year's."""
-    d = date.fromisoformat(iso[:10])
-    out = f"{d:%a} {d.day} {d:%b}"
-    return out if d.year == date.today().year else f"{out} {d.year}"
+    return statusui.fmt_date(iso, date.today())
 
 
 def _county_open_html(cdata, shown=COUNTY_OPEN_SHOWN):
