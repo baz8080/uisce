@@ -1499,6 +1499,13 @@ def county_events(areas_history):
     return sorted(seen.values(), key=lambda e: (e["start"], e["ref"]), reverse=True)
 
 
+def _fmt_day(iso):
+    """'Fri 1 Aug' for readers, with the year appended when it isn't this year's."""
+    d = date.fromisoformat(iso[:10])
+    out = f"{d:%a} {d.day} {d:%b}"
+    return out if d.year == date.today().year else f"{out} {d.year}"
+
+
 def _county_open_html(cdata, shown=COUNTY_OPEN_SHOWN):
     """Notices open right now — the one thing on the page a reader may have come
     for today rather than for the record."""
@@ -1508,14 +1515,14 @@ def _county_open_html(cdata, shown=COUNTY_OPEN_SHOWN):
         f'<li><span class="sev sev-{html.escape(o["sev"])}">'
         f'{html.escape(SEV_LABEL[o["sev"]])}</span> '
         f'<strong>{html.escape(o["title"])}</strong>'
-        + (f' — {html.escape(o["loc"])}' if o["loc"] else "")
-        + f'<span class="when">since {html.escape(o["since"])}</span></li>'
+        + (f' - {html.escape(o["loc"])}' if o["loc"] else "")
+        + f'<span class="when">since {_fmt_day(o["since"])}</span></li>'
         for o in cdata["open"][:shown]
     )
     more = ""
     if cdata["open_total"] > shown:
         more = (
-            f'<p class="more">{cdata["open_total"] - shown:,} more open — '
+            f'<p class="more">{cdata["open_total"] - shown:,} more open - '
             f'see the interactive view.</p>'
         )
     return (
@@ -1620,7 +1627,7 @@ def _county_events_html(events, shown=COUNTY_EVENTS_SHOWN):
         if e.get("open"):
             bits.append("still open")
         elif e.get("closed"):
-            bits.append(f'closed {e["closed"]}')
+            bits.append(f'closed {_fmt_day(e["closed"])}')
         elif not e.get("confirmed") and not e.get("scheduled"):
             # the distinction event_record is careful about: no end was ever
             # reported, which is not the same as an end of zero hours
@@ -1630,8 +1637,8 @@ def _county_events_html(events, shown=COUNTY_EVENTS_SHOWN):
             f'<li><span class="sev sev-{html.escape(e["sev"])}">'
             f'{html.escape(SEV_LABEL[e["sev"]])}</span> '
             f'<strong>{html.escape(e["title"])}</strong>'
-            + (f' — {html.escape(e["loc"])}' if e.get("loc") else "")
-            + f'<span class="when">{html.escape(e["start"])}'
+            + (f' - {html.escape(e["loc"])}' if e.get("loc") else "")
+            + f'<span class="when">{_fmt_day(e["start"])}'
             + (f' · {meta}' if meta else "")
             + '</span></li>'
         )
@@ -1664,7 +1671,7 @@ def county_page_html(county, cdata, areas, events, months, all_counties):
         f'<header><h1>Co. {html.escape(county)} water supply disruptions</h1>'
         f'{_county_summary_html(county, cdata, len(areas), len(events), months)}'
         f'<p class="app"><a href="{app}">Open the interactive view for '
-        f'Co. {html.escape(county)}</a> — daily bars, month switching and the '
+        f'Co. {html.escape(county)}</a> - daily bars, month switching and the '
         f'area drill-down.</p></header>'
         f'<nav>{nav}</nav>'
         f'{_county_open_html(cdata)}'
@@ -2117,11 +2124,11 @@ def write_site(site, site_dir, towns=None):
                 COUNTY_HTML,
                 {
                     "TITLE": html.escape(
-                        f"Co. {county} water supply disruptions — Uisce Éireann notices"
+                        f"Co. {county} water supply disruptions - Uisce Éireann notices"
                     ),
                     "DESC": html.escape(
                         f"Water outages, boil notices, restrictions and works announced by "
-                        f"Uisce Éireann in Co. {county} — {len(events):,} notices across "
+                        f"Uisce Éireann in Co. {county} - {len(events):,} notices across "
                         f"{len(areas):,} areas, updated twice daily."
                     ),
                     "CANONICAL": f"{BASE_URL}/{COUNTY_DIR}/{slug}.html",
