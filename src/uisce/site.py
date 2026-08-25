@@ -1553,7 +1553,7 @@ def _county_summary_html(county, cdata, n_areas, n_events, months):
     )
     parts = [
         f"<p class=\"sub\">Every water supply notice Uisce Éireann has published for "
-        f"Co. {html.escape(county)} since 20 April 2026: "
+        f"Co. {html.escape(county)}: "
         f"{n_events:,} notice{'' if n_events == 1 else 's'} across "
         f"{n_areas:,} area{'' if n_areas == 1 else 's'}, "
         f"population {pop:,}.</p>"
