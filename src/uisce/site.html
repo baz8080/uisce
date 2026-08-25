@@ -471,7 +471,7 @@ function isLatest() { return curMonth === LATEST; }
 function partialNote() {
   return curMonth === today.slice(0, 7)
     ? "Month in progress. Notices without a reported end count as ongoing, so figures will move." :
-    curMonth === D.months[0] ? "This site started collecting on 20 April 2026, so April is a part-month." : "";
+    curMonth === D.months[0] ? "This site started collecting partway through April, so April is a part-month." : "";
 }
 
 function isPartial() { return curMonth === today.slice(0, 7); }
@@ -814,7 +814,7 @@ function renderTop() {
   const national = Object.values(D.counties)
     .reduce((sum, c) => sum + (c.months[ym] ? c.months[ym].person_h : 0), 0);
   const share = national ? Math.round(100 * rows.reduce((s, r) => s + r.person_h, 0) / national) : 0;
-  const startedNote = ym === D.months[0] ? " This site started collecting on 20 April 2026, so April is a part-month." : "";
+  const startedNote = ym === D.months[0] ? " This site started collecting partway through April, so April is a part-month." : "";
 
   document.getElementById("topview").innerHTML = `
     <a class="back" href="#" onclick="go(''); return false;">← All counties</a>
