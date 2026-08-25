@@ -292,7 +292,7 @@
       <p><b>2 August 2026.</b> An active boil-water or do-not-drink notice used to knock the grade down one step. It no longer does - that made a county with a notice affecting 200 people indistinguishable from one that lost supply county-wide. The notice is now shown as a marker beside the grade instead.</p>
     </details>
 
-    <p id="gen"></p>
+    <p id="gen"><a href="https://github.com/baz8080/uisce" style="color:inherit">Source code</a> · not affiliated with Uisce Éireann.</p>
   </footer>
 </div>
 
@@ -510,8 +510,6 @@ function render() {
   for (const [name, id] of Object.entries(VIEW_EL)) {
     document.getElementById(id).hidden = name !== view;
   }
-  document.getElementById("gen").textContent =
-    "Generated " + D.generated + " from uisce.db · github.com/baz8080/uisce · not affiliated with Uisce Éireann.";
   document.getElementById("pickHint").hidden = view !== "overview";
   const chl = document.getElementById("countyHistoryLink");
   chl.hidden = view !== "county";
