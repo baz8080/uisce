@@ -447,9 +447,11 @@ class TestBuildSite:
         )
         month = build_site([issue, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["quality"] == 1
-        # interval closed at the lift, not running to "now"
-        assert month["days"][1][0] == "quality"  # May 2: active
-        assert month["days"][4][0] == ""  # May 5: lifted
+        # interval closed at the lift, not running to "now": an unpaired open
+        # notice would still be in force on the 10th and read health_now == 1
+        assert month["health_now"] == 0
+        # quality never colours a bar — the healthmark carries it
+        assert month["days"][1][0] == ""
         # the notice is reported beside the grade, not inside it
         assert month["grade"] == "A"
         assert month["health_n"] == 1
@@ -484,8 +486,8 @@ class TestBuildSite:
         )
         month = build_site([issue, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["quality"] == 1
-        assert month["days"][1][0] == "quality"  # May 2: active
-        assert month["days"][4][0] == ""  # May 5: lifted
+        # closed at the lift: an unpaired open notice would still be in force
+        assert month["health_now"] == 0
         assert month["health_n"] == 1
 
     def test_a_long_running_consumption_notice_is_capped_at_its_lift(self):
@@ -515,10 +517,11 @@ class TestBuildSite:
             start_date="2026-05-09T00:00:00+00:00",
         )
         months = build_site([issue, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]
-        # 21 April + 14 days runs out on 5 May, not on the 9th the lift is stamped
-        coloured = sum(1 for m in months.values() for d in m["days"] if d[0] == "quality")
-        assert coloured == CAP_DAYS
-        assert months["2026-05"]["days"][8][0] == ""  # May 9: past the cap
+        # the cap itself (21 April + 14 days, not the 9 May lift) is asserted at
+        # the boil_notice_fate level; here the event stays confined to the
+        # months the charge touches, and colours no bar in either
+        assert [months[ym]["events"]["quality"] for ym in ("2026-04", "2026-05")] == [1, 1]
+        assert not any(d[0] == "quality" for m in months.values() for d in m["days"])
 
     def test_the_cap_bounds_the_arithmetic_but_not_the_health_marker(self):
         """The other half of the cap. Capping what a notice charges must not
@@ -554,8 +557,6 @@ class TestBuildSite:
         # carries the marker
         assert [months[ym]["health_n"] for ym in ("2026-05", "2026-06", "2026-07")] == [1, 1, 1]
         # but the charge still stops at the cap: 14 days in May, nothing after
-        coloured = sum(1 for m in months.values() for d in m["days"] if d[0] == "quality")
-        assert coloured == CAP_DAYS
         assert months["2026-06"]["events"] == {
             "outage": 0, "quality": 0, "degraded": 0, "maintenance": 0
         }
@@ -585,10 +586,11 @@ class TestBuildSite:
             reference_num="COR2",
             start_date="2026-05-09T00:00:00+00:00",
         )
-        months = build_site([issue, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]
-        coloured = sum(1 for m in months.values() for d in m["days"] if d[0] == "quality")
-        assert coloured == 1  # publication day only, not through to the lift
-        assert months["2026-05"]["days"][7][0] == ""  # May 8: never reached
+        lifts = {("Carlow", "consumption_notice_lifted"):
+                 [(norm_scheme(lift["location"]), _dt(lift["start_date"]))]}
+        case = resolve_case(issue, SA_INDEX, lifts, NOW)
+        # the token footprint survives the available lift: pairing was refused
+        assert case.intervals[0][1] - case.intervals[0][0] == timedelta(seconds=1)
 
     def test_health_now_separates_a_standing_notice_from_a_lifted_one(self):
         """health_n counts notices active at any point in the month, which the
@@ -632,8 +634,9 @@ class TestBuildSite:
         month = build_site([stale], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["quality"] == 1
         assert month["health_n"] == 1
-        # still accruing, which is the half of the boil policy that was not taken
-        assert month["days"][8][0] == "quality"  # May 9, well past a token footprint
+        # still accruing, which is the half of the boil policy that was not
+        # taken: excluded-as-stale would read health_now == 0
+        assert month["health_now"] == 1
 
     def test_days_before_collection_start_are_no_data(self):
         site = build_site([_case()], SA_INDEX, NOW)
@@ -887,6 +890,32 @@ class TestClearDays:
                 [_case()], SA_INDEX, now, TOWNS
             )["counties"]["Carlow"]["months"].items():
                 assert month["clear_days"] <= month["days_elapsed"], ym
+
+
+class TestQualityDaysDoNotColourTheBars:
+    """Quality notices left the day bars in the 2026-08-26 design alignment:
+    the healthmark and the county pages carry drinking-water notices, and the
+    bar shows availability alone."""
+
+    def test_a_quality_only_day_renders_clear(self):
+        m = build_site(
+            [_case(work_category="boil_notice_issued")], SA_INDEX, NOW, TOWNS
+        )["counties"]["Carlow"]["months"]["2026-05"]
+        assert m["days"][0] == ["", 0.0]
+        assert m["clear_days"] == 10          # the notice day included
+        assert m["events"]["quality"] == 1    # still counted, just not painted
+
+    def test_a_quality_and_restriction_day_shows_the_restriction(self):
+        # worst-severity short-circuits, so this only works with quality skipped
+        # server-side; a client-side remap of ["quality", pct] could not recover
+        # the restriction underneath
+        rows = [
+            _case(id=1, work_category="boil_notice_issued"),
+            _case(id=2, reference_num="CAR00000002", work_category=None,
+                  work_type=None, reduced_pressure=1),
+        ]
+        m = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]["months"]["2026-05"]
+        assert m["days"][0][0] == "degraded"
 
 
 class TestTopEvents:
@@ -1767,7 +1796,7 @@ class TestHistoryShards:
         assert len(set(slugs)) == len(COUNTY_POP)
 
     def test_the_files_written_are_data_index_and_one_shard_per_county(self, tmp_path):
-        site, (data_bytes, shard_bytes, n_areas, _, _, _) = self._write(tmp_path)
+        site, (data_bytes, shard_bytes, n_areas, _, _, _, _) = self._write(tmp_path)
         assert (tmp_path / "data.js").exists() and (tmp_path / "index.html").exists()
         shards = sorted(p.name for p in (tmp_path / "h").iterdir())
         assert shards == sorted(f"{county_slug(c)}.js" for c in site["counties"])
@@ -1798,6 +1827,17 @@ class TestHistoryShards:
         assert "Testtown" in data          # the area breakdown is still there
         assert "CAR00000001" not in data   # but no event of its own
 
+    def test_search_js_maps_each_county_to_its_sorted_names(self, tmp_path):
+        """The search index bindSearch fetches on the first keystroke: county ->
+        sorted settlement names, counties restricted to the payload's so a pick
+        always routes."""
+        site, _ = self._write(tmp_path)
+        body = (tmp_path / "search.js").read_text()
+        assert body.startswith("window.UISCE_SEARCH = ")
+        index = json.loads(body.split(" = ", 1)[1].rstrip(";"))
+        assert index == {"Carlow": ["Testtown"]}
+        assert set(index) <= set(site["counties"])
+
 
 class TestIndexablePages:
     """The site's crawlable surface.
@@ -1816,7 +1856,7 @@ class TestIndexablePages:
         return counties, write_site(site, tmp_path, TOWNS)
 
     def test_every_county_gets_a_page_including_the_empty_ones(self, tmp_path):
-        counties, (*_, n_pages, county_bytes) = self._write(tmp_path)
+        counties, (*_, n_pages, county_bytes, _search) = self._write(tmp_path)
         written = sorted(p.name for p in (tmp_path / "c").iterdir())
         assert written == sorted(f"{county_slug(c)}.html" for c in counties)
         assert (n_pages, len(written)) == (len(counties), len(counties))

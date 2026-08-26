@@ -93,9 +93,56 @@ pass" below. The strip scrolls horizontally now.
 
 ### Left open
 
-The *fills* still fail the 3:1 non-text threshold against the light page — `--warning` 1.74:1, `--serious` 2.50:1 — which matters for the legend swatches, where the colour itself is the meaning rather than a backdrop for a letter. The review checked `--maint` against this threshold but not the others. Not addressed here: changing the fills reaches the bars and the county grid, which is a bigger visual decision than a text-contrast fix.
+The *fills* still fail the 3:1 non-text threshold against the light page — `--warning` 1.74:1, `--serious` 2.50:1 — which matters for the legend swatches, where the colour itself is the meaning rather than a backdrop for a letter. The review checked `--maint` against this threshold but not the others. Not addressed here: changing the fills reaches the bars and the county grid, which is a bigger visual decision than a text-contrast fix. *Partially closed 2026-08-26*: the worst offenders — the 40%/70% opacity steps, at 1.80:1 and 2.93:1 light and 1.54:1/2.51:1 dark — left the bars with the solid severity ramp (see "The design alignment pass" below); `--warning` at 1.74:1 remains, on restriction days and their swatch.
 
-Also noted and not taken: the overview is entirely JS-rendered with no `<noscript>` fallback (the county pages are static, so the content exists — it is the pointer that is missing); the health mark explains itself only through `title=`, which never fires on touch; and the sort `<select>` has no programmatic label. The first needs a wording decision, the other two touch generated markup the tests pin.
+Also noted and not taken: the overview is entirely JS-rendered with no `<noscript>` fallback (the county pages are static, so the content exists — it is the pointer that is missing); the health mark explains itself only through `title=`, which never fires on touch; and the sort `<select>` has no programmatic label (*closed 2026-08-26: the sort control was removed outright — see below*). The first needs a wording decision, the second touches generated markup the tests pin.
+
+## The design alignment pass 2026-08-26
+
+The owner reviewed uisce and esb side by side and picked a winner per element, so the two
+sites read as one product before the same language reaches lifts. What uisce absorbed, with
+the measurements:
+
+**Quality notices left the day bars** (owner decision). A quality-only day now renders clear;
+the `!` healthmark, the county tiles and the county pages carry drinking-water notices, and
+the healthkey line says so ("Quality notices do not colour the day bars."). Removed
+*server-side*, in the `worst` scan in `site.py`: `worst` short-circuits on the first severity
+with coverage, so a quality+restriction day must fall through to the restriction — a
+client-side remap of the packed `["quality", pct]` cell could never recover what was
+underneath. Consequence, accepted: `clear_days` counts quality-only days as clear.
+
+**The intensity ramp became solid severity tokens.** The old `opacity: .40/.70` steps are
+colour-mixing with `--page`: measured, n1 was 1.80:1 (light) / 1.54:1 (dark) and n2 2.93:1 /
+2.51:1 — the washed-out pink an owner review flagged against esb's solid bands. No tuned
+opacity clears 3:1 for the lightest step without collapsing the ramp, so the steps now reuse
+the severity tokens: n1 `--serious` (2.50:1 light / 7.37:1 dark), n2 `--critical` (4.56 /
+4.05), n3 `--severe` (8.44 / 2.98). Zero new tokens, theme-correct automatically, darker =
+worse literally true in light mode. n1-light and n3-dark still sit just under 3:1 — a partial
+close of the "fills fail 3:1" item above, not a full one. Cross-site wrinkle, deliberate:
+uisce's "minor" is orange where esb's is yellow — colour maps stay per site (statusui's rule).
+
+**Captions became severity words.** "Fri 1 Aug: minor supply disruption" at the old
+thresholds (minor < 0.5% of the county, moderate < 2%, major above), matching esb's pattern;
+the percentage left the caption, the legend ramp carries "darker = worse".
+
+**The sort control was removed; the shared search box replaced it.** 26 rows scroll;
+alphabetical is the only order, and statusui's `bindSearch` (the behaviour esb's box already
+had, moved upstream) searches every Census settlement — `search.js`, county → sorted names
+over the full TownLookup so never-noticed towns are findable, built per build and fetched on
+the first keystroke (~66 KB, never in the initial payload). Picking routes to the county view.
+
+**Rows gained esb's affordances**: the `›` chevron (the per-site `--row-cols` override that
+dropped its track is gone; both sites ride base), and the bare percentage became the two-line
+`.cml` stat with an "availability" caption. The counts label is "outages" — "disruptions"
+overflows the shared 92px stats column.
+
+**The banner-duplicate tiles went** ("announced supply disruptions", "typical time…"), the
+basis line became esb's shape ("Counties are graded on water supply availability. Nationally
+this month: …"), the partial-month note was removed outright (the owner: don't explain that
+future data doesn't exist), the county drill-down card adopted esb's order (legend on top,
+tall bar, tiles instead of the `.drow` run), and the footer's `.method` hairlines went, with
+every disclosure tightened for a lay reader — the numbers stay in these notes and the
+methodology files.
 
 ## The iPhone review pass 2026-08-19
 

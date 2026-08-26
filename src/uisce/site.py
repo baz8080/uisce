@@ -1928,6 +1928,12 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
                 days_elapsed += elapsed
                 worst = ""
                 for sev in SEV_ORDER:
+                    # Quality never colours a bar: drinking-water safety is the
+                    # healthmark's job, availability is the bar's — and skipping
+                    # it here lets a quality+restriction day fall through to the
+                    # restriction, which no client-side remap could recover.
+                    if sev == "quality":
+                        continue
                     if union_seconds(merged[sev], dlo, dhi) > 0:
                         worst = sev
                         break
@@ -2091,9 +2097,21 @@ def write_site(site, site_dir, towns=None):
     # The directory. Substituted rather than copied, unlike index.html: the rows
     # are the page, and generating them into a template keeps the markup and CSS
     # in an HTML file instead of in Python string literals.
-    index_bytes = county_bytes = n_county_pages = 0
+    index_bytes = county_bytes = n_county_pages = search_bytes = 0
     pages = ["", "areas.html"]
     if towns is not None:
+        # The search index: every Census settlement, noticed or not, so a
+        # reader finds their town even when it has never had a notice. Fetched
+        # by bindSearch on the first keystroke, never in the initial payload.
+        names = defaultdict(set)
+        for code, name in towns.name.items():
+            if towns.county[code] in site["counties"]:
+                names[towns.county[code]].add(name)
+        search = "window.UISCE_SEARCH = " + statusui.dumps(
+            {c: sorted(v) for c, v in sorted(names.items())}
+        ) + ";"
+        (site_dir / "search.js").write_text(search)
+        search_bytes = len(search.encode())
         index = area_index(history, towns)
         page = page_html(
             AREAS_HTML,
@@ -2149,6 +2167,7 @@ def write_site(site, site_dir, towns=None):
         index_bytes,
         n_county_pages,
         county_bytes,
+        search_bytes,
     )
 
 
@@ -2166,9 +2185,8 @@ def run():
 
     n_counties, n_months = len(site["counties"]), len(site["months"])
     n_towns = sum(len(c["towns"]) for c in site["counties"].values())
-    data_bytes, shard_bytes, n_areas, index_bytes, n_county_pages, county_bytes = write_site(
-        site, SITE_DIR, towns
-    )
+    (data_bytes, shard_bytes, n_areas, index_bytes, n_county_pages, county_bytes,
+     search_bytes) = write_site(site, SITE_DIR, towns)
     print(
         f"Wrote {SITE_DIR}/ ({n_counties} counties, "
         f"{n_towns} town breakdowns, {n_months} months)"
@@ -2178,6 +2196,7 @@ def run():
     print(
         f"  data.js {data_bytes:,} bytes  ·  {n_counties} history shards "
         f"{shard_bytes:,} bytes over {n_areas} areas (loaded on demand)  ·  "
+        f"search.js {search_bytes:,} bytes (loaded on demand)  ·  "
         f"areas.html {index_bytes:,} bytes"
     )
     # the indexable surface, printed for the same reason: these pages exist to
