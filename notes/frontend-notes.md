@@ -230,3 +230,15 @@ An area is reachable only as `#area/<county>/<code>`. There is no `a/<slug>.html
 Left open rather than papered over. Closing it means building area pages, and the measurement that would gate that is written down: of 3,717 areas, 909 are named CSO settlements and 2,808 are electoral divisions whose names all begin "Around " — pages for those would be thin content at scale. Slugging the `(county, name)` pair is collision-free across all 3,717 (name alone collides 185 times), so the scheme is not the obstacle; the decision about which areas deserve a page is.
 
 Guarded by `tests/test_permalink_affordance.py`, including a test that asserts the area view offers nothing, so the gap stays deliberate.
+
+### The county page's meta description had the same shape
+
+"…in Co. Carlow - 1,234 notices across 56 areas, updated twice daily." The counts are the county's whole record; `_county_events_html` stops at `COUNTY_EVENTS_SHOWN = 60`. Less blatant than the link, because it never said the page listed them — but a reader arriving from that snippet expects to find them.
+
+Now: "Co. Carlow: 1,234 Uisce Éireann notices across 56 areas - water outages, boil notices, restrictions and works. Month-by-month totals and the most recent notices." Same fix as esb's, and the same ordering rule behind it.
+
+**Ordered so truncation cannot make it false.** A snippet is cut by pixel width and what survives is the front, so the clause naming what the page holds goes last: cut anywhere in it, what remains is a true statement about the county. 156 characters on the fixture county.
+
+`{len(areas):,} areas` printed "1 areas"; fixed in passing.
+
+Guarded in `tests/test_site.py::TestIndexablePages` — the ordering, the truncation property, the length ceiling and the plural.
