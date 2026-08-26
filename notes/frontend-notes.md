@@ -275,6 +275,12 @@ The EDs are the whole reason there is a predicate. All 2,808 of them are named *
 
 Uncapped, unlike the county page's 60: an area accrues about one notice a month where a county accrues hundreds. Worth re-deciding if the biggest page passes a few hundred rows.
 
+### Two things a review caught
+
+The "open the interactive map" link shipped as `#area/<county>` — one segment where the app's area route needs two — so it matched neither of the router's patterns and dropped the reader on the national overview. It is the county route now, the same one the county pages use. A test reads the two patterns out of `site.html` and runs them against the href, rather than pinning a remembered shape; the build check does the same across all 1,247 hash links the static pages emit.
+
+An event's `people` is the whole event's footprint. On an area page that sits two lines under the area's own Census population, so a notice spanning five areas printed 3,775 people on a page headed 528 with nothing to explain it — the app's badge carries that caveat in its title and the page had dropped it. The multi-area note now carries it too, and only when there is a figure to qualify.
+
 ### What it costs
 
 739 pages, 15,030,476 bytes raw and 4.58 MB gzipped — the largest is Dún Laoghaire at 35.5 KB raw / 7.8 KB gzipped, the smallest ~18.5 KB. **84% of a small page is the inlined CSS**, which is the tradeoff statusui's `assemble()` makes on purpose: every one of these pages is entered cold from a search result, so a shared stylesheet would cost that reader a second request. Inlining is most justified exactly here. Re-decide if the page count goes much past a thousand; a linked stylesheet would drop ~12 MB from the artifact and cost each cold reader a round trip.

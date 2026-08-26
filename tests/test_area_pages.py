@@ -12,6 +12,7 @@ change has to avoid, so the predicate is guarded rather than trusted.
 
 import csv
 import re
+from pathlib import Path
 
 import pytest
 import statusui
@@ -127,6 +128,27 @@ class TestThePage:
                  "start": "2026-05-01", "areas": n}
         assert expected in _events_html([event], multi_area=True)
 
+    @pytest.mark.parametrize(
+        "event,expected",
+        [
+            ({"areas": 4, "people": 3775}, True),
+            ({"areas": 4}, False),
+        ],
+        ids=["with-a-people-figure", "without-one"],
+    )
+    def test_a_multi_area_row_says_whose_people_those_are(self, event, expected):
+        """`people` is the whole event's footprint. An area page states the
+        area's own population two lines above it, so a notice spanning five
+        areas can print seven times that number — the app's badge carries this
+        caveat and the page has to as well. Said only when there is a figure to
+        qualify."""
+        row = _events_html(
+            [{"ref": "R", "title": "Burst", "sev": "outage",
+              "start": "2026-05-01", **event}],
+            multi_area=True,
+        )
+        assert ("not this area\u2019s share" in row) is expected
+
     def test_the_county_list_never_carries_that_note(self):
         """It de-duplicates, so every event on it is there once and saying
         "also published in 3 other areas" would be answering a question the
@@ -143,6 +165,28 @@ class TestThePage:
         desc = re.search(r'name="description" content="([^"]*)"', page).group(1)
         assert "every one of them" in desc
         assert "not shown here" not in page
+
+    def test_the_app_link_is_a_route_the_router_actually_has(self, tmp_path):
+        """Run the app's own patterns against the href the page emits, rather
+        than trusting a remembered shape. It shipped as `#area/<county>` — one
+        segment where the area route needs two — which matches neither pattern
+        and drops the reader on the national overview.
+        """
+        _write(tmp_path)
+        page = (tmp_path / area_path("Carlow", "Testtown")).read_text()
+        frag = re.search(r'href="\.\./\.\./index\.html(#[^"]*)"', page).group(1)
+
+        site_html = (
+            Path(__file__).resolve().parent.parent / "src" / "uisce" / "site.html"
+        ).read_text()
+        routes = [
+            re.compile(pat.replace("\\/", "/"))
+            for pat in re.findall(r"location\.hash\.match\(/(.+?)/\)", site_html)
+        ]
+        assert len(routes) == 2, "the router's patterns moved; this test reads them"
+        assert any(r.match(frag) for r in routes), frag
+        # the shape that regressed, held against the same patterns
+        assert not any(r.match("#area/Carlow") for r in routes)
 
     def test_it_links_back_to_the_county_and_the_directory(self, tmp_path):
         """A sitemap is a weak discovery signal; these are the strong ones, and

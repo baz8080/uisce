@@ -1706,7 +1706,17 @@ def _events_html(events, shown=None, heading="Notice history", multi_area=False)
             + (
                 f'<span class="also">Also published in '
                 f'{e["areas"] - 1} other area'
-                f'{"" if e["areas"] == 2 else "s"}, and listed in each</span>'
+                f'{"" if e["areas"] == 2 else "s"}, and listed in each'
+                # the figure above is the whole event's footprint, and this page
+                # states the area's own population two lines up; the app's badge
+                # carries the same caveat in its title
+                + (
+                    "; the people affected is the whole notice\u2019s, "
+                    "not this area\u2019s share"
+                    if e.get("people")
+                    else ""
+                )
+                + "</span>"
                 if multi_area and e.get("areas")
                 else ""
             )
@@ -1737,7 +1747,10 @@ def area_page_html(county, name, pop, events):
     and the view are the same content - which is why the app links to it as a
     permanent link rather than by naming what is on it.
     """
-    app = f"../../index.html#area/{quote(county, safe='')}"
+    # the county route, the same one county_page_html links to: the area route
+    # needs the code as a second segment, and a bare `#area/<county>` matches
+    # neither of the app's two patterns
+    app = f"../../index.html#county/{quote(county, safe='')}"
     return (
         f'<a class="back" href="../../{COUNTY_DIR}/{county_slug(county)}.html">'
         f'← Co. {html.escape(county)}</a>'
