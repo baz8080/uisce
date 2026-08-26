@@ -34,8 +34,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 # Pinned to a commit in uv.lock; ../statusui/rollout.sh moves the pin.
+# Temporarily tracking the alignment branch; repoint to the bare URL and
+# re-lock once statusui's claude/uisce-esb-design-alignment-djqu7s merges.
 [tool.uv.sources]
-statusui = { git = "https://github.com/baz8080/statusui" }
+statusui = { git = "https://github.com/baz8080/statusui", branch = "claude/uisce-esb-design-alignment-djqu7s" }
 
 [dependency-groups]
 dev = [
