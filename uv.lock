@@ -203,7 +203,7 @@ wheels = [
 [[package]]
 name = "statusui"
 version = "0.1.0"
-source = { git = "https://github.com/baz8080/statusui?branch=claude%2Fuisce-esb-design-alignment-djqu7s#b8909241d739b94ed4b787bf8caa1f42ea9f5ea1" }
+source = { git = "https://github.com/baz8080/statusui#ddb3f74a8becc67a2417a3b2071b600804649927" }
 
 [[package]]
 name = "uisce"
@@ -227,7 +227,7 @@ requires-dist = [
     { name = "pyproj", specifier = ">=3.7.2" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "requests", specifier = ">=2.34.2" },
-    { name = "statusui", git = "https://github.com/baz8080/statusui?branch=claude%2Fuisce-esb-design-alignment-djqu7s" },
+    { name = "statusui", git = "https://github.com/baz8080/statusui" },
 ]
 
 [package.metadata.requires-dev]
