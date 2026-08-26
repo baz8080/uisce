@@ -1,4 +1,4 @@
-# Outline — 12 chapters, chronological (+ 14–15 added 21 Aug 2026)
+# Outline — 12 chapters, chronological (+ 14–16 added as PRs landed)
 
 Each entry: PRs · thesis (what the site now thinks) · concepts to box · worked example · diagram ·
 reading list beyond `sources/chNN.md`. Read notes *by section heading only* (grep the heading,
@@ -270,3 +270,22 @@ table; the four disagreements.  **Diagrams.** Mermaid: rules→LLM; the CI pair.
 
 **Reading.** `sources/ch15.md`; `notes/rules-vs-llm-end-times.md` whole; `src/uisce/rules.py`
 docstring.
+
+## Ch 16 — Stop sounding like the author · #54–#61 · 25–26 Aug (added 26 Aug 2026)
+
+**Thesis.** Ch 10 round two: cold-read as a neighbour, the county page still sounded like its
+author. #54–#57 plain-reader copy (Areas paragraph → one line + disclosure; "pin" out of copy;
+"Sat 1 Aug" dates via fmtDay/_fmt_day; em-dashes → hyphens; placement rule once; collection date
+dropped; footer "Source code · not affiliated"). #58–#60 the sharing rule runs forward: fmtDay/
+fmtDate then freshness() promoted on esb becoming the second user (freshness equivalence over
+57,721 ages; test_ui_globals forces the move); comment rule written down. #61 esb design
+alignment: quality leaves the day bars (server-side, worst short-circuits; quality-only days
+count clear, noted; "clear of supply disruption" fix), opacity ramp 1.80/2.93 → solid tokens
+2.50/4.56/8.44, severity-word captions (<0.5%/<2%), shared search over search.js (~66 KB),
+alphabetical + chevron + card reorder; tests repurposed, 443.
+
+**Concepts.** *Promoted on the second user* · *the bars answer one question*.
+**Worked examples.** The date format; the contrast ramp; the self-contradicting clear-days
+sentence.  **Diagram.** None — nothing spatial.
+
+**Reading.** `sources/ch16.md`; `notes/frontend-notes.md` design-alignment section.

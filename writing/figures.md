@@ -258,3 +258,20 @@ Chapters quote from here rather than re-deriving; a missing figure is written in
 | Deploy latency before #51 | up to ~6 h | PR #51 |
 | JSONL on main, 21 Aug | 29,756 records / 10,908 cases; rules-v1 90 records (47 scheduled, 43 completion), 89 latest-per-case; first 08:01 UTC | measured 21 Aug 2026 |
 | JSONL repo cost | ~4 MB packed after 39 commits | notes "CI runs the rules half" |
+
+## Chapter 16 (added 26 Aug 2026)
+
+| Figure | Value | Source |
+|---|---|---|
+| Areas paragraph | ~1,000 chars → one line + disclosure | PR #54 |
+| Date format | "Sat 1 Aug", year only when not current; one `describeCell` path | PR #54 |
+| Duplicate placement prose | stated four ways → once | PR #54 |
+| Freshness equivalence | identical across 57,721 ages, −2 h to 40 d | PR #59 |
+| Site-specific freshness knobs | `STALE_AFTER_H = 24` + warning sentence | PR #59 |
+| statusui promotions | fmtDay/fmtDate (2076735, esb second user); freshness() | PRs #58, #59 |
+| Day-cell ramp contrast | opacity 1.80/2.93 : 1 (most real county-days 1.5–1.8) → tokens 2.50/4.56/8.44 : 1 | PR #61; notes/frontend-notes.md |
+| Severity caption thresholds | minor < 0.5% of county, moderate < 2%, major above (old opacity thresholds) | PR #61 |
+| Search index | search.js ~66 KB, every Census settlement, fetched on first keystroke | PR #61 |
+| Clear-days copy fix | "elapsed days with no notice" → "clear of supply disruption" | PR #61 |
+| Tests | 440 (#54–#57) → 443 (#61) | PRs |
+| PR #53 | does not exist (number skipped) | gh, 26 Aug 2026 |

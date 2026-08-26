@@ -1,8 +1,8 @@
-# 16. Closing: what the site can say, and what it cannot
+# 17. Closing: what the site can say, and what it cannot
 *~10 min read · with a glossary*
 
-*Where we are:* the end of the account, on 21 August 2026, with the repository at pull request
-#52. Chapters 1–12 were written on 18 August; chapters 14–15 cover the three days after. This chapter returns to the question, sets out plainly what the site can and cannot claim,
+*Where we are:* the end of the account, on 26 August 2026, with the repository at pull request
+#61. Chapters 1–12 were written on 18 August; chapters 14–16 cover what came after. This chapter returns to the question, sets out plainly what the site can and cannot claim,
 lists what was learned in the form the repository itself keeps it, and collects every concept
 box into a glossary.
 
@@ -87,6 +87,7 @@ list of "things that were measured, and closed". In plain language:
 | Keep a copy of the shared design layer in each site | Three copies drifted within a day, five commits apart, with nothing failing to say so; one upstream repository, pinned by commit in each site (chapter 14). |
 | Keep sending every notice to the language model | ~93% of notices are a rigid template; rules answer those with zero wrong emissions on 354 labelled rows and abstain to the model for the rest (chapter 15). |
 | Let rules emit "not found", or handle repeating windows | Absence of a match is evidence about the rules, not the notice; the window values are what needed a model (chapter 15). |
+| Colour the day bars by water-quality notices too | The bars answer "was the supply disrupted?"; safety lives in the health marker, tiles and county pages. A quality-only day counts clear, accepted and noted (chapter 16). |
 
 Two conventions sit under all of it and are worth naming last. **Decisions go in the notes,
 dated, with the rejected alternatives and their numbers** — so a future session, human or
@@ -140,9 +141,11 @@ full box and its worked example live.
 - **Shadow evaluation, then the truth gate** — agreement with the model on the seen corpus is cheap evidence; a hand-labelled unseen round is the judge (15).
 - **The data clock and the build clock** — "Updated N ago" reads the last feed read, so a UI-only deploy cannot silence the dead-build alarm (15).
 - **Two writers, one append-only file** — append-only plus `merge=union` plus latest-per-case by timestamp lets CI and a laptop both add records safely (15).
+- **Promoted on the second user** — a helper starts site-local and moves upstream the moment a second site wants it; the no-redeclare guard makes the move mandatory (16).
+- **The bars answer one question** — day cells show supply disruption only; safety is the health marker's job, and the split must happen when the cell is computed (16).
 
 ## Notes
 
 - Kildare July 2026 figures: `out/site/data.js` built 18 Aug 2026 14:37Z (chapter 8b).
 - The settled-decisions table paraphrases the repository's `CLAUDE.md` index; each row's evidence is in the `notes/` section that row names.
-- Concept boxes: 41 across chapters 1–15; this glossary lists each once.
+- Concept boxes: 43 across chapters 1–16; this glossary lists each once.

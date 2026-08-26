@@ -24,9 +24,10 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 10 | For a reader, not an analyst | #31(last), #32–36 | reviewed | 2,085 |
 | 11 | Be findable | #37–39 | reviewed | 1,034 |
 | 12 | Put a number on what you don't know | #40–41 | reviewed | 2,623 |
-| 14 | One design, three sites | #42, #44–#49 | drafted | 2,765 |
-| 15 | Rules first, model second | #46, #50–#52 | drafted | 2,916 |
-| 16 | Closing: what the site can say, and what it cannot (+ glossary) (was 13) | — | reviewed | 2,197 |
+| 14 | One design, three sites | #42, #44–#49 | reviewed | 2,765 |
+| 15 | Rules first, model second | #46, #50–#52 | reviewed | 2,916 |
+| 16 | Stop sounding like the author | #54–#61 | drafted | 2,070 |
+| 17 | Closing: what the site can say, and what it cannot (+ glossary) (was 13) | — | reviewed | 2,197 |
 
 ## Chapter summaries (3 lines each, added when drafted)
 
@@ -152,6 +153,12 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
   clock); #52 `--rules-only` in CI, commit as uisce-ci (concept box two writers, merge=union),
   uisce-data/release asset rejected; #46 footnote. Worked example KLD00118059 via rules.extract
   = same answer as Ch 3. Two mermaid diagrams. Ends: JSONL 29,756/10,908, 90 rules records.
+- **16** Ch 10 round two. #54–#57 plain-reader copy ("pin" out; "Sat 1 Aug"; em-dashes out;
+  rule stated once; footer "Source code"). #58–#60 promotions on the second user (concept box;
+  fmtDay/fmtDate, freshness() with the 57,721-age equivalence; comment rule). #61 esb
+  alignment: quality leaves the bars (concept box; server-side; clear-days copy fix), ramp →
+  solid tokens 2.50/4.56/8.44, severity-word captions, shared search (~66 KB), 443 tests.
+  Ends: two published numbers moved knowingly; the vocabulary irony.
 
 ## Open threads
 
@@ -161,19 +168,19 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 - PR #23's Kildare table shows Naas at 25,824; the corrected settlement figure is 26,180. When
   quoting the table say "as published in PR #23" and note the correction once.
 
-## Status: 20 posts; chapters 14–15 drafted 21 Aug 2026, not yet continuity-reviewed
+## Status: 21 posts; chapter 16 drafted 26 Aug 2026, not yet continuity-reviewed
 
-Chapters 14–15 were added on 21 Aug 2026 for PRs #42–#52 (the closing moved from 13 to 16;
-intro table, closing settled-rows and glossary updated; 41 concept boxes). Next session: read
-14 and 15 once for continuity (cross-references to chapters 3, 5b, 9a, 12; vocabulary; read
-times), mark `reviewed`. The 18 posts of 18 Aug were drafted and reviewed as below. Continuity pass done: no `[verify:` markers; every read time
-matches wc/230; every forward cross-reference lands (one sharpened: Ch 3 → "chapter 5b");
-vocabulary clean against the fixed table; 32 concept boxes, each in the glossary once.
+Chapter 16 (PRs #54–#61) added 26 Aug 2026; the closing moved 16 → 17 (one settled row, two
+glossary entries; 43 concept boxes). Chapters 14–15 passed their continuity check 26 Aug
+(cross-refs land, no verify markers) and are `reviewed`. Next session: continuity-read 16;
+new chapters follow the same pattern — sources pack, chapter, closing renumber. The original
+18 posts had their full continuity pass on 18 Aug (no verify markers, read times, cross-refs,
+vocabulary).
 
 **How to publish.** Each file in `chapters/` is a standalone post: title, read time, "where we
 are", concept boxes as blockquotes, worked examples, notes. Diagrams are relative links to
 `../diagrams/*.svg` (11 files) and mermaid fences (4) — a blog host needs mermaid support or
-the fences pre-rendered. Publish in file order (00 → 16). For a paper, `figures.md` is the
+the fences pre-rendered. Publish in file order (00 → 17). For a paper, `figures.md` is the
 figure registry and `outline.md` the structure; the settled-decisions table in Ch 13 is the
 discussion section in embryo.
 
@@ -360,6 +367,9 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
+- 2026-08-26 · Session 13 · merged main; drafted Ch 16 (2,070 w) for PRs #54–#61; closing
+  renumbered 16→17 (+1 settled row, +2 glossary); 14–15 continuity-checked → reviewed;
+  sources/ch16.md; there is no PR #53.
 - 2026-08-21 · Session 12 · merged main into the branch (kept main's JSONL; the branch's 85
   records were all superseded there); source packs ch14/ch15 (5.4k words); drafted Ch 14
   (2,765 w) and Ch 15 (2,916 w); closing renumbered 13→16 with three settled rows and eight

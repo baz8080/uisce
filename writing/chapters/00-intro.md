@@ -58,7 +58,8 @@ short essay on one problem.
 | **12** | *Put a number on what you don't know* | Events charged as zero, the double-count nobody had sized, and the two assumptions examined in public. |
 | **14** | *One design, three sites* | The look moves into a layer shared with two sibling sites; a phone review; a copy that drifted in a day and became a pinned dependency. |
 | **15** | *Rules first, model second* | Ninety-three per cent of the notices are a template; rules answer those in under a second and the model keeps the rest, and the scheduled build runs the rules half itself. |
-| **16** | *Closing* | What the site can say, what it cannot, what was learned, and a glossary. |
+| **16** | *Stop sounding like the author* | A copy pass in the reader's own words, two helpers promoted into the shared layer, and the design alignment with the sibling sites. |
+| **17** | *Closing* | What the site can say, what it cannot, what was learned, and a glossary. |
 
 ## How it was built, said once
 
