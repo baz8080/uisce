@@ -1570,7 +1570,8 @@ def _county_summary_html(county, cdata, n_areas, n_events, months):
         parts.append(
             f'<p class="now">This month: grade <strong>{m["grade"]}</strong>, '
             f'{_avail_text(m)} supply availability, '
-            f'{m["clear_days"]} of {m["days_elapsed"]} elapsed days with no notice.'
+            f'{m["clear_days"]} of {m["days_elapsed"]} elapsed days clear of '
+            f'supply disruption.'
             f'{health}</p>'
         )
     return "".join(parts)
