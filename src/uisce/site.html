@@ -856,6 +856,11 @@ function historyBody(name) {
   return out;
 }
 
+// The link is address-flavoured, unlike the county view's, because this page
+// carries the same notices this view does - naming it for its content would
+// promise a reader what they are already looking at. `t.slug` is shipped in the
+// payload and present exactly when the area has a page: ui.js's slug() is
+// deliberately not statusui.slug(), and would leave a fada as a dash.
 function renderArea() {
   const c = D.counties[areaCounty];
   const t = c.towns[areaCode];
@@ -873,6 +878,7 @@ function renderArea() {
       <h2>${esc(name)}</h2>
       <span class="pop">${t && t.pop != null ? t.pop.toLocaleString() + " people · Census 2022 · " : ""}Co.&nbsp;${esc(areaCounty)}</span>
     </div>
+    ${t && t.slug ? `<div class="sub"><a href="a/${areaCounty.toLowerCase()}/${t.slug}.html">Permanent link to ${esc(name)}</a></div>` : ""}
     <div class="card">
       <h3>Every notice published here${total == null ? "" : ` <span class="n">${total} notice${total === 1 ? "" : "s"}</span>`}</h3>
       ${historyBody(areaCounty)}

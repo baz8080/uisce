@@ -20,3 +20,35 @@ ul.areas li .p { color: var(--muted); font-size: 12px; font-variant-numeric: tab
                  min-width: 92px; text-align: right; white-space: nowrap; }
 ul.areas li.unplaced a { color: var(--muted); }
 @media (max-width: 640px) { ul.areas { columns: 1; } }
+
+/* The notice list and its section chrome, shared by c/*.html and a/*.html.
+   Neither the app nor the directory renders a notice list, so these selectors
+   are inert there. */
+section { margin-top: 26px; }
+section h2 { font-size: 16px; font-weight: 650; padding-bottom: 6px;
+             border-bottom: 1px solid var(--grid); }
+section h2 span { color: var(--muted); font-weight: 400; font-size: 13px; }
+
+ul.notices { list-style: none; margin-top: 10px; }
+ul.notices li { padding: 8px 0; border-bottom: 1px solid var(--grid);
+                font-size: 13.5px; }
+ul.notices .when { display: block; color: var(--muted); font-size: 12.5px;
+                   margin-top: 2px; }
+.sev { display: inline-block; padding: 1px 7px; border-radius: 999px;
+       font-size: 11.5px; font-weight: 600; color: #fff; vertical-align: 1px; }
+.sev-outage { background: var(--critical); }
+/* the deep serious fill: the base --serious is a 2.6:1 background for the
+   pill's white lettering */
+.sev-quality { background: var(--serious-deep); }
+.sev-degraded { background: var(--warning); color: #1a1a19; }
+.sev-maintenance { background: var(--maint); }
+/* dark-mode maint blue holds only 3.6:1 against white, so the pill goes
+   dark-lettered like sev-degraded rather than dulling the blue */
+@media (prefers-color-scheme: dark) {
+  .sev-maintenance { color: #1a1a19; }
+}
+.more { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+
+/* One event published as pins in several areas is listed under each. The area
+   pages say so on the row; the county list de-duplicates and never shows it. */
+.also { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }

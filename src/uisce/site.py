@@ -55,6 +55,7 @@ from uisce.config import (
 SITE_HTML = Path(__file__).parent / "site.html"
 AREAS_HTML = Path(__file__).parent / "areas.html"
 COUNTY_HTML = Path(__file__).parent / "county.html"
+AREA_HTML = Path(__file__).parent / "area.html"
 SITE_CSS = Path(__file__).parent / "site.css"
 AREAS_MARKER = "<!--AREAS-->"
 CANONICAL_MARKER = "<!--CANONICAL-->"
@@ -1262,6 +1263,12 @@ def county_town_data(regions, towns, county, months, now):
         # no open-case list here: each one is already in the county's, tagged with
         # its area, and holding both copies cost 80 KB to say the same thing twice
         area = {"name": towns.label(code), "months": by_month}
+        # Present exactly when the area has a page, so it is the flag as well as
+        # the value. ui.js's slug() is deliberately not this one - it would send
+        # 17 of these places to a URL that does not exist - so the app is told
+        # rather than left to work it out.
+        if area_has_page(code):
+            area["slug"] = statusui.slug(area["name"])
         if placed:
             area["pop"] = towns.pop[code]
         else:
@@ -1415,7 +1422,13 @@ def _area_items(county, areas, prefix=""):
     """
     items = []
     for code, name, pop, n in areas:
-        href = f"{prefix}index.html#area/{quote(county, safe='')}/{quote(code, safe='')}"
+        # the page when the area has one, the hash route when it does not:
+        # an ED is only ever reachable inside the app
+        href = (
+            f"{prefix}{area_path(county, name)}"
+            if area_has_page(code)
+            else f"{prefix}index.html#area/{quote(county, safe='')}/{quote(code, safe='')}"
+        )
         # The units ride on every row rather than in a column heading: the
         # heading scrolls away after the first county, and two bare
         # right-aligned integers are read in the wrong order by most people
@@ -1451,6 +1464,47 @@ def _area_index_html(index):
             f'<ul class="areas">{_area_items(county, areas)}</ul></section>'
         )
     return f"<nav>{nav}</nav>\n{''.join(sections)}"
+
+
+def area_has_page(code):
+    """Whether an area names a place a reader could search for.
+
+    Three kinds of code never do. An Electoral Division is the countryside
+    around somewhere rather than a place - all 2,808 are named "Around ...", and
+    1,193 of them have a notice; publishing that many near-identical pages is
+    what a search engine demotes as scaled thin content, and nobody searches the
+    name. A city's "-rest" code is the remainder of its Local Electoral Areas,
+    named "Elsewhere in Cork city". UNPLACED is a pin that could not be homed at
+    all. What is left is 697 CSO settlements and 42 city LEAs.
+
+    Deliberately not gated on a notice count as well. A floor would make a URL
+    appear the day an area's second notice arrives, and a permalink that comes
+    and goes is worse than a short one - the 122 pages currently holding a
+    single notice still answer "was the water off in Abbeydorney" for a real
+    place with a real population.
+    """
+    return (
+        code != UNPLACED
+        and not code.startswith("ed:")
+        and not code.endswith("-rest")
+    )
+
+
+def area_path(county, name):
+    """`a/<county>/<area>.html` for an area with a page.
+
+    Nested under the county because an area name is not unique nationally, and
+    keyed on the name rather than the code because a code is not a filename - 31
+    contain a slash and most contain colons, which is what kept the history
+    shards per county. The county-and-name pair is unique over every area in the
+    CSO file, asserted in the tests rather than assumed.
+
+    `statusui.slug` rather than the `slug` in ui.js: the two are deliberately
+    unpaired, and the JS one leaves a fada as a dash - it would send 17 of these
+    places to a URL that does not exist. The app is given the slug in the
+    payload for that reason.
+    """
+    return f"{AREA_DIR}/{county_slug(county)}/{statusui.slug(name)}.html"
 
 
 def county_slug(county):
@@ -1609,12 +1663,21 @@ def _county_months_html(cdata, months):
     )
 
 
-def _county_events_html(events, shown=COUNTY_EVENTS_SHOWN):
-    """The county's notice history, newest first."""
+def _events_html(events, shown=None, heading="Notice history", multi_area=False):
+    """A list of notices, newest first. Shared by the county and area pages.
+
+    `shown` caps the list; the area pages pass None because an area accrues
+    about one notice a month, where a county accrues hundreds.
+
+    `multi_area` adds the note the app's area view carries for the same reason:
+    one event published as pins in several areas is listed under each, so
+    meeting the same burst twice reads as double-counting unless the page says
+    so. The county list de-duplicates and must not carry it.
+    """
     if not events:
         return ""
     rows = []
-    for e in events[:shown]:
+    for e in events if shown is None else events[:shown]:
         bits = []
         if e.get("hours") is not None:
             # "so far" on an open event: the figure is time accrued to this
@@ -1639,15 +1702,56 @@ def _county_events_html(events, shown=COUNTY_EVENTS_SHOWN):
             + (f' - {html.escape(e["loc"])}' if e.get("loc") else "")
             + f'<span class="when">{_fmt_day(e["start"])}'
             + (f' · {meta}' if meta else "")
-            + '</span></li>'
+            + "</span>"
+            + (
+                f'<span class="also">Also published in '
+                f'{e["areas"] - 1} other area'
+                f'{"" if e["areas"] == 2 else "s"}, and listed in each</span>'
+                if multi_area and e.get("areas")
+                else ""
+            )
+            + "</li>"
         )
     more = ""
-    if len(events) > shown:
+    if shown is not None and len(events) > shown:
         more = f'<p class="more">{len(events) - shown:,} older notices not shown here.</p>'
     return (
-        f'<section id="notices"><h2>Notice history '
+        f'<section id="notices"><h2>{html.escape(heading)} '
         f'<span>· {len(events):,}</span></h2>'
         f'<ul class="notices">{"".join(rows)}</ul>{more}</section>'
+    )
+
+
+def _county_events_html(events, shown=COUNTY_EVENTS_SHOWN):
+    return _events_html(events, shown)
+
+
+def area_page_html(county, name, pop, events):
+    """The whole body of a/<county>/<area>.html.
+
+    Server-rendered in full and carrying no data.js, for the same reason the
+    county pages are: the hash route it replaces is not a URL a reader can keep
+    or a search engine can index.
+
+    The list is the same one the app's area view shows, uncapped, so the page
+    and the view are the same content - which is why the app links to it as a
+    permanent link rather than by naming what is on it.
+    """
+    app = f"../../index.html#area/{quote(county, safe='')}"
+    return (
+        f'<a class="back" href="../../{COUNTY_DIR}/{county_slug(county)}.html">'
+        f'← Co. {html.escape(county)}</a>'
+        f'<div class="chead"><h1>{html.escape(name)}</h1></div>'
+        f'<div class="sub">'
+        f'{f"{pop:,} people · Census 2022 · " if pop is not None else ""}'
+        f'Co.&nbsp;{html.escape(county)}</div>'
+        f'{_events_html(events, None, "Every notice published here", multi_area=True)}'
+        f'<section id="more"><h2>Elsewhere</h2><p class="links">'
+        f'<a href="../../{COUNTY_DIR}/{county_slug(county)}.html">'
+        f'Co. {html.escape(county)}\u2019s whole record</a> · '
+        f'<a href="../../areas.html">every area on this site</a> · '
+        f'<a href="{app}">the interactive map of Co. {html.escape(county)}</a>'
+        f'</p></section>'
     )
 
 
@@ -2049,6 +2153,7 @@ def load_cases(conn):
 
 HISTORY_DIR = "h"
 COUNTY_DIR = "c"
+AREA_DIR = "a"
 
 
 def write_site(site, site_dir, towns=None):
@@ -2099,6 +2204,7 @@ def write_site(site, site_dir, towns=None):
     # are the page, and generating them into a template keeps the markup and CSS
     # in an HTML file instead of in Python string literals.
     index_bytes = county_bytes = n_county_pages = search_bytes = 0
+    n_area_pages = area_bytes = 0
     pages = ["", "areas.html"]
     if towns is not None:
         # The search index: every Census settlement, noticed or not, so a
@@ -2163,6 +2269,40 @@ def write_site(site, site_dir, towns=None):
             pages.append(f"{COUNTY_DIR}/{slug}.html")
         n_county_pages = len(all_counties)
 
+        # One page per area that names a place - see area_has_page. Written from
+        # the history that is already in hand, so this costs a render and no new
+        # arithmetic; the app's area view reads the same events out of the shard.
+        for county, areas in index:
+            for code, name, pop, _n in areas:
+                if not area_has_page(code):
+                    continue
+                events = history.get(county, {}).get(code, {}).get("events", [])
+                rel = area_path(county, name)
+                path = site_dir / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                page = page_html(
+                    AREA_HTML,
+                    {
+                        "TITLE": html.escape(
+                            f"{name}, Co. {county} - water outages and notices"
+                        ),
+                        "DESC": html.escape(
+                            f"{name}, Co. {county}"
+                            + (f" - {pop:,} people" if pop is not None else "")
+                            + f". {len(events):,} Uisce Éireann "
+                            f"notice{'' if len(events) == 1 else 's'} published here: "
+                            f"water outages, boil notices, restrictions and works, "
+                            f"every one of them, newest first."
+                        ),
+                        "CANONICAL": f"{BASE_URL}/{rel}",
+                        "BODY": area_page_html(county, name, pop, events),
+                    },
+                )
+                path.write_text(page)
+                area_bytes += len(page.encode())
+                pages.append(rel)
+                n_area_pages += 1
+
     # a sitemap over the pages, not the payload: data.js and the shards are
     # fetched by the app, never landed on
     (site_dir / "sitemap.xml").write_text(statusui.sitemap(BASE_URL, pages, site["generated_iso"]))
@@ -2175,6 +2315,8 @@ def write_site(site, site_dir, towns=None):
         n_county_pages,
         county_bytes,
         search_bytes,
+        n_area_pages,
+        area_bytes,
     )
 
 
@@ -2193,7 +2335,7 @@ def run():
     n_counties, n_months = len(site["counties"]), len(site["months"])
     n_towns = sum(len(c["towns"]) for c in site["counties"].values())
     (data_bytes, shard_bytes, n_areas, index_bytes, n_county_pages, county_bytes,
-     search_bytes) = write_site(site, SITE_DIR, towns)
+     search_bytes, n_area_pages, area_bytes) = write_site(site, SITE_DIR, towns)
     print(
         f"Wrote {SITE_DIR}/ ({n_counties} counties, "
         f"{n_towns} town breakdowns, {n_months} months)"
@@ -2210,5 +2352,6 @@ def run():
     # be crawled, and one silently rendering empty is invisible from the field
     print(
         f"  {n_county_pages} county pages {county_bytes:,} bytes  ·  "
-        f"sitemap {n_county_pages + 2} URLs"
+        f"{n_area_pages} area pages {area_bytes:,} bytes  ·  "
+        f"sitemap {n_county_pages + n_area_pages + 2} URLs"
     )
