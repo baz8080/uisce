@@ -55,6 +55,9 @@ with the evidence that closed them.
 - Decisions go in `notes/`, dated, with the rejected alternatives and their numbers. Add a row here
   when one closes something off — this file carries pointers only, never the rationale, or it
   becomes the thing it exists to fix.
+- Comments earn their place or they go. Say **why**, not what — never a paraphrase of the line
+  below, a heading for an obviously-named block, or an explanation of a standard flag. One line
+  where one will do; a paragraph of reasoning belongs in the commit message or `notes/`.
 - `uv run pytest` before anything ships. The payload-shape tests in `tests/test_site.py` are guards:
   when one fails because a key was added, that is the guard working.
 - The `cases` schema is declared once, as `CASE_COLUMNS` in `pipeline.py`. `create_db`,
