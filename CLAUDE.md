@@ -46,6 +46,7 @@ with the evidence that closed them.
 | gemma-4-12b-qat over qwen3.5-9b for end-time extraction; prompt version is at v3. | model-and-runtime-benchmarks.md, end-time-eval.md |
 | Geography is CSO Census settlements, not the feed's `location` string (3,866 distinct values, fragments badly, carries no population). | statuspage-methodology.md — "The county drill-down" (2026-07-25) |
 | Overlapping events double-count person-hours by **2.0%** nationally, left uncorrected. Re-measure with `uv run uisce-eval-overlap`. | statuspage-methodology.md — "Known limitations" (2026-08-18) |
+| Quality notices do not colour the day bars — removed server-side so a quality+restriction day falls through to the restriction; the healthmark, county tiles and county pages carry them. The bars' intensity ramp is solid severity tokens, not opacity (measured contrast in the note). Sort control removed for the shared search box. | frontend-notes.md — "The design alignment pass" (2026-08-26) |
 | The design layer (tokens, base CSS, row/bar/card, JS helpers) is shared with esb and lifts via `../statusui`, a **uv git dependency pinned in `uv.lock`** — edit upstream, then `../statusui/rollout.sh` bumps all three sites. Vendored copies were tried first and drifted within a day. `site.css` and the inline blocks are this site's own. | frontend-notes.md — "the vendored copy became a pinned uv git dependency" (2026-08-20); statusui's README for what is shared |
 | End-time extraction is **rules first, LLM fallback**: `rules.py` answers the templated ~93% (99.99% corpus agreement, 0 wrong emissions on the labelled rounds, 0.6s vs ~11 GPU-hours) and abstains to the LLM for recurring windows, lifts, Irish and everything ambiguous. Rules may only emit `completion_update`/`scheduled_end_with_time`; re-measure with `uv run uisce-eval-rules-shadow`. | rules-vs-llm-end-times.md (2026-08-21) |
 | CI runs `uisce-infer --rules-only` every data build and commits the JSONL to `main`; the LLM residue is run by hand. JSONL stays in this repo (`merge=union`) — a `uisce-data` repo and a release asset were both rejected. | rules-vs-llm-end-times.md — "CI runs the rules half" (2026-08-21) |
@@ -55,6 +56,9 @@ with the evidence that closed them.
 - Decisions go in `notes/`, dated, with the rejected alternatives and their numbers. Add a row here
   when one closes something off — this file carries pointers only, never the rationale, or it
   becomes the thing it exists to fix.
+- Comments earn their place or they go. Say **why**, not what — never a paraphrase of the line
+  below, a heading for an obviously-named block, or an explanation of a standard flag. One line
+  where one will do; a paragraph of reasoning belongs in the commit message or `notes/`.
 - `uv run pytest` before anything ships. The payload-shape tests in `tests/test_site.py` are guards:
   when one fails because a key was added, that is the guard working.
 - The `cases` schema is declared once, as `CASE_COLUMNS` in `pipeline.py`. `create_db`,
