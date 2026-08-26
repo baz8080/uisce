@@ -356,46 +356,12 @@ function basisNote() {
     ` <span class="hoverhint">Hover a day in a bar for its detail.</span>`;
 }
 
-// "data to 2026-08-05 22:07 UTC" asked every reader to do timezone arithmetic to
-// answer "is this current?".
-//
-// The worry a relative stamp raises is that a normal overnight gap — the site
-// builds at 11:20 and 17:23 UTC, so up to 17h57m — reads as neglect. Softening
-// the wording does not fix that, because the problem is not that 17 is a large
-// number: it is that a large number from a healthy schedule is indistinguishable
-// from a build that died. So say the age plainly in one unit, and let a separate,
-// explicit signal carry "something is wrong". The reassurance is the *absence* of
-// the warning, which costs no words on a normal render.
-//
-// One unit all the way up, as every relative-time library does (moment, Luxon,
-// timeago all stay in hours to ~22-36h). An earlier version switched to calendar
-// days at 12h, which put a seam in the middle of the range: 11h59m read "11 hours
-// ago" and 12h01m read "yesterday", and — measured against the real cron — the
-// "earlier today" branch could never run at all.
-//
-// 24h is a safe overdue threshold with ~6h of headroom over the widest normal
-// gap, and needs no copy of the build schedule here to go stale.
-function freshness(iso) {
-  const mins = Math.round((Date.now() - Date.parse(iso)) / 60000);
-  // a reader's clock can be wrong and a cached page can be older than it says;
-  // neither may ever render as "in 20 minutes"
-  if (mins < 2) return "Updated just now";
-  if (mins < 60) return `Updated ${mins} minutes ago`;
-  // the warning is gated on the exact elapsed minutes, not on the rounded hours:
-  // rounding first fires it at 23h30m, which is not the threshold documented
-  // above and quietly eats half an hour of the headroom
-  if (mins < 24 * 60) {
-    // round, not floor, for the display: flooring reports 11h59m as "11 hours",
-    // and understating the site's own age is the one direction it must not round
-    const h = Math.round(mins / 60);
-    return `Updated ${h} hour${h === 1 ? "" : "s"} ago`;
-  }
-  // the one case that is not routine, so it does not get the muted treatment
-  // the routine ones do — a warning nobody notices is not a warning
-  const d = Math.round(mins / (24 * 60));
-  return `<span class="stale">Updated ${d} day${d === 1 ? "" : "s"} ago` +
-    ` - the last data build may have failed</span>`;
-}
+// freshness() is statusui's; these two are what it takes from this site. 24h is
+// a safe overdue threshold with ~6h of headroom over the widest normal gap — the
+// site builds at 11:20 and 17:23 UTC, so up to 17h57m — and needs no copy of the
+// build schedule here to go stale.
+const STALE_AFTER_H = 24;
+const STALE_NOTE = "the last data build may have failed";
 
 // The grade is availability alone. An active boil-water / do-not-drink /
 // do-not-consume notice is shown next to it rather than folded into it, so a
@@ -564,7 +530,7 @@ function renderOverview() {
   const nF = worst.filter(w => w[1].grade === "F").length;
   document.getElementById("banner").innerHTML =
     `<strong>${monthLabelLong(curMonth)}${isPartial() ? " so far" : ""}:</strong> ${ev} announced outages · typical outage ${natFix} · ${nF} ${nF === 1 ? "county" : "counties"} graded F
-     <span class="meta">${freshness(D.data_as_of_iso)}</span>`;
+     <span class="meta">${freshness(D.data_as_of_iso, STALE_AFTER_H, STALE_NOTE)}</span>`;
 
   // county rows
   const names = Object.keys(D.counties).sort((a, b) => {
