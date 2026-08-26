@@ -1,6 +1,5 @@
 /* This site's own rules, inlined after statusui's shared base.css in
    index.html, areas.html and the county pages. */
-:root { --row-cols: 150px 1fr 200px; --stats-cols: 100px auto; }
 
 /* uisce's footers run on from the page without a rule above them */
 footer { margin-top: 28px; padding-top: 0; border-top: 0; }

@@ -12,12 +12,6 @@
 <style>
 <!--UI-CSS-->
 <!--SITE-CSS-->
-  .controls select {
-    margin-left: auto; font: inherit; font-size: 13.5px; color: var(--ink);
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px;
-  }
-  .partial-note { font-size: 12.5px; color: var(--muted); width: 100%; }
-
   /* Lifted out of the colour legend onto its own line: it is the one thing on
      this page that bears on whether the water is safe to drink, and as the
      seventh entry in a wrapped row of swatches it read as a sixth colour. */
@@ -38,15 +32,15 @@
   .chead .healthmark { width: 24px; height: 24px; font-size: 13.5px; }
   .healthmark.sm { width: 15px; height: 15px; font-size: 10px; }
 
-  /* day cells by severity, shaded by how much of the county was affected */
-  .bar i.outage { background: var(--critical); }
-  .bar i.quality { background: var(--serious); }
+  /* Day cells by severity, stepped by how much of the county was affected.
+     Solid severity tokens, not opacity over the page: the opacity ramp put
+     most real days at 1.5-1.8:1 against --page, a washed-out pink. */
+  .bar i.outage.n1 { background: var(--serious); }
+  .bar i.outage.n2 { background: var(--critical); }
+  .bar i.outage { background: var(--severe); }
   .bar i.degraded { background: var(--warning); }
   .bar i.maintenance { background: var(--maint); }
   .bar i.future { background: var(--cell-empty); }
-  .bar i.n1 { opacity: 0.40; }
-  .bar i.n2 { opacity: 0.70; }
-  .stats .pct { font-size: 14.5px; }
 
   @media (max-width: 640px) {
     /* the drinking-water key stays above the list: that one is a warning, not a key */
@@ -54,8 +48,6 @@
     #overview > #topLink { order: 8; }
   }
 
-  .drow { display: flex; gap: 18px; flex-wrap: wrap; color: var(--ink-2); margin-bottom: 8px; font-size: 13.5px; }
-  .drow b { color: var(--ink); }
   .incident { display: flex; gap: 8px; padding: 5px 0; border-top: 1px dashed var(--grid); align-items: baseline; font-size: 13.5px; }
   .incident .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; position: relative; top: -1px; }
   .incident .t { color: var(--ink); }
@@ -189,7 +181,7 @@
 
   /* The methodology was one 2,600-character paragraph carrying nine separate
      topics. Every sentence is worth keeping and none of it was findable. */
-  .method { margin-top: 12px; border-top: 1px solid var(--border); }
+  .method { margin-top: 12px; }
   .method summary { padding: 8px 0; }
   .method summary:hover { color: var(--ink); }
   .method h4 { font-size: 12.5px; color: var(--ink-2); margin-top: 12px; }
@@ -213,12 +205,10 @@
 
     <div class="controls">
       <div class="months" id="months"></div>
-      <select id="sort">
-        <option value="name">Sort: county name</option>
-        <option value="grade">Sort: worst grade first</option>
-        <option value="events">Sort: most outages first</option>
-      </select>
-      <div class="partial-note" id="partialNote"></div>
+      <div class="search">
+        <input id="q" type="search" placeholder="Search a town or county" autocomplete="off" aria-label="Search a town or county">
+        <div class="results" id="results" hidden></div>
+      </div>
     </div>
 
     <div class="legend" id="legend"></div>
@@ -244,28 +234,28 @@
     <p id="countyHistoryLink" hidden></p>
     <details class="method">
       <summary>What this measures</summary>
-      <p>This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. Every duration is counted from when a notice was published - for an unplanned burst the water was already off before that. The headline &ldquo;works complete&rdquo; time is a <b>minimum</b>: it counts only the notices that reported one. The availability percentages are a <b>best estimate</b>, because a total has to put a number on every disruption, including the ones that never reported an end.</p>
+      <p>This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. Durations count from when a notice was published - for an unplanned burst the water was already off before that. The headline &ldquo;works complete&rdquo; time is a <b>minimum</b>: it counts only the notices that reported one. The availability percentages are a <b>best estimate</b>, because a total has to put a number on every disruption, including the ones that never reported an end.</p>
     </details>
 
     <details class="method" id="method">
       <summary>How these numbers are worked out</summary>
 
       <h4>How long a disruption lasted</h4>
-      <p>The time from notice publication to a stated &ldquo;works are now complete&rdquo; update, over disruption incidents that carry one. Incidents whose only end signal was a <em>scheduled</em> finish are counted separately and shown as &ldquo;scheduled&rdquo;: a published plan is not evidence the works ended then, so the two are never pooled into a single headline. End times are read from the notice text by an LLM (see the <a href="https://github.com/baz8080/uisce/blob/main/notes/end-time-eval.md">accuracy evaluation</a>); no time on this page is a measurement taken in the field.</p>
+      <p>The time from a notice going up to its stated &ldquo;works are now complete&rdquo; update, over the incidents that reported one. Incidents whose only end signal was a <em>scheduled</em> finish are counted separately - a published plan is not evidence the works ended then. End times are read from the notice text (see the <a href="https://github.com/baz8080/uisce/blob/main/notes/end-time-eval.md">accuracy evaluation</a>); no time on this page is a measurement taken in the field.</p>
 
-      <p>About one incident in twenty never reports an end at all - the count is shown beside the headline each month. Those are left out of the figure above, because including them would mean counting an estimate as a confirmation. They are not the long ones being quietly hidden: checked both ways, they run <em>shorter</em> than average, so leaving them out moves the headline <em>up</em>, not down. <span id="sensNote"></span> They are still counted in full in the availability percentages and person-hours, where leaving something out means calling it zero rather than calling it unknown.</p>
+      <p>About one incident in twenty never reports an end at all - the count is shown beside the headline each month. Those stay out of the figure above: checked both ways, they run <em>shorter</em> than average, so leaving them out moves the headline <em>up</em>, not down. <span id="sensNote"></span> They still count in full in the availability percentages and person-hours, where leaving something out would mean calling it zero.</p>
 
       <h4>When a notice closed</h4>
-      <p>A notice is recorded as closed the first time a twice-daily check finds it gone, so close dates are approximate and the closed-in-month lists are minimums.</p>
+      <p>A notice counts as closed the first time a twice-daily check finds it gone, so close dates are approximate and the closed-in-month lists are minimums.</p>
 
       <h4>What counts as a disruption</h4>
-      <p>Only hard disruptions count against the availability figures: bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages, and unplanned repair works. Investigations, leak detection, hydrant works and installations are shown as works but never count; restrictions, low pressure and discolouration are shown but never count. A closed notice that never reported a usable end is charged the typical length of a completed notice of the same kind of works - a burst main and a hydrant repair get different figures - rather than nothing at all.</p>
+      <p>Only hard disruptions count against availability: bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages and unplanned repairs. Restrictions, low pressure, discolouration and routine works are shown but never count. A closed notice with no usable end is charged the typical length of a completed notice of the same kind of works, rather than nothing at all.</p>
 
       <h4>Repeating works</h4>
-      <p>Where a notice describes works repeating over a range of nights or days - &ldquo;daily from 10pm until 7am, from 9 to 27 July&rdquo; - only the hours inside those windows are counted, so the incident reads as the hours the works took rather than the days they spanned. A notice announcing a window that <em>repeats</em> like this is treated as a restriction whatever its title says, because the same supply zone is published sometimes as a conservation restriction and sometimes as an interruption, and the two describe the same thing.</p>
+      <p>Works announced as a repeating window - &ldquo;daily from 10pm until 7am, from 9 to 27 July&rdquo; - are charged only the hours inside the windows, and are treated as a restriction whatever the title says: the same supply zone is published both ways.</p>
 
       <h4>How many people a notice affects</h4>
-      <p>Each notice pin is assumed to affect the Census 2022 Small Areas whose centres lie within 500&nbsp;m (CSO SAPS populations); the headline percentage is the population-weighted share of people's time not covered by an announced supply disruption. County <em>rankings</em> are robust to the 500&nbsp;m assumption; the letter grades are calibrated to it. Each notice is also capped at 14 days, so an incident published as several staggered notices can span longer than that.</p>
+      <p>Each notice is assumed to affect the Census 2022 Small Areas whose centres lie within 500&nbsp;m of its pin; the headline percentage is the population-weighted share of people's time not covered by an announced supply disruption. Each notice is capped at 14 days.</p>
 
       <h4>What the letters mean</h4>
       <p>Supply availability over the month, and nothing else:</p>
@@ -278,18 +268,18 @@
       </ul>
 
       <h4>Why the <span class="healthmark sm">!</span> sits beside the grade, not inside it</h4>
-      <p>An active boil-water / do-not-drink / do-not-consume notice is shown as a marker <em>beside</em> the grade rather than folded into it: whether the water is safe to drink is a different question from how much of it there was, and a letter cannot answer both.</p>
+      <p>Whether the water is safe to drink is a different question from how much of it there was, and a letter cannot answer both - so an active boil-water / do-not-drink / do-not-consume notice is a marker beside the grade, never folded into it.</p>
 
       <h4>The ten largest</h4>
-      <p>The <a href="#top" onclick="go('#top'); return false;">ten largest disruptions</a> of each finished month rank the same hard disruptions as individual incidents, with person-hours clipped to the month so they sum against the county figures. A notice reported &ldquo;confirmed&rdquo; there is one carrying a completion update, and since an incident is often published as several notices with different end signals, the count of confirmed notices is shown rather than a single verdict.</p>
+      <p>The <a href="#top" onclick="go('#top'); return false;">ten largest disruptions</a> of each finished month rank the same hard disruptions as individual incidents, with person-hours clipped to the month so they sum against the county figures.</p>
 
       <p>Full methodology: <a href="https://github.com/baz8080/uisce/blob/main/notes/statuspage-methodology.md">the full methodology, on GitHub</a>.</p>
     </details>
 
     <details class="method">
       <summary>Changes to how this site measures</summary>
-      <p><b>15 August 2026.</b> About one disruption in twenty never reports when it ended. Those used to be recorded as one second long, which counted a real outage as having disrupted nobody. They are now charged the typical length of a completed notice for the same kind of works, and how many were estimated is shown beside the headline each month. National availability falls by one to two hundredths of a percentage point; the worst-hit county-month falls by two tenths, and four county-months move down one grade. The headline &ldquo;works complete&rdquo; time is unchanged in four months of five and rose 0.2h in the fifth - these incidents stay out of it, but five large disruptions were published as several notices of which only some reported an end, and those now carry an estimate for the rest.</p>
-      <p><b>2 August 2026.</b> An active boil-water or do-not-drink notice used to knock the grade down one step. It no longer does - that made a county with a notice affecting 200 people indistinguishable from one that lost supply county-wide. The notice is now shown as a marker beside the grade instead.</p>
+      <p><b>15 August 2026.</b> Disruptions that never report an end used to count as one second long, which recorded a real outage as having disrupted nobody. They are now charged the typical length of completed works of the same kind, with the estimated count shown each month. National availability moves by hundredths of a point; four county-months drop one grade.</p>
+      <p><b>2 August 2026.</b> An active boil-water or do-not-drink notice used to knock the grade down one step. It no longer does - a notice affecting 200 people read the same as a county that lost supply county-wide. It is now a marker beside the grade instead.</p>
     </details>
 
     <p id="gen"><a href="https://github.com/baz8080/uisce" style="color:inherit">Source code</a> · not affiliated with Uisce Éireann.</p>
@@ -307,7 +297,6 @@ const SEVLABEL = { outage: "Supply disruption", quality: "Water quality notice",
                    "": "No announced disruption" };
 const LATEST = D.months[D.months.length - 1];
 let curMonth = LATEST;
-let sortBy = "name";
 let townSort = "impact";
 let county = null;  // the county being drilled into, when view === "county"
 let areaCounty = null, areaCode = null;  // the area whose history is on screen
@@ -317,13 +306,14 @@ const VIEW_EL = { overview: "overview", county: "countyview", area: "areaview", 
 const TOP_MONTHS = Object.keys(D.top || {});
 const today = new Date().toISOString().slice(0, 10);
 
+// Four entries, one desktop line. Quality notices left the bars entirely —
+// the healthmark and the county view carry them — so the legend no longer
+// explains an orange that is not there.
 const LEGEND = `
-  <span><i style="background:var(--good)"></i> No announced disruption</span>
-  <span><i style="background:var(--critical)"></i> Supply disruption</span>
-  <span><i style="background:var(--serious)"></i> Water quality notice</span>
+  <span><i style="background:var(--good)"></i> No disruption</span>
+  <span><i style="background:var(--serious)"></i><i style="background:var(--critical)"></i><i style="background:var(--severe)"></i> Disruption (darker = worse)</span>
   <span><i style="background:var(--warning)"></i> Restrictions / low pressure</span>
-  <span><i style="background:var(--maint)"></i> Works (planned / non-disruptive)</span>
-  <span><i style="background:var(--critical);opacity:.4"></i><i style="background:var(--critical);opacity:.7"></i><i style="background:var(--critical)"></i> darker = more of the county affected</span>`;
+  <span><i style="background:var(--maint)"></i> Planned works</span>`;
 
 // The seventh legend entry, promoted to its own line and its own colour. As a
 // swatch among five others it was the least noticeable thing on the page and the
@@ -343,16 +333,13 @@ const LEGEND = `
 function healthKey() {
   return `<span class="healthmark sm">!</span> marks a boil-water, do-not-drink` +
     ` or do-not-consume notice active in ${monthLabelLong(curMonth)}` +
-    ` - open the county for details.`;
+    ` - open the county for details. Quality notices do not colour the day bars.`;
 }
 
-// The reader is looking at two different clocks at once: the grade and the
-// percentage are the selected month's, "open now" is live. Nothing said so, and
-// an A beside "5 open now" reads as a contradiction rather than two timeframes.
 // one hover cue above the list, not a placeholder in every strip
-function basisNote() {
-  return `Grades and percentages are for <b>${monthLabelLong(curMonth)}</b>.` +
-    (isLatest() ? ` &ldquo;Open now&rdquo; is live, whatever month you are viewing.` : "") +
+function basisNote(natAvail, personH) {
+  return `Counties are graded on water supply availability.` +
+    ` Nationally this month: <b>${availText(natAvail, personH)}</b>.` +
     ` <span class="hoverhint">Hover a day in a bar for its detail.</span>`;
 }
 
@@ -421,16 +408,6 @@ function jsArg(s) { return esc(JSON.stringify(String(s))); }
 // via cases.closed_at, so a past month is not left with nothing to say.
 function isLatest() { return curMonth === LATEST; }
 
-// The in-progress month always reads a little worse than it will settle at:
-// an open notice with no reported end accrues to now, and some of those ends
-// never arrive at all (the text simply doesn't state one). Saying so here beats
-// a separate caveat line, and it stays true whether or not inference is current.
-function partialNote() {
-  return curMonth === today.slice(0, 7)
-    ? "Month in progress. Notices without a reported end count as ongoing, so figures will move." :
-    curMonth === D.months[0] ? "This site started collecting partway through April, so April is a part-month." : "";
-}
-
 function isPartial() { return curMonth === today.slice(0, 7); }
 
 // Two decimals make 100.00% out of any small event in a large county, which
@@ -444,12 +421,18 @@ function availText(a, personH) {
 
 // one cell for the shared dayCells: [class, caption]. Cells are [severity,
 // share] pairs rather than a packed string, and there is no part-day note.
+// Severity words, not percentages, matching esb's captions; the steps are the
+// old intensity thresholds (under 0.5% of the county, under 2%, 2% and up).
 function describeCell([s, pct], date) {
   if (date > today) return ["future", `${fmtDay(date)}: still to come`];
   if (s === "nd") return ["future", `${fmtDay(date)}: before this site started collecting`];
-  const intensity = !s ? "" : pct < 0.5 ? "n1" : pct < 2 ? "n2" : "";
-  const label = s ? `${SEVLABEL[s]} · about ${pct < 0.1 ? "<0.1" : pct.toFixed(1)}% of the county` : SEVLABEL[s];
-  return [`${s} ${intensity}`, `${fmtDay(date)}: ${label}`];
+  // a stale data.js beside a new page can still carry quality days
+  if (!s || s === "quality") return ["", `${fmtDay(date)}: no supply disruption announced`];
+  if (s === "degraded") return ["degraded", `${fmtDay(date)}: restrictions / low pressure`];
+  if (s === "maintenance") return ["maintenance", `${fmtDay(date)}: planned works`];
+  const step = pct < 0.5 ? "n1" : pct < 2 ? "n2" : "";
+  const word = { n1: "minor", n2: "moderate", "": "major" }[step];
+  return [`outage ${step}`, `${fmtDay(date)}: ${word} supply disruption`];
 }
 function bar(days) { return dayCells(days, curMonth, describeCell); }
 
@@ -479,10 +462,8 @@ function render() {
 
 function renderOverview() {
   document.getElementById("months").innerHTML = monthTabs(D.months, curMonth, "setMonth");
-  document.getElementById("partialNote").textContent = partialNote();
   document.getElementById("legend").innerHTML = LEGEND;
   document.getElementById("healthKey").innerHTML = healthKey();
-  document.getElementById("basis").innerHTML = basisNote();
 
   // national tiles
   let ev = 0, personH = 0, quality = 0, openNow = 0, popH = 0, worst = [];
@@ -494,18 +475,13 @@ function renderOverview() {
     worst.push([name, m]);
   }
   const natAvail = 100 * (1 - personH / popH);
+  document.getElementById("basis").innerHTML = basisNote(natAvail, personH);
   const nat = D.national[curMonth] || {};
   const natFix = nat.median_completion_h == null ? "—" : nat.median_completion_h + "h";
-  const fixNote = nat.median_completion_h == null
-    ? "no completed notices this month"
-    : `${nat.completed_n || 0} notices confirmed complete` +
-      (nat.scheduled_n ? ` · ${nat.scheduled_n} had only a scheduled end` : "") +
-      (nat.imputed_n ? ` · ${nat.imputed_n} never reported one` : "");
   document.getElementById("natHeading").textContent = `The national picture in ${monthLabelLong(curMonth)}`;
+  // no disruption-count or typical-time tile: the banner already carries both
   document.getElementById("tiles").innerHTML = `
     <div class="tile"><div class="v">${availText(natAvail, personH)}</div><div class="k">of people's time with no outage announced</div></div>
-    <div class="tile"><div class="v">${ev}</div><div class="k">announced supply disruptions</div></div>
-    <div class="tile"><div class="v">${natFix}</div><div class="k">typical time from notice to &ldquo;works complete&rdquo;<br>${fixNote}</div></div>
     <div class="tile"><div class="v">${fmtPersonH(personH)}</div><div class="k">hours without water, added up across everyone affected</div></div>
     <div class="tile"><div class="v">${quality}</div><div class="k">water-quality notices</div></div>
     ${isLatest() ? `<div class="tile"><div class="v">${openNow}</div><div class="k">notices open right now</div></div>` : ""}`;
@@ -532,13 +508,10 @@ function renderOverview() {
     `<strong>${monthLabelLong(curMonth)}${isPartial() ? " so far" : ""}:</strong> ${ev} announced outages · typical outage ${natFix} · ${nF} ${nF === 1 ? "county" : "counties"} graded F
      <span class="meta">${freshness(D.data_as_of_iso, STALE_AFTER_H, STALE_NOTE)}</span>`;
 
-  // county rows
-  const names = Object.keys(D.counties).sort((a, b) => {
-    const ma = D.counties[a].months[curMonth], mb = D.counties[b].months[curMonth];
-    if (sortBy === "grade") return mb.grade.localeCompare(ma.grade) || ma.availability - mb.availability;
-    if (sortBy === "events") return mb.events.outage - ma.events.outage;
-    return a.localeCompare(b);
-  });
+  // county rows, always alphabetical: 26 rows scroll, and the search box is
+  // the fast path — the sort control it replaced earned neither its space nor
+  // its unlabelled select
+  const names = Object.keys(D.counties).sort((a, b) => a.localeCompare(b));
 
   document.getElementById("list").innerHTML = names.map(name => {
     const c = D.counties[name], m = c.months[curMonth];
@@ -557,10 +530,11 @@ function renderOverview() {
         <div class="bar">${bar(m.days)}</div>
         <div class="stats">
           <div class="counts">
-            <b>${m.events.outage}</b><span>${pl(m.events.outage, "disruption")}</span>${openBadge}
+            <b>${m.events.outage}</b><span>${pl(m.events.outage, "outage")}</span>${openBadge}
           </div>
-          <b class="pct">${availText(m.availability, m.person_h)}</b>
+          <div class="cml"><b>${availText(m.availability, m.person_h)}</b><br>availability</div>
         </div>
+        <span class="chev">›</span>
         <div class="daycap"></div>
       </div>
     </div>`;
@@ -688,7 +662,11 @@ function resolvedSection(c) {
 
 function renderCounty() {
   const c = D.counties[county], m = c.months[curMonth];
-  const note = partialNote();
+  // the tile carries the "n confirmed / scheduled / never reported" split the
+  // old inline note did, in the caption where esb's card puts its qualifiers
+  const fixTile = m.events.outage === 0 ? "" : m.median_completion_h == null
+    ? `<div class="tile"><div class="v">—</div><div class="k">no disruption has reported completion yet</div></div>`
+    : `<div class="tile"><div class="v">${m.median_completion_h}h</div><div class="k">typical time to &ldquo;works complete&rdquo; · ${m.completed_n} confirmed${m.scheduled_n ? `, ${m.scheduled_n} scheduled only` : ""}${m.imputed_n ? `, ${m.imputed_n} never reported an end` : ""}</div></div>`;
   document.getElementById("countyview").innerHTML = `
     <a class="back" href="#" onclick="go(''); return false;">← All counties</a>
     <div class="chead">
@@ -699,23 +677,20 @@ function renderCounty() {
     </div>
     <div class="controls">
       <div class="months">${monthTabs(D.months, curMonth, "setMonth")}</div>
-      ${note ? `<div class="partial-note">${note}</div>` : ""}
     </div>
 
     <div class="card">
-      <div class="drow">
-        <span><b>${availText(m.availability, m.person_h)}</b> of people's time with no outage announced</span>
-        <span><b>${m.events.outage}</b> supply ${pl(m.events.outage, "disruption")} (<b>${m.person_h.toLocaleString()}</b> person-hours)</span>
-        ${m.events.outage === 0 ? "" : `<span>${m.median_completion_h == null
-          ? `none of them has reported completion yet`
-          : `typical time from notice to &ldquo;works complete&rdquo; <b>${m.median_completion_h}h</b> (${m.completed_n} confirmed complete${m.scheduled_n ? `, ${m.scheduled_n} scheduled only` : ""}${m.imputed_n ? `, ${m.imputed_n} never reported an end` : ""})`}</span>`}
-        <span><b>${m.events.maintenance}</b> planned ${pl(m.events.maintenance, "work item", "works")}</span>
-        <span><b>${m.events.quality}</b> quality ${pl(m.events.quality, "notice")}</span>
-        <span><b>${m.clear_days}</b>/${m.days_elapsed} clear days${isPartial() ? " so far" : ""}</span>
-      </div>
+      <div class="legend" style="margin:0 0 12px">${LEGEND}</div>
       <div class="bar tall">${bar(m.days)}</div>
       <div class="daycap">Tap a day for detail.</div>
-      <div class="legend" style="margin:12px 0 0">${LEGEND}</div>
+      <div class="tiles" style="margin-bottom:0">
+        <div class="tile"><div class="v">${availText(m.availability, m.person_h)}</div><div class="k">supply availability</div></div>
+        <div class="tile"><div class="v">${m.events.outage}</div><div class="k">supply ${pl(m.events.outage, "disruption")} · ${m.person_h.toLocaleString()} person-hours</div></div>
+        ${fixTile}
+        <div class="tile"><div class="v">${m.events.maintenance}</div><div class="k">planned ${pl(m.events.maintenance, "work item", "works")}</div></div>
+        <div class="tile"><div class="v">${m.events.quality}</div><div class="k">quality ${pl(m.events.quality, "notice")}</div></div>
+        <div class="tile"><div class="v">${m.clear_days}/${m.days_elapsed}</div><div class="k">clear days${isPartial() ? " so far" : ""}</div></div>
+      </div>
     </div>
 
     <div class="card">
@@ -951,7 +926,14 @@ function openMethod() {
   d.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-document.getElementById("sort").addEventListener("change", e => { sortBy = e.target.value; render(); });
+bindSearch({
+  input: document.getElementById("q"),
+  results: document.getElementById("results"),
+  counties: Object.keys(D.counties),
+  src: "search.js" + cacheBust(D),
+  loaded: () => window.UISCE_SEARCH,
+  pick: goCounty
+});
 window.addEventListener("hashchange", route);
 window.addEventListener("popstate", route);
 bindDayCaption();
