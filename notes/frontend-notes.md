@@ -203,3 +203,23 @@ measured against the old width: at 851px the strip fits with "Aug 2026" at x 352
 of view while the page below shows August. `bindMonthReveal()` (statusui `0567472`) binds one
 resize listener that reveals the tab in every laid-out `.months`; hidden views measure zero
 and are skipped, since they re-render before they are shown.
+
+## The county-page link came up out of the footer — 2026-08-26
+
+It was a `<p id="countyHistoryLink">` in the footer, shown only in the county view, reading "See every notice ever recorded for Kildare". Nothing gets clicked in a footer, and what is on the other side — the full notice history, the month table, the area list — is more interesting than that placement implied.
+
+It now sits on its own line directly under the county heading, above the month tabs: the placement lifts has always used and esb adopted the same day. The rule that styles it, `.chead + .sub`, is promoted to statusui's `base.css`; lifts and esb had been carrying it byte for byte and this site is the third consumer. In the meantime it sits in this site's inline block beside `.chead .pop`, because `uv.lock` can only track statusui's `main` — all three local copies go in the pin-bump commit.
+
+**The overview row's `href` changed too, and this was the bigger hole.** It pointed at `#county/<name>` — the hash. lifts and esb both point theirs at the static page with the click suppressed, so a crawler, a middle-click and a "copy link address" all reach the page while a normal click stays in the app. Here they reached a fragment, which meant `c/<county>.html` was discoverable only from the footer link and from `areas.html`. It now points at `c/<county>.html`.
+
+**Wording stays close to the old footer copy — "Every notice ever recorded in Co. Carlow" — because it is honest here.** The county view shows one month's bars, tiles and town table; the page shows the whole record. Naming that difference gives a reader a reason to follow it. lifts says "Permanent link to Athy station" instead, because its page carries the same months and cases its view already shows, so a content label there would promise something the reader is looking at. Same placement on all three, different words, on purpose.
+
+"Permalink" was rejected as the label: it is blogging-era vocabulary a general audience mostly does not hold, and it would undersell a page that genuinely carries more than the view. The county is in the link text because a screen reader lists links stripped of their context.
+
+### The area view has no equivalent, and that is the accepted gap
+
+An area is reachable only as `#area/<county>/<code>`. There is no `a/<slug>.html`, so a reader who drills county → area watches the affordance disappear — one click deeper, into the ~1,836 areas that are the long tail and where a shareable URL is worth most.
+
+Left open rather than papered over. Closing it means building area pages, and the measurement that would gate that is written down: of 3,717 areas, 909 are named CSO settlements and 2,808 are electoral divisions whose names all begin "Around " — pages for those would be thin content at scale. Slugging the `(county, name)` pair is collision-free across all 3,717 (name alone collides 185 times), so the scheme is not the obstacle; the decision about which areas deserve a page is.
+
+Guarded by `tests/test_permalink_affordance.py`, including a test that asserts the area view offers nothing, so the gap stays deliberate.
