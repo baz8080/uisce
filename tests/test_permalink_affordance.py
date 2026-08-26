@@ -18,6 +18,18 @@ def test_the_county_view_links_to_the_county_page():
     assert '<div class="sub"><a href="c/${county.toLowerCase()}.html">' in SITE_HTML
 
 
+def test_the_label_claims_the_months_and_not_every_notice():
+    """The page caps its notice list at COUNTY_EVENTS_SHOWN and says so in its
+    own "older notices not shown here" line, so a link promising every notice
+    would be contradicted by the page it lands on. What the page really does
+    carry that the view does not is every month - the same claim esb's makes,
+    because the two stand in the same relation to their views."""
+    assert "Every month for" in SITE_HTML
+    assert "on one page" in SITE_HTML
+    assert "Every notice ever recorded" not in SITE_HTML
+    assert "permanent link" not in SITE_HTML.lower()
+
+
 def test_the_link_sits_under_the_heading_and_not_in_the_footer():
     """Placement is the point: above the month tabs, directly under the county
     name, the same position lifts and esb use."""

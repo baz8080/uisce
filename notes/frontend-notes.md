@@ -212,7 +212,14 @@ It now sits on its own line directly under the county heading, above the month t
 
 **The overview row's `href` changed too, and this was the bigger hole.** It pointed at `#county/<name>` — the hash. lifts and esb both point theirs at the static page with the click suppressed, so a crawler, a middle-click and a "copy link address" all reach the page while a normal click stays in the app. Here they reached a fragment, which meant `c/<county>.html` was discoverable only from the footer link and from `areas.html`. It now points at `c/<county>.html`.
 
-**Wording stays close to the old footer copy — "Every notice ever recorded in Co. Carlow" — because it is honest here.** The county view shows one month's bars, tiles and town table; the page shows the whole record. Naming that difference gives a reader a reason to follow it. lifts says "Permanent link to Athy station" instead, because its page carries the same months and cases its view already shows, so a content label there would promise something the reader is looking at. Same placement on all three, different words, on purpose.
+**Wording: "Every month for Co. Carlow on one page" — the same sentence esb uses, and not the old footer copy.** It first shipped as "Every notice ever recorded in Co. Carlow", carried over from the footer without being checked against the page. That was wrong: `_county_events_html` caps at `COUNTY_EVENTS_SHOWN = 60` and prints its own "N older notices not shown here", so the label promised something the page then denied — the exact false-promise failure this whole decision exists to avoid.
+
+What the page really carries that the view does not is *every month*: the county view is one month's bars, tiles and town table, and the month table on the page covers every month collection reached. That is true, and it is word for word the relation esb's county page stands in to esb's county view — so the two sites say the same thing. Two categories, not three:
+
+- **esb and uisce** — the view is one month, the page is all of them: "Every month for County X on one page".
+- **lifts** — the page carries the same months and cases the view already shows, so there is no content difference to name, only a durable address: "Permanent link to Athy station".
+
+Same placement on all three; the words follow the content relationship, and two of the three share one.
 
 "Permalink" was rejected as the label: it is blogging-era vocabulary a general audience mostly does not hold, and it would undersell a page that genuinely carries more than the view. The county is in the link text because a screen reader lists links stripped of their context.
 
