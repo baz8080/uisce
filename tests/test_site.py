@@ -1796,7 +1796,7 @@ class TestHistoryShards:
         assert len(set(slugs)) == len(COUNTY_POP)
 
     def test_the_files_written_are_data_index_and_one_shard_per_county(self, tmp_path):
-        site, (data_bytes, shard_bytes, n_areas, _, _, _, _) = self._write(tmp_path)
+        site, (data_bytes, shard_bytes, n_areas, *_rest) = self._write(tmp_path)
         assert (tmp_path / "data.js").exists() and (tmp_path / "index.html").exists()
         shards = sorted(p.name for p in (tmp_path / "h").iterdir())
         assert shards == sorted(f"{county_slug(c)}.js" for c in site["counties"])
@@ -1856,7 +1856,9 @@ class TestIndexablePages:
         return counties, write_site(site, tmp_path, TOWNS)
 
     def test_every_county_gets_a_page_including_the_empty_ones(self, tmp_path):
-        counties, (*_, n_pages, county_bytes, _search) = self._write(tmp_path)
+        counties, (*_, n_pages, county_bytes, _search, _n_area, _area_bytes) = self._write(
+            tmp_path
+        )
         written = sorted(p.name for p in (tmp_path / "c").iterdir())
         assert written == sorted(f"{county_slug(c)}.html" for c in counties)
         assert (n_pages, len(written)) == (len(counties), len(counties))
@@ -1926,11 +1928,14 @@ class TestIndexablePages:
 
     def test_the_area_rows_differ_only_by_the_link_prefix(self, tmp_path):
         """The directory and the county page render the same area from the same
-        builder, so the two can't drift into disagreeing about a notice count."""
+        builder, so the two can't drift into disagreeing about a notice count.
+
+        Matched on the whole href rather than on `index.html`, because a row now
+        points at a page or at the hash route depending on the area."""
         site = build_site([_case()], SA_INDEX, NOW, TOWNS)
         county, areas = area_index(site["history"], TOWNS)[0]
         assert _area_items(county, areas, "../") == _area_items(county, areas).replace(
-            'href="index.html', 'href="../index.html'
+            'href="', 'href="../'
         )
 
     def test_the_directory_links_to_every_county_page(self, tmp_path):
@@ -1984,7 +1989,7 @@ class TestIndexablePages:
         locs = [el.text for el in root.iter(f"{ns}loc")]
         assert locs == [f"{BASE_URL}/", f"{BASE_URL}/areas.html"] + [
             f"{BASE_URL}/c/{county_slug(c)}.html" for c in counties
-        ]
+        ] + [f"{BASE_URL}/a/carlow/testtown.html"]
         # the payload is fetched by the app, never landed on
         assert not any("data.js" in loc or "/h/" in loc for loc in locs)
 
@@ -2081,7 +2086,9 @@ class TestPayloadShape:
     def test_the_county_keys_are_unchanged(self):
         county = self._site()["counties"]["Carlow"]
         assert set(county) == {"pop", "open_total", "months", "open", "towns", "resolved"}
-        assert set(county["towns"]["T1"]) == {"name", "pop", "months"}
+        # "slug" is present exactly when the area has a page: the app cannot
+        # derive it, because ui.js's slug() leaves a fada as a dash
+        assert set(county["towns"]["T1"]) == {"name", "pop", "months", "slug"}
         assert set(county["towns"]["T1"]["months"]["2026-05"]) == {
             "events", "availability", "person_h"
         }
@@ -2224,8 +2231,16 @@ class TestAreaIndexHtml:
         assert "Whiddy/Bantry" not in html   # no raw slash reaches the href
 
     def test_an_apostrophe_and_a_fada_are_escaped(self):
+        """Only areas without a page still go through the hash route, so the
+        encoding that matters is an ED's."""
         assert "O%27Briensbridge" in self._links("ed:Clare:O'Briensbridge")
-        assert "D%C3%BAn%20Laoghaire" in self._links("02341-Dún Laoghaire")
+        assert "ed%3AGalway%3AAn%20Sp%C3%ADd%C3%A9al" in self._links("ed:Galway:An Spídéal")
+
+    def test_an_area_with_a_page_is_linked_to_it_and_not_to_the_hash(self):
+        """The county-and-name slug, not the code: a code is not a filename."""
+        html = self._links("02341-Dún Laoghaire", name="Dún Laoghaire")
+        assert 'href="a/cork/dun-laoghaire.html"' in html
+        assert "index.html#area" not in html
 
     def test_an_area_name_is_html_escaped(self):
         assert "&amp;" in self._links("T1", name="Ballymore & Kill")

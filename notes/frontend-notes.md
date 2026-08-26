@@ -242,3 +242,47 @@ Now: "Co. Carlow: 1,234 Uisce Éireann notices across 56 areas - water outages, 
 `{len(areas):,} areas` printed "1 areas"; fixed in passing.
 
 Guarded in `tests/test_site.py::TestIndexablePages` — the ordering, the truncation property, the length ceiling and the plural.
+
+## The area pages — 2026-08-26
+
+The gap the previous entry recorded as accepted is closed. 739 areas now have a page at `a/<county>/<area>.html`, and the app's area view links to it. The site's indexable surface goes from 28 URLs to 767.
+
+### Which areas, and the numbers that decided it
+
+An area code is one of five things. Measured on the 2026-08-26 corpus, over the 1,960 areas that have ever had a notice:
+
+| kind | with a notice | page? |
+|---|---|---|
+| CSO settlement | 697 | yes |
+| City Local Electoral Area | 42 | yes |
+| Electoral Division | 1,193 | **no** |
+| City residual (`-rest`) | 5 | **no** |
+| Unplaced | 23 | **no** |
+
+The EDs are the whole reason there is a predicate. All 2,808 of them are named *Around …* — countryside around somewhere, not a place anyone types into a search box — and publishing 1,193 near-identical pages is what a search engine demotes as scaled thin content, with the risk landing on the county pages that already work. The `-rest` codes are a city's leftover LEAs, named *Elsewhere in Cork city*. Neither is a place, so neither gets an address.
+
+**Deliberately not gated on a notice count as well.** A floor of two would drop 122 pages today, but it would also make a URL appear the day an area's second notice arrives and vanish if the data were ever rebuilt differently. A permalink that comes and goes is worse than a short one, and a page reading "one notice, this date, 4 hours, ~500 people" is a real answer for a real place. Notices per page today: median 5, mean 9.0, max 83 (Dún Laoghaire).
+
+### The path is keyed on the name, and the app is told the slug
+
+`a/<county-slug>/<area-slug>.html`. Not the code — a code is not a filename, which is what kept the history shards per county: 31 contain a slash and most contain colons. Not the name alone either, because 185 area names repeat across counties. County-and-name is unique over all 3,717 areas in the CSO file, asserted rather than assumed.
+
+**The slug ships in the payload rather than being derived in the app, and this is not thrift being skipped.** statusui's two slug functions are deliberately unpaired — its own test says so — and `ui.js`'s leaves a fada as a dash: `Dún Laoghaire` → `d-n-laoghaire`, where Python gives `dun-laoghaire`. 17 area names carry a fada and 3 more carry punctuation the two treat differently, so deriving the href client-side would 404 on 20 places. `towns[code].slug` is present exactly when the area has a page, so it is the flag as well as the value. Cost: 16,092 bytes on `data.js`, 849,664 → 865,756 (+1.9%).
+
+### The label names the address, not the content
+
+"Permanent link to Abbeydorney" — lifts' wording, not the county view's. The rule set on 2026-08-26 is that a label must match the content relationship, and this page carries the same notices the area view does, uncapped. Naming it for its content would promise a reader what they are already looking at. That puts uisce on both sides of the split: its county link names the months, its area link names the address.
+
+Uncapped, unlike the county page's 60: an area accrues about one notice a month where a county accrues hundreds. Worth re-deciding if the biggest page passes a few hundred rows.
+
+### Two things a review caught
+
+The "open the interactive map" link shipped as `#area/<county>` — one segment where the app's area route needs two — so it matched neither of the router's patterns and dropped the reader on the national overview. It is the county route now, the same one the county pages use. A test reads the two patterns out of `site.html` and runs them against the href, rather than pinning a remembered shape; the build check does the same across all 1,247 hash links the static pages emit.
+
+An event's `people` is the whole event's footprint. On an area page that sits two lines under the area's own Census population, so a notice spanning five areas printed 3,775 people on a page headed 528 with nothing to explain it — the app's badge carries that caveat in its title and the page had dropped it. The multi-area note now carries it too, and only when there is a figure to qualify.
+
+### What it costs
+
+739 pages, 15,030,476 bytes raw and 4.58 MB gzipped — the largest is Dún Laoghaire at 35.5 KB raw / 7.8 KB gzipped, the smallest ~18.5 KB. **84% of a small page is the inlined CSS**, which is the tradeoff statusui's `assemble()` makes on purpose: every one of these pages is entered cold from a search result, so a shared stylesheet would cost that reader a second request. Inlining is most justified exactly here. Re-decide if the page count goes much past a thousand; a linked stylesheet would drop ~12 MB from the artifact and cost each cold reader a round trip.
+
+The whole build was checked rather than sampled: 767 sitemap URLs against 767 files on disk, matching in both directions, every canonical self-referential, and all 8,376 relative links resolving.

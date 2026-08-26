@@ -26,11 +26,6 @@
   nav a:hover { text-decoration: underline; }
   nav strong { color: var(--ink); }
 
-  section { margin-top: 26px; }
-  section h2 { font-size: 16px; font-weight: 650; padding-bottom: 6px;
-               border-bottom: 1px solid var(--grid); }
-  section h2 span { color: var(--muted); font-weight: 400; font-size: 13px; }
-
   /* A month table is the one thing here that cannot reflow, so it scrolls
      inside its own box rather than pushing the page sideways on a phone. */
   .scroll { overflow-x: auto; margin-top: 10px; }
@@ -42,26 +37,6 @@
   /* the grade cell takes the shared .g-* fills; white lettering is the
      default, and the shared rules darken it on the mid-range fills */
   td.g { font-weight: 700; color: #fff; text-align: center; width: 1%; }
-
-  ul.notices { list-style: none; margin-top: 10px; }
-  ul.notices li { padding: 8px 0; border-bottom: 1px solid var(--grid);
-                  font-size: 13.5px; }
-  ul.notices .when { display: block; color: var(--muted); font-size: 12.5px;
-                     margin-top: 2px; }
-  .sev { display: inline-block; padding: 1px 7px; border-radius: 999px;
-         font-size: 11.5px; font-weight: 600; color: #fff; vertical-align: 1px; }
-  .sev-outage { background: var(--critical); }
-  /* the deep serious fill: the base --serious is a 2.6:1 background for the
-     pill's white lettering */
-  .sev-quality { background: var(--serious-deep); }
-  .sev-degraded { background: var(--warning); color: #1a1a19; }
-  .sev-maintenance { background: var(--maint); }
-  /* dark-mode maint blue holds only 3.6:1 against white, so the pill goes
-     dark-lettered like sev-degraded rather than dulling the blue */
-  @media (prefers-color-scheme: dark) {
-    .sev-maintenance { color: #1a1a19; }
-  }
-  .more { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
 
   footer { margin-top: 40px; line-height: 1.6; }
   footer p + p { margin-top: 8px; }
