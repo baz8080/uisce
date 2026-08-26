@@ -203,7 +203,7 @@ wheels = [
 [[package]]
 name = "statusui"
 version = "0.1.0"
-source = { git = "https://github.com/baz8080/statusui?branch=claude%2Fuisce-esb-design-alignment-djqu7s#8b8c4381fb59d3442de091530327b0cbf192b7d1" }
+source = { git = "https://github.com/baz8080/statusui?branch=claude%2Fuisce-esb-design-alignment-djqu7s#b8909241d739b94ed4b787bf8caa1f42ea9f5ea1" }
 
 [[package]]
 name = "uisce"
