@@ -1922,7 +1922,7 @@ class TestIndexablePages:
         write_site(_bare_site(), tmp_path, TOWNS)
         page = (tmp_path / "c" / "kildare.html").read_text()
         assert "Co. Kildare" in page
-        assert "0 notices across 0 areas" in page
+        assert "0 Uisce Éireann notices across 0 areas" in page
 
     def test_the_area_rows_differ_only_by_the_link_prefix(self, tmp_path):
         """The directory and the county page render the same area from the same
@@ -1951,6 +1951,31 @@ class TestIndexablePages:
         for county in counties:
             assert f'data-county="{county}"' in areas_page
         assert "sec.dataset.county" in areas_page
+
+    def test_the_description_states_the_county_s_record_not_the_page_s_listing(
+        self, tmp_path
+    ):
+        """A snippet is read alone, in a search result, with the page not yet
+        open - so it has to survive being read as a promise. The page stops at
+        COUNTY_EVENTS_SHOWN, so a description that reads as an inventory of what
+        is listed would be counted and found short. It is cut by width too, and
+        what survives is the front: the clause naming what the page holds may be
+        lost, and the sentence before it may not become false when it is."""
+        self._write(tmp_path)
+        page = (tmp_path / "c" / "carlow.html").read_text()
+        desc = re.search(r'name="description" content="([^"]*)"', page).group(1)
+        assert desc.startswith("Co. Carlow: ")
+        assert "Month-by-month totals and the most recent notices" in desc
+        head = desc.split(". ")[0]
+        assert "most recent" not in head
+        assert len(desc) <= 160, len(desc)
+
+    def test_the_description_counts_one_area_as_one_area(self, tmp_path):
+        """The fixture puts every notice in a single town."""
+        self._write(tmp_path)
+        desc = (tmp_path / "c" / "carlow.html").read_text()
+        assert "across 1 area -" in desc
+        assert "across 1 areas" not in desc
 
     def test_the_sitemap_lists_every_page_and_nothing_else(self, tmp_path):
         counties, _ = self._write(tmp_path)

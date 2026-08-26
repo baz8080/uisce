@@ -203,3 +203,42 @@ measured against the old width: at 851px the strip fits with "Aug 2026" at x 352
 of view while the page below shows August. `bindMonthReveal()` (statusui `0567472`) binds one
 resize listener that reveals the tab in every laid-out `.months`; hidden views measure zero
 and are skipped, since they re-render before they are shown.
+
+## The county-page link came up out of the footer — 2026-08-26
+
+It was a `<p id="countyHistoryLink">` in the footer, shown only in the county view, reading "See every notice ever recorded for Kildare". Nothing gets clicked in a footer, and what is on the other side — the full notice history, the month table, the area list — is more interesting than that placement implied.
+
+It now sits on its own line directly under the county heading, above the month tabs: the placement lifts has always used and esb adopted the same day. The rule that styles it, `.chead + .sub`, is promoted to statusui's `base.css`; lifts and esb had been carrying it byte for byte and this site is the third consumer. It sat in this site's inline block beside `.chead .pop` until the pin bump that followed, which removed all three local copies.
+
+**The overview row's `href` changed too, and this was the bigger hole.** It pointed at `#county/<name>` — the hash. lifts and esb both point theirs at the static page with the click suppressed, so a crawler, a middle-click and a "copy link address" all reach the page while a normal click stays in the app. Here they reached a fragment, which meant `c/<county>.html` was discoverable only from the footer link and from `areas.html`. It now points at `c/<county>.html`.
+
+**Wording: "Every month for Co. Carlow on one page" — the same sentence esb uses, and not the old footer copy.** It first shipped as "Every notice ever recorded in Co. Carlow", carried over from the footer without being checked against the page. That was wrong: `_county_events_html` caps at `COUNTY_EVENTS_SHOWN = 60` and prints its own "N older notices not shown here", so the label promised something the page then denied — the exact false-promise failure this whole decision exists to avoid.
+
+What the page really carries that the view does not is *every month*: the county view is one month's bars, tiles and town table, and the month table on the page covers every month collection reached. That is true, and it is word for word the relation esb's county page stands in to esb's county view — so the two sites say the same thing. Two categories, not three:
+
+- **esb and uisce** — the view is one month, the page is all of them: "Every month for County X on one page".
+- **lifts** — the page carries the same months and cases the view already shows, so there is no content difference to name, only a durable address: "Permanent link to Athy station".
+
+Same placement on all three; the words follow the content relationship, and two of the three share one.
+
+"Permalink" was rejected as the label: it is blogging-era vocabulary a general audience mostly does not hold, and it would undersell a page that genuinely carries more than the view. The county is in the link text because a screen reader lists links stripped of their context.
+
+### The area view has no equivalent, and that is the accepted gap
+
+An area is reachable only as `#area/<county>/<code>`. There is no `a/<slug>.html`, so a reader who drills county → area watches the affordance disappear — one click deeper, into the ~1,836 areas that are the long tail and where a shareable URL is worth most.
+
+Left open rather than papered over. Closing it means building area pages, and the measurement that would gate that is written down: of 3,717 areas, 909 are named CSO settlements and 2,808 are electoral divisions whose names all begin "Around " — pages for those would be thin content at scale. Slugging the `(county, name)` pair is collision-free across all 3,717 (name alone collides 185 times), so the scheme is not the obstacle; the decision about which areas deserve a page is.
+
+Guarded by `tests/test_permalink_affordance.py`, including a test that asserts the area view offers nothing, so the gap stays deliberate.
+
+### The county page's meta description had the same shape
+
+"…in Co. Carlow - 1,234 notices across 56 areas, updated twice daily." The counts are the county's whole record; `_county_events_html` stops at `COUNTY_EVENTS_SHOWN = 60`. Less blatant than the link, because it never said the page listed them — but a reader arriving from that snippet expects to find them.
+
+Now: "Co. Carlow: 1,234 Uisce Éireann notices across 56 areas - water outages, boil notices, restrictions and works. Month-by-month totals and the most recent notices." Same fix as esb's, and the same ordering rule behind it.
+
+**Ordered so truncation cannot make it false.** A snippet is cut by pixel width and what survives is the front, so the clause naming what the page holds goes last: cut anywhere in it, what remains is a true statement about the county. 156 characters on the fixture county.
+
+`{len(areas):,} areas` printed "1 areas"; fixed in passing.
+
+Guarded in `tests/test_site.py::TestIndexablePages` — the ordering, the truncation property, the length ceiling and the plural.

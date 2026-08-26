@@ -2143,10 +2143,16 @@ def write_site(site, site_dir, towns=None):
                     "TITLE": html.escape(
                         f"Co. {county} water supply disruptions - Uisce Éireann notices"
                     ),
+                    # The counts are the county's whole record; _county_events_html
+                    # stops at COUNTY_EVENTS_SHOWN. So they are stated as the
+                    # county's and what the page holds is named after them, which
+                    # also leaves a true sentence when a search engine truncates.
                     "DESC": html.escape(
-                        f"Water outages, boil notices, restrictions and works announced by "
-                        f"Uisce Éireann in Co. {county} - {len(events):,} notices across "
-                        f"{len(areas):,} areas, updated twice daily."
+                        f"Co. {county}: {len(events):,} Uisce Éireann "
+                        f"notice{'' if len(events) == 1 else 's'} across {len(areas):,} "
+                        f"area{'' if len(areas) == 1 else 's'} - water outages, boil "
+                        f"notices, restrictions and works. Month-by-month totals and the "
+                        f"most recent notices."
                     ),
                     "CANONICAL": f"{BASE_URL}/{COUNTY_DIR}/{slug}.html",
                     "BODY": body,

@@ -231,7 +231,6 @@
 
   <footer>
     <p><a href="areas.html" style="color:inherit">Every area with a notice</a> - a full directory of the 1,800-odd Census areas on this site, each linking to its incident history.</p>
-    <p id="countyHistoryLink" hidden></p>
     <details class="method">
       <summary>What this measures</summary>
       <p>This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. Durations count from when a notice was published - for an unplanned burst the water was already off before that. The headline &ldquo;works complete&rdquo; time is a <b>minimum</b>: it counts only the notices that reported one. The availability percentages are a <b>best estimate</b>, because a total has to put a number on every disruption, including the ones that never reported an end.</p>
@@ -451,11 +450,6 @@ function render() {
     document.getElementById(id).hidden = name !== view;
   }
   document.getElementById("pickHint").hidden = view !== "overview";
-  const chl = document.getElementById("countyHistoryLink");
-  chl.hidden = view !== "county";
-  if (view === "county") {
-    chl.innerHTML = `<a href="c/${county.toLowerCase()}.html" style="color:inherit">See every notice ever recorded for ${esc(county)}</a>`;
-  }
   RENDER[view]();
   revealMonthTab(document.getElementById(VIEW_EL[view]).querySelector(".months"));
 }
@@ -521,7 +515,9 @@ function renderOverview() {
     // the name is a real anchor, as the area rows already are: the row-level
     // onclick alone left every county unreachable by keyboard and unannounced
     // as interactive, and killed middle-click and open-in-new-tab
-    const href = `#county/${encodeURIComponent(name)}`;
+    // the static page, not the hash: this href is what a crawler follows and
+    // what "copy link address" yields, while the click stays in the app
+    const href = `c/${name.toLowerCase()}.html`;
     const jump = `goCounty('${encodeURIComponent(name)}')`;
     // no row title either: it would surface over the bar in place of the readout
     return `<div class="place">
@@ -675,6 +671,15 @@ function renderCounty() {
       <span class="pop">${c.pop.toLocaleString()} people · Census 2022</span>
       ${healthPill(m)}
     </div>
+    <!-- Named for the difference, not for being a permalink: this view is one
+         month at a time and that page carries every month. Deliberately not
+         "every notice ever recorded" - _county_events_html caps at
+         COUNTY_EVENTS_SHOWN and prints its own "older notices not shown here",
+         so that label would be contradicted by the page it lands on. The county
+         is in the link text because a screen reader lists links stripped of
+         their context. -->
+    <div class="sub"><a href="c/${county.toLowerCase()}.html">Every month for
+      Co. ${esc(county)} on one page</a></div>
     <div class="controls">
       <div class="months">${monthTabs(D.months, curMonth, "setMonth")}</div>
     </div>
