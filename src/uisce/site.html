@@ -579,9 +579,12 @@ function townRows(c) {
       ? '<span class="z">—</span>'
       : `${availText(m.availability, m.person_h)}<span class="meter" title="${lost.toFixed(2)}% of this area's people-time affected"><i style="width:${Math.min(100, lost * 5).toFixed(1)}%"></i></span>`;
     // the whole row is the click target, but the name is also a real anchor so
-    // middle-click and open-in-new-tab work — the county rows predate this and
-    // still don't
-    const href = esc(`#area/${encodeURIComponent(county)}/${encodeURIComponent(code)}`);
+    // middle-click and open-in-new-tab work. The page where the area has one and
+    // the hash where it does not, the same rule _area_items follows server-side:
+    // an "Around ..." Electoral Division is only ever reachable inside the app.
+    const href = esc(t.slug
+      ? `a/${slug(county)}/${t.slug}.html`
+      : `#area/${encodeURIComponent(county)}/${encodeURIComponent(code)}`);
     const jump = `goArea(${jsArg(county)}, ${jsArg(code)})`;
     return `<tr class="hist ${t.unplaced ? "unplaced" : ""}" onclick="${jump}">
       <td class="name"><a href="${href}" onclick="${jump}; return false;">${esc(t.name)}</a>${t.pop == null ? "" : `<br><span class="tpop">${t.pop.toLocaleString()} people</span>`}</td>
@@ -937,13 +940,23 @@ function openMethod() {
   d.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+// A hit is an entry point rather than a drill-down, so it is a real link: an
+// area goes straight to its page, and a county keeps its click in the app while
+// still yielding c/<county>.html to a middle-click. `slug` is ui.js's, which is
+// safe for a county because every one of them is one ASCII word; an area name
+// is not, which is why its slug rides in the index.
 bindSearch({
   input: document.getElementById("q"),
   results: document.getElementById("results"),
   counties: Object.keys(D.counties),
   src: "search.js" + cacheBust(D),
   loaded: () => window.UISCE_SEARCH,
-  pick: goCounty
+  href: (c, t) => t ? `a/${slug(c)}/${t}.html` : `c/${slug(c)}.html`,
+  // a name that can only reach its county says so: an "Around ..." Electoral
+  // Division has no page, and a hit that quietly does something else is worse
+  // than one that says what it will do
+  note: (name, c, t) => name === c ? "" : t ? c : `${c} · county`,
+  pick: (c, t) => { if (t) return false; goCounty(c); return true; }
 });
 window.addEventListener("hashchange", route);
 window.addEventListener("popstate", route);

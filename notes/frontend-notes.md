@@ -286,3 +286,45 @@ An event's `people` is the whole event's footprint. On an area page that sits tw
 739 pages, 15,030,476 bytes raw and 4.58 MB gzipped — the largest is Dún Laoghaire at 35.5 KB raw / 7.8 KB gzipped, the smallest ~18.5 KB. **84% of a small page is the inlined CSS**, which is the tradeoff statusui's `assemble()` makes on purpose: every one of these pages is entered cold from a search result, so a shared stylesheet would cost that reader a second request. Inlining is most justified exactly here. Re-decide if the page count goes much past a thousand; a linked stylesheet would drop ~12 MB from the artifact and cost each cold reader a round trip.
 
 The whole build was checked rather than sampled: 767 sitemap URLs against 767 files on disk, matching in both directions, every canonical self-referential, and all 8,376 relative links resolving.
+
+## Search reaches the area, not just its county — 2026-08-27
+
+The area pages shipped yesterday, and the one control a reader actually uses could not reach them. Typing "Abbeydorney" and clicking the hit landed you on Co. Kerry, to find Abbeydorney again yourself.
+
+That was the index's shape rather than a routing choice. statusui's `searchHits` returned `[name, county]`, `bindSearch` rendered a button carrying `data-c` alone, and the matched name was discarded — so `pick: goCounty` was not a decision, it was the only thing the callback was given. Both destinations already existed and both needed a key `search.js` did not ship.
+
+### The destination is the page, not this site's own area view
+
+uisce has an `#area/<county>/<code>` view as well as the page, so routing search at the view — and building one for esb, which has none, so the two sites would match — was the obvious symmetric answer. It was rejected, because the view earns almost nothing over the page:
+
+- They are the same content. `area_page_html`'s own docstring says so, and the page then adds an "Elsewhere" section the view lacks.
+- `renderArea` has no month tabs. The view is not a more interactive surface, just the same list.
+- The search box is not in the area view either — `#q` lives inside `#overview` — so staying in the app does not keep searching available.
+- `go()`'s comment already settled the analytics case: pushState does not get a drill-down counted, and "the county pages are what actually solved it, being real documents at their own URLs".
+- The page is indexable, shareable, middle-clickable and survives JS off. At ~18.5 KB self-contained it is one request; the in-app route may still have to fetch a county history shard, so from a cold search click the page can be the faster of the two.
+
+**A search hit is an entry point, not a drill-down, and entry points should be real URLs.** That is the same argument that moved the overview's county rows off their hash on 2026-08-26 — recorded there as "the bigger hole" — applied to the one control that had not had it yet. Every hit is an `<a href>` now: an area goes to `a/<county>/<slug>.html`, a county to `c/<county>.html` with the click kept in the app. esb does the same thing with the same code, and needs no `#area` route to do it, so the two sites converge on the page rather than on a route neither of them needed.
+
+### The `#area` view stays, and is not dead weight
+
+The argument above says the page is the better destination, which invites the conclusion that the view should go. It should not, for two reasons that are the mirror image of it:
+
+**It is the only surface the pageless areas have.** Of the 1,960 areas that have ever had a notice, 739 get a page; the 1,193 `Around …` Electoral Divisions, 5 city `-rest` buckets and 23 unplaced are denied one on purpose, to keep 1,193 near-identical pages out of the index as scaled thin content. Their notices still have to be readable, and `_area_items` already routes them there. Delete the view and **62% of noticed areas become unreachable**. Having no URL is exactly the property that makes it right for them.
+
+**A drill-down is not an entry point.** The county view's towns table is an in-app table; a row click should behave like the rest of the app. That is a different job from a hit arriving cold, and the distinction is what justifies both existing.
+
+The towns rows did carry the same hole the county rows had, though: their `href` was `#area/<county>/<code>` for *every* area, including the 739 with a page. `t.slug` was already in scope on the row. They now point at the page where there is one and the hash where there is not — the rule `_area_items` follows server-side, finally the same on both sides.
+
+### The gate is the payload's slug, not `area_has_page`
+
+`area_has_page` is a predicate on the *name*: 904 of the 3,717 areas pass it. Only the ones that have had a notice get a page built, so gating the index on the predicate would have put ~165 names on a URL that does not exist. `site["counties"][c]["towns"][code]["slug"]` is present exactly when a page was written, so it is the flag as well as the value, and the test asserts every slug the index emits has a file behind it.
+
+The slug and not the whole href: measured on `sa_towns.csv`, `search.js` goes 66,477 → 79,784 bytes (+20.0%) carrying slugs, against 92,704 (+39.5%) carrying full paths. Both sites already share the `a/<county>/<area>.html` shape, so each assembles it in one line. Shipping the *code* instead would have been cheaper still (+9,766) — settlement codes are five digits where the long colon-and-slash ones all belong to EDs — but the code only addresses the in-app view, which is not where the hit goes.
+
+`search.js` is fetched on the first keystroke and never in the initial payload, so none of this lands on a reader who does not search.
+
+### Two edges, both left as they are
+
+A county that is also a settlement name — Carlow, Sligo, Cavan and a dozen others — dedups to the county hit, so search cannot reach the *town* of Carlow's page. That is the pre-existing `name|county` dedup and typing a county name almost always means the county, which is also the richer destination.
+
+An `Around …` ED and a settlement that has never had a notice both stay county-bound, and the annotation beside the hit says "· county" so the mixed behaviour is visible rather than arbitrary. Routing the never-noticed ones at the in-app view would give a better answer than the county — "nothing was ever published in Abbeydorney" — but the view falls back to the bare area code for its heading when the payload has no entry, so it would need a name shipped as well. Worth doing only if readers turn out to search for quiet towns.
