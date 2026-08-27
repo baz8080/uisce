@@ -1830,13 +1830,46 @@ class TestHistoryShards:
     def test_search_js_maps_each_county_to_its_sorted_names(self, tmp_path):
         """The search index bindSearch fetches on the first keystroke: county ->
         sorted settlement names, counties restricted to the payload's so a pick
-        always routes."""
+        always routes. An area with a page carries its slug, so the hit can be a
+        link straight to it."""
         site, _ = self._write(tmp_path)
         body = (tmp_path / "search.js").read_text()
-        assert body.startswith("window.UISCE_SEARCH = ")
+        assert body.startswith("window.UISCE_PLACES = ")
         index = json.loads(body.split(" = ", 1)[1].rstrip(";"))
-        assert index == {"Carlow": ["Testtown"]}
+        assert index == {"Carlow": [["Testtown", "testtown"]]}
         assert set(index) <= set(site["counties"])
+
+    def test_an_area_with_no_page_stays_a_bare_name(self, tmp_path):
+        """The slug is the flag as well as the value. An Electoral Division never
+        gets a page, and neither does a settlement that has never had a notice —
+        both would 404, so both stay county-bound."""
+        # SA2 and SA3 sit well away from the test pin, so the case still lands
+        # in Testtown and the other two areas stay noticeless
+        sa = SmallAreaIndex([
+            (52.836, -6.926, "SA1", 1000),
+            (53.500, -7.500, "SA2", 500),
+            (54.500, -8.500, "SA3", 500),
+        ])
+        towns = TownLookup(
+            [
+                ("SA1", "T1", "Testtown", "Carlow"),
+                ("SA2", "ed:Carlow:Around Testtown", "Around Testtown", "Carlow"),
+                ("SA3", "T2", "Quietville", "Carlow"),
+            ],
+            sa.pop,
+        )
+        site = build_site([_case()], sa, NOW, towns)
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, towns)
+        body = (tmp_path / "search.js").read_text()
+        index = json.loads(body.split(" = ", 1)[1].rstrip(";"))
+        assert index == {
+            "Carlow": ["Around Testtown", "Quietville", ["Testtown", "testtown"]]
+        }
+        # every slug emitted has a page on disk behind it
+        for entry in index["Carlow"]:
+            if not isinstance(entry, str):
+                assert (tmp_path / "a" / "carlow" / f"{entry[1]}.html").exists()
 
 
 class TestIndexablePages:

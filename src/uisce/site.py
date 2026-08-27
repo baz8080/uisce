@@ -2223,12 +2223,35 @@ def write_site(site, site_dir, towns=None):
         # The search index: every Census settlement, noticed or not, so a
         # reader finds their town even when it has never had a notice. Fetched
         # by bindSearch on the first keystroke, never in the initial payload.
+        #
+        # An entry is `[name, slug]` where the area has a page and a bare name
+        # where it does not, which is what lets a hit be a link straight to it.
+        # The gate is the payload's own slug rather than area_has_page: 904
+        # names are eligible but only the ones with notices get a page built,
+        # and the difference would be a search result that 404s.
         names = defaultdict(set)
         for code, name in towns.name.items():
-            if towns.county[code] in site["counties"]:
-                names[towns.county[code]].add(name)
-        search = "window.UISCE_SEARCH = " + statusui.dumps(
-            {c: sorted(v) for c, v in sorted(names.items())}
+            county = towns.county[code]
+            if county not in site["counties"]:
+                continue
+            area = site["counties"][county]["towns"].get(code) or {}
+            names[county].add((name, area["slug"]) if "slug" in area else name)
+
+        def entry(e):
+            return e if isinstance(e, str) else list(e)
+
+        def by_name(e):
+            return e if isinstance(e, str) else e[0]
+
+        # UISCE_PLACES, not UISCE_SEARCH: search.js is fetched lazily, so a tab
+        # opened before a deploy pairs its own inlined ui.js with the current
+        # file. The entries carry a slug now, and the old searchHits calls
+        # toLowerCase on them - renaming with the shape means that reader gets
+        # the box's own "unavailable, try reloading" rather than a dropdown
+        # stuck on "Searching".
+        search = "window.UISCE_PLACES = " + statusui.dumps(
+            {c: [entry(e) for e in sorted(v, key=by_name)]
+             for c, v in sorted(names.items())}
         ) + ";"
         (site_dir / "search.js").write_text(search)
         search_bytes = len(search.encode())
