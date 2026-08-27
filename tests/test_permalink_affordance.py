@@ -59,7 +59,7 @@ def test_an_overview_row_points_a_crawler_at_the_page_not_the_hash():
     pointed its href at the hash, so the page was reachable only from the
     footer link and areas.html."""
     assert "const href = `c/${name.toLowerCase()}.html`;" in SITE_HTML
-    assert '<a href="${href}" onclick="${jump}; return false;">' in SITE_HTML
+    assert '<a href="${href}" onclick="if (newTab(event)) return true; ${jump}; return false;">' in SITE_HTML
 
 
 def test_the_area_view_links_to_the_area_page_when_there_is_one():
@@ -80,3 +80,29 @@ def test_the_area_label_names_the_address_and_not_the_content():
     label = _sub_line(_view("function renderArea()", "// ---- routing ----"))
     assert "Permanent link to ${esc(name)}" in label
     assert "Every notice" not in label
+
+
+def test_a_search_hit_is_a_link_to_the_page_and_not_just_a_county_jump():
+    """The box is the entry point a reader actually uses, so its hits carry the
+    same href/click split the overview rows do: an area goes to its page, a
+    county keeps the click in the app but still yields c/<county>.html."""
+    assert "href: (c, t) => t ? `a/${slug(c)}/${t}.html` : `c/${slug(c)}.html`," in SITE_HTML
+    assert "pick: (c, t) => { if (t) return false; goCounty(c); return true; }" in SITE_HTML
+
+
+def test_a_towns_row_points_at_the_page_when_the_area_has_one():
+    """The hole the overview rows had until 2026-08-26, in the last place still
+    carrying it: a paged area's row linked at the hash. The Electoral Divisions
+    keep the hash, because the app view is the only surface they have."""
+    assert "a/${slug(county)}/${t.slug}.html" in SITE_HTML
+    assert "`#area/${encodeURIComponent(county)}/${encodeURIComponent(code)}`" in SITE_HTML
+
+
+def test_a_modified_click_is_left_to_the_browser_where_the_href_is_a_page():
+    """`return false` cancels the navigation a modified click asked for, so the
+    two rows whose href is a real page have to ask first. The hash links do not:
+    there is nothing on the other side worth a new tab."""
+    assert SITE_HTML.count("if (newTab(event)) return true;") == 2
+    for row in ("${name}</a>", "${esc(t.name)}</a>"):
+        anchor = SITE_HTML[: SITE_HTML.index(row)].rsplit("<a href=", 1)[1]
+        assert "newTab(event)" in anchor

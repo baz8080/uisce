@@ -522,7 +522,7 @@ function renderOverview() {
     // no row title either: it would surface over the bar in place of the readout
     return `<div class="place">
       <div class="row" onclick="${jump}">
-        <div class="cname"><span class="gradechip g-${m.grade}">${m.grade}</span>${healthMark(m)}<a href="${href}" onclick="${jump}; return false;">${name}</a></div>
+        <div class="cname"><span class="gradechip g-${m.grade}">${m.grade}</span>${healthMark(m)}<a href="${href}" onclick="if (newTab(event)) return true; ${jump}; return false;">${name}</a></div>
         <div class="bar">${bar(m.days)}</div>
         <div class="stats">
           <div class="counts">
@@ -587,7 +587,7 @@ function townRows(c) {
       : `#area/${encodeURIComponent(county)}/${encodeURIComponent(code)}`);
     const jump = `goArea(${jsArg(county)}, ${jsArg(code)})`;
     return `<tr class="hist ${t.unplaced ? "unplaced" : ""}" onclick="${jump}">
-      <td class="name"><a href="${href}" onclick="${jump}; return false;">${esc(t.name)}</a>${t.pop == null ? "" : `<br><span class="tpop">${t.pop.toLocaleString()} people</span>`}</td>
+      <td class="name"><a href="${href}" onclick="if (newTab(event)) return true; ${jump}; return false;">${esc(t.name)}</a>${t.pop == null ? "" : `<br><span class="tpop">${t.pop.toLocaleString()} people</span>`}</td>
       ${num(ev(m, "outage"), "Disruptions")}
       ${num(ev(m, "quality"), "Quality notices")}
       ${num(ev(m, "degraded") + ev(m, "maintenance"), "Works")}
@@ -905,6 +905,12 @@ function go(hash) {
   window.scrollTo(0, 0);
 }
 function goCounty(name) { go("#county/" + encodeURIComponent(name)); }
+// A modified click is the reader asking for a new tab or a saved link, so the
+// href is theirs to follow — jumping in the app instead would cancel it. Only
+// worth asking where the href is a real page rather than a hash.
+function newTab(e) {
+  return e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button;
+}
 // Both segments encoded: an area code is not URL-safe — 31 of them contain a
 // slash ("ed:Cavan:Dunmakeever/Benbrack/Derrynananta"), most contain colons,
 // several are non-ASCII. Encoding turns the slash into %2F, which is what keeps
@@ -955,7 +961,7 @@ bindSearch({
   // a name that can only reach its county says so: an "Around ..." Electoral
   // Division has no page, and a hit that quietly does something else is worse
   // than one that says what it will do
-  note: (name, c, t) => name === c ? "" : t ? c : `${c} · county`,
+  note: (name, c, t) => t ? c : name === c ? "" : `${c} · county`,
   pick: (c, t) => { if (t) return false; goCounty(c); return true; }
 });
 window.addEventListener("hashchange", route);
