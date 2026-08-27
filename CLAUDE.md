@@ -63,7 +63,8 @@ with the evidence that closed them.
 - Comments earn their place or they go. Say **why**, not what — never a paraphrase of the line
   below, a heading for an obviously-named block, or an explanation of a standard flag. One line
   where one will do; a paragraph of reasoning belongs in the commit message or `notes/`.
-- `uv run pytest` before anything ships. The payload-shape tests in `tests/test_site.py` are guards:
+- `uv run ruff check` and `uv run pytest` before anything ships, in that order — it is the order
+  CI runs them in, and ruff failing first means the suite never runs there at all. The payload-shape tests in `tests/test_site.py` are guards:
   when one fails because a key was added, that is the guard working.
 - The `cases` schema is declared once, as `CASE_COLUMNS` in `pipeline.py`. `create_db`,
   `DB_CASE_COLUMNS`, the `V1`/`REQUIRED` migration sets and the test fixtures all derive from it.

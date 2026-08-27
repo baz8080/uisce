@@ -59,7 +59,8 @@ def test_an_overview_row_points_a_crawler_at_the_page_not_the_hash():
     pointed its href at the hash, so the page was reachable only from the
     footer link and areas.html."""
     assert "const href = `c/${name.toLowerCase()}.html`;" in SITE_HTML
-    assert '<a href="${href}" onclick="if (newTab(event)) return true; ${jump}; return false;">' in SITE_HTML
+    anchor = '<a href="${href}" onclick="if (newTab(event)) return true; ${jump}; return false;">'
+    assert anchor in SITE_HTML
 
 
 def test_the_area_view_links_to_the_area_page_when_there_is_one():
