@@ -321,7 +321,7 @@ The towns rows did carry the same hole the county rows had, though: their `href`
 
 The slug and not the whole href: measured on `sa_towns.csv`, `search.js` goes 66,477 → 79,784 bytes (+20.0%) carrying slugs, against 92,704 (+39.5%) carrying full paths. Both sites already share the `a/<county>/<area>.html` shape, so each assembles it in one line. Shipping the *code* instead would have been cheaper still (+9,766) — settlement codes are five digits where the long colon-and-slash ones all belong to EDs — but the code only addresses the in-app view, which is not where the hit goes.
 
-`search.js` is fetched on the first keystroke and never in the initial payload, so none of this lands on a reader who does not search.
+`search.js` is fetched on the first keystroke and never in the initial payload, so none of this lands on a reader who does not search. It assigns `UISCE_PLACES` rather than `UISCE_SEARCH`, and the rename is load-bearing: fetching it lazily means a tab opened before a deploy pairs its own inlined `ui.js` with the current file, and the cache-bust is a query string the server ignores rather than a version it selects. The old `searchHits` calls `toLowerCase` on an entry, which throws on the pair, before the dropdown's markup is assigned — leaving it stuck on "Searching…" until a reload. Renaming with the shape means that reader gets "Search is unavailable - try reloading" instead, which is the box's own state and tells them what to do. esb took the same rename.
 
 ### Two edges, both left as they are
 

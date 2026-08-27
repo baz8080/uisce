@@ -1834,7 +1834,7 @@ class TestHistoryShards:
         link straight to it."""
         site, _ = self._write(tmp_path)
         body = (tmp_path / "search.js").read_text()
-        assert body.startswith("window.UISCE_SEARCH = ")
+        assert body.startswith("window.UISCE_PLACES = ")
         index = json.loads(body.split(" = ", 1)[1].rstrip(";"))
         assert index == {"Carlow": [["Testtown", "testtown"]]}
         assert set(index) <= set(site["counties"])

@@ -956,7 +956,7 @@ bindSearch({
   results: document.getElementById("results"),
   counties: Object.keys(D.counties),
   src: "search.js" + cacheBust(D),
-  loaded: () => window.UISCE_SEARCH,
+  loaded: () => window.UISCE_PLACES,
   href: (c, t) => t ? `a/${slug(c)}/${t}.html` : `c/${slug(c)}.html`,
   // a name that can only reach its county says so: an "Around ..." Electoral
   // Division has no page, and a hit that quietly does something else is worse

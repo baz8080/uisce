@@ -2243,7 +2243,13 @@ def write_site(site, site_dir, towns=None):
         def by_name(e):
             return e if isinstance(e, str) else e[0]
 
-        search = "window.UISCE_SEARCH = " + statusui.dumps(
+        # UISCE_PLACES, not UISCE_SEARCH: search.js is fetched lazily, so a tab
+        # opened before a deploy pairs its own inlined ui.js with the current
+        # file. The entries carry a slug now, and the old searchHits calls
+        # toLowerCase on them - renaming with the shape means that reader gets
+        # the box's own "unavailable, try reloading" rather than a dropdown
+        # stuck on "Searching".
+        search = "window.UISCE_PLACES = " + statusui.dumps(
             {c: [entry(e) for e in sorted(v, key=by_name)]
              for c, v in sorted(names.items())}
         ) + ";"
