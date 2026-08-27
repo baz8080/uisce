@@ -31,11 +31,11 @@ def test_the_county_view_links_to_the_county_page():
 
 
 def test_the_county_label_claims_the_months_and_not_every_notice():
-    """The county page caps its notice list at COUNTY_EVENTS_SHOWN and says so
-    in its own "older notices not shown here" line, so a link promising every
-    notice would be contradicted by the page it lands on. What that page really
-    does carry that the view does not is every month — the same claim esb's
-    makes, because the two stand in the same relation to their views."""
+    """The page carries every notice since the cap came off, but that is not
+    what makes it worth opening from here: this view already shows the month's
+    notices and only ever one month. What the page has that the view lacks is
+    every month — the same claim esb's makes, because the two stand in the same
+    relation to their views."""
     label = _sub_line(_view("function renderCounty()", "function renderTop()"))
     assert "Every month for" in label
     assert "on one page" in label

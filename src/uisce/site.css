@@ -8,7 +8,8 @@ footer a { color: inherit; }
 
 /* The per-area rows: the directory and the county pages share them so an
    area reads the same on both. */
-ul.areas { list-style: none; columns: 2; column-gap: 28px; margin-top: 8px; }
+ul.areas { list-style: none; columns: 2; column-gap: 28px; margin-top: 8px;
+           padding: 0; }
 ul.areas li { break-inside: avoid; display: flex; align-items: baseline;
               gap: 6px; padding: 3px 0; font-size: 13.5px; }
 ul.areas li a { text-decoration: none; border-bottom: 1px solid var(--border); }
@@ -29,7 +30,7 @@ section h2 { font-size: 16px; font-weight: 650; padding-bottom: 6px;
              border-bottom: 1px solid var(--grid); }
 section h2 span { color: var(--muted); font-weight: 400; font-size: 13px; }
 
-ul.notices { list-style: none; margin-top: 10px; }
+ul.notices { list-style: none; margin-top: 10px; padding: 0; }
 ul.notices li { padding: 8px 0; border-bottom: 1px solid var(--grid);
                 font-size: 13.5px; }
 ul.notices .when { display: block; color: var(--muted); font-size: 12.5px;

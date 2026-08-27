@@ -18,6 +18,7 @@ import statusui
 from uisce.site import (
     AREA_HTML,
     AREAS_HTML,
+    COUNTY_HTML,
     SITE_CSS,
     SITE_HTML,
     area_page_html,
@@ -232,3 +233,15 @@ class TestTheSharedSubLineRule:
         statusui existed to end."""
         assert ".chead + .sub" in statusui.base_css()
         assert ".chead + .sub" not in SITE_CSS.read_text()
+
+class TestListsTakeBackTheUserAgentIndent:
+    """base.css resets margin but not padding, so a bare <ul> keeps the user
+    agent's 40px padding-inline-start — `list-style: none` removes the marker
+    and leaves the gutter it sat in. Both list rules have to reset it
+    themselves, and neither did until 2026-08-27."""
+
+    @pytest.mark.parametrize("selector", ["ul.areas", "ul.notices"])
+    def test_the_rule_resets_its_own_padding(self, selector):
+        css = _stylesheet(COUNTY_HTML)
+        block, _ = _block(css, css.index(selector + " {") + len(selector) + 1)
+        assert "padding: 0" in block, block
