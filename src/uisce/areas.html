@@ -16,8 +16,8 @@
     padding: 10px 12px; border-radius: 8px; line-height: 2;
     background: var(--surface); border: 1px solid var(--border);
     font-size: 13px; color: var(--muted);
-    /* bounded, so a narrow window cannot leave the sticky nav taller than the
-       scroll-margin below it and hide the heading it just jumped to */
+    /* bounded so a short landscape window is not all nav; the narrow-window
+       side of the overlap is the static-nav breakpoint below */
     max-height: 30vh; overflow-y: auto;
   }
   nav a { text-decoration: none; }
@@ -39,9 +39,11 @@
   }
   .find input:focus { outline: 2px solid var(--ink-2); outline-offset: -1px; }
   .find p { color: var(--muted); font-size: 13px; margin-top: 6px; min-height: 1.45em; }
-  /* On a phone the nav wraps to six lines and eats the screen, so it scrolls
-     away with the page instead of pinning to the top of it. */
-  @media (max-width: 640px) {
+  /* The nav holds the two lines the 104px scroll margin clears only when
+     roughly 900px wide; narrower it wraps taller and hides the heading a jump
+     link lands on — and on a phone it eats the screen — so below that it
+     scrolls away with the page instead of pinning to the top of it. */
+  @media (max-width: 900px) {
     nav { position: static; max-height: none; }
     section { scroll-margin-top: 12px; }
   }
@@ -83,7 +85,10 @@
     // the bare name, not the heading: the heading also carries the area count
     // and the county-page link, and "page" must not match all 26 counties
     county: sec.dataset.county.toLowerCase(),
-    items: [...sec.querySelectorAll("li")].map(li => ({ li, text: li.textContent.toLowerCase() })),
+    // the name node only — the row's textContent also carries the units,
+    // and "notice", "people" or a bare digit must not match every row
+    items: [...sec.querySelectorAll("li")].map(li =>
+      ({ li, text: li.firstChild.textContent.trim().toLowerCase() })),
   }));
 
   function apply() {
