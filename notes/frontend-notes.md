@@ -330,3 +330,101 @@ A county that is also a settlement name dedups to the county hit, so search cann
 A modified click asks for a new tab, and `return false` on an in-app jump cancels it. That cost nothing while these hrefs were hashes; it costs a page now, so the two rows whose href is a real document — the overview's county row and the towns row — ask `newTab(event)` first. The hash links are left alone, having nothing on the other side worth a tab. statusui's `bindSearch` took the same fix the same day, where the guard has to be conditional on there being an href at all: lifts renders buttons, and swallowing the click there would just break it.
 
 An `Around …` ED and a settlement that has never had a notice both stay county-bound, and the annotation beside the hit says "· county" so the mixed behaviour is visible rather than arbitrary. Routing the never-noticed ones at the in-app view would give a better answer than the county — "nothing was ever published in Abbeydorney" — but the view falls back to the bare area code for its heading when the payload has no entry, so it would need a name shipped as well. Worth doing only if readers turn out to search for quiet towns.
+
+## The copy and consistency pass — 2026-08-27
+
+A read-through of the live pages, page by page, against what each one actually says. Four
+kinds of finding, plus one substantive change.
+
+### The county page is the county's whole record now — the cap came off
+
+`COUNTY_EVENTS_SHOWN = 60` and `COUNTY_OPEN_SHOWN = 20` are gone, and so is the
+`"N older notices not shown here"` line under the list. The page exists to be the durable,
+indexable document the hash routes can never be; presenting itself as a county's record while
+holding a sixtieth of it was the one claim on the site that could be checked and found short.
+
+Measured cost, at 251 bytes per rendered row (`_events_html`, synthetic Cork-shaped rows):
+500 notices is 123 KB of list, 1,000 is 245 KB, 2,000 is 490 KB. The corpus holds 11,405 cases
+nationally, so no county is near the top of that range today. esb, whose corpus *is* local and
+whose cap came off the same day, went from a 100.7 KB largest county page to 127.4 KB.
+
+**This does reopen a real concern**: the archive grows without bound and nothing now bounds
+the page. The bound to reintroduce, if one is needed, is a byte budget rather than a count —
+a count was always a proxy for the bytes and a bad one, since a row's size varies with the
+title and location strings. Nothing was measured against the live uisce feed here: the ArcGIS
+host is unreachable through this session's proxy, so the figures above are from synthetic rows
+of realistic width. **Check the largest `c/*.html` on the next CI data build.**
+
+The two places that documented the cap as their reason moved with it. The county view's
+sub-link still says "Every month for Co. X on one page" and still deliberately avoids "every
+notice ever recorded" — but the reason is now that the *view* is one month at a time, not that
+the page is short. The meta description reads "Month-by-month totals and every notice
+published"; the record-then-listing ordering stays, because a snippet cut by width still has
+to leave a true sentence behind.
+
+`_events_html` lost its `shown` parameter entirely and `_county_events_html` with it — both
+call sites are uncapped, so the parameter had no caller left.
+
+### One name per thing
+
+Three surfaces named the same destination three ways, and one of the three was false.
+
+| Thing | Was | Now |
+|---|---|---|
+| the area directory | "every area with a notice" (index), "every area on the site" (county card), "every area on this site" (area page), **"every area in Ireland"** (static footers) | "every area with a notice" everywhere — the directory's own `<h1>`. The static-footer wording was simply wrong: `area_index` reads the built history, so an area with no notice is not in it |
+| the app | "the interactive map of Co. X" (area page), "the interactive view" (county page) | "Co. X's interactive view". It is bars and a table; it was never a map |
+| a notice count | `· 24` (static), `24 notices` (app cards), `· 24 notices` (app month headings) | `· 24 notices` everywhere, noun included |
+| the footer credit | "Source and methodology" (uisce's three static pages) | "Source code · not affiliated with Uisce Éireann." — already the shape on uisce's index, both lifts pages and all three esb footers, so uisce's static pages were the outlier rather than the pattern |
+
+The area page's "Elsewhere" block dropped to two links. The directory link it gave up now sits
+in the footer, where the county page already had one and where every other static page carries
+it; keeping both was one line saying the same thing twice. "Co. Carlow's whole record" survives
+the edit because the cap coming off makes it literally true.
+
+### The 40px that nothing asked for
+
+`base.css` resets `margin` and not `padding`, so every `<ul>` a site emits keeps the user
+agent's `padding-inline-start: 40px`. `list-style: none` takes the marker away and leaves the
+gutter it sat in, which is why `ul.notices` and `ul.areas` were indented for no visible reason.
+Both take their own padding back now; `.tl` and `.method .grades` already did, which is what
+made the omission easy to miss. Guarded in `test_site_css.py` against the built county page,
+so it is the assembled cascade being asserted and not the source text.
+
+Kept local rather than promoted to statusui: the shared rule there wants a custom property or
+a component, not a blanket `ul` reset, and lifts renders no such list. `ul.areas` is already
+down for promotion as a separate follow-up (esb's `notes/area-pages.md`).
+
+### The footer's own chrome
+
+`.method` was doing two jobs. It styles the footer's three disclosures *and* the county card's
+"How areas are drawn" — but only the footer ones sit inside `footer details` / `footer summary`
+in base.css, so its `margin-top: 12px` and `summary { padding: 8px 0 }` were stacking on top of
+chrome that already existed. Both are scoped to `.card > .method` now, which is the one context
+that has no chrome of its own. `.method h4`, `.method > p:last-child` and `.method .grades` stay
+unscoped; the footer's methodology block is the only thing that uses them.
+
+`#topLink .toplink` lost its 14px bottom margin. It is the last thing in the overview, so the
+footer's own 28px was the whole gap and the two were adding to 42px.
+
+### Copy
+
+- "Durations count from when a notice was published, not when the service was lost" replaces a
+  sentence that explained the same thing through an example of a burst.
+- "the headline" was doing work it cannot do in two places. The figure it named is a duration,
+  so it says duration.
+- "How many people a notice affects" was one sentence carrying pin geometry, a weighted average
+  and a cap. It is three now, and the average is described rather than named.
+- Two trailing clauses went: ", over the incidents that reported one" (the sentence before it
+  already says so) and ": the same supply zone is published both ways" (the rationale, which
+  belongs in statuspage-methodology.md and is there).
+- The healthkey lost "Quality notices do not colour the day bars." The decision stands — see
+  the design alignment pass above — but the key is for reading the page, not for explaining
+  why the page is the way it is.
+
+### The county card's hours tile carried someone else's numbers
+
+`20.7h · 6 confirmed, 2 scheduled only, 1 never reported an end` put a duration and a
+breakdown of *cases* in one tile. The split decomposes the outage count, so it moved onto the
+tile that carries that count; the hours tile shows the hours. `completed_n` drops out of the
+view but stays in the payload — it is what `median_completion_h` is computed over, and
+`TestPayloadShape` snapshots the key set on purpose.

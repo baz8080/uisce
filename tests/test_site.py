@@ -1994,16 +1994,14 @@ class TestIndexablePages:
         self, tmp_path
     ):
         """A snippet is read alone, in a search result, with the page not yet
-        open - so it has to survive being read as a promise. The page stops at
-        COUNTY_EVENTS_SHOWN, so a description that reads as an inventory of what
-        is listed would be counted and found short. It is cut by width too, and
-        what survives is the front: the clause naming what the page holds may be
-        lost, and the sentence before it may not become false when it is."""
+        open - so it has to survive being read as a promise. It is cut by width,
+        and what survives is the front: the clause naming what the page holds may
+        be lost, and the sentence before it must not become false when it is."""
         self._write(tmp_path)
         page = (tmp_path / "c" / "carlow.html").read_text()
         desc = re.search(r'name="description" content="([^"]*)"', page).group(1)
         assert desc.startswith("Co. Carlow: ")
-        assert "Month-by-month totals and the most recent notices" in desc
+        assert "Month-by-month totals and every notice published" in desc
         head = desc.split(". ")[0]
         assert "most recent" not in head
         assert len(desc) <= 160, len(desc)

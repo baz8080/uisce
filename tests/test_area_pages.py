@@ -166,6 +166,15 @@ class TestThePage:
         assert "every one of them" in desc
         assert "not shown here" not in page
 
+    def test_the_county_page_is_uncapped_too(self, tmp_path):
+        """The cap came off on 2026-08-27: the county page presents itself as
+        the county's whole record, and a "60 older notices not shown here" line
+        underneath said otherwise."""
+        _write(tmp_path)
+        page = (tmp_path / "c" / "carlow.html").read_text()
+        assert "not shown here" not in page
+        assert "more open" not in page
+
     def test_the_app_link_is_a_route_the_router_actually_has(self, tmp_path):
         """Run the app's own patterns against the href the page emits, rather
         than trusting a remembered shape. It shipped as `#area/<county>` — one

@@ -1527,16 +1527,6 @@ SEV_LABEL = {
     "maintenance": "Works (planned / non-disruptive)",
 }
 
-# The county page is a document, not the app: past this many events a reader is
-# better served by the interactive view, and the page stays a few KB.
-COUNTY_EVENTS_SHOWN = 60
-
-# Cork has 46 notices open at once, which is enough to push everything else on
-# the page below the fold. Capped for the same reason resolved_by_month caps its
-# own list, and the true count is still printed beside the heading.
-COUNTY_OPEN_SHOWN = 20
-
-
 def county_events(areas_history):
     """Every event in one county, newest first, each appearing once.
 
@@ -1558,7 +1548,7 @@ def _fmt_day(iso):
     return statusui.fmt_date(iso, date.today())
 
 
-def _county_open_html(cdata, shown=COUNTY_OPEN_SHOWN):
+def _county_open_html(cdata):
     """Notices open right now — the one thing on the page a reader may have come
     for today rather than for the record."""
     if not cdata["open"]:
@@ -1569,17 +1559,12 @@ def _county_open_html(cdata, shown=COUNTY_OPEN_SHOWN):
         f'<strong>{html.escape(o["title"])}</strong>'
         + (f' - {html.escape(o["loc"])}' if o["loc"] else "")
         + f'<span class="when">since {_fmt_day(o["since"])}</span></li>'
-        for o in cdata["open"][:shown]
+        for o in cdata["open"]
     )
-    more = ""
-    if cdata["open_total"] > shown:
-        more = (
-            f'<p class="more">{cdata["open_total"] - shown:,} more open - '
-            f'see the interactive view.</p>'
-        )
     return (
-        f'<section id="open"><h2>Open now <span>· {cdata["open_total"]}</span></h2>'
-        f'<ul class="notices">{rows}</ul>{more}</section>'
+        f'<section id="open"><h2>Open now <span>'
+        f'· {cdata["open_total"]:,} notice{"" if cdata["open_total"] == 1 else "s"}'
+        f'</span></h2><ul class="notices">{rows}</ul></section>'
     )
 
 
@@ -1663,11 +1648,12 @@ def _county_months_html(cdata, months):
     )
 
 
-def _events_html(events, shown=None, heading="Notice history", multi_area=False):
+def _events_html(events, heading="Notice history", multi_area=False):
     """A list of notices, newest first. Shared by the county and area pages.
 
-    `shown` caps the list; the area pages pass None because an area accrues
-    about one notice a month, where a county accrues hundreds.
+    Uncapped on both. These pages exist to be the durable, indexable record, and
+    a county's whole history costs a few hundred KB of text — cheaper than a
+    document that presents itself as complete and is not.
 
     `multi_area` adds the note the app's area view carries for the same reason:
     one event published as pins in several areas is listed under each, so
@@ -1677,7 +1663,7 @@ def _events_html(events, shown=None, heading="Notice history", multi_area=False)
     if not events:
         return ""
     rows = []
-    for e in events if shown is None else events[:shown]:
+    for e in events:
         bits = []
         if e.get("hours") is not None:
             # "so far" on an open event: the figure is time accrued to this
@@ -1722,18 +1708,11 @@ def _events_html(events, shown=None, heading="Notice history", multi_area=False)
             )
             + "</li>"
         )
-    more = ""
-    if shown is not None and len(events) > shown:
-        more = f'<p class="more">{len(events) - shown:,} older notices not shown here.</p>'
     return (
         f'<section id="notices"><h2>{html.escape(heading)} '
-        f'<span>· {len(events):,}</span></h2>'
-        f'<ul class="notices">{"".join(rows)}</ul>{more}</section>'
+        f'<span>· {len(events):,} notice{"" if len(events) == 1 else "s"}</span></h2>'
+        f'<ul class="notices">{"".join(rows)}</ul></section>'
     )
-
-
-def _county_events_html(events, shown=COUNTY_EVENTS_SHOWN):
-    return _events_html(events, shown)
 
 
 def area_page_html(county, name, pop, events):
@@ -1758,12 +1737,11 @@ def area_page_html(county, name, pop, events):
         f'<div class="sub">'
         f'{f"{pop:,} people · Census 2022 · " if pop is not None else ""}'
         f'Co.&nbsp;{html.escape(county)}</div>'
-        f'{_events_html(events, None, "Every notice published here", multi_area=True)}'
+        f'{_events_html(events, "Every notice published here", multi_area=True)}'
         f'<section id="more"><h2>Elsewhere</h2><p class="links">'
         f'<a href="../../{COUNTY_DIR}/{county_slug(county)}.html">'
         f'Co. {html.escape(county)}\u2019s whole record</a> · '
-        f'<a href="../../areas.html">every area on this site</a> · '
-        f'<a href="{app}">the interactive map of Co. {html.escape(county)}</a>'
+        f'<a href="{app}">Co.&nbsp;{html.escape(county)}\u2019s interactive view</a>'
         f'</p></section>'
     )
 
@@ -1792,9 +1770,9 @@ def county_page_html(county, cdata, areas, events, months, all_counties):
         f'<nav>{nav}</nav>'
         f'{_county_open_html(cdata)}'
         f'{_county_months_html(cdata, months)}'
-        f'{_county_events_html(events)}'
+        f'{_events_html(events)}'
         f'<section id="areas"><h2>Areas with a notice '
-        f'<span>· {len(areas)}</span></h2>'
+        f'<span>· {len(areas):,} area{"" if len(areas) == 1 else "s"}</span></h2>'
         f'<ul class="areas">{_area_items(county, areas, "../")}</ul></section>'
     )
 
@@ -2285,16 +2263,15 @@ def write_site(site, site_dir, towns=None):
                     "TITLE": html.escape(
                         f"Co. {county} water supply disruptions - Uisce Éireann notices"
                     ),
-                    # The counts are the county's whole record; _county_events_html
-                    # stops at COUNTY_EVENTS_SHOWN. So they are stated as the
-                    # county's and what the page holds is named after them, which
-                    # also leaves a true sentence when a search engine truncates.
+                    # The counts and the listing now agree, but the order still
+                    # matters: the record first, what the page holds after it, so
+                    # a snippet truncated by width leaves a true sentence.
                     "DESC": html.escape(
                         f"Co. {county}: {len(events):,} Uisce Éireann "
                         f"notice{'' if len(events) == 1 else 's'} across {len(areas):,} "
                         f"area{'' if len(areas) == 1 else 's'} - water outages, boil "
-                        f"notices, restrictions and works. Month-by-month totals and the "
-                        f"most recent notices."
+                        f"notices, restrictions and works. Month-by-month totals and "
+                        f"every notice published."
                     ),
                     "CANONICAL": f"{BASE_URL}/{COUNTY_DIR}/{slug}.html",
                     "BODY": body,

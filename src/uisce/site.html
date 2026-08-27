@@ -70,6 +70,8 @@
     border-bottom: 1px solid var(--border); padding-bottom: 2px;
   }
   .toplink:hover { color: var(--ink); }
+  /* last thing in the overview, so footer's own margin is the whole gap */
+  #topLink .toplink { margin-bottom: 0; }
   .lede { font-size: 14.5px; line-height: 1.5; margin-bottom: 14px; }
   .lede b { font-weight: 650; }
   .toprow {
@@ -181,8 +183,9 @@
 
   /* The methodology was one 2,600-character paragraph carrying nine separate
      topics. Every sentence is worth keeping and none of it was findable. */
-  .method { margin-top: 12px; }
-  .method summary { padding: 8px 0; }
+  /* the county card's disclosure sits outside footer's chrome and needs its own */
+  .card > .method { margin-top: 12px; }
+  .card > .method summary { padding: 8px 0; }
   .method summary:hover { color: var(--ink); }
   .method h4 { font-size: 12.5px; color: var(--ink-2); margin-top: 12px; }
   .method > p:last-child { margin-top: 12px; }
@@ -233,16 +236,16 @@
     <p><a href="areas.html" style="color:inherit">Every area with a notice</a> - a full directory of the 1,800-odd Census areas on this site, each linking to its incident history.</p>
     <details class="method">
       <summary>What this measures</summary>
-      <p>This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. Durations count from when a notice was published - for an unplanned burst the water was already off before that. The headline &ldquo;works complete&rdquo; time is a <b>minimum</b>: it counts only the notices that reported one. The availability percentages are a <b>best estimate</b>, because a total has to put a number on every disruption, including the ones that never reported an end.</p>
+      <p>This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. Durations count from when a notice was published, not when the service was lost. The published &ldquo;works complete&rdquo; time is a <b>minimum</b>: it counts only the notices that reported one. The availability percentages are a <b>best estimate</b>, because a total has to put a number on every disruption, including the ones that never reported an end.</p>
     </details>
 
     <details class="method" id="method">
       <summary>How these numbers are worked out</summary>
 
       <h4>How long a disruption lasted</h4>
-      <p>The time from a notice going up to its stated &ldquo;works are now complete&rdquo; update, over the incidents that reported one. Incidents whose only end signal was a <em>scheduled</em> finish are counted separately - a published plan is not evidence the works ended then. End times are read from the notice text (see the <a href="https://github.com/baz8080/uisce/blob/main/notes/end-time-eval.md">accuracy evaluation</a>); no time on this page is a measurement taken in the field.</p>
+      <p>The time from a notice going up to its stated &ldquo;works are now complete&rdquo; update. Incidents whose only end signal was a <em>scheduled</em> finish are counted separately - a published plan is not evidence the works ended then. End times are read from the notice text (see the <a href="https://github.com/baz8080/uisce/blob/main/notes/end-time-eval.md">accuracy evaluation</a>); no time on this page is a measurement taken in the field.</p>
 
-      <p>About one incident in twenty never reports an end at all - the count is shown beside the headline each month. Those stay out of the figure above: checked both ways, they run <em>shorter</em> than average, so leaving them out moves the headline <em>up</em>, not down. <span id="sensNote"></span> They still count in full in the availability percentages and person-hours, where leaving something out would mean calling it zero.</p>
+      <p>About one incident in twenty never reports an end at all - the count is shown beside the county's disruption count each month. Those stay out of the figure above: checked both ways, they run <em>shorter</em> than average, so leaving them out moves the typical duration <em>up</em>, not down. <span id="sensNote"></span> They still count in full in the availability percentages and person-hours, where leaving something out would mean calling it zero.</p>
 
       <h4>When a notice closed</h4>
       <p>A notice counts as closed the first time a twice-daily check finds it gone, so close dates are approximate and the closed-in-month lists are minimums.</p>
@@ -251,10 +254,10 @@
       <p>Only hard disruptions count against availability: bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages and unplanned repairs. Restrictions, low pressure, discolouration and routine works are shown but never count. A closed notice with no usable end is charged the typical length of a completed notice of the same kind of works, rather than nothing at all.</p>
 
       <h4>Repeating works</h4>
-      <p>Works announced as a repeating window - &ldquo;daily from 10pm until 7am, from 9 to 27 July&rdquo; - are charged only the hours inside the windows, and are treated as a restriction whatever the title says: the same supply zone is published both ways.</p>
+      <p>Works announced as a repeating window - &ldquo;daily from 10pm until 7am, from 9 to 27 July&rdquo; - are charged only the hours inside the windows, and are treated as a restriction whatever the title says.</p>
 
       <h4>How many people a notice affects</h4>
-      <p>Each notice is assumed to affect the Census 2022 Small Areas whose centres lie within 500&nbsp;m of its pin; the headline percentage is the population-weighted share of people's time not covered by an announced supply disruption. Each notice is capped at 14 days.</p>
+      <p>Each notice is assumed to affect the Census 2022 Small Areas whose centres lie within 500&nbsp;m of its pin. Availability weighs each notice by how many people it covers and how long it stands: the percentage is the share of all that person-time no notice covered. One notice is charged at most 14 days.</p>
 
       <h4>What the letters mean</h4>
       <p>Supply availability over the month, and nothing else:</p>
@@ -332,7 +335,7 @@ const LEGEND = `
 function healthKey() {
   return `<span class="healthmark sm">!</span> marks a boil-water, do-not-drink` +
     ` or do-not-consume notice active in ${monthLabelLong(curMonth)}` +
-    ` - open the county for details. Quality notices do not colour the day bars.`;
+    ` - open the county for details.`;
 }
 
 // one hover cue above the list, not a placeholder in every strip
@@ -637,7 +640,7 @@ function openSection(c) {
   named.sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
   const when = o => `${o.since > today ? "from" : "since"} ${fmtDate(o.since, today)}`;
   return `<div class="card">
-    <h3>Open right now <span class="n">${c.open_total} ${pl(c.open_total, "notice")}</span></h3>
+    <h3>Open right now <span class="n">· ${c.open_total} ${pl(c.open_total, "notice")}</span></h3>
     <div class="note">Notices Uisce Éireann still shows as open right now. Some are advance warning of planned works; a few were never taken down.</div>
     ${named.length ? named.map(([name, cases]) => `<div class="tgroup">
         <div class="tname">${esc(name)}</div>
@@ -651,7 +654,7 @@ function resolvedSection(c) {
   const r = c.resolved[curMonth];
   const shown = r ? r.cases : [];
   return `<div class="card">
-    <h3>Notices that closed in ${monthLabelLong(curMonth)} <span class="n">${r ? r.n : 0} ${pl(r ? r.n : 0, "notice")}</span></h3>
+    <h3>Notices that closed in ${monthLabelLong(curMonth)} <span class="n">· ${r ? r.n : 0} ${pl(r ? r.n : 0, "notice")}</span></h3>
     ${shown.length
       ? shown.map(o => incident(o, o => `opened ${fmtDate(o.since, today)} · closed ${fmtDate(o.closed, today)}`)).join("") +
         (r.n > shown.length ? `<div class="incident" style="color:var(--muted)">…and ${r.n - shown.length} more</div>` : "")
@@ -661,11 +664,12 @@ function resolvedSection(c) {
 
 function renderCounty() {
   const c = D.counties[county], m = c.months[curMonth];
-  // the tile carries the "n confirmed / scheduled / never reported" split the
-  // old inline note did, in the caption where esb's card puts its qualifiers
   const fixTile = m.events.outage === 0 ? "" : m.median_completion_h == null
     ? `<div class="tile"><div class="v">—</div><div class="k">no disruption has reported completion yet</div></div>`
-    : `<div class="tile"><div class="v">${m.median_completion_h}h</div><div class="k">typical time to &ldquo;works complete&rdquo; · ${m.completed_n} confirmed${m.scheduled_n ? `, ${m.scheduled_n} scheduled only` : ""}${m.imputed_n ? `, ${m.imputed_n} never reported an end` : ""}</div></div>`;
+    : `<div class="tile"><div class="v">${m.median_completion_h}h</div><div class="k">typical time to &ldquo;works complete&rdquo;</div></div>`;
+  // the "scheduled only / never reported an end" split decomposes the outage
+  // count, so it rides on that tile rather than on the duration beside it
+  const endSplit = `${m.scheduled_n ? ` · ${m.scheduled_n} scheduled only` : ""}${m.imputed_n ? `${m.scheduled_n ? "," : " ·"} ${m.imputed_n} never reported an end` : ""}`;
   document.getElementById("countyview").innerHTML = `
     <a class="back" href="#" onclick="go(''); return false;">← All counties</a>
     <div class="chead">
@@ -675,12 +679,9 @@ function renderCounty() {
       ${healthPill(m)}
     </div>
     <!-- Named for the difference, not for being a permalink: this view is one
-         month at a time and that page carries every month. Deliberately not
-         "every notice ever recorded" - _county_events_html caps at
-         COUNTY_EVENTS_SHOWN and prints its own "older notices not shown here",
-         so that label would be contradicted by the page it lands on. The county
-         is in the link text because a screen reader lists links stripped of
-         their context. -->
+         month at a time and that page carries every month, which is the only
+         thing the page has that this view does not. The county is in the link
+         text because a screen reader lists links stripped of their context. -->
     <div class="sub"><a href="c/${county.toLowerCase()}.html">Every month for
       Co. ${esc(county)} on one page</a></div>
     <div class="controls">
@@ -693,7 +694,7 @@ function renderCounty() {
       <div class="daycap">Tap a day for detail.</div>
       <div class="tiles" style="margin-bottom:0">
         <div class="tile"><div class="v">${availText(m.availability, m.person_h)}</div><div class="k">supply availability</div></div>
-        <div class="tile"><div class="v">${m.events.outage}</div><div class="k">supply ${pl(m.events.outage, "disruption")} · ${m.person_h.toLocaleString()} person-hours</div></div>
+        <div class="tile"><div class="v">${m.events.outage}</div><div class="k">supply ${pl(m.events.outage, "disruption")} · ${m.person_h.toLocaleString()} person-hours${endSplit}</div></div>
         ${fixTile}
         <div class="tile"><div class="v">${m.events.maintenance}</div><div class="k">planned ${pl(m.events.maintenance, "work item", "works")}</div></div>
         <div class="tile"><div class="v">${m.events.quality}</div><div class="k">quality ${pl(m.events.quality, "notice")}</div></div>
@@ -703,7 +704,7 @@ function renderCounty() {
 
     <div class="card">
       <h3>Areas with notices in ${monthLabelLong(curMonth)}</h3>
-      <div class="note"><b>Select an area</b> to see every notice ever published there, or <a href="areas.html" style="color:inherit">browse every area on the site</a>.</div>
+      <div class="note"><b>Select an area</b> to see every notice ever published there, or <a href="areas.html" style="color:inherit">browse every area with a notice</a>.</div>
       <details class="method">
         <summary>How areas are drawn</summary>
         <p>Each notice is placed in the Census 2022 area its affected population centres on: the settlement it is in, or - for the roughly 40% of the network that runs between towns - the countryside of the surrounding Electoral Division, shown as <em>Around&nbsp;…</em> to keep it distinct from the town of the same name. The Census counts a city and its suburbs as one settlement, so any settlement above 50,000 is broken into its Local Electoral Areas instead. Availability is measured against each area's own population, not the county's, and there are no letter grades at this level: the A-F thresholds are calibrated to county-months and would mislead against a village-sized denominator.</p>
@@ -883,7 +884,7 @@ function renderArea() {
     </div>
     ${t && t.slug ? `<div class="sub"><a href="a/${areaCounty.toLowerCase()}/${t.slug}.html">Permanent link to ${esc(name)}</a></div>` : ""}
     <div class="card">
-      <h3>Every notice published here${total == null ? "" : ` <span class="n">${total} notice${total === 1 ? "" : "s"}</span>`}</h3>
+      <h3>Every notice published here${total == null ? "" : ` <span class="n">· ${total} notice${total === 1 ? "" : "s"}</span>`}</h3>
       ${historyBody(areaCounty)}
     </div>`;
 }
