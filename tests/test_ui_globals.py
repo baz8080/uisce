@@ -30,9 +30,11 @@ MARKERS = (statusui.UI_JS, statusui.UI_JS_CAPTION)
 def declares(script, name):
     """Does this script declare `name` at the top level, in a form we can see?
 
-    Column zero, one name per declaration - which is how every such line in
-    these pages is written. What it does not see is a name that is the second
-    or later declarator in a list: `var a = 1, esc = 2;` hides esc from it.
+    Column zero, and the first name of a declaration. What it does not see is a
+    name that is the second or later declarator in a list - and site.html:304
+    is `let areaCounty = null, areaCode = null;`, so that is not hypothetical:
+    add a third declarator named `esc` or `when` to that line and this guard
+    stays green while the page shadows the shared helper at runtime.
 
     That gap is left open on purpose. Four attempts to close it here each
     parsed JavaScript with a regex and each traded the narrow miss for a worse
