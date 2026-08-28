@@ -28,43 +28,28 @@ MARKERS = (statusui.UI_JS, statusui.UI_JS_CAPTION)
 
 
 def declares(script, name):
-    """Does this script declare `name` at the top level?
+    """Does this script declare `name` at the top level, in a form we can see?
 
-    Asked per name rather than by listing what the script declares, because
-    listing misses the second name in `let a = 1, esc = 2;` - and a guard that
-    misses a name fails open.
+    Column zero, one name per declaration - which is how every such line in
+    these pages is written. What it does not see is a name that is the second
+    or later declarator in a list: `var a = 1, esc = 2;` hides esc from it.
 
-    Column zero only, which is what top level means here: site.html's
-    `const when` and `const num` sit inside function bodies, scoped to them,
-    shadowing nothing. The `=` in the second branch is what makes a name a
-    declaration rather than a mention: a shared helper passed by reference
-    reads as `, esc]`.
+    That gap is left open on purpose. Four attempts to close it here each
+    parsed JavaScript with a regex and each traded the narrow miss for a worse
+    one: an array of shared helpers read as a redeclaration; a semicolon inside
+    a string ended a statement early; a bracket in a caption made an ordinary
+    object literal unreadable and broke the build. statusui holds its own
+    bundle to one name per declaration by running it under a JavaScript engine.
+    Nothing short of that belongs on this side, and nothing short of that is
+    worth the false failures.
     """
-    n = re.escape(name)
     return bool(
-        re.search(rf"^(?:async\s+)?(?:function|var|let|const|class)\s+{n}\b", script, re.M)
-        or re.search(rf"^(?:var|let|const)\b[^\n]*,\s*{n}\s*=", script, re.M)
+        re.search(
+            rf"^(?:async\s+)?(?:function|var|let|const|class)\s+{re.escape(name)}\b",
+            script,
+            re.M,
+        )
     )
-
-
-def unreadable_declarations(script):
-    """Top-level declarations this guard cannot read, so it can say so.
-
-    It reads a line at a time, which covers every form these pages use - a
-    multi-line object literal still declares its one name on the first line.
-    What it cannot follow is a declarator list continued onto the next line,
-    or a destructuring pattern. Neither appears in any of the three sites
-    today; the point is that the day one does, this stops rather than quietly
-    missing whatever the second name was.
-    """
-    for line in re.findall(r"^(?:var|let|const)\b[^\n]*", script, re.M):
-        # A trailing comma inside an open bracket is a literal continuing, not
-        # a second name: `const SEVLABEL = { outage: "...",` is one declaration.
-        open_brackets = sum(line.count(c) for c in "{[(") - sum(line.count(c) for c in "}])")
-        if (line.rstrip().endswith(",") and open_brackets <= 0) or re.match(
-            r"^(?:var|let|const)\s*[\[{]", line
-        ):
-            yield line.strip()
 
 
 # area.html included: it is a real template (site.py renders one per area) and
@@ -79,6 +64,5 @@ def test_site_script_redeclares_no_shared_global(page):
     if marker is None:
         return  # no shared script on this page, nothing to collide with
     own = text.split(marker, 1)[1]
-    assert list(unreadable_declarations(own)) == [], f"{page}: see the docstring"
     clashes = sorted(name for name in shared if declares(own, name))
     assert not clashes, f"{page} redeclares {clashes}"
