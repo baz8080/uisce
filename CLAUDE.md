@@ -76,6 +76,18 @@ with the evidence that closed them.
 - Migrations are additive nullable columns only; anything that rewrites data is a rebuild, and a
   rebuild costs the accumulated archive.
 
+## Punctuation
+
+**No em dashes.** Not in the site's prose, the code comments, `notes/`, commit messages, PR
+bodies, issue bodies or the replies in a session. The house dash is a spaced hyphen - like this
+one. Where a sentence reads better without one, write it out: "which is", "because", a colon, or
+two sentences. En dashes go the same way outside a numeric range.
+
+This binds new prose, and only prose. It is not a licence for a bulk rewrite: as of 2026-08-29
+this repo carries 905 em dashes and 335 en dashes across 45 files. Many of them are in
+`data/eval/*.csv`, which is recorded data and is **never** re-punctuated: fixing a character in a
+sample changes what was sampled. Fix the rest on lines you are already editing.
+
 ## Commands
 
 ```bash
