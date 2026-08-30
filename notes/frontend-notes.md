@@ -74,6 +74,44 @@ From a cold external usability review. Every ratio below was recomputed independ
 
 The same pass fixed the text uses of the status hues, which are tuned for fills and are too light to be read on the page: `.badge.partial` was **1.79:1** — yellow on off-white, effectively invisible — and the boil-water `!` mark, the most safety-relevant element on the page, was 2.64:1. Text-safe shades (`--good-text`, `--warning-text`, `--serious-text`, `--critical-text`, and `--serious-deep` for fills that must carry white) are separate tokens rather than changes to the fill hues, so the fills keep their identity in the bars and swatches. Light-mode `--muted` was 3.41:1 and becomes `#6e6c66`; dark mode keeps `#898781`, which already passed at 5.41:1 on near-black.
 
+### Amended 2026-08-30: B and D carry white after all
+
+The lettering decided above was reversed when the scale grew an E and every chip was
+re-examined. **This reopened a settled decision, and the reopening was accidental**: the B and D
+change was made before this section was read, which is the thing the conventions exist to stop.
+The evidence that closes it is below, recorded late rather than not at all.
+
+The 2026-08-18 pass judged the chips on WCAG 2.1 alone, which is the formula this repo has always
+tested against and which is unreliable on saturated mid-tones. Checked against APCA, the WCAG 3
+candidate that models the effect properly, the two metrics disagree sharply on B:
+
+| B `#69930f` | WCAG 2 | APCA |
+|---|---|---|
+| dark `#1a1a19` | 4.79:1 | **Lc 38.6** |
+| white | 3.63:1 | **Lc 69.2** |
+
+Lc 38.6 made B the least readable chip on the page by a wide margin, the next worst being D at
+51.3. The dark ink was chosen on a number that did not describe what a reader sees, and it was a
+reader noticing B looked wrong that prompted the recheck.
+
+**The alternative this section rejected was adopted.** The stated reason for rejecting it - that
+a D dark enough for white text "turns the D chip a red close enough to F to blur the one boundary
+the scale exists to draw" - was asserted rather than measured, and does not hold at the value
+chosen. D is now `--serious-deep` `#b34a20`, already in the token set for exactly this purpose,
+and sits at delta-E **20.6** from F and **20.2** from E. Across all fifteen pairs of the six
+chips, no two are closer than 20.2. B is now its own token, `--fair` `#5a7a10`, rather than a
+`color-mix` of two bar hues that moved whenever a bar was retuned.
+
+The ink alternation is gone: **C is the only chip taking dark ink**, because the amber is the one
+fill light enough to need it. White on the other five is 4.97 to 8.89 on WCAG and Lc 77.5 to 93.5
+on APCA. The hue progression green, olive, amber, burnt orange, red, dark red still carries the
+ordering, which is what the original note said was doing the work.
+
+Guards, in `../statusui/tests/test_ui.py`: `test_fills_carry_the_lettering_set_on_them` names
+every fill-and-lettering pair the chips actually use, in both schemes, so none of this can drift
+silently again. The 2026-08-18 pass had no such test, which is the other reason it went stale
+unnoticed.
+
 ### The month-tab overflow starts at six months, not now
 
 The review reported the tab strip already overflowing a 390px phone at five tabs, with the sort control clipped and a page scrollbar. **That did not reproduce and was not true when written.** At five tabs the buttons shrink to fit (89px → 65px) and `document.scrollWidth` equals the viewport exactly. Measured at 390px, without `flex-wrap`:

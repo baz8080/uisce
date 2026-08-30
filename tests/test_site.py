@@ -225,7 +225,16 @@ class TestGrade:
         assert grade(99.8) == "B"
         assert grade(99.5) == "C"
         assert grade(99.2) == "D"
+        assert grade(98.8) == "E"
         assert grade(98.0) == "F"
+
+    def test_the_bands_meet_where_they_say_they_do(self):
+        """Mid-band values alone would pass an off-by-one on any cut, and the
+        legend prints these five numbers to the reader."""
+        for cut, above, below in ((99.9, "A", "B"), (99.75, "B", "C"), (99.45, "C", "D"),
+                                  (99.0, "D", "E"), (98.7, "E", "F")):
+            assert grade(cut) == above
+            assert grade(cut - 0.001) == below
 
     def test_the_grade_depends_on_availability_alone(self):
         """A health notice used to knock the letter one step. It was measured

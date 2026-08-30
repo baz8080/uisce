@@ -419,6 +419,8 @@ def grade(availability):
         return "C"
     if availability >= 99.0:
         return "D"
+    if availability >= 98.7:
+        return "E"
     return "F"
 
 
