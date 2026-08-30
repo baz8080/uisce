@@ -201,7 +201,17 @@ The grade mix moves A 9, B 26, C 53, D 31, F 11 to A 9, B 26, C 53, D 31, E 9, F
 
 What this costs: the band is 0.30 wide where D is 0.45, so the widening progression breaks at the bottom, and the cut is fitted to a young 130-row archive. **Re-measure it as the archive grows**, against the `uisce.db` CI publishes as a release asset rather than a fresh `uisce-pipeline` run: the numbers above came off the 2026-08-29 release, and in a Claude Code web session the proxy blocks ArcGIS, so the release is the only way to get a current database. If months worse than 98.459% start arriving, the honest move is to widen F downward by raising the cut, not to leave 98.7 sitting where a fuller distribution no longer puts a break. In hours off supply over a 30-day month the cuts now read 0.72, 1.8, 3.96, 7.2 and 9.36.
 
-One consequence on the page: the banner counts the counties graded F, and that count now excludes the E counties it used to include. The comparison was left as it is, because F still means the worst band the site has.
+One consequence on the page: the banner counts the counties graded F (`nF` in `site.html`), and that count now excludes the E counties it used to include. **Raised, measured and left as it is on 2026-08-30**, on the owner's call: F still means the worst band the site has, and a reader who wants the detail has the county rows immediately below. The cost is written down rather than guessed at, because it is larger than a glance at a build suggests. Counties under 99.0% against counties under the new 98.7%:
+
+| month | banner before | banner now | moved F to E |
+|---|---|---|---|
+| 2026-04 | 3 | 0 | Kildare, Sligo, Waterford |
+| 2026-05 | 0 | 0 | - |
+| 2026-06 | 2 | 1 | Kildare |
+| 2026-07 | 5 | 0 | Clare, Kerry, Limerick, Tipperary, Waterford |
+| 2026-08 | 1 | 1 | - |
+
+Two of the five months now head the page with "0 counties graded F" while still holding counties in the bottom two bands. The month the page opens on is unaffected, which is why this does not show up in a casual look at a build. If it is ever reopened, the one-line fix is to count `E` and `F` together and say "graded E or F".
 
 ### The health notice was unbundled from the grade (2026-08-02)
 
