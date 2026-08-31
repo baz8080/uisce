@@ -1,0 +1,401 @@
+# Progress ledger
+
+Read this first each session. Keep it under ~1k tokens: status per chapter, a 3-line summary of
+each drafted chapter (so the next session has continuity without re-reading it), open threads,
+and the brief for the next session.
+
+Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later session) → `final`.
+
+| Ch | Title | PRs | Status | Words |
+|---|---|---|---|---|
+| 00 | Are other areas having as many outages as I am? (intro) | — | reviewed | 1,368 |
+| 01 | A notice is a row | pre, #1–4 | reviewed | 1,934 |
+| 02 | Let a robot do it every week | #5–6 | reviewed | 1,034 |
+| 03 | Ask a local model what the notice actually says | #8–13 | reviewed | 2,231 |
+| 04 | Make it a real project | #14–15 | reviewed | 1,296 |
+| 05a | A website, and a number that is fair to Cork | #16 | reviewed | 1,694 |
+| 05b | An honest number on the model | #16–17 | reviewed | 2,024 |
+| 06 | Say what you actually measured | #18–20 | reviewed | 2,090 |
+| 07 | Record the moment a case closes | #21–22 | reviewed | 2,074 |
+| 08a | How a pin gets a population | #23 | reviewed | 2,323 |
+| 08b | Where you actually live | #23–25 | reviewed | 2,491 |
+| 09a | Eighteen nights in a trench coat | #26–27 | reviewed | 1,913 |
+| 09b | The title is not the severity | #28–31 | reviewed | 2,117 |
+| 10 | For a reader, not an analyst | #31(last), #32–36 | reviewed | 2,085 |
+| 11 | Be findable | #37–39 | reviewed | 1,034 |
+| 12 | Put a number on what you don't know | #40–41 | reviewed | 2,623 |
+| 14 | One design, three sites | #42, #44–#49 | reviewed | 2,765 |
+| 15 | Rules first, model second | #46, #50–#52 | reviewed | 2,916 |
+| 16 | Stop sounding like the author | #54–#61 | drafted | 2,070 |
+| 17 | Closing: what the site can say, and what it cannot (+ glossary) (was 13) | — | reviewed | 2,197 |
+
+## Chapter summaries (3 lines each, added when drafted)
+
+- **01** Opens with the Leixlip question. Feed = ArcGIS feature service (Web Mercator → lat/lon,
+  epoch-ms dates); pins reverse-geocoded via LocationIQ at 4-dp rounding with a cache; SQLite
+  `cases` + `geocode_cache`; PR #4 upsert turns snapshot into archive because the feed has no
+  memory (0/8,155 LASTUPDATE). Worked example KLD00118059 (Forest Park, Leixlip) foreshadows
+  Ch 3 (end in prose), Ch 6 (end_date is a default), Ch 5/8 (no footprint). Concept boxes:
+  ArcGIS feed; reverse geocoding + cache; notice/pin/case; the feed has no memory.
+- **02** Weekly GHA (Mon 06:00 UTC) downloads last release DB → upsert → geocode new coords →
+  publish dated Release; geocodes.jsonl folded into the DB. PR #6 backfills ~10 blank counties
+  from the geocode cache, strips "County ". Concept box: CI as a scheduled clerk. Foreshadows
+  Ch 7 (release snapshots are the only history; 1,816 closures recovered) and Ch 4 (one job per
+  step). Ends: "when did the water come back" is in the prose, not a column.
+- **03** Opens with end_date agreeing with the text 6.6% of the time. PR #8 gemma-4-12b-qat on
+  LM Studio; PR #9 "do less in the model" — v1 asked for UTC+DST arithmetic (hallucinations,
+  loops), v2 reads only: notes-first, end_source, local_date, local_time, temp 0. PR #10 hash
+  gate + append-only JSONL as truth; PR #11 zoneinfo duration, NULL rules, ~19 negatives (→532,
+  Ch 6); PR #12 pin start at first inference, JSONL/DB independent; PR #13 table on CI (6,561).
+  15 Jul benchmark detour: decode-bound, qwen faster but wrong. Worked example KLD00118059
+  → 52,987 s. Concept boxes: extraction is reading not writing; hash-based incremental work.
+  Ends: accuracy unmeasured (Ch 5, 71.9%); column misnamed (Ch 6).
+- **04** PR #14 package + 42 tests + hardening (retry, ordered paging, placeholder geocode rows,
+  circuit breaker, dedupe −15% calls, timeout 120 s). PR #15 work_category (26 slugs) and
+  work_type 31%→89% by title rules; today 90.4%, 16 uncategorised. Concept boxes: what a test
+  suite buys; a title is a category, not a severity (→ Ch 9). Ends: next the Census, Ch 5.
+- **05a** Cork May uptime 2% → person-hours and SAIDI-style availability (~99.2%); Small Areas
+  within 500 m (details deferred to Ch 8a); four classes, outage-only accrues (investigation
+  was ~8%); events by reference_num, intervals and footprints unioned; A–F thresholds stated,
+  calibration deferred to Ch 12; Ofwat 99.999% not comparable; page claims "announced
+  disruptions and time-to-fix". Worked example Drogheda 23.8 h × 23,169 = 551,427 ph → Louth
+  May 99.469% (C) alone; vs Drogheda's own 44,135 → 98.3% (foreshadows Ch 8). SVG diagram
+  person-hours-rectangle. Concept boxes: person-hours; population-weighted availability.
+- **05b** Round 1 stratified 114: 71.9% raw / 82.8% duration-feeding; error taxonomy;
+  lifted_immediate excluded. pv2: skip-logic bug (bump re-read nothing), replay harness, ruler
+  defects (~4 pts, four labels amended), 81→99/114, 99/99. Round 2 uniform 120/120; rule of
+  three → ≥97.5%. Corpus 7,892 re-read, date_only 55→0, no fabrications. Boil-notice staleness
+  (Cork May F→D) and no-better-start (toggle rejected). Concept boxes: stratified sample;
+  replay vs hold-out. Ends: the metric gets renamed → Ch 6.
+- **06** PR #18 renames (notice_to_end_seconds etc.), floor not estimate; observed 17.0 h
+  (3,166) vs scheduled 5.4 h (894) vs pooled 9.3 h — plans still accrue, excluded from median;
+  overrun probe 69.5% late (parked); 183 un-inferred. PR #19: 532 negative spans (not 19),
+  re-stamp evidence, 12 open outage cases fabricating ~101k Kildare / 66k Donegal ph →
+  ended_by_publication; both rescue routes closed (minimum-start rejected — Ch 3's promise
+  kept); create_db double column. PR #20 Pages deploy. Worked examples: case 237573 (−5 h 04 m)
+  and a toy pooled-median list. SVG observed-vs-scheduled. Concept boxes: floor vs estimate;
+  why pooling two populations lies. Ends: nobody can say which month a case closed → Ch 7.
+- **07** "49 open now" on a historic month; closed_at stamped in the upsert — observation time,
+  NULL ambiguous, a floor (12% under Mon/Wed/Fri); closed_at values pile up on build days
+  (304/363/365/399). Schema v2 via the additive-only ladder (0.7 ms). Feed probe (0/8,155);
+  replay of 10 release snapshots recovers 1,816 of 7,613 (24%) — Ch 2's accident pays. PR #22
+  daily builds; re-measured 31 Jul: 1.9% never seen open, but utility closes cases a median
+  75.7 h late — the floor's owner is the operator. Worked example KLD00118059's five days
+  (72 h lag). SVG build-gap-timeline. Concept boxes: observation vs event time; additive-only
+  migration ladder. Ends: closed_at's first use is Ch 8.
+- **08a** cases.location unusable (3,866 values); Small Area concept box (18,919 → 5,149,139);
+  the four Census files table with join keys and traps + mermaid; 500 m centroid rule (grid
+  bins, fallback 8 km, cache) with concept box "centroid, not polygon"; SA→named area is the
+  CSO's own attribute; the retracted point-in-polygon method (97.5%, 54 settlements missing,
+  187/789 >10% short, Doneraile 214 vs 857 ~4×) with concept box on systematic under-count in
+  a denominator; join wrinkles (19 shared names, 125 straddlers). Worked examples: KLD00118059's
+  circle = 12 SAs / 3,255 people, all Leixlip, ≈47,900 ph; radius 300 m/1 km → 1,966/8,440
+  (plants Ch 12); Leixlip 56 SAs = 16,733 exact. SVGs: pin-circle-centroids,
+  doneraile-polygon-vs-attribute. Ends: tiers/homing/straddle → 8b, ending at the Kildare table.
+- **08b** Three tiers concept box + one rule ("finest official geography whose names arrive
+  usable"); Dublin 1,261,884 = 83% → 40 LEA rows, 30% sliver threshold and why it kills name
+  collisions; 242/1,492 vs 0/2,552 suffixing; rural bucket 44% / 22 of 26 → 1,172 "Around <ED>";
+  uniform alternative rejected (~300 km²); LEA names administrative (12/5/11), ED costed;
+  homing by dominant share (median 1.00) + charge only inside (SVG straddle); own-county guard,
+  "Pinned outside the county"; no town grades (0.18 vs 11); county page, closed_at first use
+  (Carlow 8), payload 645 KB. Worked example: PR #23's Kildare table reconciled via the 588.5 h
+  observed denominator; today's full-July: Leixlip 438,691 / 96.48% vs Naas & Maynooth 100%,
+  county 99.20% D — THE ANSWER. Mermaid tier tree. #24/#25 as footnotes. Ends: → Ch 9 recurring
+  windows.
+- **09a** #26 midday build (7.7→3.9 h) as an aside. Concept box pin/case/event (LOU00112686;
+  union intervals, union footprints, cap) + SVG pins-to-event. Top ten (21.9%); NULL-category
+  leak (66, one #9; Cork DNC lift). Recurring windows: representation not reading; concept box
+  hours-not-days; v3 replay identical; results table (−7.7%, Donegal 22,156→12,682/1k). Two
+  failures: completion pin re-covered gaps → event_windows lends; the report that missed it.
+  Worked example DON00115765 (162 announced, 144.0 run, 385.2 charged, 6,596 people) + SVG
+  recurring-window. Ends: 949,824 still looked wrong → 9b.
+- **09b** #28 name once (348 events; Exton/Wyeville/Zedbury table). #29 same zone two titles
+  table; phrase counts rule out the text reading; concept box "a repeating window is a
+  restriction whatever the title"; −3.8%, Donegal rank 1→6, no grade changes; reduced_pressure
+  backfill; expansion now numerically inert. #30/#31 review 2/9, concept box "review the
+  consequential calls"; text+model detection; grade thresholds checked (one letter). Worked
+  example: Donegal event 2,540,854 → 949,824 → 0. Ends: correct but unreadable → Ch 10.
+- **10** Opens with the health-knock unbundling (PR #31 last commit): the 8-of-78 table, ratio
+  0.01, Tipperary's three invisible notices; concept box "beside the grade, not inside it".
+  PR #32 per-area history + 1,836-area directory; sharded h/<county>.js; 801 false 0.0 h
+  suppressed; concept box "listed under every area, charged once" (220 of 1,830 → all; 6 KB gz);
+  15 withdrawn. PR #34 three wrong figures — worked example Cavan 27/31 → 3/6; 100.00% clamp;
+  vocabulary; hover-only content; freshness ladder argument. PR #36 [hidden] regression. Ends:
+  can't be found → Ch 11.
+- **11** Custom-domain question → the real problem: 2 indexable URLs; concept box why a
+  JS-routed SPA is invisible (fragment never sent). PR #37 26 county pages, sitemap/robots/
+  canonical, 2→28 / 73,087→383,714 / 1→28. The retraction of #25's pushState (kept for
+  back/forward). Worked example: what a crawler saw before/after. #38/#39 tidy-ups. Ends: →
+  Ch 12, events counted as zero.
+- **12** PR #40: concept box "a median can abstain, a total cannot"; population 200/4/29;
+  SpanTable rules; why median still excludes; concept box censoring/KM (13.9 vs 13.4; ~10.7 vs
+  16.9); effect table, four county-months, the 0.2 h leak; Ofwat analogue + deviation;
+  first_start_date COALESCE; schema declared once; CLAUDE.md's origin. PR #41: contrast; health
+  flags not signals (do_not_drink 9/19; 8 cm, 0 grades, 9 markers); DNC half-policy (Whiddy);
+  overlap concept box, 3.6% → 2.0% and the lesson (SVG overlap-double-count). Radius
+  sensitivity (0.93/0.91; 48/52) + concept box "letters about an assumption" (SVG
+  radius-sensitivity with Leixlip 1,966/3,255/8,440); thresholds fitted to 78 county-months
+  (97/76/33/10th pct), checked and left. Worked examples: no-end event 7.5 h; Leixlip at three
+  radii; overlap toy. Ends: where the repo stands on 18 Aug 2026.
+- **14** Three look-alike sites, one design layer. #44 caption strip inside `.row`, tooltips
+  gone, hover-capability gate then hidden-while-empty (iPad trackpad). #45 statusui vendored,
+  `assemble()` inlines at build (concept box), shared/per-site rule, visible costs listed. #47
+  iPhone review: month strip scrolls (1,095 px in 356 px; rotate 851→375 bug), touch
+  `pointerover` (concept box hover≠touch), rhythm, copy; health key shortened then reverted
+  (42 = 35 + 7, no "drink"). #48 one day of vendoring → five commits drift → uv git dep pinned
+  (concept box vendor or pin), rollout.sh. #49 first rollout drops the dot. #42 closes the
+  README schema thread. Mermaid rollout diagram. Ends: sizes 241/142/23 lines, pin 61b642c.
+- **15** Ch 3 benchmarks never asked whether calls needed a model. Concept boxes: fix the bar
+  before you measure (acceptance table); a rule may abstain but never guess (two classes only);
+  shadow eval then truth gate (92.7%/99.99%; four disagreements incl. 237463 LLM-wrong; fresh
+  120: LLM 120/120, rules 110/110 at 91.7%; 354 labelled rows); the hybrid (model stamp,
+  staleness, no backfill; first run 1+3); #51 deploy on push (concept box data clock vs build
+  clock); #52 `--rules-only` in CI, commit as uisce-ci (concept box two writers, merge=union),
+  uisce-data/release asset rejected; #46 footnote. Worked example KLD00118059 via rules.extract
+  = same answer as Ch 3. Two mermaid diagrams. Ends: JSONL 29,756/10,908, 90 rules records.
+- **16** Ch 10 round two. #54–#57 plain-reader copy ("pin" out; "Sat 1 Aug"; em-dashes out;
+  rule stated once; footer "Source code"). #58–#60 promotions on the second user (concept box;
+  fmtDay/fmtDate, freshness() with the 57,721-age equivalence; comment rule). #61 esb
+  alignment: quality leaves the bars (concept box; server-side; clear-days copy fix), ramp →
+  solid tokens 2.50/4.56/8.44, severity-word captions, shared search (~66 KB), 443 tests.
+  Ends: two published numbers moved knowingly; the vocabulary irony.
+
+## Open threads
+
+- ~~README says `SCHEMA_VERSION` "currently 2"; code says 3~~ — fixed by PR #42 (19 Aug), noted in Ch 14.
+- Oldest `start_date` in the DB is `0206-08-10` (mis-typed year in the feed) — a possible
+  footnote in Ch 1 or Ch 6 about trusting feed dates.
+- PR #23's Kildare table shows Naas at 25,824; the corrected settlement figure is 26,180. When
+  quoting the table say "as published in PR #23" and note the correction once.
+
+## Status: 21 posts; chapter 16 drafted 26 Aug 2026, not yet continuity-reviewed
+
+Chapter 16 (PRs #54–#61) added 26 Aug 2026; the closing moved 16 → 17 (one settled row, two
+glossary entries; 43 concept boxes). Chapters 14–15 passed their continuity check 26 Aug
+(cross-refs land, no verify markers) and are `reviewed`. Next session: continuity-read 16;
+new chapters follow the same pattern — sources pack, chapter, closing renumber. The original
+18 posts had their full continuity pass on 18 Aug (no verify markers, read times, cross-refs,
+vocabulary).
+
+**How to publish.** Each file in `chapters/` is a standalone post: title, read time, "where we
+are", concept boxes as blockquotes, worked examples, notes. Diagrams are relative links to
+`../diagrams/*.svg` (11 files) and mermaid fences (4) — a blog host needs mermaid support or
+the fences pre-rendered. Publish in file order (00 → 17). For a paper, `figures.md` is the
+figure registry and `outline.md` the structure; the settled-decisions table in Ch 13 is the
+discussion section in embryo.
+
+**Optional later passes.** Diagram polish (consistent palette/typography; the SVGs are
+deliberately unstyled); a root `README.md` line pointing at `writing/`; re-run the anchor
+queries in `figures.md` if the series is published long after 18 Aug 2026 and mark the date.
+
+_Superseded brief (done):_ **FINAL PASS** (1–2 sessions). Everything is drafted (16 posts). Do, in order:
+1. Write `chapters/00-intro.md` (~1,200 w): the question; what the site is today (one paragraph
+   with today's Leixlip/Naas figures from Ch 8b); how it was built — AI-assisted, named here
+   once and not again (see the Co-Authored-By trailers in the source packs: Sonnet 4.6 → Sonnet
+   5 → Opus 4.8 → Opus 5 → Fable 5 across June–August; Barry directed, reviewed, labelled the
+   eval rounds and the recurrence review by hand); how to read the series (chapters standalone;
+   concept boxes; every number sourced; wrong turns kept); the vocabulary table lifted from
+   `README.md`.
+2. Write `chapters/13-closing.md` (~1,500 w): return to the question with Ch 8b's answer; what
+   the site can say and what it cannot (start is publication → floor; closed_at is a floor
+   owned by the operator's 75.7 h lag; 2.0% overlap; the 500 m assumption; the letters are about
+   an assumption; imputed events; scheduled ends accrue an announced interval); the settled-
+   decisions table from `CLAUDE.md` recast as "what we learned" in plain language; a glossary
+   built from every concept box (grep `> \*\*Concept:` across chapters — ~30 boxes).
+3. Continuity read of all 16 posts (~40k tokens): fix cross-references ("chapter 12" promises
+   made in Ch 3/5a/6/8a — check each landed), terminology against the fixed vocabulary
+   (case/pin/event; area/settlement/LEA/ED; person-hours; availability; health marker), read
+   times vs `wc -w`/230, and any `[verify:` markers (grep; there should be none — confirm).
+   Known nits to check: Ch 3 says "chapter 6" for the minimum-start rejection (correct); Ch 5a
+   says "chapter 12" for calibration (landed); Ch 8a says "chapter 12" for radius (landed);
+   Ch 7 says "chapter 9" for the twice-daily reason (landed in 9a's aside); Ch 4's "guard tests"
+   phrasing predates the payload guards (fine as forward statement).
+4. Update `PROGRESS.md` statuses to `reviewed`; add a one-line "how to publish" note (each
+   chapter is a standalone post; diagrams are relative links under `diagrams/`).
+5. Commit. Optionally: a diagram-polish pass later, and README.md in the repo root could gain
+   one line pointing at `writing/`.
+
+_Superseded brief (done):_ **Ch 12 "Put a number on what you don't know"** (PRs #40–#41, 15–18 Aug — the last drafting
+session). Read: this file → `README.md` → `outline.md` Ch 12 → `sources/ch12.md` (~5.2k words)
+→ `notes/statuspage-methodology.md` "An event with no usable end is charged a typical span"
+(~280–310), "Known limitations" (~311–323), "Radius sensitivity" (~226–229), and the "Do-not-
+consume notices got the pairing" + "A paired lift is capped" sections (~34–80, skim) →
+`notes/data-quality.md` "The two health flags are not signals either" and "Duration outliers
+are categorical" (grep headings) → `src/uisce/site.py` `SpanTable` (~545–608), `grade` docstring
+(read already in Ch 5) → `src/uisce/eval_overlap.py` docstring/`overlap_by_month`. Cover: #40
+imputation (204 of 4,473 outage events on 1-s footprint, 200 negative-span + 4 not_found;
+category medians mains_repair 7.5 h vs pump_repair 43.7 h; MIN_CATEGORY_N 15; Kaplan–Meier 13.9
+vs naive 13.4 h; +2.3–4.4%/month, four county-months drop a grade; five-month before/after grid;
+first_start_date schema v3 with COALESCE not MIN); #41 three cold reviews (WCAG contrast 3.35/
+2.87/2.64/1.79:1; do_not_drink wrong on 9 of 19 → flags dropped from classify; DNC pairing not
+exclusion; paired lift capped for charge, uncapped for marker; overlap probe 3.6% per-pin wrong
+→ 2.0% per-event, 1.58M of 80.3M, left uncorrected). Also fold in radius sensitivity (rank corr
+0.93/0.91 at 300 m, 0.90/0.86 at 1 km; 48 of 52 county-months change letter — tie to Ch 8a's
+1,966 / 3,255 / 8,440 for the Leixlip pin) and grade calibration to 78 county-months
+(p10/median/p90 98.9/99.6/99.87; cuts at 97/76/33/10th pct — Ch 5a and 9b promised this).
+Concept boxes: imputation vs exclusion (a total has no NULL); censoring / Kaplan–Meier in one
+paragraph; overlap double-counting; grades are letters about an assumption. Worked examples:
+one negative-span outage event charged its category median; the Leixlip pin at three radii;
+overlap of two events over one Small Area (toy). Diagrams (SVG): two events over one SA with
+overlap hatched; three concentric circles 300/500/1000 m with populations 1,966/3,255/8,440;
+maybe the 78-county-month distribution with five lines (optional). Then update ledger; the
+following session is the FINAL PASS (intro, closing, glossary, continuity read, [verify]
+sweep). Register figures. Commit.
+
+_Superseded brief (done):_ **Ch 10 + Ch 11** (light pair). Ch 10 "For a reader, not an analyst" (PRs #32–#36, 5–6 Aug):
+per-area incident history + directory (1,836 areas; 220 of 1,830 with no history because
+multi-area events named once; 764 multi-area; 6 KB gz; 801 false 0.0 h; h/<county>.js shards
+1.5 MB/183 KB), legend icon (#33), plain-language rewrite (#34: Cavan 27/31 clear days on 6 Aug;
+100.00% beside a disruption; 2,600-char paragraph → seven sections), Actions bump (#35), mobile
+view switching (#36, 375 px). Also the health-marker unbundling (2 Aug, in #29's timeframe? —
+check `sources/ch10.md` and notes "The health notice was unbundled from the grade" ~185: 0.45 pp
+vs 0.003–0.012 pp ~100×; Tipperary three notices invisible; grade mix A2 B16 C31 D19 F10 → A2 B17
+C34 D18 F7). Ch 11 "Be findable" (PRs #37–#39, 6–8 Aug): county landing pages 2→28 indexable
+URLs, static text 73,087→383,714 chars, analytics pages 1→28, retraction of #25's pushState;
+#38 link; #39 trim comments duplicating notes. Read: this file → `README.md` → `outline.md` Ch
+10–11 → `sources/ch10.md` (~4.2k words), `sources/ch11.md` (~1.6k) → notes
+`statuspage-methodology.md` "The health notice was unbundled from the grade" (~185–225) and the
+history/directory paragraphs already read in Ch 8b (lines ~100–112, skip) → `notes/frontend-notes.md`
+(short). Concept boxes: history lists name an event under every area it reached, accounting
+charges it once; health marker beside the grade not inside it; why a JS-routed static site is
+invisible to search. Worked example: Cavan clear-days arithmetic; the pushState retraction.
+Register figures. Update this file. Commit.
+
+_Superseded brief (done):_ **Ch 9 "Not everything is an outage"** (PRs #26–#31, 31 Jul – 2 Aug; heavy — likely split into
+9a events/recurring windows and 9b naming/severity/review). Read: this file → `README.md` →
+`outline.md` Ch 9 → `sources/ch09.md` (~8k words — the biggest; read in two passes, #26–#27
+then #28–#31) → `notes/statuspage-methodology.md` "The national top ten" (~230), "A scheduled
+repeating window is a restriction" (~242), "Recurring windows cover hours, not days" (~264) →
+`notes/data-quality.md` "Multi-pin events" (~131), "The notice title is not a reliable severity
+signal", "A missing variant was silently inventing supply outages (found 2026-08-01)" (~144),
+"What the v3 corpus run delivered" (~164) → `src/uisce/site.py` `daily_windows` (~609),
+`event_windows` (~708), `recurring_intervals` (~740), `Region.add` (~1019), `event_pop` (~1068).
+Cover: #26 midday build (7.7 → 3.9 h) and 75.7 h feed lag; #27 top ten (21.9%), DON00115765
+"daily 10pm–7am, 9–27 July" 385.2 h → 144.0 h, July −7.7%, NULL-category leak (66 cases, one
+#9); #28 name an event once over its footprint (348 events, Exton/Wyeville/Zedbury table); #29
+repeating window is a restriction whatever the title (Donegal Conservation vs Interruption,
+949,824 ph, −3.8%); #30/#31 recurrence review 2 right / 9 wrong, text detection, pv3. Concept
+boxes: pin vs case vs event (LOU00112686 13 pins; 675 refs / 1,930 rows); interval union +
+population unioned once, capped; recurring windows as hours not days; the completion pin
+borrows its siblings' window. Worked examples: DON00115765 arithmetic (18 pins, 9–11 Jul
+publication; 18 nights × 9 h = 162 h — reconcile with the 144.0 h figure: PR #27 says 144.0;
+check whether that is 16 nights or clipped to "now"/month; register); Exton table lifted from
+#28. Diagrams: SVG 16 solid days vs 18 nightly stripes; SVG 13 dots → one event with unioned
+footprint. Continuity: Ch 5a "eighteen nightly windows in a trench coat"; Ch 4 "title is a
+category not a severity"; Ch 7 promised the 31 Jul twice-daily reason. Register figures.
+Update this file. Commit.
+
+_Superseded brief (done):_ **Ch 8b "Where you actually live"** (PR #23 second half + #24, #25 footnotes). Read: this file
+→ `README.md` → `outline.md` Ch 8 concepts 4–6 → `sources/ch08.md` lines ~106–260 (commits
+"Break each county down", "Split the city agglomerations", "Correct the claim that LEA names",
+"Take the drill-down geography… name the countryside", "State the drill-down geography rule
+once") and the #24/#25 stubs at the end → `notes/statuspage-methodology.md` "The county
+drill-down" (~81–180: closed_at gives a past month something to say; Cities; LEA names;
+countryside; pins outside the county) → `src/uisce/site.py` ~470–545 (`TownLookup.dominant`,
+`.within`) → `src/uisce/towns.py` `split_large_settlements` (~172), `around_label` (~72).
+Cover: three tiers (settlement / LEA >50,000 / "Around <ED>") and *why* — the finest official
+geography whose names arrive usable (242/1,492 city EDs letter-suffixed vs 0/2,552 rural);
+Dublin 1,261,884 = 83% of cases → 40 rows; MIN_PART_SHARE 0.30 and "Elsewhere in…"; rural
+bucket ranked first in 22/26 → 1,172 areas; homing by dominant share (median 1.00); straddle
+rule (filed under winner, charged only what's inside → area ph ≤ county); cross-county refusal
+and "Pinned outside the county" (~1.5%); no town grades (0.18 pt vs 11); payload 645 KB;
+closed_at's first use (Carlow 8 closures). END on the Kildare July table (Leixlip 405,666 ph
+95.88% vs Naas 100%) — the answer to the original question; note Naas 25,824 → 26,180
+correction once. Worked examples: Kildare table arithmetic (405,666 ÷ (16,733 × 744 h) =
+3.26% → 96.74%? — check: PR says 95.88%; July observed window may be shorter than 744 h or the
+2 events' footprints differ; derive or mark [verify]); a 60/40 straddle toy. Diagrams: mermaid
+three-tier decision tree with Leixlip / Kimmage-Rathmines / Around Ardmayle as leaves; SVG
+straddle. #24 (Cloudflare analytics) and #25 (pushState — retracted in Ch 11) as footnotes.
+Register figures. Update this file. Commit.
+
+_Superseded brief (done):_ **Ch 8a "How a pin gets a population"** (PR #23, first half — the chapter Barry most needs).
+Read: this file → `README.md` → `outline.md` Ch 8 concepts 1–3 → `sources/ch08.md` (~4.5k
+words; PR #23 body + commits, incl. the "Kildare 99.25% hid…" commit) →
+`notes/population-data-sources.md` (whole, ~1.4k words) → `src/uisce/site.py` ~415–470
+(`SmallAreaIndex`, `_near`, `affected`) → `src/uisce/towns.py` `resolve_settlements` (~145) and
+the header comments 21–50. Cover: the four Census files and their join keys; Small Areas
+(18,919 → 5,149,139 exactly); pin → SAs by centroid distance within 500 m, else nearest within
+8 km, 0.01° grid hash; SA → named area is an attribute lookup; the retracted point-in-polygon
+version (37 MB, 54 settlements missing, 187/789 >10% short, Doneraile 214 vs 857). Worked
+examples: Leixlip 56 SAs → 16,733 exact; a real pin's 500 m circle listing its SAs (write a
+~15-line script using `SmallAreaIndex` against KLD00118059's coordinates 53.3627, −6.506 —
+one-off, register the result). Diagrams (SVG): circle over centroid dots; polygon-vs-attribute
+on Doneraile. Leave tiers/homing/straddle/Kildare table for 8b. Register figures. Update this
+file. Commit.
+
+_Superseded brief (done):_ **Ch 7** (PRs #21–#22: `closed_at`, schema v2 and the additive-only migration ladder, replaying
+release DBs to recover 1,816 of 7,613 closures, 12% of cases open+close inside one build gap →
+daily builds). Read: this file → `README.md` → `outline.md` Ch 7 → `sources/ch07.md` (~2.2k
+words) → `notes/data-quality.md` "`closed_at` is a floor" (line ~209) and its "Re-measured
+2026-07-31" subsection (line ~215) → README migration paragraphs (~lines 25–40) →
+`src/uisce/replay_closed_at.py` docstring only. Worked example: a case seen Open in the 14 Jul
+snapshot and Closed in the 16 Jul one — closed_at = 16 Jul (a floor); and KLD00118059's
+closed_at 2026-08-13 12:02 vs its text's 1 pm 10 Aug (three days of feed lag — ties to Ch 9's
+75.7 h median). Diagram: timeline with build ticks and a short case that fits between two (SVG).
+Continuity: Ch 2 promised the release snapshots would recover 1,816 closures; Ch 6 ended on
+"which month did a case close". Register figures. Update this file. Commit.
+
+_Superseded brief (done):_ **Ch 6** (PRs #18–#20: rename to notice_to_end, observed 17.0 h vs scheduled 5.4 h vs pooled
+9.3 h, the 532-case negative-span family and ~101k fabricated Kildare person-hours, deploy to
+Pages). Read: this file → `README.md` → `outline.md` Ch 6 → `sources/ch06.md` (~2k words) →
+`notes/statuspage-methodology.md` "The published time metric is notice → observed completion"
+(line ~324) → `notes/data-quality.md` "Measured 2026-07-20: ends preceding publication are 532
+cases" (grep the heading; the rejected minimum-start rule is there — Ch 3 promised it).
+Worked example: the median arithmetic with the three n's; maybe a real negative-span case.
+Diagram: two histograms "measured" vs "promised" (SVG, simple). Continuity: Ch 5b ended
+"three days later the site changed what it called the number"; Ch 1 said end_date "reads like
+a system default". Register figures. Update this file. Commit.
+
+_Superseded brief (done):_ **Ch 5** (heavy — first site, person-hours, availability, grades, the model eval). Read: this
+file → `README.md` → `outline.md` Ch 5 → `sources/ch05.md` (~3.4k words) →
+`notes/statuspage-methodology.md` "Why not plain uptime?" and "Severity classes" →
+`notes/end-time-eval.md` "Workflow", "Labelling guide", and the 2026-07-18/19 results → `site.py`
+`region_month` (~1075–1120) and `grade`. Worked example: one event's person-hours → a
+county-month availability (Drogheda 23.8 h / 551,427 ph is in the notes; or derive one for
+Kildare July from PR #23's table). Diagrams: rectangle (hours × people); a county-month bar with
+the lost sliver. Keep grade *calibration* for Ch 12 — Ch 5 only states the thresholds. Continuity:
+Ch 3 promised "71.9%" and Ch 4 ended "that is where the Census comes in". Register figures.
+Update this file. Commit.
+
+_Superseded brief (done):_ **Ch 3** (+ Ch 4 if the window allows). Read: this file → `README.md` → `outline.md` Ch 3–4 →
+`sources/ch03.md` (~1.7k words), `sources/ch04.md` → `notes/end-time-eval.md` intro and
+"Decision: `lifted_immediate` is excluded" → `notes/model-and-runtime-benchmarks.md` (whole,
+short). For the worked example reuse KLD00118059 from Ch 1: pull its `inferred_cases` row
+(`end_source`, inferred end, `notice_to_end_seconds`) and, if cheap, the prompt text from
+`src/uisce/inference.py`. Continuity: Ch 1 promised that "getting the end out of the prose is
+chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Commit per chapter.
+
+## Session log
+
+- 2026-08-26 · Session 13 · merged main; drafted Ch 16 (2,070 w) for PRs #54–#61; closing
+  renumbered 16→17 (+1 settled row, +2 glossary); 14–15 continuity-checked → reviewed;
+  sources/ch16.md; there is no PR #53.
+- 2026-08-21 · Session 12 · merged main into the branch (kept main's JSONL; the branch's 85
+  records were all superseded there); source packs ch14/ch15 (5.4k words); drafted Ch 14
+  (2,765 w) and Ch 15 (2,916 w); closing renumbered 13→16 with three settled rows and eight
+  glossary entries; intro table, outline, figures extended.
+
+- 2026-08-18 · Session 11 (final pass) · wrote 00-intro (1,368 w, AI process named once with
+  the trailer counts: Sonnet 4.6 ×5, Sonnet 5 ×13, Opus 4.8 ×17, Opus 5 ×41, Fable 5 ×29) and
+  13-closing (2,197 w: can/cannot say, settled-decisions table in plain language, 32-entry
+  glossary); mechanical checks; all statuses → reviewed.
+- 2026-08-18 · Session 10 · drafted Ch 12 (2,623 w); SVGs overlap-double-count,
+  radius-sensitivity. All 16 posts drafted.
+- 2026-08-18 · Session 9 · drafted Ch 10 (2,085 w) and Ch 11 (1,034 w).
+- 2026-08-18 · Session 8 · drafted Ch 9a (1,913 w) and 9b (2,117 w); SVGs recurring-window,
+  pins-to-event; reconciled 144.0 h / 6,596 people.
+- 2026-08-18 · Session 7 · drafted Ch 8b (2,491 w); SVG straddle; reconciled PR #23's Kildare
+  table (588.5 h denominator) and pulled today's July figures from data.js.
+- 2026-08-18 · Session 6 · drafted Ch 8a (2,323 w); two SVGs; measured KLD00118059's 500 m
+  footprint (12 SAs / 3,255) and Doneraile's three SAs.
+- 2026-08-18 · Session 5 · drafted Ch 7 (2,074 w); SVG build-gap-timeline; measured closed_at
+  distribution and KLD00118059 lifecycle.
+- 2026-08-18 · Session 4 · drafted Ch 6 (2,090 w); SVG observed-vs-scheduled.
+- 2026-08-18 · Session 3 · drafted Ch 5a (1,694 w) and 5b (2,024 w) — Ch 5 split as the length
+  rule intends; first SVG diagram.
+- 2026-08-18 · Session 2 · drafted Ch 3 (2,231 w) and Ch 4 (1,296 w); pulled prompt v1/v2 diffs
+  and KLD00118059's inferred row; category counts measured.
+- 2026-08-18 · Session 1 · drafted Ch 1 (1,934 w) and Ch 2 (1,034 w); measured 10,610 cases /
+  10,550 distinct rounded coords; KLD00118059 pulled as the running example.
+- 2026-08-18 · Session 0 · scaffold: README (style guide), outline, figures registry with anchors
+  verified, source pack built (12 files, 34.7k words) via `tools/build_sources.sh`.

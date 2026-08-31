@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 260" width="520" height="260" font-family="system-ui, sans-serif" font-size="14">
+  <!-- person-hours as a rectangle: hours along the bottom, people up the side -->
+  <rect x="90" y="40" width="380" height="150" fill="#cfe3f5" stroke="#3b6ea5" stroke-width="2"/>
+  <text x="280" y="105" text-anchor="middle" font-size="16" font-weight="600" fill="#1f3a5a">551,427 person-hours</text>
+  <text x="280" y="128" text-anchor="middle" fill="#1f3a5a">one reservoir interruption, Drogheda, May 2026</text>
+  <text x="280" y="150" text-anchor="middle" font-size="12" fill="#3b6ea5">area = people × hours</text>
+  <!-- hours axis -->
+  <line x1="90" y1="215" x2="470" y2="215" stroke="#333" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="280" y="240" text-anchor="middle">23.8 hours</text>
+  <!-- people axis -->
+  <line x1="60" y1="190" x2="60" y2="40" stroke="#333" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="50" y="120" text-anchor="end" transform="rotate(-90 50 120)">~23,169 people</text>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker></defs>
+</svg>
