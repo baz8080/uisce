@@ -346,12 +346,11 @@ function basisNote(natAvail, personH) {
     ` <span class="hoverhint">Hover a day in a bar for its detail.</span>`;
 }
 
-// freshness() is statusui's; these two are what it takes from this site. 24h is
+// freshness() is statusui's; this is what it takes from this site. 24h is
 // a safe overdue threshold with ~6h of headroom over the widest normal gap — the
 // site builds at 11:20 and 17:23 UTC, so up to 17h57m — and needs no copy of the
 // build schedule here to go stale.
 const STALE_AFTER_H = 24;
-const STALE_NOTE = "the last data build may have failed";
 
 // The grade is availability alone. An active boil-water / do-not-drink /
 // do-not-consume notice is shown next to it rather than folded into it, so a
@@ -504,7 +503,7 @@ function renderOverview() {
   const nF = worst.filter(w => w[1].grade === "F").length;
   document.getElementById("banner").innerHTML =
     `<strong>${monthLabelLong(curMonth)}${isPartial() ? " so far" : ""}:</strong> ${ev} announced outages · typical outage ${natFix} · ${nF} ${nF === 1 ? "county" : "counties"} graded F
-     <span class="meta">${freshness(D.data_as_of_iso, STALE_AFTER_H, STALE_NOTE)}</span>`;
+     <span class="meta">${freshness(D.data_as_of_iso, STALE_AFTER_H)}</span>`;
 
   // county rows, always alphabetical: 26 rows scroll, and the search box is
   // the fast path — the sort control it replaced earned neither its space nor
