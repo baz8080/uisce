@@ -153,6 +153,14 @@ Two changes stop this recurring. NULL no longer groups with the repairs — an u
 
 Net effect on the July 2026 figures: national person-hours 27,505,846 → 26,898,291 (**−2.2%**), of which −1.9% is the slug fixes and −0.3% the NULL default. Eleven cases remain unmatched and correctly so: eight titled `unknown`, one bare reference number, one `Gorteen, Mullingar`, one `Supply Re-direction`.
 
+### The dash lost its trailing space (found 2026-09-03)
+
+The report from the late-August builds (issue #67) listed 17 cases across 9 prefixes. Six were fixable, and four of those were not the table's fault: `Mains Repair Works -Meath`, `Mains Repair Works -Sligo` and `Burst Water Main -Kerry` put the space *before* the dash and none after, and the title splitter required the space after it, so the county was swallowed into the category key and the exact lookup missed a rule that was already there. Two burst mains and two repairs, invisible to the metrics.
+
+The splitter now splits on a dash with whitespace on at least one side. A dash with no whitespace at all still does not split, which is the invariant that keeps `Mains Tie-In` and `Supply Re-direction` whole; every existing variant resolves to itself under the new pattern. The alternative, stripping a trailing county name against the 26-county list in `site.py`, was rejected as heavier and wrong in a different way: it would also strip the tail off a title that has no category at all, and `Gorteen, Mullingar` is correctly left whole today.
+
+The other two were plain missing variants and were added: `Mains Flushing Works` to `mains_flushing` and `Fire Hydrant Replacement` to `hydrant_repair`. The four survivors are the same as on 2026-08-01, `unknown` (now nine), the bare reference number, `Gorteen, Mullingar` and `Supply Re-direction`, and the report keeps its role. Not re-run against the live archive from the fixing session (the proxy blocks ArcGIS): the next CI data build's `backfill()` re-derives `work_category` and its log should read 12 cases with no category rule.
+
 ## Recurring windows were charged as continuous outages (found 2026-08-01)
 
 147 of 9,183 notices (1.6%) describe a window that *repeats* over a date range — "Works are now scheduled to take place daily from 10pm until 7am, from 9 July to 27 July". Until prompt v3 the pipeline had nowhere to put that, so it charged the whole range as one continuous block.

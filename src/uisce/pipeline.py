@@ -542,7 +542,7 @@ CATEGORY_RULES = (
     CategoryRule(
         "mains_flushing",
         "Planned",
-        ("mains flushing", "main flushing"),
+        ("mains flushing", "main flushing", "mains flushing works"),
     ),
     CategoryRule(
         "boil_notice_issued",
@@ -591,7 +591,12 @@ CATEGORY_RULES = (
     CategoryRule(
         "hydrant_repair",
         "Unplanned",
-        ("hydrant repair works", "hydrant repair", "hydrant replacement works"),
+        (
+            "hydrant repair works",
+            "hydrant repair",
+            "hydrant replacement works",
+            "fire hydrant replacement",
+        ),
     ),
     CategoryRule(
         "hydrant_installation",
@@ -710,9 +715,10 @@ CATEGORY_RULES = (
 _RULE_BY_VARIANT = {variant: rule for rule in CATEGORY_RULES for variant in rule.variants}
 
 # titles use an en-dash or hyphen between category and county, inconsistently,
-# and sometimes without the space before the dash ("...Works– Roscommon");
-# the trailing space is required so hyphenated words don't split
-_TITLE_CATEGORY_SPLIT = re.compile(r"\s*[–-]\s+")
+# and the space beside it lands on either side or both ("...Works– Roscommon",
+# "...Works -Meath"). A dash with no whitespace at all must not split, or
+# "mains tie-in" and "supply re-direction" lose their tails.
+_TITLE_CATEGORY_SPLIT = re.compile(r"\s+[–-]\s*|\s*[–-]\s+")
 
 
 def _normalise_category(category):
