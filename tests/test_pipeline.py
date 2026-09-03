@@ -379,6 +379,8 @@ class TestCategoryClassification:
             ("Meter Installation - Dublin", "meter_installation"),
             ("Meter Exchange Works - Wicklow", "meter_installation"),
             ("Mains Tie-In - Cork", "new_connection"),
+            ("Mains Flushing Works - Cork", "mains_flushing"),
+            ("Fire Hydrant Replacement - Dublin", "hydrant_repair"),
         ):
             assert classify_category(title).slug == slug, title
 
@@ -413,12 +415,23 @@ class TestCategoryClassification:
         assert classify_category("Burst Water Main- Cork").slug == "burst_main"  # no space
         assert classify_category("essential works –  dublin").slug == "essential_works"  # lower
         assert classify_category("  Mains Flushing – Kerry  ").slug == "mains_flushing"  # padded
+        # the feed also puts the space before the dash and none after, which
+        # swallowed the county into the category key for three cases (#67)
+        assert classify_category("Mains Repair Works -Meath").slug == "mains_repair"
+        assert classify_category("Burst Water Main -Kerry").slug == "burst_main"
+
+    def test_a_dash_with_no_whitespace_does_not_split(self):
+        # the split accepts whitespace on either side of the dash, so the
+        # invariant that keeps hyphenated words whole is "no whitespace, no split"
+        assert pipeline._title_category("Supply Re-direction") == "supply re-direction"
+        assert classify_category("Mains Tie-In - Cork").slug == "new_connection"
 
     def test_returns_none_for_unknown_or_empty(self):
         # the real survivors: a title the feed never filled in, and a bare
         # reference number. Neither carries recoverable category information.
         assert classify_category("KER00113058") is None
         assert classify_category("Something Novel – Kerry") is None
+        assert classify_category("Supply Re-direction") is None
         assert classify_category("unknown") is None
         assert classify_category(None) is None
 
