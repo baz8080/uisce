@@ -961,8 +961,9 @@ bindSearch({
   href: (c, t) => t ? `a/${slug(c)}/${t}.html` : `c/${slug(c)}.html`,
   // a name that can only reach its county says so: an "Around ..." Electoral
   // Division has no page, and a hit that quietly does something else is worse
-  // than one that says what it will do
-  note: (name, c, t) => t ? c : name === c ? "" : `${c} · county`,
+  // than one that says what it will do. A town named for its county sits under
+  // the county's own row, so it says which of the two it is
+  note: (name, c, t) => t ? (name === c ? "town" : c) : name === c ? "" : `${c} · county`,
   pick: (c, t) => { if (t) return false; goCounty(c); return true; }
 });
 window.addEventListener("hashchange", route);
