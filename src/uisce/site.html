@@ -548,7 +548,7 @@ const n = (v, absent) => (v == null ? absent : v);
 const TOWN_SORTS = {
   impact: (a, b) => n(b[1].person_h, -1) - n(a[1].person_h, -1) || ev(b[1], "outage") - ev(a[1], "outage") || n(b[0].pop, -1) - n(a[0].pop, -1),
   outages: (a, b) => ev(b[1], "outage") - ev(a[1], "outage") || n(b[1].person_h, -1) - n(a[1].person_h, -1),
-  avail: (a, b) => n(a[1].availability, 101) - n(b[1].availability, 101) || n(b[0].pop, -1) - n(a[0].pop, -1),
+  avail: (a, b) => n(a[1].availability, a[0].unplaced ? 101 : 100) - n(b[1].availability, b[0].unplaced ? 101 : 100) || n(b[0].pop, -1) - n(a[0].pop, -1),
   name: (a, b) => a[0].name.localeCompare(b[0].name),
 };
 
@@ -563,7 +563,7 @@ function openByArea(c) {
 
 function townRows(c) {
   const open = openByArea(c);
-  const rows = Object.entries(c.towns)
+  const rows = Object.entries(COUNTY[county].towns)
     .filter(([, t]) => t.months[curMonth])
     // the code rides along as a fourth element: it is the area's key in the
     // history shards, and every comparator reads only the first three
@@ -573,14 +573,16 @@ function townRows(c) {
 
   const num = (v, label) => `<td class="${v ? "" : "z"}" data-label="${label}">${v ? `<b>${v}</b>` : "0"}</td>`;
   const body = rows.map(([t, m, openNow, code]) => {
+    // a clear month omits its 100.0 like every other implied figure
+    const availability = t.unplaced ? null : (m.availability ?? 100);
     // share of the area's person-time lost, as a hairline meter — the numbers
     // alone all read "99.something" and hide which area actually took the hit
-    const lost = m.availability == null ? 0 : Math.min(100, 100 - m.availability);
+    const lost = availability == null ? 0 : Math.min(100, 100 - availability);
     // an unplaced pin's footprint is in another county, so there is no population
     // to divide by and nothing honest to put in the last two columns
-    const avail = m.availability == null
+    const avail = availability == null
       ? '<span class="z">—</span>'
-      : `${availText(m.availability, m.person_h)}<span class="meter" title="${lost.toFixed(2)}% of this area's people-time affected"><i style="width:${Math.min(100, lost * 5).toFixed(1)}%"></i></span>`;
+      : `${availText(availability, m.person_h)}<span class="meter" title="${lost.toFixed(2)}% of this area's people-time affected"><i style="width:${Math.min(100, lost * 5).toFixed(1)}%"></i></span>`;
     // the whole row is the click target, but the name is also a real anchor so
     // middle-click and open-in-new-tab work. The page where the area has one and
     // the hash where it does not, the same rule _area_items follows server-side:
@@ -636,7 +638,7 @@ function openSection(c) {
     if (!groups.has(o.area)) groups.set(o.area, []);
     groups.get(o.area).push(o);
   }
-  const named = [...groups].map(([code, cases]) => [c.towns[code] ? c.towns[code].name : "—", cases]);
+  const named = [...groups].map(([, cases]) => [cases[0].name || "—", cases]);
   named.sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
   const when = o => `${o.since > today ? "from" : "since"} ${fmtDate(o.since, today)}`;
   return `<div class="card">
@@ -651,7 +653,7 @@ function openSection(c) {
 }
 
 function resolvedSection(c) {
-  const r = c.resolved[curMonth];
+  const r = COUNTY[county].resolved[curMonth];
   const shown = r ? r.cases : [];
   return `<div class="card">
     <h3>Notices that closed in ${monthLabelLong(curMonth)} <span class="n">· ${r ? r.n : 0} ${pl(r ? r.n : 0, "notice")}</span></h3>
@@ -709,11 +711,38 @@ function renderCounty() {
         <summary>How areas are drawn</summary>
         <p>Each notice is placed in the Census 2022 area its affected population centres on: the settlement it is in, or - for the roughly 40% of the network that runs between towns - the countryside of the surrounding Electoral Division, shown as <em>Around&nbsp;…</em> to keep it distinct from the town of the same name. The Census counts a city and its suburbs as one settlement, so any settlement above 50,000 is broken into its Local Electoral Areas instead. Availability is measured against each area's own population, not the county's, and there are no letter grades at this level: the A-F thresholds are calibrated to county-months and would mislead against a village-sized denominator.</p>
       </details>
-      ${townRows(c)}
+      ${countyShardBody(county) || townRows(c)}
     </div>
 
     ${openSection(c)}
-    ${resolvedSection(c)}`;
+    ${countyShardBody(county) ? `<div class="card">${countyShardBody(county)}</div>` : resolvedSection(c)}`;
+}
+
+// ---- the county's own data, one shard per county ----
+
+// The area breakdown and the closed-in-month lists are read by this view alone
+// and were 78% of data.js, so they arrive with the county rather than with the
+// page. Same loader and same reason as the history: an injected script, so it
+// works off disk.
+const COUNTY = {};
+window.UISCE_COUNTY = COUNTY;
+const COUNTY_STATE = {};
+
+function loadCounty(name) {
+  if (COUNTY_STATE[name] === "ok") return;
+  loadShard(COUNTY_STATE, name, "t/" + name.toLowerCase() + ".js" + cacheBust(D),
+    () => !!COUNTY[name],
+    () => { if (view === "county" && county === name) render(); });
+}
+
+// the note that stands in for a card while its shard is in flight, or "" once
+// the card can render
+function countyShardBody(name) {
+  const state = COUNTY_STATE[name];
+  if (state === "ok") return "";
+  return `<div class="note" style="margin:0">${state === "error"
+    ? `The area breakdown for Co.&nbsp;${esc(name)} did not load. Reloading the page usually fixes it.`
+    : `Loading the area breakdown for Co.&nbsp;${esc(name)}…`}</div>`;
 }
 
 // ---- the national top ten ----
@@ -866,14 +895,11 @@ function historyBody(name) {
 // payload and present exactly when the area has a page: ui.js's slug() is
 // deliberately not statusui.slug(), and would leave a fada as a dash.
 function renderArea() {
-  const c = D.counties[areaCounty];
-  const t = c.towns[areaCode];
-  const loaded = HISTORY_STATE[areaCounty] === "ok" ? HISTORY[areaCounty][areaCode] : null;
-  // the name comes from data.js when the area has month rows and from the shard
-  // otherwise — an area whose every notice is still in the future has neither a
-  // month row nor a place in the county breakdown
-  const name = (t && t.name) || (loaded && loaded.name) || areaCode;
-  const total = loaded ? loaded.events.length : null;
+  // name, population and slug come with the history: the county breakdown is
+  // its own shard and this view has no reason to load it
+  const t = HISTORY_STATE[areaCounty] === "ok" ? HISTORY[areaCounty][areaCode] : null;
+  const name = (t && t.name) || areaCode;
+  const total = t ? t.events.length : null;
 
   document.getElementById("areaview").innerHTML = `
     <a class="back" href="#county/${encodeURIComponent(areaCounty)}"
@@ -937,6 +963,7 @@ function route() {
     : county ? "county"
     : location.hash === "#top" && TOP_MONTHS.length ? "top" : "overview";
   if (areaCounty) loadHistory(areaCounty);
+  if (county) loadCounty(county);
   render();
 }
 // The footer's methodology is collapsed by default; anything that points a

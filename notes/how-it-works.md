@@ -49,7 +49,7 @@ The only genuinely intricate part. It runs in four stages:
 
 **c. Regions become months.** `region_month` produces counts, person-hours and availability for one region in one month. Counties additionally get day bars, an A–F `grade`, and the notice-to-completion medians; areas get neither grades nor bars, and their month rows are written sparsely because they dominate the payload.
 
-**d. Output.** `write_site` writes 3 + 26 files. The county and area *metrics* are serialised into `data.js` as `window.UISCE_DATA`, and `site.html` is copied beside it. A `<script>` tag rather than `fetch`, so the site works opened straight off disk.
+**d. Output.** `write_site` writes the pages, `data.js` and two shards per county. The county *metrics* are serialised into `data.js` as `window.UISCE_DATA`, and `site.html` is copied beside it; the per-area breakdown and the closed-in-month lists go to `t/<county>.js`, loaded when a county is opened. A `<script>` tag rather than `fetch`, so the site works opened straight off disk.
 
 The per-area *incident histories* — every notice ever published, event by event — do not go in `data.js`: together they are twice its size. They are written to `h/<county>.js`, one shard per county, each assigning into `window.UISCE_HISTORY`, and the page injects a `<script>` tag for one county when a reader opens an area in it. Same reason as above: an injected script survives `file://`, where `fetch` cannot read a local path at all. `write_site` owns the split, so a field added to the history cannot leak into the payload by somebody forgetting to pop it.
 

@@ -466,3 +466,40 @@ breakdown of *cases* in one tile. The split decomposes the outage count, so it m
 tile that carries that count; the hours tile shows the hours. `completed_n` drops out of the
 view but stays in the payload — it is what `median_completion_h` is computed over, and
 `TestPayloadShape` snapshots the key set on purpose.
+
+## The county's own data left data.js - 2026-09-05
+
+Measured on the 2026-09-04 release, `data.js` was 955,516 bytes and the overview read a third
+of it. By block: `towns` 583,560 (61%), `resolved` 164,809 (17%), `months` 133,842 (14%),
+`open` 58,212 (6%), `top` 11,548. The first two are read by the county view alone. The
+methodology note had named 1 MB as the point to split per county, and six months in it was
+at 955 KB, growing linearly in months × areas (4,833 town-month rows).
+
+`write_site` now pops `towns` and `resolved` out of every county before serialising and
+writes them to `t/<county>.js`, the same shape and loader as the history shards. The county
+view loads its shard on entry and renders the head, tabs, bars and tiles from `data.js` at
+once; the areas card and the closed-in-month card carry a loading note until the shard lands,
+then re-render, the pattern the area view already used. After: `data.js` 212,116 bytes,
+28,640 gzipped, against 955,516 and 123,950 before. The largest county shard is Cork at
+69,925 bytes.
+
+Three readers outside the county view needed a different source. The county's open list
+grouped by area name through `towns`, so each open entry now carries its area's `name`
+beside the code (about 10 KB across the payload; the code stays because the breakdown's
+"Open now" column keys on it). The area view read name, population and slug from `towns`,
+so the history entry carries `pop` and `slug` beside the `name` it already had, and the view
+loads nothing but the history. The search index and the area pages are written by
+`write_site`, which holds the popped block. `build_site`'s output is unchanged: the split is
+the writer's, so `TestPayloadShape` still guards the full shape and a new guard asserts what
+reaches `data.js`.
+
+Two smaller things went with it. A clear area-month omitted its zero events and its zero
+person-hours but spelled out `"availability": 100.0`; it is implied now, like the others
+(1,218 of 4,833 rows). And `run()` prints `statusui.size_report` against `INITIAL_BUDGET`,
+512 KB for index.html plus data.js, with a `::warning::` line on the Pages run when it is
+over. A warning, not a failure: a deploy must not fail on growth alone, and the site would be
+serving stale data until someone noticed.
+
+Rejected: folding the breakdown into the history shard. It would have made one file and one
+request per county, but the county view would wait for 2.4 MB of history it does not read,
+and the area view would carry a breakdown it does not read either.

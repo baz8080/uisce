@@ -807,7 +807,16 @@ class TestPayload:
         month = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
         area_month = month["towns"]["T1"]["months"]["2026-05"]
         assert "person_h" not in area_month
-        assert area_month["availability"] == 100.0
+        assert "availability" not in area_month  # a clear month's 100.0 is implied
+
+    def test_a_month_that_lost_time_carries_its_availability(self):
+        month = build_site([_case()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert month["towns"]["T1"]["months"]["2026-05"]["availability"] < 100
+
+    def test_an_open_entry_names_its_area(self):
+        county = build_site([_case(status="Open")], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert set(county["open"][0]) == {"sev", "title", "loc", "since", "area", "name"}
+        assert (county["open"][0]["area"], county["open"][0]["name"]) == ("T1", "Testtown")
 
     def test_a_month_with_nothing_resolved_omits_the_count(self):
         month = build_site([_case()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
@@ -1833,8 +1842,31 @@ class TestHistoryShards:
         data = (tmp_path / "data.js").read_text()
         assert "history" not in site
         assert "UISCE_HISTORY" not in data
-        assert "Testtown" in data          # the area breakdown is still there
-        assert "CAR00000001" not in data   # but no event of its own
+        assert "CAR00000001" not in data
+
+    def test_the_county_breakdown_never_reaches_data_js_either(self, tmp_path):
+        """The 2026-09-05 split: towns and resolved are the county view's alone
+        and were 78% of the payload the overview loaded."""
+        site, _ = self._write(tmp_path)
+        data = (tmp_path / "data.js").read_text()
+        assert set(site["counties"]["Carlow"]) == {"pop", "months", "open", "open_total"}
+        assert "Testtown" not in data and "towns" not in data and "resolved" not in data
+        shard = (tmp_path / "t" / "carlow.js").read_text()
+        assert shard.startswith("window.UISCE_COUNTY = window.UISCE_COUNTY || {};")
+        county = json.loads(shard.split("=", 2)[2].rstrip(";"))
+        assert set(county) == {"towns", "resolved"}
+        assert county["towns"]["T1"]["name"] == "Testtown"
+
+    def test_every_county_gets_a_breakdown_shard_including_the_empty_ones(self, tmp_path):
+        write_site(_bare_site(), tmp_path, TOWNS)
+        shard = (tmp_path / "t" / "kildare.js").read_text()
+        assert json.loads(shard.split("=", 2)[2].rstrip(";")) == {"towns": {}, "resolved": {}}
+
+    def test_the_history_entry_carries_what_the_area_view_needs(self, tmp_path):
+        site, _ = self._write(tmp_path)
+        shard = (tmp_path / "h" / "carlow.js").read_text()
+        area = json.loads(shard.split("=", 2)[2].rstrip(";"))["T1"]
+        assert (area["name"], area["pop"], area["slug"]) == ("Testtown", 1000, "testtown")
 
     def test_search_js_maps_each_county_to_its_sorted_names(self, tmp_path):
         """The search index bindSearch fetches on the first keystroke: county ->
