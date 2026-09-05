@@ -2198,7 +2198,14 @@ def write_site(site, site_dir, towns=None):
     data = "window.UISCE_DATA = " + json.dumps(site) + ";"
     site_dir.mkdir(parents=True, exist_ok=True)
     (site_dir / "data.js").write_text(data)
-    (site_dir / "index.html").write_text(page_html(SITE_HTML, {"CANONICAL": f"{BASE_URL}/"}))
+    # the noscript fallback: the county pages carry the same figures statically
+    county_links = " · ".join(
+        f'<a href="{COUNTY_DIR}/{county_slug(c)}.html">{html.escape(c)}</a>'
+        for c in sorted(site["counties"])
+    )
+    (site_dir / "index.html").write_text(
+        page_html(SITE_HTML, {"CANONICAL": f"{BASE_URL}/", "COUNTY-LINKS": county_links})
+    )
 
     shard_bytes = county_shard_bytes = 0
     for name, sub, payload in (

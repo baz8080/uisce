@@ -60,6 +60,7 @@ with the evidence that closed them.
 | End-time extraction is **rules first, LLM fallback**: `rules.py` answers the templated ~93% (99.99% corpus agreement, 0 wrong emissions on the labelled rounds, 0.6s vs ~11 GPU-hours) and abstains to the LLM for recurring windows, lifts, Irish and everything ambiguous. Rules may only emit `completion_update`/`scheduled_end_with_time`; re-measure with `uv run uisce-eval-rules-shadow`. | rules-vs-llm-end-times.md (2026-08-21) |
 | `towns` and `resolved` are the county view's data and ship per county in `t/<county>.js`; `data.js` carries months, open and top only (212 KB against 955 KB). `INITIAL_BUDGET` is 512 KB for index.html plus data.js, **warned, never failed**. Folding the breakdown into the history shard was rejected. | frontend-notes.md - "The county's own data left data.js" (2026-09-05) |
 | CI runs `uisce-infer --rules-only` every data build and commits the JSONL to `main`; the LLM residue is run by hand. JSONL stays in this repo (`merge=union`) — a `uisce-data` repo and a release asset were both rejected. | rules-vs-llm-end-times.md — "CI runs the rules half" (2026-08-21) |
+| The fourteen towns named for their county (Carlow, Sligo, Wexford ...) render one row under the county's, `Sligo` + `town`, reachable from the box. The index always carried them; the `name|county` dedup that hid them was fixed upstream in statusui and the pin moved in the same PR | frontend-notes.md - "Two edges, both left as they are", 2026-09-03 amendment |
 
 ## Conventions
 
