@@ -1326,6 +1326,11 @@ def event_record(county, ref, meta, intervals, sas):
         span = (iv[-1][1] - iv[0][0]).total_seconds() / 3600
         if span - hours > 0.1:
             record["span_h"] = round(span, 1)
+        # the last charged day, which is what lets a day in the county's bar
+        # find its events; an event with no duration has only its start day
+        end = (iv[-1][1] - timedelta(seconds=1)).strftime("%Y-%m-%d")
+        if end != record["start"]:
+            record["end"] = end
     # the whole event's footprint, capped as Region.event_pop caps it — this
     # describes an event, not an area's accrual, so it is the same number the
     # national top ten prints for the same event
