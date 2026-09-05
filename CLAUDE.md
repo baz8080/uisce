@@ -1,7 +1,7 @@
 # uisce
 
 A static status site for Uisce Éireann water disruption notices, built from an ArcGIS feed.
-`notes/` carries ~33k tokens of measured findings and settled decisions across 10 files — too much
+`notes/` carries ~33k tokens of measured findings and settled decisions across 11 files — too much
 to read wholesale, which is why the important ones are indexed here.
 
 ## The UI is shared — change it upstream
@@ -54,7 +54,7 @@ with the evidence that closed them.
 | The county-page link sits under the county heading, not in the footer, and the overview row's `href` points at `c/<county>.html` rather than the hash. Wording is the same sentence esb uses, because the two pages stand in the same relation to their views; it is deliberately not "every notice ever recorded" — not because the page is short (the cap came off 2026-08-27) but because the *view* is one month at a time. lifts' names the address instead, because its page is the same content as its view. The area view's link names the address ("Permanent link to Abbeydorney") because its page is the same content as the view. | frontend-notes.md — "The county-page link came up out of the footer" (2026-08-26) |
 | A search hit is an entry point, so it is a real link: an area hit goes to `a/<county>/<area>.html`, a county hit carries `c/<county>.html` in its `href` but keeps the click in the app. The `#area` view stays — it is the only surface the 1,221 pageless areas have — and the towns rows got the same href treatment. The index gate is the payload's `slug`, not `area_has_page` (904 eligible, 739 built) | frontend-notes.md — "Search reaches the area, not just its county" (2026-08-27) |
 | The county page's meta description states the county's record, then names what the page holds, in that order — a snippet truncated mid-sentence must not read as an inventory | frontend-notes.md — "The county page's meta description had the same shape" (2026-08-26) |
-| The county page lists **every** notice; `COUNTY_EVENTS_SHOWN`/`COUNTY_OPEN_SHOWN` are gone. A count was always a proxy for bytes and a bad one — if a bound is needed again, make it a byte budget. **Not measured against the live feed** (proxy blocks ArcGIS): check the largest `c/*.html` on the next CI data build. | frontend-notes.md — "The copy and consistency pass" (2026-08-27) |
+| The county page lists **every** notice; `COUNTY_EVENTS_SHOWN`/`COUNTY_OPEN_SHOWN` are gone. A count was always a proxy for bytes and a bad one — if a bound is needed again, make it a byte budget. Measured 2026-09-05 on the 2026-09-04 release: Dublin 384 KB, Cork 336 KB, with the open notices' text; no byte budget yet. | frontend-notes.md — "The copy and consistency pass" (2026-08-27) |
 | One name per thing: the directory is "every area with a notice" (never "in Ireland" — that was false), the app is "Co. X's interactive view" (never a map), a count reads `· N notices`, and every footer says "Source code · not affiliated with Uisce Éireann." | frontend-notes.md — "One name per thing" (2026-08-27) |
 | `base.css` resets margin, not padding, so a bare `<ul>` keeps the UA's 40px indent — `ul.notices`/`ul.areas` reset their own. Kept per-site, not promoted. | frontend-notes.md — "The 40px that nothing asked for" (2026-08-27) |
 | The design layer (tokens, base CSS, row/bar/card, JS helpers) is shared with esb and lifts via `../statusui`, a **uv git dependency pinned in `uv.lock`** — edit upstream, then `../statusui/rollout.sh` bumps all three sites. Vendored copies were tried first and drifted within a day. `site.css` and the inline blocks are this site's own. | frontend-notes.md — "the vendored copy became a pinned uv git dependency" (2026-08-20); statusui's README for what is shared |
@@ -68,6 +68,9 @@ with the evidence that closed them.
 - Decisions go in `notes/`, dated, with the rejected alternatives and their numbers. Add a row here
   when one closes something off — this file carries pointers only, never the rationale, or it
   becomes the thing it exists to fix.
+- Follow-ups go in [notes/roadmap.md](notes/roadmap.md): work agreed and not started, checks
+  that gate it, decisions waiting on the owner, re-measurements with a trigger. Delete the entry
+  when it closes and put the outcome where it belongs.
 - Comments earn their place or they go. Say **why**, not what — never a paraphrase of the line
   below, a heading for an obviously-named block, or an explanation of a standard flag. One line
   where one will do; a paragraph of reasoning belongs in the commit message or `notes/`.

@@ -1645,6 +1645,18 @@ class TestAreaHistory:
             "confirmed": 1, "loc": "Somewhere",
         }
 
+    def test_the_last_charged_day_is_carried_when_it_differs_from_the_first(self):
+        """The county bar finds a day's events by [start, end]; a one-day event
+        omits the end, the sparse rule the rest of the record follows."""
+        assert "end" not in _history([_case()])[0]  # 1 May 00:00 to 2 May 00:00
+        three_days = _history([_case(notice_to_end_seconds=3 * 86400.0)])[0]
+        assert three_days["end"] == "2026-05-03"  # ends 4 May 00:00, so the 3rd
+        recurring = _history([_recurring()], now=AFTER_MAY)[0]
+        assert recurring["end"] == "2026-05-08"
+        open_case = _history([_case(status="Open", notice_to_end_seconds=None,
+                                    end_source="not_found", end_local_date=None)])[0]
+        assert open_case["end"] == "2026-05-09"  # accrues to NOW, midnight on the 10th
+
     def test_a_multi_pin_event_is_one_record_counting_its_pins(self):
         """The same rule the top ten uses: "was this confirmed complete?" is a
         count across the event's notices, never a boolean."""

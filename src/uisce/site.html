@@ -131,6 +131,9 @@
            background: var(--cell-empty); vertical-align: middle; margin-left: 8px; overflow: hidden; }
   .meter i { display: block; height: 100%; background: var(--critical); }
 
+  #dayEvents { margin-top: 8px; }
+  .dayhead { font-size: 13px; font-weight: 650; margin-bottom: 2px; }
+
   /* the open-now tile is the way into the national list, so it is a link
      that keeps looking like a tile */
   a.tile { display: block; color: inherit; text-decoration: none; }
@@ -315,6 +318,7 @@ let curMonth = LATEST;
 let townSort = "impact";
 let county = null;  // the county being drilled into, when view === "county"
 let areaCounty = null, areaCode = null;  // the area whose history is on screen
+let dayPick = null;  // the day in the county bar whose notices are listed
 let view = "overview";
 const VIEW_EL = { overview: "overview", county: "countyview", area: "areaview", top: "topview", open: "openview" };
 // months with a finished top ten; the in-progress month has none (see top_events)
@@ -710,7 +714,8 @@ function renderCounty() {
     <div class="card">
       <div class="legend" style="margin:0 0 12px">${LEGEND}</div>
       <div class="bar tall">${bar(m.days)}</div>
-      <div class="daycap">Tap a day for detail.</div>
+      <div class="daycap">Tap a day for its notices.</div>
+      <div id="dayEvents">${dayEventsHtml()}</div>
       <div class="tiles" style="margin-bottom:0">
         <div class="tile"><div class="v">${availText(m.availability, m.person_h)}</div><div class="k">supply availability</div></div>
         <div class="tile"><div class="v">${m.events.outage}</div><div class="k">supply ${pl(m.events.outage, "disruption")} · ${m.person_h.toLocaleString()} person-hours${endSplit}</div></div>
@@ -867,7 +872,12 @@ function loadHistory(name) {
   loadShard(HISTORY_STATE, name, "h/" + name.toLowerCase() + ".js" + cacheBust(D),
     () => !!HISTORY[name],
     // the reader may have moved on while it was in flight
-    () => { if (view === "area" && areaCounty === name) render(); });
+    () => {
+      if (view === "area" && areaCounty === name) render();
+      if (view === "county" && county === name && dayPick) {
+        document.getElementById("dayEvents").innerHTML = dayEventsHtml();
+      }
+    });
 }
 
 // A duration is only ever a floor: every span is measured from when the notice
@@ -953,6 +963,50 @@ function renderArea() {
     </div>`;
 }
 
+// ---- the notices behind a day in the county bar ----
+
+// The caption says "moderate supply disruption" and not which. The county's
+// history shard already has every event with its first and last charged day,
+// so the day's list is derived from it once a reader asks, and costs data.js
+// nothing. A recurring event matches every day of its span; the row says the
+// hours were spread across it.
+function dayEventsHtml() {
+  if (!dayPick) return "";
+  const state = HISTORY_STATE[county];
+  if (state !== "ok") {
+    return `<div class="note" style="margin:0">${state === "error"
+      ? "The notice list did not load. Reloading the page usually fixes it."
+      : "Loading the notices…"}</div>`;
+  }
+  const seen = new Set(), events = [];
+  for (const area of Object.values(HISTORY[county])) {
+    for (const e of area.events) {
+      if (seen.has(e.ref) || e.start > dayPick || (e.end || e.start) < dayPick) continue;
+      seen.add(e.ref);
+      events.push([e, area.name]);
+    }
+  }
+  events.sort((a, b) => SEV_ORDER.indexOf(a[0].sev) - SEV_ORDER.indexOf(b[0].sev)
+    || a[0].title.localeCompare(b[0].title));
+  const when = e => `${e.start === dayPick ? "published" : "from"} ${fmtDate(e.start, today)}`
+    + (e.hours == null ? "" : e.span_h ? ` · ${e.hours}h across ${e.span_h}h` : ` · ${e.hours}h`);
+  return `<div class="dayhead">${fmtDate(dayPick, today)} · ${events.length} ${pl(events.length, "notice")}</div>
+    ${events.map(([e, name]) => incident({ ...e, loc: name }, when)).join("")}`;
+}
+
+const SEV_ORDER = ["outage", "quality", "degraded", "maintenance"];
+
+// One delegated listener on the county view, beside statusui's caption one: a
+// cell carries no date, so the day is its position in the bar.
+document.getElementById("countyview").addEventListener("click", e => {
+  const cell = e.target.closest(".bar.tall i[data-cap]");
+  if (!cell || cell.classList.contains("future")) return;
+  const day = Array.prototype.indexOf.call(cell.parentNode.children, cell) + 1;
+  dayPick = `${curMonth}-${String(day).padStart(2, "0")}`;
+  loadHistory(county);
+  document.getElementById("dayEvents").innerHTML = dayEventsHtml();
+});
+
 // ---- routing ----
 
 function go(hash) {
@@ -983,13 +1037,14 @@ function newTab(e) {
 function goArea(name, code) {
   go("#area/" + encodeURIComponent(name) + "/" + encodeURIComponent(code));
 }
-function setMonth(m) { curMonth = m; render(); }
+function setMonth(m) { curMonth = m; dayPick = null; render(); }
 function setTownSort(k) { townSort = k; render(); }
 function route() {
   // matched before the county pattern, which would otherwise never see it
   const am = location.hash.match(/^#area\/([^/]+)\/(.+)$/);
   const match = location.hash.match(/^#county\/([^/]+)$/);
   const name = match ? decodeURIComponent(match[1]) : null;
+  if (name !== county) dayPick = null;
   county = name && D.counties[name] ? name : null;
   areaCounty = am && D.counties[decodeURIComponent(am[1])] ? decodeURIComponent(am[1]) : null;
   areaCode = areaCounty ? decodeURIComponent(am[2]) : null;
