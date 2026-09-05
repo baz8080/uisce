@@ -123,8 +123,9 @@ LIFT_OF = {
 
 IGNORE_CATS = set(LIFT_OF.values())  # a lift is good news, not an event
 
-# Boil notices are the weakest class in the dataset: only 1 of 23 has a real end
-# (see boil_notice_fate and notes/boil-notices.md). Setting this to True drops the
+# Boil notices are the weakest class in the dataset: only 1 of 17 events has a
+# real end, and the issue and lift populations are disjoint schemes, so that will
+# not grow (notes/boil-notices.md, 2026-09-05). Setting this to True drops the
 # class from the metrics entirely — a defensible position, since what survives is
 # a handful of events resting on a status flag known to go stale. Left False so
 # genuinely-live notices still show; flip it if the class stays this thin.
