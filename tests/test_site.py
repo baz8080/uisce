@@ -814,6 +814,33 @@ class TestPayload:
         assert "resolved_n" not in month["towns"]["T1"]["months"]["2026-05"]
 
 
+class TestVanished:
+    """An Open case the feed no longer serves is not open: nothing will ever
+    close it otherwise, and the open list would carry it for good."""
+
+    def _row(self, **overrides):
+        base = dict(status="Open", notice_to_end_seconds=None, end_source="not_found",
+                    end_local_date=None, vanished_at="2026-05-05T12:00:00+00:00")
+        return _case(**(base | overrides))
+
+    def test_it_is_neither_open_nor_resolved(self):
+        county = build_site([self._row()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert county["open"] == [] and county["open_total"] == 0
+        assert county["resolved"] == {}
+
+    def test_it_stops_accruing_to_now(self):
+        # no end signal and no lift: the closed-no-signal branch, not the accrual
+        live = resolve_case(self._row(vanished_at=None), SA_INDEX, {}, NOW)
+        gone = resolve_case(self._row(), SA_INDEX, {}, NOW)
+        assert live.intervals[0][1] == NOW
+        assert gone.intervals[0][1] == live.start + timedelta(seconds=1)
+        assert not gone.is_open
+
+    def test_a_vanished_boil_notice_is_closed_with_no_signal(self):
+        row = self._row(work_category="boil_notice_issued", title="Boil Water Notice - Carlow")
+        assert boil_notice_fate(row, {}, NOW)[0] == "closed_no_signal"
+
+
 class TestResolved:
     """cases.closed_at is the only field with a month dimension for a case that
     is no longer open — see PR #21 and notes/data-quality.md."""

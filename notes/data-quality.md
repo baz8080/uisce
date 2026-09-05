@@ -204,7 +204,7 @@ One signal noticed and *not* acted on: ~2% of interruption notices say supply wi
 
 ## The feed began (or was purged) around 2026-04-20 — earlier months are unobservable
 
-Daily case counts jump from ~0 to 100+ per day on exactly 2026-04-20 (one stray case from 2026-04-07). Verified 2026-07-16 against the live feed: this is **not** a rolling retention window — the feed still contains all 876 cases with STARTDATE before 2026-05-01 and all 24 pre-April cases the DB knows, exactly matching the DB, so **nothing has been deleted since collection began**. The feed itself evidently started (or was emptied) around mid-April 2026; the handful of older cases are long-lived carryovers such as active boil notices from 2025. Consequences: weekly snapshots currently miss nothing; "April 2026" is still really ten observed days, so any per-month metric must clip its measurement window to [2026-04-20, now] or early months look artificially healthy — this artifact, not a real deterioration, fully explained an apparent month-on-month decline in the status site's grades before the clip was added. Every boil-notice *lift* currently on file refers to a notice issued before the feed window opened. The pipeline now stamps `first_seen`/`last_seen` on every case as a tripwire: if `last_seen` ever stops advancing for cases still marked open, the operator has started pruning and snapshot frequency needs rethinking.
+Daily case counts jump from ~0 to 100+ per day on exactly 2026-04-20 (one stray case from 2026-04-07). Verified 2026-07-16 against the live feed: this is **not** a rolling retention window — the feed still contains all 876 cases with STARTDATE before 2026-05-01 and all 24 pre-April cases the DB knows, exactly matching the DB, so **nothing has been deleted since collection began**. (*Superseded 2026-09-05: the feed purged 9,052 cases on 2026-08-10; see the section on cases that vanish, below.*) The feed itself evidently started (or was emptied) around mid-April 2026; the handful of older cases are long-lived carryovers such as active boil notices from 2025. Consequences: weekly snapshots currently miss nothing; "April 2026" is still really ten observed days, so any per-month metric must clip its measurement window to [2026-04-20, now] or early months look artificially healthy — this artifact, not a real deterioration, fully explained an apparent month-on-month decline in the status site's grades before the clip was added. Every boil-notice *lift* currently on file refers to a notice issued before the feed window opened. The pipeline now stamps `first_seen`/`last_seen` on every case as a tripwire: if `last_seen` ever stops advancing for cases still marked open, the operator has started pruning and snapshot frequency needs rethinking.
 
 ## The feed carries no modification timestamp — `LASTUPDATE` and `CREATEDATE` are declared but always NULL (probed 2026-07-21)
 
@@ -235,6 +235,50 @@ If a closure *series* is ever published (month-over-month counts, or a time-to-c
 The second daily build slot exists for publication latency, not to sharpen `closed_at` (see above — past a daily cadence, Uisce Éireann's own administrative lag dominates, not the build gap). Notices publish between 07:00 and 16:00 UTC (staffed office hours), so a second build only helps if it lands inside that window: measured over 8,135 cases, a single evening build leaves a mean **7.7h** from publication to the site, a midday build halves that to **3.9h**, and an overnight build would only have bought **0.9h**. A third build takes 3.9h to 3.5h — not worth the run.
 
 The schedule (`.github/workflows/build.yml`) is two crons 6h apart; scheduled runs land ~1h20 after the cron fires, so these hit ~12:45 and ~18:45 UTC — spacing far wider than the 1–3 minute run time needs, which is what makes overlapping runs (guarded against via `concurrency`, queued rather than cancelled since a cancelled run has already read the feed) a manual-dispatch edge case rather than a routine one.
+
+## The feed purged 9,052 cases on 2026-08-10, and cases that vanish while Open are stamped (2026-09-05)
+
+The "nothing has been deleted since collection began" finding of 2026-07-16 (above) no longer
+holds. On the 2026-09-04 release, `last_seen` falls on exactly three days: 3,044 cases on
+2026-09-04, one on 2026-08-24, and **9,052 on 2026-08-10**. Everything else the DB holds was
+dropped by the feed in one build. By publication month the dropped cases are May 2,367, June
+2,563, July 3,205, August 46 (none published after 2026-08-08); what survived is 2,401 August
+cases, 71 July, and a couple of dozen long-lived older notices back to 2022. It is not a clean
+date cut and not a rolling window either: closed cases closed 31 days before the horizon are
+still served, and only one case has gone since. A second purge like the one around 2026-04-20,
+then, and the release DB is the only record of those 9,052 notices. The 2026-07-16 probe was
+right on the day it was run; the tripwire it left (`last_seen` stopping) is what caught this,
+a month late, because nothing printed it.
+
+The tripwire's real target had fired too: 10 of 549 `Open` cases had a `last_seen` behind the
+data horizon, 9 of them by more than 14 days, all `low_pressure` (6) or `water_conservation`
+(4). The feed had dropped them without ever closing them. `closed_at` stamps only a status
+transition the feed sends, and these will never send one, so they sat in every "open now"
+count and coloured every day bar as restrictions, and the set could only grow.
+
+`cases.vanished_at` (schema v4) is stamped by `load_cases` on the first build whose download
+lacks a case, and cleared by the upsert if it comes back. `site.py`'s `is_open` reads it
+beside `status`, so a vanished case is closed with no end signal: it charges the same as any
+other such case (an imputed span for an outage, a token footprint otherwise), and appears in
+neither the open list nor the closed-in-month list, which is keyed on `closed_at` and would
+be claiming an observation that was never made.
+
+**The stamp is only safe behind a count check.** `download_cases` stops on an empty page or a
+missing `exceededTransferLimit`, so a truncated response looked exactly like a purge and, with
+this stamp, would have marked thousands of cases vanished in one build. `run` now reads the
+feed's own count (`returnCountOnly=true`, the endpoint the README lists) before downloading
+and refuses a download more than 1% short (`FEED_COUNT_TOLERANCE`). The 1% is for the feed
+changing under the paging; a real purge like the one around 2026-04-20 would still be stamped,
+which is right: that is what happened.
+
+The first v4 build will stamp all 9,053 (verified on a copy of the release: the stamp is
+idempotent across builds and clears when a case returns), and `create_db` prints the count
+stamped on every build from now on, so the next purge is in the build log the day it happens.
+
+Not done: treating `vanished_at` as `closed_at`. They are different observations (the notice
+stopped being published, versus the notice's status changed) and only the second is what the
+closed-in-month lists claim. Ten cases today; re-count with
+`SELECT COUNT(*) FROM cases WHERE status = 'Open' AND vanished_at IS NOT NULL`.
 
 ## `water_outage` flag is not a filter
 
