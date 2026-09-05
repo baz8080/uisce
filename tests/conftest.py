@@ -47,6 +47,7 @@ def site_case(**overrides):
         "description": "Works may cause supply disruptions to Somewhere, Co. Carlow.",
         "closed_at": None,
         "vanished_at": None,
+        "first_seen": None,
         "full_lat": 52.836,
         "full_lon": -6.926,
         "boil_water_notice": 0,
