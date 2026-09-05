@@ -1246,8 +1246,11 @@ def town_months(region, pop, months, now, placed=True):
             continue
         month = {"events": counts}
         if placed:
-            # two decimals is what the page renders; the third was never read
-            month["availability"] = round(stats["availability"], 2)
+            # two decimals is what the page renders; the third was never read,
+            # and a clear month's 100.0 is implied like every other zero here
+            availability = round(stats["availability"], 2)
+            if availability < 100:
+                month["availability"] = availability
             if stats["person_h"]:
                 month["person_h"] = stats["person_h"]
         if resolved.get(ym):
@@ -1397,7 +1400,13 @@ def area_history(event_meta, event_iv, event_sas, event_codes, towns):
         if len(codes) > 1:
             record["areas"] = len(codes)
         for code in codes:
-            area = out[county].setdefault(code, {"name": towns.label(code), "events": []})
+            # name, pop and slug ride here because the area view has nothing
+            # else to read them from: the county breakdown is its own shard
+            area = out[county].setdefault(code, {
+                "name": towns.label(code), "pop": towns.pop[code] or None, "events": [],
+            })
+            if area_has_page(code):
+                area["slug"] = statusui.slug(area["name"])
             area["events"].append(record)
     for areas in out.values():
         for area in areas.values():
@@ -1716,14 +1725,15 @@ def _area_months_html(area_months, months):
         if not m:
             continue
         ev = m["events"]
-        # the sparse rules of town_months, read back: an absent figure is zero
-        avail = m.get("availability")
+        # the sparse rules of town_months, read back: an absent count is zero
+        # and an absent availability is a clear month
+        avail = m.get("availability", 100.0)
         person_h = m.get("person_h", 0)
-        if avail is not None and person_h:
+        if person_h:
             avail = min(avail, 99.99)
         rows.append(
             f'<tr><th scope="row">{ym}</th>'
-            f'<td>{"" if avail is None else f"{avail:.2f}%"}</td>'
+            f'<td>{avail:.2f}%</td>'
             f'<td>{ev.get("outage", 0)}</td><td>{ev.get("quality", 0)}</td>'
             f'<td>{ev.get("degraded", 0)}</td><td>{ev.get("maintenance", 0)}</td>'
             f'<td>{person_h:,}</td></tr>'
@@ -2092,7 +2102,8 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
             "months": {},
             "open": sorted(
                 (
-                    {**case, "area": area_of[(county, ref)]}
+                    {**case, "area": area_of[(county, ref)],
+                     "name": towns.label(area_of[(county, ref)])}
                     if (county, ref) in area_of
                     else dict(case)
                     for ref, case in region.open_now.items()
@@ -2308,14 +2319,19 @@ def load_cases(conn):
     ).fetchall()
 
 
+# index.html + data.js, what a reader downloads before touching anything. The
+# split of 2026-09-05 left it under 300 KB; the warning is for the next growth.
+INITIAL_BUDGET = 512 * 1024
+
 HISTORY_DIR = "h"
+COUNTY_SHARD_DIR = "t"
 COUNTY_DIR = "c"
 AREA_DIR = "a"
 FEED_DIR = "feed"
 
 
 def write_site(site, site_dir, towns=None):
-    """data.js, index.html, areas.html, c/<county>.html, and a history shard each.
+    """data.js, index.html, areas.html, c/<county>.html, and two shards per county.
 
     The c/ pages, sitemap.xml and robots.txt are the site's indexable surface.
     Before them the whole site was two URLs: everything a reader might search
@@ -2339,6 +2355,12 @@ def write_site(site, site_dir, towns=None):
     a reader is likely to open in a sitting, at a median 5 KB gzipped.
     """
     history = site.pop("history", {})
+    # the county view's own data, out of the payload the overview loads: the
+    # area breakdown alone was 61% of data.js and the overview never read it
+    county_data = {
+        county: {"towns": cdata.pop("towns", {}), "resolved": cdata.pop("resolved", {})}
+        for county, cdata in site["counties"].items()
+    }
     notice_text = site.pop("notice_text", {})
     feed = site.pop("feed", {})
     data = "window.UISCE_DATA = " + json.dumps(site) + ";"
@@ -2370,19 +2392,27 @@ def write_site(site, site_dir, towns=None):
         (site_dir / path).write_text(doc)
         sizes["feeds"] += len(doc.encode())
 
-    shard_dir = site_dir / HISTORY_DIR
-    shard_dir.mkdir(exist_ok=True)
-    shard_bytes = 0
-    for county in site["counties"]:
-        # keyed by the county's real name, so the page never has to invert the
-        # slug; the ||= guard makes a shard self-sufficient and order-independent
-        body = (
-            "window.UISCE_HISTORY = window.UISCE_HISTORY || {};\n"
-            f"window.UISCE_HISTORY[{json.dumps(county)}] = "
-            f"{json.dumps(history.get(county, {}))};"
-        )
-        (shard_dir / f"{county_slug(county)}.js").write_text(body)
-        shard_bytes += len(body.encode())
+    shard_bytes = county_shard_bytes = 0
+    for name, sub, payload in (
+        ("UISCE_HISTORY", HISTORY_DIR, history),
+        ("UISCE_COUNTY", COUNTY_SHARD_DIR, county_data),
+    ):
+        shard_dir = site_dir / sub
+        shard_dir.mkdir(exist_ok=True)
+        for county in site["counties"]:
+            # keyed by the county's real name, so the page never has to invert
+            # the slug; the ||= guard makes a shard self-sufficient and
+            # order-independent
+            body = (
+                f"window.{name} = window.{name} || {{}};\n"
+                f"window.{name}[{json.dumps(county)}] = "
+                f"{json.dumps(payload.get(county, {}))};"
+            )
+            (shard_dir / f"{county_slug(county)}.js").write_text(body)
+            if sub == HISTORY_DIR:
+                shard_bytes += len(body.encode())
+            else:
+                county_shard_bytes += len(body.encode())
 
     # The directory. Substituted rather than copied, unlike index.html: the rows
     # are the page, and generating them into a template keeps the markup and CSS
@@ -2405,7 +2435,7 @@ def write_site(site, site_dir, towns=None):
             county = towns.county[code]
             if county not in site["counties"]:
                 continue
-            area = site["counties"][county]["towns"].get(code) or {}
+            area = county_data[county]["towns"].get(code) or {}
             names[county].add((name, area["slug"]) if "slug" in area else name)
 
         def entry(e):
@@ -2448,8 +2478,8 @@ def write_site(site, site_dir, towns=None):
             areas = by_county.get(county, [])
             events = county_events(history.get(county, {}))
             body = county_page_html(
-                county, site["counties"][county], areas, events, site["months"],
-                all_counties, notice_text.get(county),
+                county, site["counties"][county] | county_data[county], areas, events,
+                site["months"], all_counties, notice_text.get(county),
             )
             page = page_html(
                 COUNTY_HTML,
@@ -2506,7 +2536,7 @@ def write_site(site, site_dir, towns=None):
                         "CANONICAL": f"{BASE_URL}/{rel}",
                         "BODY": area_page_html(
                             county, name, pop, events,
-                            site["counties"][county]["towns"].get(code, {}).get("months"),
+                            county_data[county]["towns"].get(code, {}).get("months"),
                             site["months"],
                         ),
                     },
@@ -2522,7 +2552,7 @@ def write_site(site, site_dir, towns=None):
     (site_dir / "robots.txt").write_text(statusui.robots(BASE_URL))
     return sizes | {
         "data.js": len(data.encode()),
-        "shards": shard_bytes,
+        "shards": shard_bytes + county_shard_bytes,
         "n_areas": sum(len(a) for a in history.values()),
         "areas.html": index_bytes,
         "n_county_pages": n_county_pages,
@@ -2554,12 +2584,19 @@ def run():
     )
     # the payload is the thing this site keeps having to defend; print it every
     # build so a regression is visible in the log rather than in the field
-    print(
-        f"  data.js {s['data.js']:,} bytes  ·  {n_counties} history shards "
-        f"{s['shards']:,} bytes over {s['n_areas']} areas (loaded on demand)  ·  "
-        f"search.js {s['search.js']:,} bytes (loaded on demand)  ·  "
-        f"areas.html {s['areas.html']:,} bytes"
+    initial, report = statusui.size_report(
+        SITE_DIR, INITIAL_BUDGET, COUNTY_DIR, "county pages",
+        extra=[("search.js", "loaded on demand"), ("areas.html", "the directory")],
     )
+    print(report)
+    print(
+        f"  {2 * n_counties} shards {s['shards']:,} bytes over {s['n_areas']} areas "
+        f"(one county's breakdown and one county's history, each loaded on demand)"
+    )
+    if initial > INITIAL_BUDGET:
+        # GitHub Actions surfaces this line on the run; a deploy must not fail
+        # on growth alone
+        print(f"::warning::initial load {initial:,} bytes is over the {INITIAL_BUDGET:,} budget")
     # the indexable surface, printed for the same reason: these pages exist to
     # be crawled, and one silently rendering empty is invisible from the field
     print(
