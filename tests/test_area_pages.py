@@ -109,6 +109,21 @@ class TestThePage:
         text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", body)).strip()
         assert len(text) > 400, text
 
+    def test_it_carries_the_months_the_area_had_a_notice_in(self, tmp_path):
+        _write(tmp_path)
+        page = (tmp_path / area_path("Carlow", "Testtown")).read_text()
+        table = re.search(r'<section id="months">.*?</section>', page, re.S).group(0)
+        assert '<th scope="row">2026-05</th>' in table
+        assert "<td>1</td>" in table          # the one outage
+        assert "2026-04" not in table         # no notice, no row
+
+    def test_a_month_without_person_hours_reads_as_plain_figures(self, tmp_path):
+        _write(tmp_path, [_case(work_category="essential_works")])
+        page = (tmp_path / area_path("Carlow", "Testtown")).read_text()
+        row = re.search(r'<tr><th scope="row">2026-05</th>(.*?)</tr>', page).group(1)
+        assert row.startswith("<td>100.00%</td><td>0</td>")
+        assert row.endswith("<td>0</td>")
+
     def test_it_carries_the_notice_and_the_population(self, tmp_path):
         _write(tmp_path)
         page = (tmp_path / area_path("Carlow", "Testtown")).read_text()

@@ -1650,6 +1650,44 @@ def _county_months_html(cdata, months):
     )
 
 
+def _area_months_html(area_months, months):
+    """One row per month with a notice, from the same area-month rows the app's
+    county breakdown charts. No grade: the A-F cuts are calibrated to county-
+    months, which is why the app's breakdown carries none either."""
+    rows = []
+    for ym in reversed(months):
+        m = area_months.get(ym)
+        if not m:
+            continue
+        ev = m["events"]
+        # the sparse rules of town_months, read back: an absent figure is zero
+        avail = m.get("availability")
+        person_h = m.get("person_h", 0)
+        if avail is not None and person_h:
+            avail = min(avail, 99.99)
+        rows.append(
+            f'<tr><th scope="row">{ym}</th>'
+            f'<td>{"" if avail is None else f"{avail:.2f}%"}</td>'
+            f'<td>{ev.get("outage", 0)}</td><td>{ev.get("quality", 0)}</td>'
+            f'<td>{ev.get("degraded", 0)}</td><td>{ev.get("maintenance", 0)}</td>'
+            f'<td>{person_h:,}</td></tr>'
+        )
+    if not rows:
+        return ""
+    return (
+        '<section id="months"><h2>Month by month</h2>'
+        '<div class="scroll"><table><thead><tr>'
+        '<th scope="col">Month</th>'
+        '<th scope="col" title="Against this area\'s own population">Availability</th>'
+        '<th scope="col" title="Supply disruptions">Outages</th>'
+        '<th scope="col" title="Boil water, do not drink, discolouration">Quality</th>'
+        '<th scope="col" title="Restrictions and low pressure">Restricted</th>'
+        '<th scope="col" title="Planned or non-disruptive works">Works</th>'
+        '<th scope="col" title="Population-weighted hours of lost supply">Person-hours</th>'
+        f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div></section>'
+    )
+
+
 def _events_html(events, heading="Notice history", multi_area=False):
     """A list of notices, newest first. Shared by the county and area pages.
 
@@ -1717,7 +1755,7 @@ def _events_html(events, heading="Notice history", multi_area=False):
     )
 
 
-def area_page_html(county, name, pop, events):
+def area_page_html(county, name, pop, events, area_months=None, months=()):
     """The whole body of a/<county>/<area>.html.
 
     Server-rendered in full and carrying no data.js, for the same reason the
@@ -1739,6 +1777,7 @@ def area_page_html(county, name, pop, events):
         f'<div class="sub">'
         f'{f"{pop:,} people · Census 2022 · " if pop is not None else ""}'
         f'Co.&nbsp;{html.escape(county)}</div>'
+        f'{_area_months_html(area_months or {}, months)}'
         f'{_events_html(events, "Every notice published here", multi_area=True)}'
         f'<section id="more"><h2>Elsewhere</h2><p class="links">'
         f'<a href="../../{COUNTY_DIR}/{county_slug(county)}.html">'
@@ -2310,7 +2349,11 @@ def write_site(site, site_dir, towns=None):
                             f"every one of them, newest first."
                         ),
                         "CANONICAL": f"{BASE_URL}/{rel}",
-                        "BODY": area_page_html(county, name, pop, events),
+                        "BODY": area_page_html(
+                            county, name, pop, events,
+                            site["counties"][county]["towns"].get(code, {}).get("months"),
+                            site["months"],
+                        ),
                     },
                 )
                 path.write_text(page)
