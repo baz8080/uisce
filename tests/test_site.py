@@ -1907,6 +1907,21 @@ class TestHistoryShards:
             if not isinstance(entry, str):
                 assert (tmp_path / "a" / "carlow" / f"{entry[1]}.html").exists()
 
+    def test_a_town_named_for_its_county_is_indexed_with_its_slug(self, tmp_path):
+        """Fourteen settlements share their county's name and each has a page
+        of its own. The index carries the town like any other paged area; it is
+        statusui's searchHits that keeps its row beside the county's, so a
+        `name != county` filter here would hide the page from the box again."""
+        sa = SmallAreaIndex([(52.836, -6.926, "SA1", 1000)])
+        towns = TownLookup([("SA1", "T1", "Carlow", "Carlow")], sa.pop)
+        site = build_site([_case()], sa, NOW, towns)
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, towns)
+        body = (tmp_path / "search.js").read_text()
+        index = json.loads(body.split(" = ", 1)[1].rstrip(";"))
+        assert index == {"Carlow": [["Carlow", "carlow"]]}
+        assert (tmp_path / "a" / "carlow" / "carlow.html").exists()
+
 
 class TestIndexablePages:
     """The site's crawlable surface.
@@ -1932,6 +1947,15 @@ class TestIndexablePages:
         assert written == sorted(f"{county_slug(c)}.html" for c in counties)
         assert (n_pages, len(written)) == (len(counties), len(counties))
         assert county_bytes > 0
+
+    def test_the_overview_points_a_reader_without_javascript_at_the_county_pages(self, tmp_path):
+        counties, _ = self._write(tmp_path)
+        page = (tmp_path / "index.html").read_text()
+        fallback = re.search(r"<noscript>(.*?)</noscript>", page, re.S).group(1)
+        for c in counties:
+            assert f'<a href="c/{county_slug(c)}.html">{c}</a>' in fallback
+        assert 'href="areas.html"' in fallback
+        assert "<!--COUNTY-LINKS-->" not in page
 
     def test_a_county_page_carries_its_own_areas_and_not_another_county_s(self, tmp_path):
         """The doorway-page failure, made mechanical. The Kildare pin sits on
