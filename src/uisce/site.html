@@ -130,6 +130,14 @@
            background: var(--cell-empty); vertical-align: middle; margin-left: 8px; overflow: hidden; }
   .meter i { display: block; height: 100%; background: var(--critical); }
 
+  /* the open-now tile is the way into the national list, so it is a link
+     that keeps looking like a tile */
+  a.tile { display: block; color: inherit; text-decoration: none; }
+  a.tile:hover { border-color: var(--ink-2); }
+  #openview .card > h3 a { color: inherit; text-decoration: none;
+                           border-bottom: 1px solid var(--border); }
+  #openview .card > h3 a:hover { border-bottom-color: currentColor; }
+
   .tgroup { margin-top: 10px; }
   .tgroup > .tname { font-size: 13px; font-weight: 650; }
 
@@ -232,6 +240,7 @@
   <div id="countyview" hidden></div>
   <div id="areaview" hidden></div>
   <div id="topview" hidden></div>
+  <div id="openview" hidden></div>
 
   <footer>
     <p><a href="areas.html" style="color:inherit">Every area with a notice</a> - a full directory of the 1,800-odd Census areas on this site, each linking to its incident history.</p>
@@ -305,7 +314,7 @@ let townSort = "impact";
 let county = null;  // the county being drilled into, when view === "county"
 let areaCounty = null, areaCode = null;  // the area whose history is on screen
 let view = "overview";
-const VIEW_EL = { overview: "overview", county: "countyview", area: "areaview", top: "topview" };
+const VIEW_EL = { overview: "overview", county: "countyview", area: "areaview", top: "topview", open: "openview" };
 // months with a finished top ten; the in-progress month has none (see top_events)
 const TOP_MONTHS = Object.keys(D.top || {});
 const today = new Date().toISOString().slice(0, 10);
@@ -447,7 +456,7 @@ function incident(o, when) {
     </div>`;
 }
 
-const RENDER = { overview: renderOverview, county: renderCounty, area: renderArea, top: renderTop };
+const RENDER = { overview: renderOverview, county: renderCounty, area: renderArea, top: renderTop, open: renderOpen };
 
 function render() {
   for (const [name, id] of Object.entries(VIEW_EL)) {
@@ -482,7 +491,7 @@ function renderOverview() {
     <div class="tile"><div class="v">${availText(natAvail, personH)}</div><div class="k">of people's time with no outage announced</div></div>
     <div class="tile"><div class="v">${fmtPersonH(personH)}</div><div class="k">hours without water, added up across everyone affected</div></div>
     <div class="tile"><div class="v">${quality}</div><div class="k">water-quality notices</div></div>
-    ${isLatest() ? `<div class="tile"><div class="v">${openNow}</div><div class="k">notices open right now</div></div>` : ""}`;
+    ${isLatest() ? `<a class="tile" href="#open" onclick="go('#open'); return false;"><div class="v">${openNow}</div><div class="k">notices open right now →</div></a>` : ""}`;
 
   // The sensitivity figure, in the footer's methodology block: what the headline
   // would be if the estimated incidents were let into it. Written from the data
@@ -628,10 +637,9 @@ function townRows(c) {
   </table></div>`;
 }
 
-function openSection(c) {
-  if (!isLatest()) return "";
-  // grouped here rather than shipped pre-grouped: the cases are already in
-  // c.open, and a second copy under each area was 80 KB of the same text
+// grouped here rather than shipped pre-grouped: the cases are already in
+// c.open, and a second copy under each area was 80 KB of the same text
+function openGroups(c) {
   const groups = new Map();
   for (const o of c.open) {
     if (!groups.has(o.area)) groups.set(o.area, []);
@@ -640,14 +648,20 @@ function openSection(c) {
   const named = [...groups].map(([code, cases]) => [c.towns[code] ? c.towns[code].name : "—", cases]);
   named.sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
   const when = o => `${o.since > today ? "from" : "since"} ${fmtDate(o.since, today)}`;
+  return named.map(([name, cases]) => `<div class="tgroup">
+      <div class="tname">${esc(name)}</div>
+      ${cases.map(o => incident(o, when)).join("")}
+    </div>`).join("");
+}
+
+const OPEN_NOTE = "Notices Uisce Éireann still shows as open right now. Some are advance warning of planned works; a few were never taken down.";
+
+function openSection(c) {
+  if (!isLatest()) return "";
   return `<div class="card">
     <h3>Open right now <span class="n">· ${c.open_total} ${pl(c.open_total, "notice")}</span></h3>
-    <div class="note">Notices Uisce Éireann still shows as open right now. Some are advance warning of planned works; a few were never taken down.</div>
-    ${named.length ? named.map(([name, cases]) => `<div class="tgroup">
-        <div class="tname">${esc(name)}</div>
-        ${cases.map(o => incident(o, when)).join("")}
-      </div>`).join("")
-      : `<div class="note" style="margin:0">Nothing open in ${esc(county)} right now.</div>`}
+    <div class="note">${OPEN_NOTE}</div>
+    ${openGroups(c) || `<div class="note" style="margin:0">Nothing open in ${esc(county)} right now.</div>`}
   </div>`;
 }
 
@@ -781,6 +795,27 @@ function renderTop() {
         <div class="ph">${fmtPersonH(r.person_h)}<span>person-hours</span></div>
       </div>`).join("")}
     </div>`;
+}
+
+// ---- every open notice, nationally ----
+
+// The overview tile counted them and the only way to see them was one county
+// at a time. The cases are already in the payload, so this is a render only.
+function renderOpen() {
+  const rows = Object.entries(D.counties)
+    .filter(([, c]) => c.open_total)
+    .sort((a, b) => b[1].open_total - a[1].open_total || a[0].localeCompare(b[0]));
+  const total = rows.reduce((s, [, c]) => s + c.open_total, 0);
+  document.getElementById("openview").innerHTML = `
+    <a class="back" href="#" onclick="go(''); return false;">← All counties</a>
+    <div class="chead"><h2>Open right now</h2>
+      <span class="pop">${total} ${pl(total, "notice")} · ${rows.length} ${pl(rows.length, "county", "counties")}</span></div>
+    <div class="note">${OPEN_NOTE}</div>
+    ${rows.map(([name, c]) => `<div class="card">
+      <h3><a href="c/${name.toLowerCase()}.html" onclick="if (newTab(event)) return true; goCounty('${encodeURIComponent(name)}'); return false;">${esc(name)}</a>
+        <span class="n">· ${c.open_total} ${pl(c.open_total, "notice")}</span></h3>
+      ${openGroups(c)}
+    </div>`).join("")}`;
 }
 
 // ---- the per-area history ----
@@ -936,7 +971,8 @@ function route() {
   // published there, which is a better answer than silently going somewhere else.
   view = areaCounty ? "area"
     : county ? "county"
-    : location.hash === "#top" && TOP_MONTHS.length ? "top" : "overview";
+    : location.hash === "#top" && TOP_MONTHS.length ? "top"
+    : location.hash === "#open" ? "open" : "overview";
   if (areaCounty) loadHistory(areaCounty);
   render();
 }
