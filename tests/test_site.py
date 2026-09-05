@@ -33,6 +33,7 @@ from uisce.site import (
     month_bounds,
     month_list,
     norm_scheme,
+    notice_paragraphs,
     paired_lift,
     recurrence_report,
     recurring_events,
@@ -1881,6 +1882,48 @@ class TestHistoryShards:
                 assert (tmp_path / "a" / "carlow" / f"{entry[1]}.html").exists()
 
 
+class TestNoticeText:
+    """The notice's own wording, on the county page's open rows and nowhere in
+    the app payload: it is what tells a reader whether their road is in it."""
+
+    FEED = (
+        "<b>**Update 3:08pm 2/9/2026**<br><br>\n\nWorks are now complete.</b><br><br>"
+        "Repairs may cause supply disruptions to Rosegreen &amp; Coolmoyne. <br><br>\n"
+        "Please note the reference: TIP00119710. <br><br>LA01"
+    )
+
+    def test_paragraphs_come_out_plain_and_in_order(self):
+        assert notice_paragraphs(self.FEED) == [
+            "**Update 3:08pm 2/9/2026**",
+            "Works are now complete.",
+            "Repairs may cause supply disruptions to Rosegreen & Coolmoyne.",
+            "Please note the reference: TIP00119710.",
+        ]
+
+    def test_nothing_and_markup_only_give_no_paragraphs(self):
+        assert notice_paragraphs(None) == []
+        assert notice_paragraphs("<br><br>LA01") == []
+
+    def test_the_county_page_carries_it_only_for_open_notices(self, tmp_path):
+        rows = [
+            _case(id=1, reference_num="CAR00000001", status="Open",
+                  description="Open <script>x</script> text.<br><br>Second."),
+            _case(id=2, reference_num="CAR00000002", status="Closed",
+                  description="Closed text nobody needs."),
+        ]
+        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, TOWNS)
+        assert "notice_text" not in site
+        page = (tmp_path / "c" / "carlow.html").read_text()
+        block = re.search(r'<section id="open">.*?</section>', page, re.S).group(0)
+        assert "<summary>What the notice says</summary><p>Open x text.</p><p>Second.</p>" in block
+        assert "<script" not in block
+        assert "Closed text nobody needs" not in page
+        data = (tmp_path / "data.js").read_text()
+        assert "Second." not in data and "nobody needs" not in data
+
+
 class TestIndexablePages:
     """The site's crawlable surface.
 
@@ -2093,6 +2136,7 @@ class TestPayloadShape:
         site = build_site([_case()], SA_INDEX, AFTER_MAY, TOWNS)
         site.pop("recurrence_report")
         site.pop("history")
+        site.pop("notice_text")
         return site
 
     def test_the_freshness_stamp_follows_the_data_not_the_build_clock(self):
