@@ -1921,6 +1921,15 @@ class TestIndexablePages:
         assert (n_pages, len(written)) == (len(counties), len(counties))
         assert county_bytes > 0
 
+    def test_the_overview_points_a_reader_without_javascript_at_the_county_pages(self, tmp_path):
+        counties, _ = self._write(tmp_path)
+        page = (tmp_path / "index.html").read_text()
+        fallback = re.search(r"<noscript>(.*?)</noscript>", page, re.S).group(1)
+        for c in counties:
+            assert f'<a href="c/{county_slug(c)}.html">{c}</a>' in fallback
+        assert 'href="areas.html"' in fallback
+        assert "<!--COUNTY-LINKS-->" not in page
+
     def test_a_county_page_carries_its_own_areas_and_not_another_county_s(self, tmp_path):
         """The doorway-page failure, made mechanical. The Kildare pin sits on
         the same Small Area as the Carlow one, so only `dominant`'s own-county
