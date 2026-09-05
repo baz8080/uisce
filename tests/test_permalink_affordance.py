@@ -101,9 +101,9 @@ def test_a_towns_row_points_at_the_page_when_the_area_has_one():
 
 def test_a_modified_click_is_left_to_the_browser_where_the_href_is_a_page():
     """`return false` cancels the navigation a modified click asked for, so the
-    two rows whose href is a real page have to ask first. The hash links do not:
-    there is nothing on the other side worth a new tab."""
-    assert SITE_HTML.count("if (newTab(event)) return true;") == 2
-    for row in ("${name}</a>", "${esc(t.name)}</a>"):
+    three rows whose href is a real page have to ask first. The hash links do
+    not: there is nothing on the other side worth a new tab."""
+    assert SITE_HTML.count("if (newTab(event)) return true;") == 3
+    for row in ("${name}</a>", "${esc(t.name)}</a>", "${esc(name)}</a>\n"):
         anchor = SITE_HTML[: SITE_HTML.index(row)].rsplit("<a href=", 1)[1]
         assert "newTab(event)" in anchor
