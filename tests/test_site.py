@@ -1938,6 +1938,28 @@ class TestNoticeText:
         assert "Closed text nobody needs" not in page
         data = (tmp_path / "data.js").read_text()
         assert "Second." not in data and "nobody needs" not in data
+
+    def test_an_open_row_links_its_reference_on_water_ie(self, tmp_path):
+        rows = [
+            _case(id=1, reference_num="CAR00000001 ", status="Open", title="Trailing space"),
+            _case(id=2, reference_num="HM1816040926", status="Open", title="Hand entered"),
+            _case(id=3, reference_num=None, status="Open", title="No reference"),
+            _case(id=4, reference_num="CAR00000004", status="Closed", title="Closed"),
+        ]
+        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, TOWNS)
+        page = (tmp_path / "c" / "carlow.html").read_text()
+        block = re.search(r'<section id="open">.*?</section>', page, re.S).group(0)
+        by_title = {
+            re.search(r"<strong>(.*?)</strong>", r).group(1): r
+            for r in re.findall(r"<li>.*?</li>", block, re.S)
+        }
+        link = '· <a href="https://wtr.ie/CAR00000001">CAR00000001</a>'
+        assert link in by_title["Trailing space"]
+        assert "wtr.ie" not in by_title["Hand entered"]
+        assert "wtr.ie" not in by_title["No reference"]
+        assert page.count("wtr.ie") == 1
 class TestFeeds:
     """One Atom file nationally and one per county, written from a block that
     write_site pops the way it pops the history: a subscriber gets the newest

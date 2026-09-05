@@ -681,6 +681,13 @@ def case_ref(row):
     return row["reference_num"] or f"id:{row['id']}"
 
 
+def notice_url(ref):
+    """water.ie's page for a notice, or None: the HM-style codes, the `id:`
+    fallbacks and a reference with a stray space are not pages there."""
+    ref = (ref or "").strip()
+    return f"https://wtr.ie/{ref}" if re.fullmatch(r"[A-Z]{3}\d{8}", ref) else None
+
+
 def recurring_events(rows, windows):
     """Event keys whose notices describe a window repeating over a date range.
 
@@ -1596,7 +1603,13 @@ def _county_open_html(cdata, text=None):
         f'{html.escape(SEV_LABEL[o["sev"]])}</span> '
         f'<strong>{html.escape(o["title"])}</strong>'
         + (f' - {html.escape(o["loc"])}' if o["loc"] else "")
-        + f'<span class="when">since {_fmt_day(o["since"])}</span>'
+        + f'<span class="when">since {_fmt_day(o["since"])}'
+        + (
+            f' · <a href="{url}">{url.rsplit("/", 1)[1]}</a>'
+            if (url := notice_url(o["ref"]))
+            else ""
+        )
+        + "</span>"
         + _notice_text_html(text.get(o["ref"]))
         + "</li>"
         for o in cdata["open"]
