@@ -207,6 +207,7 @@
   </header>
 
   <div id="overview">
+    <noscript><p class="basis">This page draws its bars with JavaScript. The same figures, month by month, are on the county pages: <!--COUNTY-LINKS--> · or browse <a href="areas.html">every area with a notice</a>.</p></noscript>
     <div class="banner" id="banner"></div>
 
     <div class="controls">
@@ -1016,8 +1017,9 @@ bindSearch({
   href: (c, t) => t ? `a/${slug(c)}/${t}.html` : `c/${slug(c)}.html`,
   // a name that can only reach its county says so: an "Around ..." Electoral
   // Division has no page, and a hit that quietly does something else is worse
-  // than one that says what it will do
-  note: (name, c, t) => t ? c : name === c ? "" : `${c} · county`,
+  // than one that says what it will do. A town named for its county sits under
+  // the county's own row, so it says which of the two it is
+  note: (name, c, t) => t ? (name === c ? "town" : c) : name === c ? "" : `${c} · county`,
   pick: (c, t) => { if (t) return false; goCounty(c); return true; }
 });
 window.addEventListener("hashchange", route);
