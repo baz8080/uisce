@@ -50,6 +50,12 @@ ul.notices .when { display: block; color: var(--muted); font-size: 12.5px;
 }
 .more { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
 
+/* the notice's own words, folded under the open rows on the county pages */
+ul.notices details { margin-top: 5px; font-size: 13px; }
+ul.notices summary { color: var(--muted); cursor: pointer; }
+ul.notices summary:hover { color: var(--ink); }
+ul.notices details p { margin: 6px 0 0; color: var(--ink-2); line-height: 1.5; }
+
 /* One event published as pins in several areas is listed under each. The area
    pages say so on the row; the county list de-duplicates and never shows it. */
 .also { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }

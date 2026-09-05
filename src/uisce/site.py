@@ -29,6 +29,7 @@ import csv
 import html
 import json
 import math
+import re
 import sqlite3
 import statistics
 from collections import Counter, defaultdict
@@ -680,6 +681,13 @@ def case_ref(row):
     return row["reference_num"] or f"id:{row['id']}"
 
 
+def notice_url(ref):
+    """water.ie's page for a notice, or None: the HM-style codes, the `id:`
+    fallbacks and a reference with a stray space are not pages there."""
+    ref = (ref or "").strip()
+    return f"https://wtr.ie/{ref}" if re.fullmatch(r"[A-Z]{3}\d{8}", ref) else None
+
+
 def recurring_events(rows, windows):
     """Event keys whose notices describe a window repeating over a date range.
 
@@ -1034,6 +1042,7 @@ class Region:
             self.open_now.setdefault(
                 ref,
                 {
+                    "ref": ref,
                     "sev": sev,
                     "title": r["title"],
                     "loc": r["location"] or "",
@@ -1552,17 +1561,57 @@ def _fmt_day(iso):
     return statusui.fmt_date(iso, date.today())
 
 
-def _county_open_html(cdata):
+def notice_paragraphs(description):
+    """The feed's notice text as plain paragraphs, its markup gone.
+
+    The feed writes notices as HTML with <br><br> between paragraphs and <b>
+    around updates; none of that is trusted on a page, so tags are stripped and
+    the breaks kept. The trailing "LA01"-style code is a feed artefact, not
+    something the notice said.
+    """
+    text = re.sub(r"<br\s*/?>|</p>", "\n", description or "", flags=re.I)
+    text = html.unescape(re.sub(r"<[^>]+>", " ", text)).replace("\xa0", " ")
+    paragraphs = [" ".join(p.split()) for p in re.split(r"\n\s*\n", text)]
+    paragraphs = [p for p in paragraphs if p]
+    if paragraphs and re.fullmatch(r"[A-Z]{2}\d{2}", paragraphs[-1]):
+        paragraphs.pop()
+    return paragraphs
+
+
+def _notice_text_html(description):
+    paragraphs = notice_paragraphs(description)
+    if not paragraphs:
+        return ""
+    return (
+        "<details><summary>What the notice says</summary>"
+        + "".join(f"<p>{html.escape(p)}</p>" for p in paragraphs)
+        + "</details>"
+    )
+
+
+def _county_open_html(cdata, text=None):
     """Notices open right now — the one thing on the page a reader may have come
-    for today rather than for the record."""
+    for today rather than for the record. `text` is ref -> the notice's own
+    words, carried here and nowhere in the app payload: the open notices are
+    the ones a reader needs the wording of, to know whether their road is in it.
+    """
     if not cdata["open"]:
         return ""
+    text = text or {}
     rows = "".join(
         f'<li><span class="sev sev-{html.escape(o["sev"])}">'
         f'{html.escape(SEV_LABEL[o["sev"]])}</span> '
         f'<strong>{html.escape(o["title"])}</strong>'
         + (f' - {html.escape(o["loc"])}' if o["loc"] else "")
-        + f'<span class="when">since {_fmt_day(o["since"])}</span></li>'
+        + f'<span class="when">since {_fmt_day(o["since"])}'
+        + (
+            f' · <a href="{url}">{url.rsplit("/", 1)[1]}</a>'
+            if (url := notice_url(o["ref"]))
+            else ""
+        )
+        + "</span>"
+        + _notice_text_html(text.get(o["ref"]))
+        + "</li>"
         for o in cdata["open"]
     )
     return (
@@ -1789,7 +1838,7 @@ def area_page_html(county, name, pop, events, area_months=None, months=()):
     )
 
 
-def county_page_html(county, cdata, areas, events, months, all_counties):
+def county_page_html(county, cdata, areas, events, months, all_counties, text=None):
     """The whole body of c/<slug>.html.
 
     Server-rendered in full and carrying no data.js: the point of these pages is
@@ -1811,7 +1860,7 @@ def county_page_html(county, cdata, areas, events, months, all_counties):
         f'Co. {html.escape(county)}</a> - daily bars, month switching and the '
         f'area drill-down.</p></header>'
         f'<nav>{nav}</nav>'
-        f'{_county_open_html(cdata)}'
+        f'{_county_open_html(cdata, text)}'
         f'{_county_months_html(cdata, months)}'
         f'{_events_html(events)}'
         f'<section id="areas"><h2>Areas with a notice '
@@ -1943,6 +1992,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
     # pins to top_events rather than only the outage ones — see the build report.
     event_meta = {}
     recurrence = []  # every pin that claimed a window, for the report's detail lines
+    notice_text = defaultdict(dict)  # county -> ref -> the wording, open events only
     # every pin's outcome, claimed or not — the mixed-event check needs the ones
     # that made no claim, since those are what re-cover an expanded event's gaps
     pin_tags = defaultdict(list)
@@ -1985,6 +2035,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
         meta["health"] |= knocks_grade(r)
         if case.is_open:
             meta["open"] = True
+            notice_text[case.county].setdefault(case.ref, r["description"])
         elif meta["closed"] is None and r["closed_at"]:
             # first pin with a close stamp wins, so the history and the county's
             # "observed to close" list — which reads Region.resolved, filled the
@@ -2156,6 +2207,8 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
     site["history"] = (
         area_history(event_meta, event_iv, event_sas, event_codes, towns) if towns else {}
     )
+    # popped by write_site into the county pages; never part of the payload
+    site["notice_text"] = dict(notice_text)
     site["feed"] = feed_entries(event_meta, area_of, towns)
     site["recurrence_report"] = recurrence_report(recurrence, pin_tags)
 
@@ -2281,6 +2334,7 @@ def write_site(site, site_dir, towns=None):
     a reader is likely to open in a sitting, at a median 5 KB gzipped.
     """
     history = site.pop("history", {})
+    notice_text = site.pop("notice_text", {})
     feed = site.pop("feed", {})
     data = "window.UISCE_DATA = " + json.dumps(site) + ";"
     site_dir.mkdir(parents=True, exist_ok=True)
@@ -2389,7 +2443,8 @@ def write_site(site, site_dir, towns=None):
             areas = by_county.get(county, [])
             events = county_events(history.get(county, {}))
             body = county_page_html(
-                county, site["counties"][county], areas, events, site["months"], all_counties
+                county, site["counties"][county], areas, events, site["months"],
+                all_counties, notice_text.get(county),
             )
             page = page_html(
                 COUNTY_HTML,
