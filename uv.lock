@@ -203,7 +203,7 @@ wheels = [
 [[package]]
 name = "statusui"
 version = "0.1.0"
-source = { git = "https://github.com/baz8080/statusui#be56e99a5c2cb9ddcc1ba7cce855e70d5ec1b419" }
+source = { git = "https://github.com/baz8080/statusui#49802b21b31f5dddfe93920291978ee6c44e6d51" }
 
 [[package]]
 name = "uisce"
