@@ -419,7 +419,8 @@ function pl(n, one, many) { return n === 1 ? one : (many || one + "s"); }
 // reaches JS as a plain quote without ever terminating the attribute.
 function jsArg(s) { return esc(JSON.stringify(String(s))); }
 
-// Open-case figures are a right-now snapshot of status='Open' — the DB keeps
+// Open-case figures are a right-now snapshot of Case.is_open (the feed's
+// status, less what the notice's own text has already closed) - the DB keeps
 // each case's current status, not a history, so there is no such figure for a
 // past month and none can be reconstructed. Show them only on the month the
 // snapshot belongs to. `resolved` is the one thing that *does* carry a month,
@@ -528,8 +529,8 @@ function renderOverview() {
 
   document.getElementById("list").innerHTML = names.map(name => {
     const c = D.counties[name], m = c.months[curMonth];
-    // "open" is a right-now snapshot of status='Open', not a property of the
-    // selected month — say so, or it reads as "open during July"
+    // "open" is a right-now snapshot, not a property of the selected month -
+    // say so, or it reads as "open during July"
     const openBadge = isLatest() && c.open_total ? `<b>${c.open_total}</b><span>open now</span>` : "";
     // the name is a real anchor, as the area rows already are: the row-level
     // onclick alone left every county unreachable by keyboard and unannounced
@@ -662,7 +663,10 @@ function openGroups(c) {
     </div>`).join("");
 }
 
-const OPEN_NOTE = "Notices Uisce Éireann still shows as open right now. Some are advance warning of planned works; a few were never taken down.";
+// The reading is Case.is_open's: a notice whose own text reports the works
+// complete is not listed, however long the feed goes on saying Open (a median
+// of three days, notes/statuspage-methodology.md, 2026-09-05).
+const OPEN_NOTE = "Notices Uisce Éireann still shows as open right now, less any whose own text already reports the works complete. Some are advance warning of planned works; a few were never taken down.";
 
 function openSection(c) {
   if (!isLatest()) return "";

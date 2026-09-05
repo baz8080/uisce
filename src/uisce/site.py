@@ -153,11 +153,34 @@ KNOCK_CATS = {"boil_notice_issued", "consumption_notice_issued"}
 SCHEME_NOISE = {"public", "water", "supply", "scheme", "regional", "pws", "the"}
 
 
-def is_open(row):
-    """Open as far as the site is concerned: the feed says so *and* still
-    serves the case. A case that dropped out of the feed while Open never gets
-    the transition closed_at records, so vanished_at is its only close."""
-    return row["status"] == "Open" and not row["vanished_at"]
+def is_open(row, now):
+    """Open as far as the site is concerned: the feed says so, still serves the
+    case, and nothing the notice itself has said has ended it yet.
+
+    The feed's `status` is the weakest of the three signals. A case that dropped
+    out of the feed while Open never gets the transition closed_at records, so
+    vanished_at is its only close. And the feed closes a case a median 72h after
+    the notice's own update reports the works complete (p90 111h, measured
+    2026-09-05 on 3,783 closed cases), so 216 of that day's 562 Open cases were
+    past a completion their own text had announced. The extracted end is what
+    the accrual already stops charging at; reading `status` alone here put the
+    "Open now" badge and the arithmetic in contradiction on the same case.
+
+    Only an *observed* end closes a case here, the same line the published
+    median draws: a scheduled end is a plan the works may have overrun, and the
+    feed saying Open past one is the only evidence either way. A completion
+    reported for a future instant (an update written ahead of the works) leaves
+    the case open until then. See notes/statuspage-methodology.md ("The
+    notice's own completion closes it").
+    """
+    if row["status"] != "Open" or row["vanished_at"]:
+        return False
+    if row["end_source"] == "lifted_immediate":
+        return False
+    if row["end_source"] in OBSERVED_END_SOURCES:
+        end = reported_end_utc(row["end_local_date"], row["end_local_time"])
+        return end is None or end > now
+    return True
 
 
 def classify(row, recurring=False):
@@ -257,14 +280,13 @@ def boil_notice_fate(row, lifts, now):
     # only fire on a case carrying an extracted end, and this class never has
     # one — end_source was `not_found` for all 35 on file at 2026-08-18, and
     # structurally so, because the end is published as a different case rather
-    # than in this notice's text. Adding the guard would mean a
-    # fourth outcome and a rewrite of TestBoilNoticeFate's fixture (which does
-    # carry an end, unlike anything real) to protect against zero cases. If a
-    # prompt version ever starts extracting ends here, add it then.
+    # than in this notice's text. Adding the guard would mean a fourth outcome
+    # to protect against zero cases. If a prompt version ever starts extracting
+    # ends here, add it then.
     pairing = lift_pairing(row, lifts, start)
     if pairing is not None:
         return "paired", pairing
-    if not is_open(row):
+    if not is_open(row, now):
         return "closed_no_signal", None
     if now - start > timedelta(days=CAP_DAYS):
         return "exclude", None
@@ -848,6 +870,10 @@ class Case(NamedTuple):
     # False: that is what keeps these out of the published median without
     # touching the filter that reads it.
     imputed: bool = False
+    # is_open(row, now), decided once here so the open list, the history's
+    # "still open", the county page's notice text and the Atom feed cannot
+    # disagree about a case
+    is_open: bool = False
 
     @property
     def county(self):
@@ -857,10 +883,6 @@ class Case(NamedTuple):
     def marker_intervals(self):
         """The intervals the health marker stands over — see `in_force`."""
         return self.in_force or self.intervals
-
-    @property
-    def is_open(self):
-        return is_open(self.row)
 
 
 def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, spans=None):
@@ -947,7 +969,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
             # a lift is a real, observed end, not a schedule
             in_force, end = pairing
             has_end = observed_end = True
-        elif is_open(r) and start < now and not already_over:
+        elif is_open(r, now) and start < now and not already_over:
             # ongoing with no inferred end: runs from start until now, capped
             end = min(now, start + cap)
         else:
@@ -986,6 +1008,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
                 row=r, sev=sev, ref=case_ref(r), start=start,
                 intervals=windows, sas=sa_index.affected(r["full_lat"], r["full_lon"]),
                 has_end=has_end, observed_end=observed_end, rec=rec,
+                is_open=is_open(r, now),
             )
 
     return Case(
@@ -1000,6 +1023,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         rec=rec,
         imputed=imputed,
         in_force=tuple(in_force),
+        is_open=is_open(r, now),
     )
 
 
