@@ -395,6 +395,10 @@ title and location strings. Nothing was measured against the live uisce feed her
 host is unreachable through this session's proxy, so the figures above are from synthetic rows
 of realistic width. **Check the largest `c/*.html` on the next CI data build.**
 
+*Measured 2026-09-05*, on the 2026-09-04 release with #80's notice text folded under the open
+rows: Dublin 384,115 bytes, Cork 335,599, Kerry 245,632. Under the 512 KB the index budgets for
+itself, so no byte budget yet; the entry to watch is Dublin's.
+
 The two places that documented the cap as their reason moved with it. The county view's
 sub-link still says "Every month for Co. X on one page" and still deliberately avoids "every
 notice ever recorded" — but the reason is now that the *view* is one month at a time, not that
