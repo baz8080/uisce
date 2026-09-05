@@ -1880,6 +1880,21 @@ class TestHistoryShards:
             if not isinstance(entry, str):
                 assert (tmp_path / "a" / "carlow" / f"{entry[1]}.html").exists()
 
+    def test_a_town_named_for_its_county_is_indexed_with_its_slug(self, tmp_path):
+        """Fourteen settlements share their county's name and each has a page
+        of its own. The index carries the town like any other paged area; it is
+        statusui's searchHits that keeps its row beside the county's, so a
+        `name != county` filter here would hide the page from the box again."""
+        sa = SmallAreaIndex([(52.836, -6.926, "SA1", 1000)])
+        towns = TownLookup([("SA1", "T1", "Carlow", "Carlow")], sa.pop)
+        site = build_site([_case()], sa, NOW, towns)
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, towns)
+        body = (tmp_path / "search.js").read_text()
+        index = json.loads(body.split(" = ", 1)[1].rstrip(";"))
+        assert index == {"Carlow": [["Carlow", "carlow"]]}
+        assert (tmp_path / "a" / "carlow" / "carlow.html").exists()
+
 
 class TestIndexablePages:
     """The site's crawlable surface.
