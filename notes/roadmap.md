@@ -25,6 +25,15 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
    many cases were stamped `vanished_at`. A `::warning::` line when that count is large, say
    over the 1% the download guard already uses, would have shown the 2026-08-10 purge the day
    it happened instead of a month later. A candidate, not agreed.
+4. **The negative-span family reads "no end reported" in the histories.** 302 cases on the
+   2026-09-05 release carry a completion update whose end precedes the re-stamped
+   `start_date`, so `build.py` nulls the span and they are charged an imputed one. Their
+   history rows and the app's end badge then say "no end reported" / "withdrawn without a
+   completion update", which is false: the end was reported, the start was lost. Seven of
+   them were also listed as open until the 2026-09-05 `is_open` change; now they read the
+   same as the 295 closed ones. Wants a record field that says "completion reported, span
+   unusable" and copy for it; a payload-shape guard in `tests/test_site.py` will fail when
+   the key is added, which is the guard working.
 
 ## Waiting on a check by hand
 
@@ -42,20 +51,16 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
 - **"0 counties graded F" over a month with counties in E.** Raised, measured and left on
   2026-08-30 (statuspage-methodology.md, "The scale grew an E"). The one-line fix is to count E
   and F together and say "graded E or F". Listed so it is findable, not to reopen it.
-- **`Case.is_open` shows a case as "Open now" after its own text says it is complete.** A
-  reader flagged CAR00119809 (statuspage-methodology.md, "The completion-vs-status contradiction
-  is display-only", 2026-09-05) - the same shape as the 20-of-508 figure already measured for
-  "Open cases" in the same file's Known limitations. `is_open` reads only `row["status"]`, never
-  `end_source`. Prototyped fix: `is_open = row["status"] == "Open" and not (observed_end and
-  reported_end <= now)`. Not shipped because `is_open` also feeds `open_total`, the per-event
-  history's "still open"/"closed" text and the Atom feed, and about a dozen tests in
-  `tests/test_site.py` build `status="Open"` rows on the default fixture - which already carries
-  a `completion_update` - as shorthand, with no intent to exercise this interaction; the tests to
-  touch are named in the note. Left for the owner because hiding a genuinely open case on a bad
-  extraction is a worse failure than a stale display, and that trade needs a decision, not a
-  five-line patch.
 
 ## Re-measure when
+
+- **Follow-ups after a stated completion**, 0 of 7,667 completion updates on 2026-09-05
+  (statuspage-methodology.md, "The notice's own completion closes it"): the figure that makes
+  a reported completion safe to close a case on. Re-run the segment check against the current
+  release if a reader reports a live disruption missing from "Open now".
+- **Scheduled ends passed while the feed says Open**, 133 of 562 on 2026-09-05. They stay
+  listed as open because a schedule is a plan; a labelled sample showing announced ends are
+  met reliably would let them close for display too.
 
 - **The E cut at 98.7%**, fitted to a 130-row archive: re-measure against the latest release
   DB as months worse than 98.459% arrive (statuspage-methodology.md).

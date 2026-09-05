@@ -74,6 +74,7 @@ At runtime `SmallAreaIndex` answers "which Small Areas does this pin affect?" by
 | How a title becomes a category | `CategoryRule` in `pipeline.py`, then run `uisce-backfill` |
 | Grade thresholds | `grade` in `site.py` |
 | How long an open case accrues for | `CAP_DAYS`, and `resolve_case` |
+| What counts as open, everywhere the site says so | `is_open` in `site.py`, carried on `Case.is_open` |
 | Which end signals count as observed | `OBSERVED_END_SOURCES` in `config.py` |
 | The affected-population radius | `AFFECT_RADIUS_KM` / `FALLBACK_KM` |
 | When a settlement is split into electoral areas | `SPLIT_ABOVE_POP` / `MIN_PART_SHARE` in `towns.py` |

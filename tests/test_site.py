@@ -32,6 +32,7 @@ from uisce.site import (
     describes_recurrence,
     event_windows,
     grade,
+    is_open,
     load_cases,
     merge,
     month_bounds,
@@ -52,6 +53,16 @@ UTC = timezone.utc
 
 def _dt(iso):
     return datetime.fromisoformat(iso).astimezone(UTC)
+
+
+def _open(**overrides):
+    """A case that is open by every reading: the feed says so and its text has
+    reported no end. The default fixture carries a completion, and since
+    2026-09-05 a passed completion closes a case whatever `status` says, so
+    `_case(status="Open")` is a *contradiction*, not shorthand for open."""
+    base = dict(status="Open", notice_to_end_seconds=None, end_source="not_found",
+                end_local_date=None, end_local_time=None)
+    return _case(**(base | overrides))
 
 
 # one Small Area of 1,000 people sitting right on the test pin
@@ -140,10 +151,14 @@ class TestBoilNoticeFate:
     """The whole boil-notice policy. See notes/boil-notices.md."""
 
     def _notice(self, **overrides):
+        # no extracted end, as no real boil notice has one: the end is
+        # published as a separate lift case, never in this notice's text
         defaults = {
             "work_category": "boil_notice_issued",
             "boil_water_notice": 1,
             "notice_to_end_seconds": None,
+            "end_source": "not_found",
+            "end_local_date": None,
             "status": "Open",
         }
         return _case(**(defaults | overrides))
@@ -788,7 +803,7 @@ class TestTownBreakdown:
 
     def test_an_open_case_names_its_area_instead_of_being_listed_twice(self):
         """The county's list is the only copy; the front end groups it by area."""
-        county = build_site([_case(status="Open")], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site([_open()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
         assert [(o["title"], o["area"]) for o in county["open"]] == [
             ("Burst Water Main - Carlow", "T1")
         ]
@@ -820,7 +835,7 @@ class TestPayload:
         assert month["towns"]["T1"]["months"]["2026-05"]["availability"] < 100
 
     def test_an_open_entry_names_its_area(self):
-        county = build_site([_case(status="Open")], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site([_open()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
         assert set(county["open"][0]) == {"sev", "title", "loc", "since", "area", "name", "ref"}
         assert (county["open"][0]["area"], county["open"][0]["name"]) == ("T1", "Testtown")
 
@@ -856,6 +871,82 @@ class TestVanished:
         assert boil_notice_fate(row, {}, NOW)[0] == "closed_no_signal"
 
 
+class TestOpenReading:
+    """A case is open only while nothing the notice itself said has ended it.
+
+    The feed's `status` lags a stated completion by a median of three days
+    (2026-09-05, notes/statuspage-methodology.md), and the accrual already
+    stops charging at the extracted end. Before this the badge read `status`
+    alone, so CAR00119809 sat under "Open now" beneath its own "works are now
+    complete" update. Every surface that says open reads Case.is_open, so the
+    county list is checked alongside the history and the feed here.
+    """
+
+    # CAR00119809's shape: published 08:40, complete at 14:36 the same day,
+    # still 'Open' in the feed two days later
+    def _complete(self, **overrides):
+        base = dict(status="Open", start_date="2026-05-08T08:40:00+00:00",
+                    notice_to_end_seconds=17747.0, end_source="completion_update",
+                    end_local_date="2026-05-08", end_local_time="14:36")
+        return _case(**(base | overrides))
+
+    def test_a_reported_completion_closes_it_everywhere(self, tmp_path):
+        site = build_site([self._complete(description="Works are now complete.")],
+                          SA_INDEX, NOW, TOWNS)
+        county = site["counties"]["Carlow"]
+        assert county["open"] == [] and county["open_total"] == 0
+        event = site["history"]["Carlow"]["T1"]["events"][0]
+        assert "open" not in event and event["confirmed"] == 1
+        assert "closed" not in event  # closed_at is the feed's observation, still unmade
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, TOWNS)
+        page = (tmp_path / "c" / "carlow.html").read_text()
+        assert '<section id="open">' not in page
+        assert "Works are now complete" not in page
+        feed = (tmp_path / "feed" / "carlow.xml").read_text()
+        assert "still open" not in feed and "closed</summary>" in feed
+
+    def test_the_reading_changes_what_is_said_and_nothing_that_is_charged(self):
+        """The arithmetic trusted the extracted end already; this only brings
+        the display into line with it. Same case, feed Open and feed Closed:
+        identical figures, differing only in the open list."""
+        as_open = build_site([self._complete()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        as_closed = build_site([self._complete(status="Closed")], SA_INDEX, NOW, TOWNS)
+        as_closed = as_closed["counties"]["Carlow"]
+        assert as_open == as_closed
+        assert as_open["months"]["2026-05"]["person_h"] == round(17747 / 3600 * 1000)
+
+    def test_a_completion_still_ahead_of_the_build_leaves_it_open(self):
+        """An update written for a time still to come: nothing has ended yet."""
+        row = self._complete(end_local_date="2026-05-10", end_local_time="09:00")  # NOW is 00:00
+        assert is_open(row, NOW)
+        county = build_site([row], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert county["open_total"] == 1
+
+    def test_a_passed_scheduled_end_does_not_close_it(self):
+        """A schedule is a plan the works may have overrun, the same line the
+        published median draws. 133 of the 562 open cases on 2026-09-05 were
+        past one; they stay open until the feed or their own text says otherwise."""
+        row = self._complete(end_source="scheduled_end_with_time")
+        assert is_open(row, NOW)
+        for source in ("not_found", None):
+            assert is_open(_open(end_source=source), NOW)
+
+    def test_a_completion_before_publication_closes_it(self):
+        """The negative-span family: build.py nulls the span, the end stands."""
+        row = self._complete(notice_to_end_seconds=None, end_local_date="2026-05-06")
+        assert not is_open(row, NOW)
+
+    def test_a_lift_with_immediate_effect_is_not_open(self):
+        row = self._complete(work_category="boil_notice_lifted", end_source="lifted_immediate",
+                             notice_to_end_seconds=None, end_local_date=None, end_local_time=None)
+        assert not is_open(row, NOW)
+
+    def test_the_feed_and_the_vanished_stamp_still_close_it_first(self):
+        assert not is_open(_open(status="Closed"), NOW)
+        assert not is_open(_open(vanished_at="2026-05-05T12:00:00+00:00"), NOW)
+
+
 class TestResolved:
     """cases.closed_at is the only field with a month dimension for a case that
     is no longer open — see PR #21 and notes/data-quality.md."""
@@ -874,7 +965,7 @@ class TestResolved:
         assert build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]["resolved"] == {}
 
     def test_an_open_case_is_never_listed_as_resolved(self):
-        rows = [_case(status="Open", closed_at="2026-05-06T04:00:00+00:00")]
+        rows = [_open(closed_at="2026-05-06T04:00:00+00:00")]
         county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
         assert county["resolved"] == {}
         assert county["open_total"] == 1
@@ -1998,7 +2089,7 @@ class TestNoticeText:
 
     def test_the_county_page_carries_it_only_for_open_notices(self, tmp_path):
         rows = [
-            _case(id=1, reference_num="CAR00000001", status="Open",
+            _open(id=1, reference_num="CAR00000001",
                   description="Open <script>x</script> text.<br><br>Second."),
             _case(id=2, reference_num="CAR00000002", status="Closed",
                   description="Closed text nobody needs."),
@@ -2017,9 +2108,9 @@ class TestNoticeText:
 
     def test_an_open_row_links_its_reference_on_water_ie(self, tmp_path):
         rows = [
-            _case(id=1, reference_num="CAR00000001 ", status="Open", title="Trailing space"),
-            _case(id=2, reference_num="HM1816040926", status="Open", title="Hand entered"),
-            _case(id=3, reference_num=None, status="Open", title="No reference"),
+            _open(id=1, reference_num="CAR00000001 ", title="Trailing space"),
+            _open(id=2, reference_num="HM1816040926", title="Hand entered"),
+            _open(id=3, reference_num=None, title="No reference"),
             _case(id=4, reference_num="CAR00000004", status="Closed", title="Closed"),
         ]
         site = build_site(rows, SA_INDEX, NOW, TOWNS)

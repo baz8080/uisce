@@ -258,7 +258,7 @@ count and coloured every day bar as restrictions, and the set could only grow.
 
 `cases.vanished_at` (schema v4) is stamped by `load_cases` on the first build whose download
 lacks a case, and cleared by the upsert if it comes back. `site.py`'s `is_open` reads it
-beside `status`, so a vanished case is closed with no end signal: it charges the same as any
+beside `status` and the extracted end, so a vanished case is closed with no end signal: it charges the same as any
 other such case (an imputed span for an outage, a token footprint otherwise), and appears in
 neither the open list nor the closed-in-month list, which is keyed on `closed_at` and would
 be claiming an observation that was never made.
