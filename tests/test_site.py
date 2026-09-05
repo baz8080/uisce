@@ -1805,7 +1805,8 @@ class TestHistoryShards:
         assert len(set(slugs)) == len(COUNTY_POP)
 
     def test_the_files_written_are_data_index_and_one_shard_per_county(self, tmp_path):
-        site, (data_bytes, shard_bytes, n_areas, *_rest) = self._write(tmp_path)
+        site, sizes = self._write(tmp_path)
+        data_bytes, shard_bytes, n_areas = sizes["data.js"], sizes["shards"], sizes["n_areas"]
         assert (tmp_path / "data.js").exists() and (tmp_path / "index.html").exists()
         shards = sorted(p.name for p in (tmp_path / "h").iterdir())
         assert shards == sorted(f"{county_slug(c)}.js" for c in site["counties"])
@@ -1896,6 +1897,73 @@ class TestHistoryShards:
         assert (tmp_path / "a" / "carlow" / "carlow.html").exists()
 
 
+class TestFeeds:
+    """One Atom file nationally and one per county, written from a block that
+    write_site pops the way it pops the history: a subscriber gets the newest
+    sightings, the app payload gets none of them."""
+
+    def _write(self, tmp_path, rows=None):
+        site = build_site(rows or [_case()], SA_INDEX, NOW, TOWNS)
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, TOWNS)
+        return site
+
+    def _entries(self, path):
+        ns = {"a": "http://www.w3.org/2005/Atom"}
+        return ET.parse(path).getroot().findall("a:entry", ns), ns
+
+    def test_a_feed_is_written_nationally_and_per_county(self, tmp_path):
+        site = self._write(tmp_path)
+        assert "feed" not in site
+        data = (tmp_path / "data.js").read_text().split("=", 1)[1].rstrip(";")
+        assert "feed" not in json.loads(data)
+        assert (tmp_path / "feed.xml").exists()
+        assert (tmp_path / "feed" / "carlow.xml").exists()
+
+    def test_an_entry_links_to_the_area_page_and_says_what_and_where(self, tmp_path):
+        self._write(tmp_path)
+        entries, ns = self._entries(tmp_path / "feed" / "carlow.xml")
+        assert len(entries) == 1
+        e = entries[0]
+        assert e.find("a:title", ns).text == "Burst Water Main - Carlow: Testtown"
+        assert e.find("a:link", ns).get("href") == f"{BASE_URL}/a/carlow/testtown.html"
+        assert e.find("a:id", ns).text == f"{BASE_URL}/n/carlow/CAR00000001"
+        summary = e.find("a:summary", ns).text
+        assert "Supply disruption · Co. Carlow · Testtown · published 2026-05-01" in summary
+
+    def test_the_sighting_orders_the_feed_and_publication_stands_in_for_it(self, tmp_path):
+        rows = [
+            _case(id=1, reference_num="CAR00000001", first_seen="2026-07-02T12:00:00+00:00"),
+            _case(id=2, reference_num="CAR00000002", first_seen="2026-07-03T12:00:00+00:00",
+                  start_date="2026-04-25T00:00:00+00:00"),
+            _case(id=3, reference_num="CAR00000003", first_seen=None,
+                  start_date="2026-05-20T00:00:00+00:00"),
+        ]
+        self._write(tmp_path, rows)
+        entries, ns = self._entries(tmp_path / "feed.xml")
+        assert [e.find("a:updated", ns).text for e in entries] == [
+            "2026-07-03T12:00:00+00:00", "2026-07-02T12:00:00+00:00", "2026-05-20T00:00:00+00:00",
+        ]
+
+    def test_an_area_without_a_page_falls_back_to_the_county_page(self, tmp_path):
+        self._write(tmp_path, [_case(full_lat=53.15, full_lon=-6.8)])
+        entries, ns = self._entries(tmp_path / "feed.xml")
+        assert entries[0].find("a:link", ns).get("href") == f"{BASE_URL}/c/carlow.html"
+
+    def test_markup_in_a_title_cannot_break_the_document(self, tmp_path):
+        self._write(tmp_path, [_case(title="Burst <b>Main</b> & more - Carlow")])
+        entries, ns = self._entries(tmp_path / "feed.xml")
+        assert entries[0].find("a:title", ns).text.startswith("Burst <b>Main</b> & more")
+
+    def test_the_pages_point_at_their_feed(self, tmp_path):
+        self._write(tmp_path)
+        county = (tmp_path / "c" / "carlow.html").read_text()
+        assert 'type="application/atom+xml"' in county and 'href="../feed/carlow.xml"' in county
+        area = (tmp_path / "a" / "carlow" / "testtown.html").read_text()
+        assert 'href="../../feed/carlow.xml"' in area
+        assert 'href="feed.xml"' in (tmp_path / "index.html").read_text()
+
+
 class TestIndexablePages:
     """The site's crawlable surface.
 
@@ -1913,9 +1981,8 @@ class TestIndexablePages:
         return counties, write_site(site, tmp_path, TOWNS)
 
     def test_every_county_gets_a_page_including_the_empty_ones(self, tmp_path):
-        counties, (*_, n_pages, county_bytes, _search, _n_area, _area_bytes) = self._write(
-            tmp_path
-        )
+        counties, sizes = self._write(tmp_path)
+        n_pages, county_bytes = sizes["n_county_pages"], sizes["county_pages"]
         written = sorted(p.name for p in (tmp_path / "c").iterdir())
         assert written == sorted(f"{county_slug(c)}.html" for c in counties)
         assert (n_pages, len(written)) == (len(counties), len(counties))
@@ -2117,6 +2184,7 @@ class TestPayloadShape:
         site = build_site([_case()], SA_INDEX, AFTER_MAY, TOWNS)
         site.pop("recurrence_report")
         site.pop("history")
+        site.pop("feed")
         return site
 
     def test_the_freshness_stamp_follows_the_data_not_the_build_clock(self):

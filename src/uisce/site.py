@@ -36,6 +36,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import quote
+from xml.sax.saxutils import escape as xml_escape
 
 import statusui
 
@@ -1923,9 +1924,12 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
             # first pin wins, matching how the event's open entry is recorded
             {"title": r["title"], "start": r["start_date"][:10], "first_pub": case.start,
              "pins": 0, "confirmed": 0, "scheduled": 0, "sev": case.sev,
-             "loc": r["location"] or "", "open": False, "closed": None, "health": False},
+             "loc": r["location"] or "", "open": False, "closed": None, "health": False,
+             "seen": r["first_seen"] or r["start_date"]},
         )
         meta["pins"] += 1
+        # the build that first saw any pin; NULL on every case before the column
+        meta["seen"] = min(meta["seen"], r["first_seen"] or r["start_date"])
         # the earliest publication across the event's pins, which is what
         # "started this month" means for the completion median. Not
         # setdefault: rows arrive in id order, not start_date order.
@@ -2112,9 +2116,71 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
     site["history"] = (
         area_history(event_meta, event_iv, event_sas, event_codes, towns) if towns else {}
     )
+    site["feed"] = feed_entries(event_meta, area_of, towns)
     site["recurrence_report"] = recurrence_report(recurrence, pin_tags)
 
     return site
+
+
+FEED_SHOWN = 50
+
+
+def feed_entries(event_meta, area_of, towns):
+    """{county: [entry, ...]} of the newest FEED_SHOWN events by first sighting.
+
+    Sighting, not publication: `start_date` is re-stamped in place upstream, and
+    what a subscriber wants is the build that first saw the notice. Not part of
+    the payload; write_site pops it into the Atom files.
+    """
+    by_county = defaultdict(list)
+    for (county, ref), meta in event_meta.items():
+        entry = {
+            "ref": ref, "county": county, "title": meta["title"], "sev": meta["sev"],
+            "seen": meta["seen"], "start": meta["start"], "loc": meta["loc"],
+            "open": meta["open"], "closed": meta["closed"],
+        }
+        code = area_of.get((county, ref)) if towns is not None else None
+        if code is not None:
+            entry["area"] = towns.label(code)
+            if area_has_page(code):
+                entry["path"] = area_path(county, entry["area"])
+        by_county[county].append(entry)
+    return {
+        county: sorted(entries, key=lambda e: (e["seen"], e["ref"]), reverse=True)[:FEED_SHOWN]
+        for county, entries in by_county.items()
+    }
+
+
+def _atom_entry(e):
+    where = e.get("area") or e["loc"]
+    state = "still open" if e["open"] else f"closed {e['closed']}" if e["closed"] else "closed"
+    summary = " · ".join(
+        filter(None, [SEV_LABEL[e["sev"]], f"Co. {e['county']}", where,
+                      f"published {e['start']}", state])
+    )
+    link = e.get("path") or f"{COUNTY_DIR}/{county_slug(e['county'])}.html"
+    return (
+        # keyed by county as well as reference: 15 references span two counties
+        f"<entry><id>{BASE_URL}/n/{county_slug(e['county'])}/{xml_escape(e['ref'])}</id>"
+        f"<title>{xml_escape(e['title'] + (f': {where}' if where else ''))}</title>"
+        f"<updated>{xml_escape(e['seen'])}</updated>"
+        f'<link href="{xml_escape(f"{BASE_URL}/{link}", {chr(34): "&quot;"})}"/>'
+        f"<summary>{xml_escape(summary)}</summary></entry>"
+    )
+
+
+def atom_feed(title, path, entries, updated):
+    """An Atom document of `entries` (feed_entries' shape), newest first."""
+    if entries:
+        updated = entries[0]["seen"]
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<feed xmlns="http://www.w3.org/2005/Atom">'
+        f"<title>{xml_escape(title)}</title>"
+        f'<link href="{BASE_URL}/{path}" rel="self"/><link href="{BASE_URL}/"/>'
+        f"<id>{BASE_URL}/{path}</id><updated>{xml_escape(updated)}</updated>"
+        f"{''.join(_atom_entry(e) for e in entries)}</feed>"
+    )
 
 
 def data_horizon(conn):
@@ -2128,7 +2194,7 @@ def load_cases(conn):
     return conn.execute(
         """
         SELECT c.id, c.county, c.work_category, c.work_type, c.status, c.title,
-               c.reference_num, c.start_date, c.location, c.closed_at,
+               c.reference_num, c.start_date, c.location, c.closed_at, c.first_seen,
                -- read only by describes_recurrence, which is why the severity
                -- rule no longer depends on the model having extracted a window
                c.description,
@@ -2147,6 +2213,7 @@ def load_cases(conn):
 HISTORY_DIR = "h"
 COUNTY_DIR = "c"
 AREA_DIR = "a"
+FEED_DIR = "feed"
 
 
 def write_site(site, site_dir, towns=None):
@@ -2174,6 +2241,7 @@ def write_site(site, site_dir, towns=None):
     a reader is likely to open in a sitting, at a median 5 KB gzipped.
     """
     history = site.pop("history", {})
+    feed = site.pop("feed", {})
     data = "window.UISCE_DATA = " + json.dumps(site) + ";"
     site_dir.mkdir(parents=True, exist_ok=True)
     (site_dir / "data.js").write_text(data)
@@ -2185,6 +2253,23 @@ def write_site(site, site_dir, towns=None):
     (site_dir / "index.html").write_text(
         page_html(SITE_HTML, {"CANONICAL": f"{BASE_URL}/", "COUNTY-LINKS": county_links})
     )
+    sizes = {"feeds": 0}
+    feed_dir = site_dir / FEED_DIR
+    feed_dir.mkdir(exist_ok=True)
+    # the national feed is the newest of every county's, so a county's own can
+    # never carry a notice the national one skipped
+    national = sorted(
+        (e for entries in feed.values() for e in entries),
+        key=lambda e: (e["seen"], e["ref"]), reverse=True,
+    )[:FEED_SHOWN]
+    feeds = [("feed.xml", "Irish water supply disruptions", national)] + [
+        (f"{FEED_DIR}/{county_slug(c)}.xml", f"Co. {c} water supply disruptions", feed.get(c, []))
+        for c in site["counties"]
+    ]
+    for path, title, entries in feeds:
+        doc = atom_feed(title, path, entries, site["generated_iso"])
+        (site_dir / path).write_text(doc)
+        sizes["feeds"] += len(doc.encode())
 
     shard_dir = site_dir / HISTORY_DIR
     shard_dir.mkdir(exist_ok=True)
@@ -2269,6 +2354,7 @@ def write_site(site, site_dir, towns=None):
             page = page_html(
                 COUNTY_HTML,
                 {
+                    "FEED": f"../{FEED_DIR}/{slug}.xml",
                     "TITLE": html.escape(
                         f"Co. {county} water supply disruptions - Uisce Éireann notices"
                     ),
@@ -2305,6 +2391,7 @@ def write_site(site, site_dir, towns=None):
                 page = page_html(
                     AREA_HTML,
                     {
+                        "FEED": f"../../{FEED_DIR}/{county_slug(county)}.xml",
                         "TITLE": html.escape(
                             f"{name}, Co. {county} - water outages and notices"
                         ),
@@ -2329,17 +2416,17 @@ def write_site(site, site_dir, towns=None):
     # fetched by the app, never landed on
     (site_dir / "sitemap.xml").write_text(statusui.sitemap(BASE_URL, pages, site["generated_iso"]))
     (site_dir / "robots.txt").write_text(statusui.robots(BASE_URL))
-    return (
-        len(data.encode()),
-        shard_bytes,
-        sum(len(a) for a in history.values()),
-        index_bytes,
-        n_county_pages,
-        county_bytes,
-        search_bytes,
-        n_area_pages,
-        area_bytes,
-    )
+    return sizes | {
+        "data.js": len(data.encode()),
+        "shards": shard_bytes,
+        "n_areas": sum(len(a) for a in history.values()),
+        "areas.html": index_bytes,
+        "n_county_pages": n_county_pages,
+        "county_pages": county_bytes,
+        "search.js": search_bytes,
+        "n_area_pages": n_area_pages,
+        "area_pages": area_bytes,
+    }
 
 
 def run():
@@ -2356,8 +2443,7 @@ def run():
 
     n_counties, n_months = len(site["counties"]), len(site["months"])
     n_towns = sum(len(c["towns"]) for c in site["counties"].values())
-    (data_bytes, shard_bytes, n_areas, index_bytes, n_county_pages, county_bytes,
-     search_bytes, n_area_pages, area_bytes) = write_site(site, SITE_DIR, towns)
+    s = write_site(site, SITE_DIR, towns)
     print(
         f"Wrote {SITE_DIR}/ ({n_counties} counties, "
         f"{n_towns} town breakdowns, {n_months} months)"
@@ -2365,15 +2451,16 @@ def run():
     # the payload is the thing this site keeps having to defend; print it every
     # build so a regression is visible in the log rather than in the field
     print(
-        f"  data.js {data_bytes:,} bytes  ·  {n_counties} history shards "
-        f"{shard_bytes:,} bytes over {n_areas} areas (loaded on demand)  ·  "
-        f"search.js {search_bytes:,} bytes (loaded on demand)  ·  "
-        f"areas.html {index_bytes:,} bytes"
+        f"  data.js {s['data.js']:,} bytes  ·  {n_counties} history shards "
+        f"{s['shards']:,} bytes over {s['n_areas']} areas (loaded on demand)  ·  "
+        f"search.js {s['search.js']:,} bytes (loaded on demand)  ·  "
+        f"areas.html {s['areas.html']:,} bytes"
     )
     # the indexable surface, printed for the same reason: these pages exist to
     # be crawled, and one silently rendering empty is invisible from the field
     print(
-        f"  {n_county_pages} county pages {county_bytes:,} bytes  ·  "
-        f"{n_area_pages} area pages {area_bytes:,} bytes  ·  "
-        f"sitemap {n_county_pages + n_area_pages + 2} URLs"
+        f"  {s['n_county_pages']} county pages {s['county_pages']:,} bytes  ·  "
+        f"{s['n_area_pages']} area pages {s['area_pages']:,} bytes  ·  "
+        f"sitemap {s['n_county_pages'] + s['n_area_pages'] + 2} URLs  ·  "
+        f"{n_counties + 1} feeds {s['feeds']:,} bytes"
     )
