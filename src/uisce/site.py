@@ -152,6 +152,13 @@ KNOCK_CATS = {"boil_notice_issued", "consumption_notice_issued"}
 SCHEME_NOISE = {"public", "water", "supply", "scheme", "regional", "pws", "the"}
 
 
+def is_open(row):
+    """Open as far as the site is concerned: the feed says so *and* still
+    serves the case. A case that dropped out of the feed while Open never gets
+    the transition closed_at records, so vanished_at is its only close."""
+    return row["status"] == "Open" and not row["vanished_at"]
+
+
 def classify(row, recurring=False):
     """Severity class for a case row, or None if it isn't an event.
 
@@ -256,7 +263,7 @@ def boil_notice_fate(row, lifts, now):
     pairing = lift_pairing(row, lifts, start)
     if pairing is not None:
         return "paired", pairing
-    if row["status"] != "Open":
+    if not is_open(row):
         return "closed_no_signal", None
     if now - start > timedelta(days=CAP_DAYS):
         return "exclude", None
@@ -852,7 +859,7 @@ class Case(NamedTuple):
 
     @property
     def is_open(self):
-        return self.row["status"] == "Open"
+        return is_open(self.row)
 
 
 def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, spans=None):
@@ -939,7 +946,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
             # a lift is a real, observed end, not a schedule
             in_force, end = pairing
             has_end = observed_end = True
-        elif r["status"] == "Open" and start < now and not already_over:
+        elif is_open(r) and start < now and not already_over:
             # ongoing with no inferred end: runs from start until now, capped
             end = min(now, start + cap)
         else:
@@ -2304,6 +2311,7 @@ def load_cases(conn):
         """
         SELECT c.id, c.county, c.work_category, c.work_type, c.status, c.title,
                c.reference_num, c.start_date, c.location, c.closed_at, c.first_seen,
+               c.vanished_at,
                -- read only by describes_recurrence, which is why the severity
                -- rule no longer depends on the model having extracted a window
                c.description,

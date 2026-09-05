@@ -27,6 +27,10 @@ ARCGIS_QUERY_URL = (
 )
 ARCGIS_PAGE_SIZE = 1000
 ARCGIS_PAGE_SLEEP = 0.3
+# A download short of the feed's own count by more than this is refused: the
+# paging loop stops on an empty page, so a truncated response would otherwise
+# publish a release and, worse, stamp every missing case as vanished.
+FEED_COUNT_TOLERANCE = 0.01
 
 LOCATIONIQ_REVERSE_URL = "https://us1.locationiq.com/v1/reverse"
 LOCATIONIQ_GEOCODE_SLEEP = 1
@@ -37,7 +41,7 @@ USABLE_CASE_THRESHOLD_FIELDS = ["TITLE", "DESCRIPTION"]
 # Stamped into PRAGMA user_version. The `cases` schema is declared once, in
 # create_db; bump this only when that declaration changes, and add the matching
 # step to MIGRATIONS so DBs already in the wild can be carried forward.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # The `cases` schema, declared once: every column in table order, with its SQL
 # type. create_db renders this into the CREATE TABLE, the migration guard derives
@@ -70,6 +74,7 @@ CASE_COLUMNS = {
     "last_seen": "TEXT",
     "closed_at": "TEXT",
     "first_start_date": "TEXT",
+    "vanished_at": "TEXT",
     "full_lat": "REAL NOT NULL",
     "full_lon": "REAL NOT NULL",
     "rounded_lat": "REAL NOT NULL",
@@ -81,7 +86,7 @@ CASE_COLUMNS = {
 # tuple. load_cases sets first_seen / last_seen / closed_at / first_start_date
 # explicitly; backfill_work_category fills work_category.
 STAMPED_CASE_COLUMNS = frozenset(
-    {"work_category", "first_seen", "last_seen", "closed_at", "first_start_date"}
+    {"work_category", "first_seen", "last_seen", "closed_at", "first_start_date", "vanished_at"}
 )
 
 # The columns fed straight from the feed, in table order. This is the INSERT's
@@ -96,6 +101,7 @@ DB_CASE_COLUMNS = [c for c in CASE_COLUMNS if c not in STAMPED_CASE_COLUMNS]
 MIGRATIONS = {
     2: {"closed_at": "TEXT"},
     3: {"first_start_date": "TEXT"},
+    4: {"vanished_at": "TEXT"},
 }
 
 # V1 is the floor: a DB carrying these is structurally sound and can be migrated
@@ -163,6 +169,24 @@ def require_api_key():
     if not api_key:
         raise RuntimeError("LOCATIONIQ_API_KEY not set, check your .env file")
     return api_key
+
+
+def feed_count(session):
+    params = {"where": "1=1", "returnCountOnly": "true", "f": "json"}
+    resp = session.get(ARCGIS_QUERY_URL, params=params, timeout=DEFAULT_TIMEOUT)
+    resp.raise_for_status()
+    data = resp.json()
+    if "error" in data:
+        raise RuntimeError(f"ArcGIS error on count: {data['error']}")
+    return data["count"]
+
+
+def check_download_complete(features, expected):
+    if len(features) < expected * (1 - FEED_COUNT_TOLERANCE):
+        raise RuntimeError(
+            f"downloaded {len(features)} cases but the feed reports {expected}; "
+            "refusing to build from a truncated download"
+        )
 
 
 def download_cases(session):
@@ -404,7 +428,11 @@ def create_db(cases, db_path=DB_PATH):
         """)
 
         check_schema_version(conn, db_path)
-        load_cases(conn, cases)
+        vanished = load_cases(conn, cases)
+        if vanished:
+            # a purge is invisible otherwise: the 2026-08-10 one dropped 9,052
+            # cases and was found a month later
+            print(f"{vanished} cases stamped vanished: the feed no longer serves them")
 
 
 def check_schema_version(conn, db_path=DB_PATH):
@@ -496,9 +524,23 @@ def load_cases(conn, cases, now=None):
         f"INSERT INTO cases ({columns}, first_seen, last_seen, first_start_date) "
         f"VALUES ({placeholders}, ?, ?, ?) "
         f"ON CONFLICT(id) DO UPDATE SET {updates}, "
-        f"last_seen = excluded.last_seen, {closed_at}, {first_start}",
+        f"last_seen = excluded.last_seen, {closed_at}, {first_start}, vanished_at = NULL",
         rows,
     )
+    # A case the feed has dropped can never send the status transition closed_at
+    # waits for, so its disappearance is the only close it will ever have. Only
+    # safe behind check_download_complete: a short download is not a purge.
+    cur.execute("CREATE TEMP TABLE IF NOT EXISTS downloaded (id INTEGER PRIMARY KEY)")
+    cur.execute("DELETE FROM downloaded")
+    cur.executemany("INSERT INTO downloaded VALUES (?)", [(r["id"],) for r in cases])
+    cur.execute(
+        "UPDATE cases SET vanished_at = ? "
+        "WHERE vanished_at IS NULL AND id NOT IN (SELECT id FROM downloaded)",
+        (now,),
+    )
+    vanished = cur.rowcount
+    cur.execute("DROP TABLE downloaded")
+    return vanished
 
 
 def _is_usable_case(attrs):
@@ -895,7 +937,10 @@ def backfill(db_path=DB_PATH):
 
 
 def run(skip_geocode=False):
-    features = download_cases(make_session())
+    session = make_session()
+    expected = feed_count(session)
+    features = download_cases(session)
+    check_download_complete(features, expected)
     CASES_RAW_PATH.parent.mkdir(parents=True, exist_ok=True)
     CASES_RAW_PATH.write_text(json.dumps(features, indent=2))
 

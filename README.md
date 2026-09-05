@@ -22,7 +22,7 @@ Tables:
 
 Before leaning on `start_date`/`end_date` or per-case counts, read [notes/data-quality.md](notes/data-quality.md) — several fields don't mean what they appear to mean.
 
-The `cases` schema is declared once, in `create_db`, and stamped into `PRAGMA user_version` (`SCHEMA_VERSION`, currently 3). The published DB is downloaded and updated in place each build, so `check_schema_version` runs every time and carries older DBs forward via `MIGRATIONS`.
+The `cases` schema is declared once, in `create_db`, and stamped into `PRAGMA user_version` (`SCHEMA_VERSION`, currently 4). The published DB is downloaded and updated in place each build, so `check_schema_version` runs every time and carries older DBs forward via `MIGRATIONS`.
 
 Migration is deliberately narrow: **additive nullable columns only**, which SQLite applies without rewriting a row. A DB missing any v1 column is refused with instructions to rebuild rather than migrated. That asymmetry is on purpose — the DB is an accumulating archive of a feed with no history, so a rebuild costs every case the feed no longer serves plus the geocode cache. Take a copy before rebuilding.
 
@@ -44,6 +44,8 @@ uv run uisce-replay-closed-at --snapshots snaps --write
 ```
 
 `cases.first_start_date` (v3) stamps the `start_date` seen on the **first download** of a case and never advances it — the feed re-stamps `start_date` in place, so the original is otherwise lost. It is first-observed, not earliest-seen, and nothing computes a published number from it yet; it is an instrument accumulating history. See [notes/data-quality.md](notes/data-quality.md).
+
+`cases.vanished_at` (v4) stamps the first build that found a case missing from the feed, and is cleared if it returns. A case dropped while `Open` never sends the transition `closed_at` records, so this is its only close: the site treats such a case as closed with no end signal. The stamp is only trusted because the pipeline first checks the download against the feed's own count (`returnCountOnly`) and refuses a short one. See [notes/data-quality.md](notes/data-quality.md) ("Cases that vanish from the feed").
 
 ## Running it yourself
 
