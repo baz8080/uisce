@@ -42,6 +42,18 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
 - **"0 counties graded F" over a month with counties in E.** Raised, measured and left on
   2026-08-30 (statuspage-methodology.md, "The scale grew an E"). The one-line fix is to count E
   and F together and say "graded E or F". Listed so it is findable, not to reopen it.
+- **`Case.is_open` shows a case as "Open now" after its own text says it is complete.** A
+  reader flagged CAR00119809 (statuspage-methodology.md, "The completion-vs-status contradiction
+  is display-only", 2026-09-05) - the same shape as the 20-of-508 figure already measured for
+  "Open cases" in the same file's Known limitations. `is_open` reads only `row["status"]`, never
+  `end_source`. Prototyped fix: `is_open = row["status"] == "Open" and not (observed_end and
+  reported_end <= now)`. Not shipped because `is_open` also feeds `open_total`, the per-event
+  history's "still open"/"closed" text and the Atom feed, and about a dozen tests in
+  `tests/test_site.py` build `status="Open"` rows on the default fixture - which already carries
+  a `completion_update` - as shorthand, with no intent to exercise this interaction; the tests to
+  touch are named in the note. Left for the owner because hiding a genuinely open case on a bad
+  extraction is a worse failure than a stale display, and that trade needs a decision, not a
+  five-line patch.
 
 ## Re-measure when
 
