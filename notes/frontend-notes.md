@@ -466,3 +466,20 @@ breakdown of *cases* in one tile. The split decomposes the outage count, so it m
 tile that carries that count; the hours tile shows the hours. `completed_n` drops out of the
 view but stays in the payload — it is what `median_completion_h` is computed over, and
 `TestPayloadShape` snapshots the key set on purpose.
+
+## A day in the county bar lists its notices - 2026-09-05
+
+The caption on a day cell said "moderate supply disruption" and not which. The county's
+history shard already carried every event with its first charged day, so `event_record` now
+adds `end`, the last charged day (omitted when it is the start day, the sparse rule the rest
+of the record follows), and the county view derives the day's list from the shard once a
+reader taps a cell. Nothing is added to `data.js`; the shards grew from 2,406,853 to
+2,513,470 bytes, loaded on demand as before.
+
+Two limits, both accepted. The list is county-view only: the overview's bars are 26 rows
+of the same cells and a tap there still just captions, because loading a shard per row a
+reader hovers is the wrong trade. And a recurring event matches every day of its span, not
+only the nights it ran, because the shard carries covered hours and span, not the windows;
+the row says the hours were spread across the span. A cell carries no date, so the day is
+its position among its siblings, which holds because `dayCells` emits one cell per calendar
+day of the month.
