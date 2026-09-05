@@ -53,6 +53,7 @@ from uisce.config import (
     SITE_DIR,
     describes_recurrence,
 )
+from uisce.pipeline import check_schema_version
 
 SITE_HTML = Path(__file__).parent / "site.html"
 AREAS_HTML = Path(__file__).parent / "areas.html"
@@ -2305,6 +2306,15 @@ def data_horizon(conn):
     return parse_dt(last_seen) if last_seen else None
 
 
+def read_cases(db_path=DB_PATH):
+    """The rows and horizon of the DB at `db_path`, carried to this code's schema
+    first: a UI deploy builds from whichever release is current, and that
+    release predates every column added since the last data build."""
+    with sqlite3.connect(db_path) as conn:
+        check_schema_version(conn, db_path)
+        return load_cases(conn), data_horizon(conn)
+
+
 def load_cases(conn):
     conn.row_factory = sqlite3.Row
     return conn.execute(
@@ -2574,9 +2584,7 @@ def write_site(site, site_dir, towns=None):
 def run():
     sa_index = SmallAreaIndex.from_csv(SA_POP_PATH)
     towns = TownLookup.from_csv(SA_TOWNS_PATH, sa_index.pop)
-    with sqlite3.connect(DB_PATH) as conn:
-        rows = load_cases(conn)
-        data_as_of = data_horizon(conn)
+    rows, data_as_of = read_cases()
     site = build_site(rows, sa_index, datetime.now(timezone.utc), towns, data_as_of)
 
     # a diagnostic for the build log, not for the page

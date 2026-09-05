@@ -4,9 +4,12 @@ import sqlite3
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, time, timedelta, timezone
 
+import pytest
 from conftest import site_case as _case
+from test_pipeline import _cases_db
 
 from uisce.config import BASE_URL
+from uisce.pipeline import SCHEMA_VERSION
 from uisce.site import (
     CAP_DAYS,
     COUNTY_POP,
@@ -29,12 +32,14 @@ from uisce.site import (
     describes_recurrence,
     event_windows,
     grade,
+    load_cases,
     merge,
     month_bounds,
     month_list,
     norm_scheme,
     notice_paragraphs,
     paired_lift,
+    read_cases,
     recurrence_report,
     recurring_events,
     resolve_case,
@@ -2517,3 +2522,38 @@ class TestAreaIndexHtml:
                                  ("Louth", [("T2", "B", 1, 1)])])
         assert html.count("<section") == 2
         assert 'href="#c-cork"' in html and 'id="c-louth"' in html
+
+
+class TestReleaseDb:
+    """The site builds from whichever release is current, and a release can
+    predate a column: the data build migrates the DB and republishes it, but a
+    UI push in between reads the old one. read_cases carries the local copy
+    forward before the SELECT names the new column."""
+
+    def _v3_db(self, path):
+        _cases_db(path, version=3)
+        with sqlite3.connect(path) as conn:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(cases)")}
+            assert "vanished_at" not in cols
+            row = {k: v for k, v in _case().items() if k in cols}
+            conn.execute(
+                f"INSERT INTO cases ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})",
+                list(row.values()),
+            )
+            conn.execute(
+                "CREATE TABLE inferred_cases (case_id, notice_to_end_seconds, end_source, "
+                "end_local_date, end_local_time, end_recurrence, end_window_open, "
+                "end_window_close, end_window_first_date)"
+            )
+
+    def test_a_release_from_before_the_last_column_still_builds(self, tmp_path):
+        path = tmp_path / "uisce.db"
+        self._v3_db(path)
+        with sqlite3.connect(path) as conn:
+            with pytest.raises(sqlite3.OperationalError, match="vanished_at"):
+                load_cases(conn)
+        rows, horizon = read_cases(path)
+        assert [r["reference_num"] for r in rows] == ["CAR00000001"]
+        assert rows[0]["vanished_at"] is None
+        with sqlite3.connect(path) as conn:
+            assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
