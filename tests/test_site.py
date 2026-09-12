@@ -4,9 +4,12 @@ import sqlite3
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, time, timedelta, timezone
 
+import pytest
 from conftest import site_case as _case
+from test_pipeline import _cases_db
 
 from uisce.config import BASE_URL
+from uisce.pipeline import SCHEMA_VERSION
 from uisce.site import (
     CAP_DAYS,
     COUNTY_POP,
@@ -29,11 +32,15 @@ from uisce.site import (
     describes_recurrence,
     event_windows,
     grade,
+    is_open,
+    load_cases,
     merge,
     month_bounds,
     month_list,
     norm_scheme,
+    notice_paragraphs,
     paired_lift,
+    read_cases,
     recurrence_report,
     recurring_events,
     resolve_case,
@@ -46,6 +53,16 @@ UTC = timezone.utc
 
 def _dt(iso):
     return datetime.fromisoformat(iso).astimezone(UTC)
+
+
+def _open(**overrides):
+    """A case that is open by every reading: the feed says so and its text has
+    reported no end. The default fixture carries a completion, and since
+    2026-09-05 a passed completion closes a case whatever `status` says, so
+    `_case(status="Open")` is a *contradiction*, not shorthand for open."""
+    base = dict(status="Open", notice_to_end_seconds=None, end_source="not_found",
+                end_local_date=None, end_local_time=None)
+    return _case(**(base | overrides))
 
 
 # one Small Area of 1,000 people sitting right on the test pin
@@ -134,10 +151,14 @@ class TestBoilNoticeFate:
     """The whole boil-notice policy. See notes/boil-notices.md."""
 
     def _notice(self, **overrides):
+        # no extracted end, as no real boil notice has one: the end is
+        # published as a separate lift case, never in this notice's text
         defaults = {
             "work_category": "boil_notice_issued",
             "boil_water_notice": 1,
             "notice_to_end_seconds": None,
+            "end_source": "not_found",
+            "end_local_date": None,
             "status": "Open",
         }
         return _case(**(defaults | overrides))
@@ -225,7 +246,16 @@ class TestGrade:
         assert grade(99.8) == "B"
         assert grade(99.5) == "C"
         assert grade(99.2) == "D"
+        assert grade(98.8) == "E"
         assert grade(98.0) == "F"
+
+    def test_the_bands_meet_where_they_say_they_do(self):
+        """Mid-band values alone would pass an off-by-one on any cut, and the
+        legend prints these five numbers to the reader."""
+        for cut, above, below in ((99.9, "A", "B"), (99.75, "B", "C"), (99.45, "C", "D"),
+                                  (99.0, "D", "E"), (98.7, "E", "F")):
+            assert grade(cut) == above
+            assert grade(cut - 0.001) == below
 
     def test_the_grade_depends_on_availability_alone(self):
         """A health notice used to knock the letter one step. It was measured
@@ -773,7 +803,7 @@ class TestTownBreakdown:
 
     def test_an_open_case_names_its_area_instead_of_being_listed_twice(self):
         """The county's list is the only copy; the front end groups it by area."""
-        county = build_site([_case(status="Open")], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site([_open()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
         assert [(o["title"], o["area"]) for o in county["open"]] == [
             ("Burst Water Main - Carlow", "T1")
         ]
@@ -798,11 +828,123 @@ class TestPayload:
         month = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
         area_month = month["towns"]["T1"]["months"]["2026-05"]
         assert "person_h" not in area_month
-        assert area_month["availability"] == 100.0
+        assert "availability" not in area_month  # a clear month's 100.0 is implied
+
+    def test_a_month_that_lost_time_carries_its_availability(self):
+        month = build_site([_case()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert month["towns"]["T1"]["months"]["2026-05"]["availability"] < 100
+
+    def test_an_open_entry_names_its_area(self):
+        county = build_site([_open()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert set(county["open"][0]) == {"sev", "title", "loc", "since", "area", "name", "ref"}
+        assert (county["open"][0]["area"], county["open"][0]["name"]) == ("T1", "Testtown")
 
     def test_a_month_with_nothing_resolved_omits_the_count(self):
         month = build_site([_case()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
         assert "resolved_n" not in month["towns"]["T1"]["months"]["2026-05"]
+
+
+class TestVanished:
+    """An Open case the feed no longer serves is not open: nothing will ever
+    close it otherwise, and the open list would carry it for good."""
+
+    def _row(self, **overrides):
+        base = dict(status="Open", notice_to_end_seconds=None, end_source="not_found",
+                    end_local_date=None, vanished_at="2026-05-05T12:00:00+00:00")
+        return _case(**(base | overrides))
+
+    def test_it_is_neither_open_nor_resolved(self):
+        county = build_site([self._row()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert county["open"] == [] and county["open_total"] == 0
+        assert county["resolved"] == {}
+
+    def test_it_stops_accruing_to_now(self):
+        # no end signal and no lift: the closed-no-signal branch, not the accrual
+        live = resolve_case(self._row(vanished_at=None), SA_INDEX, {}, NOW)
+        gone = resolve_case(self._row(), SA_INDEX, {}, NOW)
+        assert live.intervals[0][1] == NOW
+        assert gone.intervals[0][1] == live.start + timedelta(seconds=1)
+        assert not gone.is_open
+
+    def test_a_vanished_boil_notice_is_closed_with_no_signal(self):
+        row = self._row(work_category="boil_notice_issued", title="Boil Water Notice - Carlow")
+        assert boil_notice_fate(row, {}, NOW)[0] == "closed_no_signal"
+
+
+class TestOpenReading:
+    """A case is open only while nothing the notice itself said has ended it.
+
+    The feed's `status` lags a stated completion by a median of three days
+    (2026-09-05, notes/statuspage-methodology.md), and the accrual already
+    stops charging at the extracted end. Before this the badge read `status`
+    alone, so CAR00119809 sat under "Open now" beneath its own "works are now
+    complete" update. Every surface that says open reads Case.is_open, so the
+    county list is checked alongside the history and the feed here.
+    """
+
+    # CAR00119809's shape: published 08:40, complete at 14:36 the same day,
+    # still 'Open' in the feed two days later
+    def _complete(self, **overrides):
+        base = dict(status="Open", start_date="2026-05-08T08:40:00+00:00",
+                    notice_to_end_seconds=17747.0, end_source="completion_update",
+                    end_local_date="2026-05-08", end_local_time="14:36")
+        return _case(**(base | overrides))
+
+    def test_a_reported_completion_closes_it_everywhere(self, tmp_path):
+        site = build_site([self._complete(description="Works are now complete.")],
+                          SA_INDEX, NOW, TOWNS)
+        county = site["counties"]["Carlow"]
+        assert county["open"] == [] and county["open_total"] == 0
+        event = site["history"]["Carlow"]["T1"]["events"][0]
+        assert "open" not in event and event["confirmed"] == 1
+        assert "closed" not in event  # closed_at is the feed's observation, still unmade
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, TOWNS)
+        page = (tmp_path / "c" / "carlow.html").read_text()
+        assert '<section id="open">' not in page
+        assert "Works are now complete" not in page
+        feed = (tmp_path / "feed" / "carlow.xml").read_text()
+        assert "still open" not in feed and "closed</summary>" in feed
+
+    def test_the_reading_changes_what_is_said_and_nothing_that_is_charged(self):
+        """The arithmetic trusted the extracted end already; this only brings
+        the display into line with it. Same case, feed Open and feed Closed:
+        identical figures, differing only in the open list."""
+        as_open = build_site([self._complete()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        as_closed = build_site([self._complete(status="Closed")], SA_INDEX, NOW, TOWNS)
+        as_closed = as_closed["counties"]["Carlow"]
+        assert as_open == as_closed
+        assert as_open["months"]["2026-05"]["person_h"] == round(17747 / 3600 * 1000)
+
+    def test_a_completion_still_ahead_of_the_build_leaves_it_open(self):
+        """An update written for a time still to come: nothing has ended yet."""
+        row = self._complete(end_local_date="2026-05-10", end_local_time="09:00")  # NOW is 00:00
+        assert is_open(row, NOW)
+        county = build_site([row], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert county["open_total"] == 1
+
+    def test_a_passed_scheduled_end_does_not_close_it(self):
+        """A schedule is a plan the works may have overrun, the same line the
+        published median draws. 133 of the 562 open cases on 2026-09-05 were
+        past one; they stay open until the feed or their own text says otherwise."""
+        row = self._complete(end_source="scheduled_end_with_time")
+        assert is_open(row, NOW)
+        for source in ("not_found", None):
+            assert is_open(_open(end_source=source), NOW)
+
+    def test_a_completion_before_publication_closes_it(self):
+        """The negative-span family: build.py nulls the span, the end stands."""
+        row = self._complete(notice_to_end_seconds=None, end_local_date="2026-05-06")
+        assert not is_open(row, NOW)
+
+    def test_a_lift_with_immediate_effect_is_not_open(self):
+        row = self._complete(work_category="boil_notice_lifted", end_source="lifted_immediate",
+                             notice_to_end_seconds=None, end_local_date=None, end_local_time=None)
+        assert not is_open(row, NOW)
+
+    def test_the_feed_and_the_vanished_stamp_still_close_it_first(self):
+        assert not is_open(_open(status="Closed"), NOW)
+        assert not is_open(_open(vanished_at="2026-05-05T12:00:00+00:00"), NOW)
 
 
 class TestResolved:
@@ -823,7 +965,7 @@ class TestResolved:
         assert build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]["resolved"] == {}
 
     def test_an_open_case_is_never_listed_as_resolved(self):
-        rows = [_case(status="Open", closed_at="2026-05-06T04:00:00+00:00")]
+        rows = [_open(closed_at="2026-05-06T04:00:00+00:00")]
         county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
         assert county["resolved"] == {}
         assert county["open_total"] == 1
@@ -1626,6 +1768,18 @@ class TestAreaHistory:
             "confirmed": 1, "loc": "Somewhere",
         }
 
+    def test_the_last_charged_day_is_carried_when_it_differs_from_the_first(self):
+        """The county bar finds a day's events by [start, end]; a one-day event
+        omits the end, the sparse rule the rest of the record follows."""
+        assert "end" not in _history([_case()])[0]  # 1 May 00:00 to 2 May 00:00
+        three_days = _history([_case(notice_to_end_seconds=3 * 86400.0)])[0]
+        assert three_days["end"] == "2026-05-03"  # ends 4 May 00:00, so the 3rd
+        recurring = _history([_recurring()], now=AFTER_MAY)[0]
+        assert recurring["end"] == "2026-05-08"
+        open_case = _history([_case(status="Open", notice_to_end_seconds=None,
+                                    end_source="not_found", end_local_date=None)])[0]
+        assert open_case["end"] == "2026-05-09"  # accrues to NOW, midnight on the 10th
+
     def test_a_multi_pin_event_is_one_record_counting_its_pins(self):
         """The same rule the top ten uses: "was this confirmed complete?" is a
         count across the event's notices, never a boolean."""
@@ -1796,7 +1950,8 @@ class TestHistoryShards:
         assert len(set(slugs)) == len(COUNTY_POP)
 
     def test_the_files_written_are_data_index_and_one_shard_per_county(self, tmp_path):
-        site, (data_bytes, shard_bytes, n_areas, _, _, _, _) = self._write(tmp_path)
+        site, sizes = self._write(tmp_path)
+        data_bytes, shard_bytes, n_areas = sizes["data.js"], sizes["shards"], sizes["n_areas"]
         assert (tmp_path / "data.js").exists() and (tmp_path / "index.html").exists()
         shards = sorted(p.name for p in (tmp_path / "h").iterdir())
         assert shards == sorted(f"{county_slug(c)}.js" for c in site["counties"])
@@ -1824,19 +1979,219 @@ class TestHistoryShards:
         data = (tmp_path / "data.js").read_text()
         assert "history" not in site
         assert "UISCE_HISTORY" not in data
-        assert "Testtown" in data          # the area breakdown is still there
-        assert "CAR00000001" not in data   # but no event of its own
+        assert "CAR00000001" not in data
+
+    def test_the_county_breakdown_never_reaches_data_js_either(self, tmp_path):
+        """The 2026-09-05 split: towns and resolved are the county view's alone
+        and were 78% of the payload the overview loaded."""
+        site, _ = self._write(tmp_path)
+        data = (tmp_path / "data.js").read_text()
+        assert set(site["counties"]["Carlow"]) == {"pop", "months", "open", "open_total"}
+        assert "Testtown" not in data and "towns" not in data and "resolved" not in data
+        shard = (tmp_path / "t" / "carlow.js").read_text()
+        assert shard.startswith("window.UISCE_COUNTY = window.UISCE_COUNTY || {};")
+        county = json.loads(shard.split("=", 2)[2].rstrip(";"))
+        assert set(county) == {"towns", "resolved"}
+        assert county["towns"]["T1"]["name"] == "Testtown"
+
+    def test_every_county_gets_a_breakdown_shard_including_the_empty_ones(self, tmp_path):
+        write_site(_bare_site(), tmp_path, TOWNS)
+        shard = (tmp_path / "t" / "kildare.js").read_text()
+        assert json.loads(shard.split("=", 2)[2].rstrip(";")) == {"towns": {}, "resolved": {}}
+
+    def test_the_history_entry_carries_what_the_area_view_needs(self, tmp_path):
+        site, _ = self._write(tmp_path)
+        shard = (tmp_path / "h" / "carlow.js").read_text()
+        area = json.loads(shard.split("=", 2)[2].rstrip(";"))["T1"]
+        assert (area["name"], area["pop"], area["slug"]) == ("Testtown", 1000, "testtown")
 
     def test_search_js_maps_each_county_to_its_sorted_names(self, tmp_path):
         """The search index bindSearch fetches on the first keystroke: county ->
         sorted settlement names, counties restricted to the payload's so a pick
-        always routes."""
+        always routes. An area with a page carries its slug, so the hit can be a
+        link straight to it."""
         site, _ = self._write(tmp_path)
         body = (tmp_path / "search.js").read_text()
-        assert body.startswith("window.UISCE_SEARCH = ")
+        assert body.startswith("window.UISCE_PLACES = ")
         index = json.loads(body.split(" = ", 1)[1].rstrip(";"))
-        assert index == {"Carlow": ["Testtown"]}
+        assert index == {"Carlow": [["Testtown", "testtown"]]}
         assert set(index) <= set(site["counties"])
+
+    def test_an_area_with_no_page_stays_a_bare_name(self, tmp_path):
+        """The slug is the flag as well as the value. An Electoral Division never
+        gets a page, and neither does a settlement that has never had a notice —
+        both would 404, so both stay county-bound."""
+        # SA2 and SA3 sit well away from the test pin, so the case still lands
+        # in Testtown and the other two areas stay noticeless
+        sa = SmallAreaIndex([
+            (52.836, -6.926, "SA1", 1000),
+            (53.500, -7.500, "SA2", 500),
+            (54.500, -8.500, "SA3", 500),
+        ])
+        towns = TownLookup(
+            [
+                ("SA1", "T1", "Testtown", "Carlow"),
+                ("SA2", "ed:Carlow:Around Testtown", "Around Testtown", "Carlow"),
+                ("SA3", "T2", "Quietville", "Carlow"),
+            ],
+            sa.pop,
+        )
+        site = build_site([_case()], sa, NOW, towns)
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, towns)
+        body = (tmp_path / "search.js").read_text()
+        index = json.loads(body.split(" = ", 1)[1].rstrip(";"))
+        assert index == {
+            "Carlow": ["Around Testtown", "Quietville", ["Testtown", "testtown"]]
+        }
+        # every slug emitted has a page on disk behind it
+        for entry in index["Carlow"]:
+            if not isinstance(entry, str):
+                assert (tmp_path / "a" / "carlow" / f"{entry[1]}.html").exists()
+
+    def test_a_town_named_for_its_county_is_indexed_with_its_slug(self, tmp_path):
+        """Fourteen settlements share their county's name and each has a page
+        of its own. The index carries the town like any other paged area; it is
+        statusui's searchHits that keeps its row beside the county's, so a
+        `name != county` filter here would hide the page from the box again."""
+        sa = SmallAreaIndex([(52.836, -6.926, "SA1", 1000)])
+        towns = TownLookup([("SA1", "T1", "Carlow", "Carlow")], sa.pop)
+        site = build_site([_case()], sa, NOW, towns)
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, towns)
+        body = (tmp_path / "search.js").read_text()
+        index = json.loads(body.split(" = ", 1)[1].rstrip(";"))
+        assert index == {"Carlow": [["Carlow", "carlow"]]}
+        assert (tmp_path / "a" / "carlow" / "carlow.html").exists()
+
+
+class TestNoticeText:
+    """The notice's own wording, on the county page's open rows and nowhere in
+    the app payload: it is what tells a reader whether their road is in it."""
+
+    FEED = (
+        "<b>**Update 3:08pm 2/9/2026**<br><br>\n\nWorks are now complete.</b><br><br>"
+        "Repairs may cause supply disruptions to Rosegreen &amp; Coolmoyne. <br><br>\n"
+        "Please note the reference: TIP00119710. <br><br>LA01"
+    )
+
+    def test_paragraphs_come_out_plain_and_in_order(self):
+        assert notice_paragraphs(self.FEED) == [
+            "**Update 3:08pm 2/9/2026**",
+            "Works are now complete.",
+            "Repairs may cause supply disruptions to Rosegreen & Coolmoyne.",
+            "Please note the reference: TIP00119710.",
+        ]
+
+    def test_nothing_and_markup_only_give_no_paragraphs(self):
+        assert notice_paragraphs(None) == []
+        assert notice_paragraphs("<br><br>LA01") == []
+
+    def test_the_county_page_carries_it_only_for_open_notices(self, tmp_path):
+        rows = [
+            _open(id=1, reference_num="CAR00000001",
+                  description="Open <script>x</script> text.<br><br>Second."),
+            _case(id=2, reference_num="CAR00000002", status="Closed",
+                  description="Closed text nobody needs."),
+        ]
+        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, TOWNS)
+        assert "notice_text" not in site
+        page = (tmp_path / "c" / "carlow.html").read_text()
+        block = re.search(r'<section id="open">.*?</section>', page, re.S).group(0)
+        assert "<summary>What the notice says</summary><p>Open x text.</p><p>Second.</p>" in block
+        assert "<script" not in block
+        assert "Closed text nobody needs" not in page
+        data = (tmp_path / "data.js").read_text()
+        assert "Second." not in data and "nobody needs" not in data
+
+    def test_an_open_row_links_its_reference_on_water_ie(self, tmp_path):
+        rows = [
+            _open(id=1, reference_num="CAR00000001 ", title="Trailing space"),
+            _open(id=2, reference_num="HM1816040926", title="Hand entered"),
+            _open(id=3, reference_num=None, title="No reference"),
+            _case(id=4, reference_num="CAR00000004", status="Closed", title="Closed"),
+        ]
+        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, TOWNS)
+        page = (tmp_path / "c" / "carlow.html").read_text()
+        block = re.search(r'<section id="open">.*?</section>', page, re.S).group(0)
+        by_title = {
+            re.search(r"<strong>(.*?)</strong>", r).group(1): r
+            for r in re.findall(r"<li>.*?</li>", block, re.S)
+        }
+        link = '· <a href="https://wtr.ie/CAR00000001">CAR00000001</a>'
+        assert link in by_title["Trailing space"]
+        assert "wtr.ie" not in by_title["Hand entered"]
+        assert "wtr.ie" not in by_title["No reference"]
+        assert page.count("wtr.ie") == 1
+class TestFeeds:
+    """One Atom file nationally and one per county, written from a block that
+    write_site pops the way it pops the history: a subscriber gets the newest
+    sightings, the app payload gets none of them."""
+
+    def _write(self, tmp_path, rows=None):
+        site = build_site(rows or [_case()], SA_INDEX, NOW, TOWNS)
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, TOWNS)
+        return site
+
+    def _entries(self, path):
+        ns = {"a": "http://www.w3.org/2005/Atom"}
+        return ET.parse(path).getroot().findall("a:entry", ns), ns
+
+    def test_a_feed_is_written_nationally_and_per_county(self, tmp_path):
+        site = self._write(tmp_path)
+        assert "feed" not in site
+        data = (tmp_path / "data.js").read_text().split("=", 1)[1].rstrip(";")
+        assert "feed" not in json.loads(data)
+        assert (tmp_path / "feed.xml").exists()
+        assert (tmp_path / "feed" / "carlow.xml").exists()
+
+    def test_an_entry_links_to_the_area_page_and_says_what_and_where(self, tmp_path):
+        self._write(tmp_path)
+        entries, ns = self._entries(tmp_path / "feed" / "carlow.xml")
+        assert len(entries) == 1
+        e = entries[0]
+        assert e.find("a:title", ns).text == "Burst Water Main - Carlow: Testtown"
+        assert e.find("a:link", ns).get("href") == f"{BASE_URL}/a/carlow/testtown.html"
+        assert e.find("a:id", ns).text == f"{BASE_URL}/n/carlow/CAR00000001"
+        summary = e.find("a:summary", ns).text
+        assert "Supply disruption · Co. Carlow · Testtown · published 2026-05-01" in summary
+
+    def test_the_sighting_orders_the_feed_and_publication_stands_in_for_it(self, tmp_path):
+        rows = [
+            _case(id=1, reference_num="CAR00000001", first_seen="2026-07-02T12:00:00+00:00"),
+            _case(id=2, reference_num="CAR00000002", first_seen="2026-07-03T12:00:00+00:00",
+                  start_date="2026-04-25T00:00:00+00:00"),
+            _case(id=3, reference_num="CAR00000003", first_seen=None,
+                  start_date="2026-05-20T00:00:00+00:00"),
+        ]
+        self._write(tmp_path, rows)
+        entries, ns = self._entries(tmp_path / "feed.xml")
+        assert [e.find("a:updated", ns).text for e in entries] == [
+            "2026-07-03T12:00:00+00:00", "2026-07-02T12:00:00+00:00", "2026-05-20T00:00:00+00:00",
+        ]
+
+    def test_an_area_without_a_page_falls_back_to_the_county_page(self, tmp_path):
+        self._write(tmp_path, [_case(full_lat=53.15, full_lon=-6.8)])
+        entries, ns = self._entries(tmp_path / "feed.xml")
+        assert entries[0].find("a:link", ns).get("href") == f"{BASE_URL}/c/carlow.html"
+
+    def test_markup_in_a_title_cannot_break_the_document(self, tmp_path):
+        self._write(tmp_path, [_case(title="Burst <b>Main</b> & more - Carlow")])
+        entries, ns = self._entries(tmp_path / "feed.xml")
+        assert entries[0].find("a:title", ns).text.startswith("Burst <b>Main</b> & more")
+
+    def test_the_pages_point_at_their_feed(self, tmp_path):
+        self._write(tmp_path)
+        county = (tmp_path / "c" / "carlow.html").read_text()
+        assert 'type="application/atom+xml"' in county and 'href="../feed/carlow.xml"' in county
+        area = (tmp_path / "a" / "carlow" / "testtown.html").read_text()
+        assert 'href="../../feed/carlow.xml"' in area
+        assert 'href="feed.xml"' in (tmp_path / "index.html").read_text()
 
 
 class TestIndexablePages:
@@ -1856,11 +2211,21 @@ class TestIndexablePages:
         return counties, write_site(site, tmp_path, TOWNS)
 
     def test_every_county_gets_a_page_including_the_empty_ones(self, tmp_path):
-        counties, (*_, n_pages, county_bytes, _search) = self._write(tmp_path)
+        counties, sizes = self._write(tmp_path)
+        n_pages, county_bytes = sizes["n_county_pages"], sizes["county_pages"]
         written = sorted(p.name for p in (tmp_path / "c").iterdir())
         assert written == sorted(f"{county_slug(c)}.html" for c in counties)
         assert (n_pages, len(written)) == (len(counties), len(counties))
         assert county_bytes > 0
+
+    def test_the_overview_points_a_reader_without_javascript_at_the_county_pages(self, tmp_path):
+        counties, _ = self._write(tmp_path)
+        page = (tmp_path / "index.html").read_text()
+        fallback = re.search(r"<noscript>(.*?)</noscript>", page, re.S).group(1)
+        for c in counties:
+            assert f'<a href="c/{county_slug(c)}.html">{c}</a>' in fallback
+        assert 'href="areas.html"' in fallback
+        assert "<!--COUNTY-LINKS-->" not in page
 
     def test_a_county_page_carries_its_own_areas_and_not_another_county_s(self, tmp_path):
         """The doorway-page failure, made mechanical. The Kildare pin sits on
@@ -1922,15 +2287,18 @@ class TestIndexablePages:
         write_site(_bare_site(), tmp_path, TOWNS)
         page = (tmp_path / "c" / "kildare.html").read_text()
         assert "Co. Kildare" in page
-        assert "0 notices across 0 areas" in page
+        assert "0 Uisce Éireann notices across 0 areas" in page
 
     def test_the_area_rows_differ_only_by_the_link_prefix(self, tmp_path):
         """The directory and the county page render the same area from the same
-        builder, so the two can't drift into disagreeing about a notice count."""
+        builder, so the two can't drift into disagreeing about a notice count.
+
+        Matched on the whole href rather than on `index.html`, because a row now
+        points at a page or at the hash route depending on the area."""
         site = build_site([_case()], SA_INDEX, NOW, TOWNS)
         county, areas = area_index(site["history"], TOWNS)[0]
         assert _area_items(county, areas, "../") == _area_items(county, areas).replace(
-            'href="index.html', 'href="../index.html'
+            'href="', 'href="../'
         )
 
     def test_the_directory_links_to_every_county_page(self, tmp_path):
@@ -1952,6 +2320,29 @@ class TestIndexablePages:
             assert f'data-county="{county}"' in areas_page
         assert "sec.dataset.county" in areas_page
 
+    def test_the_description_states_the_county_s_record_not_the_page_s_listing(
+        self, tmp_path
+    ):
+        """A snippet is read alone, in a search result, with the page not yet
+        open - so it has to survive being read as a promise. It is cut by width,
+        and what survives is the front: the clause naming what the page holds may
+        be lost, and the sentence before it must not become false when it is."""
+        self._write(tmp_path)
+        page = (tmp_path / "c" / "carlow.html").read_text()
+        desc = re.search(r'name="description" content="([^"]*)"', page).group(1)
+        assert desc.startswith("Co. Carlow: ")
+        assert "Month-by-month totals and every notice published" in desc
+        head = desc.split(". ")[0]
+        assert "most recent" not in head
+        assert len(desc) <= 160, len(desc)
+
+    def test_the_description_counts_one_area_as_one_area(self, tmp_path):
+        """The fixture puts every notice in a single town."""
+        self._write(tmp_path)
+        desc = (tmp_path / "c" / "carlow.html").read_text()
+        assert "across 1 area -" in desc
+        assert "across 1 areas" not in desc
+
     def test_the_sitemap_lists_every_page_and_nothing_else(self, tmp_path):
         counties, _ = self._write(tmp_path)
         root = ET.fromstring((tmp_path / "sitemap.xml").read_text())
@@ -1959,7 +2350,7 @@ class TestIndexablePages:
         locs = [el.text for el in root.iter(f"{ns}loc")]
         assert locs == [f"{BASE_URL}/", f"{BASE_URL}/areas.html"] + [
             f"{BASE_URL}/c/{county_slug(c)}.html" for c in counties
-        ]
+        ] + [f"{BASE_URL}/a/carlow/testtown.html"]
         # the payload is fetched by the app, never landed on
         assert not any("data.js" in loc or "/h/" in loc for loc in locs)
 
@@ -2023,6 +2414,8 @@ class TestPayloadShape:
         site = build_site([_case()], SA_INDEX, AFTER_MAY, TOWNS)
         site.pop("recurrence_report")
         site.pop("history")
+        site.pop("notice_text")
+        site.pop("feed")
         return site
 
     def test_the_freshness_stamp_follows_the_data_not_the_build_clock(self):
@@ -2056,7 +2449,9 @@ class TestPayloadShape:
     def test_the_county_keys_are_unchanged(self):
         county = self._site()["counties"]["Carlow"]
         assert set(county) == {"pop", "open_total", "months", "open", "towns", "resolved"}
-        assert set(county["towns"]["T1"]) == {"name", "pop", "months"}
+        # "slug" is present exactly when the area has a page: the app cannot
+        # derive it, because ui.js's slug() leaves a fada as a dash
+        assert set(county["towns"]["T1"]) == {"name", "pop", "months", "slug"}
         assert set(county["towns"]["T1"]["months"]["2026-05"]) == {
             "events", "availability", "person_h"
         }
@@ -2199,8 +2594,16 @@ class TestAreaIndexHtml:
         assert "Whiddy/Bantry" not in html   # no raw slash reaches the href
 
     def test_an_apostrophe_and_a_fada_are_escaped(self):
+        """Only areas without a page still go through the hash route, so the
+        encoding that matters is an ED's."""
         assert "O%27Briensbridge" in self._links("ed:Clare:O'Briensbridge")
-        assert "D%C3%BAn%20Laoghaire" in self._links("02341-Dún Laoghaire")
+        assert "ed%3AGalway%3AAn%20Sp%C3%ADd%C3%A9al" in self._links("ed:Galway:An Spídéal")
+
+    def test_an_area_with_a_page_is_linked_to_it_and_not_to_the_hash(self):
+        """The county-and-name slug, not the code: a code is not a filename."""
+        html = self._links("02341-Dún Laoghaire", name="Dún Laoghaire")
+        assert 'href="a/cork/dun-laoghaire.html"' in html
+        assert "index.html#area" not in html
 
     def test_an_area_name_is_html_escaped(self):
         assert "&amp;" in self._links("T1", name="Ballymore & Kill")
@@ -2210,3 +2613,38 @@ class TestAreaIndexHtml:
                                  ("Louth", [("T2", "B", 1, 1)])])
         assert html.count("<section") == 2
         assert 'href="#c-cork"' in html and 'id="c-louth"' in html
+
+
+class TestReleaseDb:
+    """The site builds from whichever release is current, and a release can
+    predate a column: the data build migrates the DB and republishes it, but a
+    UI push in between reads the old one. read_cases carries the local copy
+    forward before the SELECT names the new column."""
+
+    def _v3_db(self, path):
+        _cases_db(path, version=3)
+        with sqlite3.connect(path) as conn:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(cases)")}
+            assert "vanished_at" not in cols
+            row = {k: v for k, v in _case().items() if k in cols}
+            conn.execute(
+                f"INSERT INTO cases ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})",
+                list(row.values()),
+            )
+            conn.execute(
+                "CREATE TABLE inferred_cases (case_id, notice_to_end_seconds, end_source, "
+                "end_local_date, end_local_time, end_recurrence, end_window_open, "
+                "end_window_close, end_window_first_date)"
+            )
+
+    def test_a_release_from_before_the_last_column_still_builds(self, tmp_path):
+        path = tmp_path / "uisce.db"
+        self._v3_db(path)
+        with sqlite3.connect(path) as conn:
+            with pytest.raises(sqlite3.OperationalError, match="vanished_at"):
+                load_cases(conn)
+        rows, horizon = read_cases(path)
+        assert [r["reference_num"] for r in rows] == ["CAR00000001"]
+        assert rows[0]["vanished_at"] is None
+        with sqlite3.connect(path) as conn:
+            assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION

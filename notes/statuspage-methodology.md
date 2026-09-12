@@ -180,7 +180,38 @@ With every Small Area now belonging to a named area, a pin only fails to place w
 
 ## Grades
 
-A–F comes from availability: **A ≥ 99.9%, B ≥ 99.75%, C ≥ 99.45%, D ≥ 99.0%, else F** — supply availability and nothing else.
+A to F comes from availability: **A ≥ 99.9%, B ≥ 99.75%, C ≥ 99.45%, D ≥ 99.0%, E ≥ 98.7%, else F** - supply availability and nothing else.
+
+### The scale grew an E (2026-08-29)
+
+The scale ran A, B, C, D, F. Skipping E is an American-ism, and this is an Irish site, so the letter was added. It splits the old F band and moves nothing else: every cut from 99.9 down to 99.0 sits exactly where it did, so no county-month that was graded A to D changes letter. The alternative, re-spreading six bands across the distribution, was rejected without measuring: it would move published letters, and the calibration below was settled on 2026-08-02 after an explicit recalibration check that was declined.
+
+**The cut is 98.7%, and it is fitted to the tail rather than derived from the band widths.** The obvious cut was 98.4%: the bands widen 0.15, 0.30, 0.45, so 0.60 continues the arithmetic, and 98.4 is the rounder number. Measured against the 2026-08-29 build it is wrong. Over 130 graded county-months the whole F population lies between 98.459% and 98.900%, so the record's worst month is 0.54 points below the D cut, and a cut at 98.4 puts all 11 rows in E and leaves F holding nobody.
+
+| cut | E | F |
+|---|---|---|
+| 98.7 | 9 | 2 |
+| 98.5 | 10 | 1 |
+| 98.4 | 11 | 0 |
+| 98.0 | 11 | 0 |
+
+98.7 keeps both bands saying something, and the two it leaves in F (98.459 and 98.596) are the two worst county-months in the record. 98.5 was rejected as too fragile: it would hold one row, four hundredths below the cut. The empty-F option was rejected because these bands are calibrated to be honest relative to this dataset rather than imported from a regulator, and a bottom band nothing reaches teaches a reader the scale is mis-set.
+
+The grade mix moves A 9, B 26, C 53, D 31, F 11 to A 9, B 26, C 53, D 31, E 9, F 2.
+
+What this costs: the band is 0.30 wide where D is 0.45, so the widening progression breaks at the bottom, and the cut is fitted to a young 130-row archive. **Re-measure it as the archive grows**, against the `uisce.db` CI publishes as a release asset rather than a fresh `uisce-pipeline` run: the numbers above came off the 2026-08-29 release, and in a Claude Code web session the proxy blocks ArcGIS, so the release is the only way to get a current database. If months worse than 98.459% start arriving, the honest move is to widen F downward by raising the cut, not to leave 98.7 sitting where a fuller distribution no longer puts a break. In hours off supply over a 30-day month the cuts now read 0.72, 1.8, 3.96, 7.2 and 9.36.
+
+One consequence on the page: the banner counts the counties graded F (`nF` in `site.html`), and that count now excludes the E counties it used to include. **Raised, measured and left as it is on 2026-08-30**, on the owner's call: F still means the worst band the site has, and a reader who wants the detail has the county rows immediately below. The cost is written down rather than guessed at, because it is larger than a glance at a build suggests. Counties under 99.0% against counties under the new 98.7%:
+
+| month | banner before | banner now | moved F to E |
+|---|---|---|---|
+| 2026-04 | 3 | 0 | Kildare, Sligo, Waterford |
+| 2026-05 | 0 | 0 | - |
+| 2026-06 | 2 | 1 | Kildare |
+| 2026-07 | 5 | 0 | Clare, Kerry, Limerick, Tipperary, Waterford |
+| 2026-08 | 1 | 1 | - |
+
+Two of the five months now head the page with "0 counties graded F" while still holding counties in the bottom two bands. The month the page opens on is unaffected, which is why this does not show up in a casual look at a build. If it is ever reopened, the one-line fix is to count `E` and `F` together and say "graded E or F".
 
 ### The health notice was unbundled from the grade (2026-08-02)
 
@@ -319,7 +350,34 @@ Four county-months move down one grade: Limerick 2026-04 B→C, Mayo 2026-05 C�
 - "May be affected" notices count everyone in the radius; the index measures disruption exposure, not confirmed loss of supply.
 - County populations are hardcoded Census 2022 figures in site.py.
 - The current month grades harshly while in progress, for three separate reasons: open cases accrue to "now" against a part-elapsed denominator; some feed `status` values are known to be stale; and cases downloaded since the last `uisce-infer` run have no end signal at all, which sends them down the same accrue-to-now branch — 98% of the never-inferred backlog is `status = 'Open'`, so this is concentrated exactly where it does most damage. See [pipeline-dependencies.md](pipeline-dependencies.md).
-- "Open cases" on the page is a right-now snapshot of `status = 'Open'`, attached to the county rather than the selected month, so it does not vary as you page through months (the copy says so). Of 508 open cases on the 2026-07-20 snapshot: 127 are future-dated advance notices of planned works, 20 carry a description that already says "works are now complete" (genuinely stale feed status), 72 more have a passed scheduled end, and 13 are long-lived boil / do-not-consume notices that are correctly still open.
+- "Open cases" on the page is a right-now snapshot of `Case.is_open` (`status = 'Open'`, still served by the feed, and not past a completion the notice's own text reported - see "The notice's own completion closes it" below), attached to the county rather than the selected month, so it does not vary as you page through months (the copy says so). Of 508 open cases on the 2026-07-20 snapshot: 127 are future-dated advance notices of planned works, 20 carry a description that already says "works are now complete" (genuinely stale feed status; these no longer list), 72 more have a passed scheduled end (these still do), and 13 are long-lived boil / do-not-consume notices that are correctly still open.
+
+## The notice's own completion closes it (settled 2026-09-05)
+
+A reader flagged CAR00119809 (Carlow, Burst Water Main): its own 2:36pm update said "Works are now complete ... supply should start returning", and two days later the county page still listed it under "Open now". `Case.is_open` read `row["status"] == "Open"` and nothing else. The extracted completion (`OBSERVED_END_SOURCES`) is what the accrual already stops charging at, so the case's *hours* were closed off at 2:36pm while its badge said open: the arithmetic trusted the notice and the display trusted the feed, on the same case.
+
+The first session to look at this prototyped the fix and set it aside for the owner, on the argument that hiding a genuinely open case on a bad extraction costs more than a stale badge. It did not measure either side of that trade. Measured the same day on the 2026-09-05 release:
+
+| | n |
+|---|---|
+| cases the feed had `Open` (not vanished) | 562 |
+| ... past a completion their own text reported | **216** (143 outage-class, 65 maintenance, 8 restriction) |
+| ... past a *scheduled* end, no completion | 133 |
+| ... with a scheduled end still ahead | 154 |
+| ... with no end signal at all | 55 (41 of them boil / do-not-consume notices, which never carry one) |
+| events those 216 cases make, once pins are grouped | 177 of the 437 the site listed as open |
+
+The stale badge is not "a build cycle or two". Across the 3,783 closed cases carrying both a completion update and a `closed_at`, the feed closed the case a **median 72h after the stated completion** (p10 33h, p90 111h, 11 cases over a week). The 216 had been sitting past their completion a median 50h. So a reader checking whether their road is affected was, on this day, shown 177 disruptions as ongoing that had been over for two days, and had to read each notice's text to find out.
+
+The false-negative side is small enough to measure at zero. A completion read wrongly would come from a template misread (the rules emit `completion_update` only under a parsed update header carrying the phrase; 0 wrong emissions on the labelled rounds, [rules-vs-llm-end-times.md](rules-vs-llm-end-times.md)) or from a follow-up problem after the completion. Of the 7,667 cases on file with a completion update, **exactly one** carries an update block newer than the completion, and it is the same 3:47pm update pasted twice (DLR00118752). Uisce publishes a follow-up problem as a new case with a new reference, which the feed then serves as Open with no completion, so it lists on its own.
+
+**Decision.** A case is open only while nothing the notice itself has said has ended it: `is_open(row, now)` is `status = 'Open'`, not `vanished_at`, and not past an *observed* end (`OBSERVED_END_SOURCES`, plus `lifted_immediate`). The decision is made once, in `resolve_case`, and carried on `Case.is_open`, so the open list, `open_total`, the national open view, the county page's "Open now" section and its notice text, the history's "still open" / "at least Nh so far" and the Atom feed's "still open" all read the same answer and cannot drift apart again. On the 2026-09-05 release this takes the national open count from 437 to 260; every published figure - availability, person-hours, grades, medians, coverage, the top ten, the area breakdowns - is byte-identical under both readings with the clock pinned, which is the point: the arithmetic already believed the notice.
+
+**What does not close a case here.** A passed scheduled end (133 on the day). A schedule is a plan the works may have overrun, the same line the published median draws ("The published time metric" above), and the feed saying Open past one is the only evidence either way. A completion reported for an instant still ahead of the build leaves the case open until then. And `closed_at` is untouched: it records the build that observed the feed close the case, so the "observed to close" list and the history's "closed <date>" keep meaning that, and a case closed by its own text reads as closed with no close date until the feed catches up.
+
+**The general rule this settles**, because the deferral was the failure here rather than the five-line patch: when the site trusts a signal for the arithmetic, it trusts it for the display. A surface that reads the feed's `status` alone where the site's own extraction contradicts it is a bug, not a trade-off, and a trade-off left for the owner has to carry both sides' numbers. The measurements above took a few minutes against the release DB; the deferral left 177 finished disruptions listed as ongoing on the live site.
+
+**Reopen this if** the follow-up-after-completion count stops being zero (re-run the segment check in this section's commit against the current release), or if a labelled sample shows scheduled ends are met reliably enough to close a case for display too.
 
 ## The published time metric is notice → *observed* completion (settled 2026-07-20)
 

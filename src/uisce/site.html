@@ -9,6 +9,7 @@
 <meta property="og:description" content="Where Uisce Éireann has announced water outages, restrictions and works across Ireland, county by county, town by town. Independent, updated twice daily.">
 <meta property="og:type" content="website">
 <link rel="canonical" href="<!--CANONICAL-->">
+<link rel="alternate" type="application/atom+xml" title="New notices nationally" href="feed.xml">
 <style>
 <!--UI-CSS-->
 <!--SITE-CSS-->
@@ -70,6 +71,8 @@
     border-bottom: 1px solid var(--border); padding-bottom: 2px;
   }
   .toplink:hover { color: var(--ink); }
+  /* last thing in the overview, so footer's own margin is the whole gap */
+  #topLink .toplink { margin-bottom: 0; }
   .lede { font-size: 14.5px; line-height: 1.5; margin-bottom: 14px; }
   .lede b { font-weight: 650; }
   .toprow {
@@ -128,6 +131,17 @@
            background: var(--cell-empty); vertical-align: middle; margin-left: 8px; overflow: hidden; }
   .meter i { display: block; height: 100%; background: var(--critical); }
 
+  #dayEvents { margin-top: 8px; }
+  .dayhead { font-size: 13px; font-weight: 650; margin-bottom: 2px; }
+
+  /* the open-now tile is the way into the national list, so it is a link
+     that keeps looking like a tile */
+  a.tile { display: block; color: inherit; text-decoration: none; }
+  a.tile:hover { border-color: var(--ink-2); }
+  #openview .card > h3 a { color: inherit; text-decoration: none;
+                           border-bottom: 1px solid var(--border); }
+  #openview .card > h3 a:hover { border-bottom-color: currentColor; }
+
   .tgroup { margin-top: 10px; }
   .tgroup > .tname { font-size: 13px; font-weight: 650; }
 
@@ -181,8 +195,9 @@
 
   /* The methodology was one 2,600-character paragraph carrying nine separate
      topics. Every sentence is worth keeping and none of it was findable. */
-  .method { margin-top: 12px; }
-  .method summary { padding: 8px 0; }
+  /* the county card's disclosure sits outside footer's chrome and needs its own */
+  .card > .method { margin-top: 12px; }
+  .card > .method summary { padding: 8px 0; }
   .method summary:hover { color: var(--ink); }
   .method h4 { font-size: 12.5px; color: var(--ink-2); margin-top: 12px; }
   .method > p:last-child { margin-top: 12px; }
@@ -201,6 +216,7 @@
   </header>
 
   <div id="overview">
+    <noscript><p class="basis">This page draws its bars with JavaScript. The same figures, month by month, are on the county pages: <!--COUNTY-LINKS--> · or browse <a href="areas.html">every area with a notice</a>.</p></noscript>
     <div class="banner" id="banner"></div>
 
     <div class="controls">
@@ -228,22 +244,23 @@
   <div id="countyview" hidden></div>
   <div id="areaview" hidden></div>
   <div id="topview" hidden></div>
+  <div id="openview" hidden></div>
 
   <footer>
     <p><a href="areas.html" style="color:inherit">Every area with a notice</a> - a full directory of the 1,800-odd Census areas on this site, each linking to its incident history.</p>
-    <p id="countyHistoryLink" hidden></p>
+    <p>New notices as an <a href="feed.xml" style="color:inherit">Atom feed</a>, nationally; each county page carries its own.</p>
     <details class="method">
       <summary>What this measures</summary>
-      <p>This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. Durations count from when a notice was published - for an unplanned burst the water was already off before that. The headline &ldquo;works complete&rdquo; time is a <b>minimum</b>: it counts only the notices that reported one. The availability percentages are a <b>best estimate</b>, because a total has to put a number on every disruption, including the ones that never reported an end.</p>
+      <p>This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. Durations count from when a notice was published, not when the service was lost. The published &ldquo;works complete&rdquo; time is a <b>minimum</b>: it counts only the notices that reported one. The availability percentages are a <b>best estimate</b>, because a total has to put a number on every disruption, including the ones that never reported an end.</p>
     </details>
 
     <details class="method" id="method">
       <summary>How these numbers are worked out</summary>
 
       <h4>How long a disruption lasted</h4>
-      <p>The time from a notice going up to its stated &ldquo;works are now complete&rdquo; update, over the incidents that reported one. Incidents whose only end signal was a <em>scheduled</em> finish are counted separately - a published plan is not evidence the works ended then. End times are read from the notice text (see the <a href="https://github.com/baz8080/uisce/blob/main/notes/end-time-eval.md">accuracy evaluation</a>); no time on this page is a measurement taken in the field.</p>
+      <p>The time from a notice going up to its stated &ldquo;works are now complete&rdquo; update. Incidents whose only end signal was a <em>scheduled</em> finish are counted separately - a published plan is not evidence the works ended then. End times are read from the notice text (see the <a href="https://github.com/baz8080/uisce/blob/main/notes/end-time-eval.md">accuracy evaluation</a>); no time on this page is a measurement taken in the field.</p>
 
-      <p>About one incident in twenty never reports an end at all - the count is shown beside the headline each month. Those stay out of the figure above: checked both ways, they run <em>shorter</em> than average, so leaving them out moves the headline <em>up</em>, not down. <span id="sensNote"></span> They still count in full in the availability percentages and person-hours, where leaving something out would mean calling it zero.</p>
+      <p>About one incident in twenty never reports an end at all - the count is shown beside the county's disruption count each month. Those stay out of the figure above: checked both ways, they run <em>shorter</em> than average, so leaving them out moves the typical duration <em>up</em>, not down. <span id="sensNote"></span> They still count in full in the availability percentages and person-hours, where leaving something out would mean calling it zero.</p>
 
       <h4>When a notice closed</h4>
       <p>A notice counts as closed the first time a twice-daily check finds it gone, so close dates are approximate and the closed-in-month lists are minimums.</p>
@@ -252,10 +269,10 @@
       <p>Only hard disruptions count against availability: bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages and unplanned repairs. Restrictions, low pressure, discolouration and routine works are shown but never count. A closed notice with no usable end is charged the typical length of a completed notice of the same kind of works, rather than nothing at all.</p>
 
       <h4>Repeating works</h4>
-      <p>Works announced as a repeating window - &ldquo;daily from 10pm until 7am, from 9 to 27 July&rdquo; - are charged only the hours inside the windows, and are treated as a restriction whatever the title says: the same supply zone is published both ways.</p>
+      <p>Works announced as a repeating window - &ldquo;daily from 10pm until 7am, from 9 to 27 July&rdquo; - are charged only the hours inside the windows, and are treated as a restriction whatever the title says.</p>
 
       <h4>How many people a notice affects</h4>
-      <p>Each notice is assumed to affect the Census 2022 Small Areas whose centres lie within 500&nbsp;m of its pin; the headline percentage is the population-weighted share of people's time not covered by an announced supply disruption. Each notice is capped at 14 days.</p>
+      <p>Each notice is assumed to affect the Census 2022 Small Areas whose centres lie within 500&nbsp;m of its pin. Availability weighs each notice by how many people it covers and how long it stands: the percentage is the share of all that person-time no notice covered. One notice is charged at most 14 days.</p>
 
       <h4>What the letters mean</h4>
       <p>Supply availability over the month, and nothing else:</p>
@@ -264,7 +281,8 @@
         <li><span class="gradechip g-B">B</span> 99.75% or better</li>
         <li><span class="gradechip g-C">C</span> 99.45% or better</li>
         <li><span class="gradechip g-D">D</span> 99.0% or better</li>
-        <li><span class="gradechip g-F">F</span> below 99.0%</li>
+        <li><span class="gradechip g-E">E</span> 98.7% or better</li>
+        <li><span class="gradechip g-F">F</span> below 98.7%</li>
       </ul>
 
       <h4>Why the <span class="healthmark sm">!</span> sits beside the grade, not inside it</h4>
@@ -300,8 +318,9 @@ let curMonth = LATEST;
 let townSort = "impact";
 let county = null;  // the county being drilled into, when view === "county"
 let areaCounty = null, areaCode = null;  // the area whose history is on screen
+let dayPick = null;  // the day in the county bar whose notices are listed
 let view = "overview";
-const VIEW_EL = { overview: "overview", county: "countyview", area: "areaview", top: "topview" };
+const VIEW_EL = { overview: "overview", county: "countyview", area: "areaview", top: "topview", open: "openview" };
 // months with a finished top ten; the in-progress month has none (see top_events)
 const TOP_MONTHS = Object.keys(D.top || {});
 const today = new Date().toISOString().slice(0, 10);
@@ -333,7 +352,7 @@ const LEGEND = `
 function healthKey() {
   return `<span class="healthmark sm">!</span> marks a boil-water, do-not-drink` +
     ` or do-not-consume notice active in ${monthLabelLong(curMonth)}` +
-    ` - open the county for details. Quality notices do not colour the day bars.`;
+    ` - open the county for details.`;
 }
 
 // one hover cue above the list, not a placeholder in every strip
@@ -343,12 +362,11 @@ function basisNote(natAvail, personH) {
     ` <span class="hoverhint">Hover a day in a bar for its detail.</span>`;
 }
 
-// freshness() is statusui's; these two are what it takes from this site. 24h is
+// freshness() is statusui's; this is what it takes from this site. 24h is
 // a safe overdue threshold with ~6h of headroom over the widest normal gap — the
 // site builds at 11:20 and 17:23 UTC, so up to 17h57m — and needs no copy of the
 // build schedule here to go stale.
 const STALE_AFTER_H = 24;
-const STALE_NOTE = "the last data build may have failed";
 
 // The grade is availability alone. An active boil-water / do-not-drink /
 // do-not-consume notice is shown next to it rather than folded into it, so a
@@ -401,7 +419,8 @@ function pl(n, one, many) { return n === 1 ? one : (many || one + "s"); }
 // reaches JS as a plain quote without ever terminating the attribute.
 function jsArg(s) { return esc(JSON.stringify(String(s))); }
 
-// Open-case figures are a right-now snapshot of status='Open' — the DB keeps
+// Open-case figures are a right-now snapshot of Case.is_open (the feed's
+// status, less what the notice's own text has already closed) - the DB keeps
 // each case's current status, not a history, so there is no such figure for a
 // past month and none can be reconstructed. Show them only on the month the
 // snapshot belongs to. `resolved` is the one thing that *does* carry a month,
@@ -444,18 +463,13 @@ function incident(o, when) {
     </div>`;
 }
 
-const RENDER = { overview: renderOverview, county: renderCounty, area: renderArea, top: renderTop };
+const RENDER = { overview: renderOverview, county: renderCounty, area: renderArea, top: renderTop, open: renderOpen };
 
 function render() {
   for (const [name, id] of Object.entries(VIEW_EL)) {
     document.getElementById(id).hidden = name !== view;
   }
   document.getElementById("pickHint").hidden = view !== "overview";
-  const chl = document.getElementById("countyHistoryLink");
-  chl.hidden = view !== "county";
-  if (view === "county") {
-    chl.innerHTML = `<a href="c/${county.toLowerCase()}.html" style="color:inherit">See every notice ever recorded for ${esc(county)}</a>`;
-  }
   RENDER[view]();
   revealMonthTab(document.getElementById(VIEW_EL[view]).querySelector(".months"));
 }
@@ -484,7 +498,7 @@ function renderOverview() {
     <div class="tile"><div class="v">${availText(natAvail, personH)}</div><div class="k">of people's time with no outage announced</div></div>
     <div class="tile"><div class="v">${fmtPersonH(personH)}</div><div class="k">hours without water, added up across everyone affected</div></div>
     <div class="tile"><div class="v">${quality}</div><div class="k">water-quality notices</div></div>
-    ${isLatest() ? `<div class="tile"><div class="v">${openNow}</div><div class="k">notices open right now</div></div>` : ""}`;
+    ${isLatest() ? `<a class="tile" href="#open" onclick="go('#open'); return false;"><div class="v">${openNow}</div><div class="k">notices open right now →</div></a>` : ""}`;
 
   // The sensitivity figure, in the footer's methodology block: what the headline
   // would be if the estimated incidents were let into it. Written from the data
@@ -506,7 +520,7 @@ function renderOverview() {
   const nF = worst.filter(w => w[1].grade === "F").length;
   document.getElementById("banner").innerHTML =
     `<strong>${monthLabelLong(curMonth)}${isPartial() ? " so far" : ""}:</strong> ${ev} announced outages · typical outage ${natFix} · ${nF} ${nF === 1 ? "county" : "counties"} graded F
-     <span class="meta">${freshness(D.data_as_of_iso, STALE_AFTER_H, STALE_NOTE)}</span>`;
+     <span class="meta">${freshness(D.data_as_of_iso, STALE_AFTER_H)}</span>`;
 
   // county rows, always alphabetical: 26 rows scroll, and the search box is
   // the fast path — the sort control it replaced earned neither its space nor
@@ -515,18 +529,20 @@ function renderOverview() {
 
   document.getElementById("list").innerHTML = names.map(name => {
     const c = D.counties[name], m = c.months[curMonth];
-    // "open" is a right-now snapshot of status='Open', not a property of the
-    // selected month — say so, or it reads as "open during July"
+    // "open" is a right-now snapshot, not a property of the selected month -
+    // say so, or it reads as "open during July"
     const openBadge = isLatest() && c.open_total ? `<b>${c.open_total}</b><span>open now</span>` : "";
     // the name is a real anchor, as the area rows already are: the row-level
     // onclick alone left every county unreachable by keyboard and unannounced
     // as interactive, and killed middle-click and open-in-new-tab
-    const href = `#county/${encodeURIComponent(name)}`;
+    // the static page, not the hash: this href is what a crawler follows and
+    // what "copy link address" yields, while the click stays in the app
+    const href = `c/${name.toLowerCase()}.html`;
     const jump = `goCounty('${encodeURIComponent(name)}')`;
     // no row title either: it would surface over the bar in place of the readout
     return `<div class="place">
       <div class="row" onclick="${jump}">
-        <div class="cname"><span class="gradechip g-${m.grade}">${m.grade}</span>${healthMark(m)}<a href="${href}" onclick="${jump}; return false;">${name}</a></div>
+        <div class="cname"><span class="gradechip g-${m.grade}">${m.grade}</span>${healthMark(m)}<a href="${href}" onclick="if (newTab(event)) return true; ${jump}; return false;">${name}</a></div>
         <div class="bar">${bar(m.days)}</div>
         <div class="stats">
           <div class="counts">
@@ -549,7 +565,7 @@ const n = (v, absent) => (v == null ? absent : v);
 const TOWN_SORTS = {
   impact: (a, b) => n(b[1].person_h, -1) - n(a[1].person_h, -1) || ev(b[1], "outage") - ev(a[1], "outage") || n(b[0].pop, -1) - n(a[0].pop, -1),
   outages: (a, b) => ev(b[1], "outage") - ev(a[1], "outage") || n(b[1].person_h, -1) - n(a[1].person_h, -1),
-  avail: (a, b) => n(a[1].availability, 101) - n(b[1].availability, 101) || n(b[0].pop, -1) - n(a[0].pop, -1),
+  avail: (a, b) => n(a[1].availability, a[0].unplaced ? 101 : 100) - n(b[1].availability, b[0].unplaced ? 101 : 100) || n(b[0].pop, -1) - n(a[0].pop, -1),
   name: (a, b) => a[0].name.localeCompare(b[0].name),
 };
 
@@ -564,7 +580,7 @@ function openByArea(c) {
 
 function townRows(c) {
   const open = openByArea(c);
-  const rows = Object.entries(c.towns)
+  const rows = Object.entries(COUNTY[county].towns)
     .filter(([, t]) => t.months[curMonth])
     // the code rides along as a fourth element: it is the area's key in the
     // history shards, and every comparator reads only the first three
@@ -574,21 +590,26 @@ function townRows(c) {
 
   const num = (v, label) => `<td class="${v ? "" : "z"}" data-label="${label}">${v ? `<b>${v}</b>` : "0"}</td>`;
   const body = rows.map(([t, m, openNow, code]) => {
+    // a clear month omits its 100.0 like every other implied figure
+    const availability = t.unplaced ? null : (m.availability ?? 100);
     // share of the area's person-time lost, as a hairline meter — the numbers
     // alone all read "99.something" and hide which area actually took the hit
-    const lost = m.availability == null ? 0 : Math.min(100, 100 - m.availability);
+    const lost = availability == null ? 0 : Math.min(100, 100 - availability);
     // an unplaced pin's footprint is in another county, so there is no population
     // to divide by and nothing honest to put in the last two columns
-    const avail = m.availability == null
+    const avail = availability == null
       ? '<span class="z">—</span>'
-      : `${availText(m.availability, m.person_h)}<span class="meter" title="${lost.toFixed(2)}% of this area's people-time affected"><i style="width:${Math.min(100, lost * 5).toFixed(1)}%"></i></span>`;
+      : `${availText(availability, m.person_h)}<span class="meter" title="${lost.toFixed(2)}% of this area's people-time affected"><i style="width:${Math.min(100, lost * 5).toFixed(1)}%"></i></span>`;
     // the whole row is the click target, but the name is also a real anchor so
-    // middle-click and open-in-new-tab work — the county rows predate this and
-    // still don't
-    const href = esc(`#area/${encodeURIComponent(county)}/${encodeURIComponent(code)}`);
+    // middle-click and open-in-new-tab work. The page where the area has one and
+    // the hash where it does not, the same rule _area_items follows server-side:
+    // an "Around ..." Electoral Division is only ever reachable inside the app.
+    const href = esc(t.slug
+      ? `a/${slug(county)}/${t.slug}.html`
+      : `#area/${encodeURIComponent(county)}/${encodeURIComponent(code)}`);
     const jump = `goArea(${jsArg(county)}, ${jsArg(code)})`;
     return `<tr class="hist ${t.unplaced ? "unplaced" : ""}" onclick="${jump}">
-      <td class="name"><a href="${href}" onclick="${jump}; return false;">${esc(t.name)}</a>${t.pop == null ? "" : `<br><span class="tpop">${t.pop.toLocaleString()} people</span>`}</td>
+      <td class="name"><a href="${href}" onclick="if (newTab(event)) return true; ${jump}; return false;">${esc(t.name)}</a>${t.pop == null ? "" : `<br><span class="tpop">${t.pop.toLocaleString()} people</span>`}</td>
       ${num(ev(m, "outage"), "Disruptions")}
       ${num(ev(m, "quality"), "Quality notices")}
       ${num(ev(m, "degraded") + ev(m, "maintenance"), "Works")}
@@ -625,34 +646,42 @@ function townRows(c) {
   </table></div>`;
 }
 
-function openSection(c) {
-  if (!isLatest()) return "";
-  // grouped here rather than shipped pre-grouped: the cases are already in
-  // c.open, and a second copy under each area was 80 KB of the same text
+// grouped here rather than shipped pre-grouped: the cases are already in
+// c.open, and a second copy under each area was 80 KB of the same text
+function openGroups(c) {
   const groups = new Map();
   for (const o of c.open) {
     if (!groups.has(o.area)) groups.set(o.area, []);
     groups.get(o.area).push(o);
   }
-  const named = [...groups].map(([code, cases]) => [c.towns[code] ? c.towns[code].name : "—", cases]);
+  const named = [...groups].map(([, cases]) => [cases[0].name || "—", cases]);
   named.sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
   const when = o => `${o.since > today ? "from" : "since"} ${fmtDate(o.since, today)}`;
+  return named.map(([name, cases]) => `<div class="tgroup">
+      <div class="tname">${esc(name)}</div>
+      ${cases.map(o => incident(o, when)).join("")}
+    </div>`).join("");
+}
+
+// The reading is Case.is_open's: a notice whose own text reports the works
+// complete is not listed, however long the feed goes on saying Open (a median
+// of three days, notes/statuspage-methodology.md, 2026-09-05).
+const OPEN_NOTE = "Notices Uisce Éireann still shows as open right now, less any whose own text already reports the works complete. Some are advance warning of planned works; a few were never taken down.";
+
+function openSection(c) {
+  if (!isLatest()) return "";
   return `<div class="card">
-    <h3>Open right now <span class="n">${c.open_total} ${pl(c.open_total, "notice")}</span></h3>
-    <div class="note">Notices Uisce Éireann still shows as open right now. Some are advance warning of planned works; a few were never taken down.</div>
-    ${named.length ? named.map(([name, cases]) => `<div class="tgroup">
-        <div class="tname">${esc(name)}</div>
-        ${cases.map(o => incident(o, when)).join("")}
-      </div>`).join("")
-      : `<div class="note" style="margin:0">Nothing open in ${esc(county)} right now.</div>`}
+    <h3>Open right now <span class="n">· ${c.open_total} ${pl(c.open_total, "notice")}</span></h3>
+    <div class="note">${OPEN_NOTE}</div>
+    ${openGroups(c) || `<div class="note" style="margin:0">Nothing open in ${esc(county)} right now.</div>`}
   </div>`;
 }
 
 function resolvedSection(c) {
-  const r = c.resolved[curMonth];
+  const r = COUNTY[county].resolved[curMonth];
   const shown = r ? r.cases : [];
   return `<div class="card">
-    <h3>Notices that closed in ${monthLabelLong(curMonth)} <span class="n">${r ? r.n : 0} ${pl(r ? r.n : 0, "notice")}</span></h3>
+    <h3>Notices that closed in ${monthLabelLong(curMonth)} <span class="n">· ${r ? r.n : 0} ${pl(r ? r.n : 0, "notice")}</span></h3>
     ${shown.length
       ? shown.map(o => incident(o, o => `opened ${fmtDate(o.since, today)} · closed ${fmtDate(o.closed, today)}`)).join("") +
         (r.n > shown.length ? `<div class="incident" style="color:var(--muted)">…and ${r.n - shown.length} more</div>` : "")
@@ -662,11 +691,12 @@ function resolvedSection(c) {
 
 function renderCounty() {
   const c = D.counties[county], m = c.months[curMonth];
-  // the tile carries the "n confirmed / scheduled / never reported" split the
-  // old inline note did, in the caption where esb's card puts its qualifiers
   const fixTile = m.events.outage === 0 ? "" : m.median_completion_h == null
     ? `<div class="tile"><div class="v">—</div><div class="k">no disruption has reported completion yet</div></div>`
-    : `<div class="tile"><div class="v">${m.median_completion_h}h</div><div class="k">typical time to &ldquo;works complete&rdquo; · ${m.completed_n} confirmed${m.scheduled_n ? `, ${m.scheduled_n} scheduled only` : ""}${m.imputed_n ? `, ${m.imputed_n} never reported an end` : ""}</div></div>`;
+    : `<div class="tile"><div class="v">${m.median_completion_h}h</div><div class="k">typical time to &ldquo;works complete&rdquo;</div></div>`;
+  // the "scheduled only / never reported an end" split decomposes the outage
+  // count, so it rides on that tile rather than on the duration beside it
+  const endSplit = `${m.scheduled_n ? ` · ${m.scheduled_n} scheduled only` : ""}${m.imputed_n ? `${m.scheduled_n ? "," : " ·"} ${m.imputed_n} never reported an end` : ""}`;
   document.getElementById("countyview").innerHTML = `
     <a class="back" href="#" onclick="go(''); return false;">← All counties</a>
     <div class="chead">
@@ -675,6 +705,12 @@ function renderCounty() {
       <span class="pop">${c.pop.toLocaleString()} people · Census 2022</span>
       ${healthPill(m)}
     </div>
+    <!-- Named for the difference, not for being a permalink: this view is one
+         month at a time and that page carries every month, which is the only
+         thing the page has that this view does not. The county is in the link
+         text because a screen reader lists links stripped of their context. -->
+    <div class="sub"><a href="c/${county.toLowerCase()}.html">Every month for
+      Co. ${esc(county)} on one page</a></div>
     <div class="controls">
       <div class="months">${monthTabs(D.months, curMonth, "setMonth")}</div>
     </div>
@@ -682,10 +718,11 @@ function renderCounty() {
     <div class="card">
       <div class="legend" style="margin:0 0 12px">${LEGEND}</div>
       <div class="bar tall">${bar(m.days)}</div>
-      <div class="daycap">Tap a day for detail.</div>
+      <div class="daycap">Tap a day for its notices.</div>
+      <div id="dayEvents">${dayEventsHtml()}</div>
       <div class="tiles" style="margin-bottom:0">
         <div class="tile"><div class="v">${availText(m.availability, m.person_h)}</div><div class="k">supply availability</div></div>
-        <div class="tile"><div class="v">${m.events.outage}</div><div class="k">supply ${pl(m.events.outage, "disruption")} · ${m.person_h.toLocaleString()} person-hours</div></div>
+        <div class="tile"><div class="v">${m.events.outage}</div><div class="k">supply ${pl(m.events.outage, "disruption")} · ${m.person_h.toLocaleString()} person-hours${endSplit}</div></div>
         ${fixTile}
         <div class="tile"><div class="v">${m.events.maintenance}</div><div class="k">planned ${pl(m.events.maintenance, "work item", "works")}</div></div>
         <div class="tile"><div class="v">${m.events.quality}</div><div class="k">quality ${pl(m.events.quality, "notice")}</div></div>
@@ -695,16 +732,43 @@ function renderCounty() {
 
     <div class="card">
       <h3>Areas with notices in ${monthLabelLong(curMonth)}</h3>
-      <div class="note"><b>Select an area</b> to see every notice ever published there, or <a href="areas.html" style="color:inherit">browse every area on the site</a>.</div>
+      <div class="note"><b>Select an area</b> to see every notice ever published there, or <a href="areas.html" style="color:inherit">browse every area with a notice</a>.</div>
       <details class="method">
         <summary>How areas are drawn</summary>
         <p>Each notice is placed in the Census 2022 area its affected population centres on: the settlement it is in, or - for the roughly 40% of the network that runs between towns - the countryside of the surrounding Electoral Division, shown as <em>Around&nbsp;…</em> to keep it distinct from the town of the same name. The Census counts a city and its suburbs as one settlement, so any settlement above 50,000 is broken into its Local Electoral Areas instead. Availability is measured against each area's own population, not the county's, and there are no letter grades at this level: the A-F thresholds are calibrated to county-months and would mislead against a village-sized denominator.</p>
       </details>
-      ${townRows(c)}
+      ${countyShardBody(county) || townRows(c)}
     </div>
 
     ${openSection(c)}
-    ${resolvedSection(c)}`;
+    ${countyShardBody(county) ? `<div class="card">${countyShardBody(county)}</div>` : resolvedSection(c)}`;
+}
+
+// ---- the county's own data, one shard per county ----
+
+// The area breakdown and the closed-in-month lists are read by this view alone
+// and were 78% of data.js, so they arrive with the county rather than with the
+// page. Same loader and same reason as the history: an injected script, so it
+// works off disk.
+const COUNTY = {};
+window.UISCE_COUNTY = COUNTY;
+const COUNTY_STATE = {};
+
+function loadCounty(name) {
+  if (COUNTY_STATE[name] === "ok") return;
+  loadShard(COUNTY_STATE, name, "t/" + name.toLowerCase() + ".js" + cacheBust(D),
+    () => !!COUNTY[name],
+    () => { if (view === "county" && county === name) render(); });
+}
+
+// the note that stands in for a card while its shard is in flight, or "" once
+// the card can render
+function countyShardBody(name) {
+  const state = COUNTY_STATE[name];
+  if (state === "ok") return "";
+  return `<div class="note" style="margin:0">${state === "error"
+    ? `The area breakdown for Co.&nbsp;${esc(name)} did not load. Reloading the page usually fixes it.`
+    : `Loading the area breakdown for Co.&nbsp;${esc(name)}…`}</div>`;
 }
 
 // ---- the national top ten ----
@@ -773,6 +837,27 @@ function renderTop() {
     </div>`;
 }
 
+// ---- every open notice, nationally ----
+
+// The overview tile counted them and the only way to see them was one county
+// at a time. The cases are already in the payload, so this is a render only.
+function renderOpen() {
+  const rows = Object.entries(D.counties)
+    .filter(([, c]) => c.open_total)
+    .sort((a, b) => b[1].open_total - a[1].open_total || a[0].localeCompare(b[0]));
+  const total = rows.reduce((s, [, c]) => s + c.open_total, 0);
+  document.getElementById("openview").innerHTML = `
+    <a class="back" href="#" onclick="go(''); return false;">← All counties</a>
+    <div class="chead"><h2>Open right now</h2>
+      <span class="pop">${total} ${pl(total, "notice")} · ${rows.length} ${pl(rows.length, "county", "counties")}</span></div>
+    <div class="note">${OPEN_NOTE}</div>
+    ${rows.map(([name, c]) => `<div class="card">
+      <h3><a href="c/${name.toLowerCase()}.html" onclick="if (newTab(event)) return true; goCounty('${encodeURIComponent(name)}'); return false;">${esc(name)}</a>
+        <span class="n">· ${c.open_total} ${pl(c.open_total, "notice")}</span></h3>
+      ${openGroups(c)}
+    </div>`).join("")}`;
+}
+
 // ---- the per-area history ----
 
 // Every event ever published in an area, loaded one county at a time. All of it
@@ -791,7 +876,12 @@ function loadHistory(name) {
   loadShard(HISTORY_STATE, name, "h/" + name.toLowerCase() + ".js" + cacheBust(D),
     () => !!HISTORY[name],
     // the reader may have moved on while it was in flight
-    () => { if (view === "area" && areaCounty === name) render(); });
+    () => {
+      if (view === "area" && areaCounty === name) render();
+      if (view === "county" && county === name && dayPick) {
+        document.getElementById("dayEvents").innerHTML = dayEventsHtml();
+      }
+    });
 }
 
 // A duration is only ever a floor: every span is measured from when the notice
@@ -851,15 +941,17 @@ function historyBody(name) {
   return out;
 }
 
+// The link is address-flavoured, unlike the county view's, because this page
+// carries the same notices this view does - naming it for its content would
+// promise a reader what they are already looking at. `t.slug` is shipped in the
+// payload and present exactly when the area has a page: ui.js's slug() is
+// deliberately not statusui.slug(), and would leave a fada as a dash.
 function renderArea() {
-  const c = D.counties[areaCounty];
-  const t = c.towns[areaCode];
-  const loaded = HISTORY_STATE[areaCounty] === "ok" ? HISTORY[areaCounty][areaCode] : null;
-  // the name comes from data.js when the area has month rows and from the shard
-  // otherwise — an area whose every notice is still in the future has neither a
-  // month row nor a place in the county breakdown
-  const name = (t && t.name) || (loaded && loaded.name) || areaCode;
-  const total = loaded ? loaded.events.length : null;
+  // name, population and slug come with the history: the county breakdown is
+  // its own shard and this view has no reason to load it
+  const t = HISTORY_STATE[areaCounty] === "ok" ? HISTORY[areaCounty][areaCode] : null;
+  const name = (t && t.name) || areaCode;
+  const total = t ? t.events.length : null;
 
   document.getElementById("areaview").innerHTML = `
     <a class="back" href="#county/${encodeURIComponent(areaCounty)}"
@@ -868,11 +960,56 @@ function renderArea() {
       <h2>${esc(name)}</h2>
       <span class="pop">${t && t.pop != null ? t.pop.toLocaleString() + " people · Census 2022 · " : ""}Co.&nbsp;${esc(areaCounty)}</span>
     </div>
+    ${t && t.slug ? `<div class="sub"><a href="a/${areaCounty.toLowerCase()}/${t.slug}.html">Permanent link to ${esc(name)}</a></div>` : ""}
     <div class="card">
-      <h3>Every notice published here${total == null ? "" : ` <span class="n">${total} notice${total === 1 ? "" : "s"}</span>`}</h3>
+      <h3>Every notice published here${total == null ? "" : ` <span class="n">· ${total} notice${total === 1 ? "" : "s"}</span>`}</h3>
       ${historyBody(areaCounty)}
     </div>`;
 }
+
+// ---- the notices behind a day in the county bar ----
+
+// The caption says "moderate supply disruption" and not which. The county's
+// history shard already has every event with its first and last charged day,
+// so the day's list is derived from it once a reader asks, and costs data.js
+// nothing. A recurring event matches every day of its span; the row says the
+// hours were spread across it.
+function dayEventsHtml() {
+  if (!dayPick) return "";
+  const state = HISTORY_STATE[county];
+  if (state !== "ok") {
+    return `<div class="note" style="margin:0">${state === "error"
+      ? "The notice list did not load. Reloading the page usually fixes it."
+      : "Loading the notices…"}</div>`;
+  }
+  const seen = new Set(), events = [];
+  for (const area of Object.values(HISTORY[county])) {
+    for (const e of area.events) {
+      if (seen.has(e.ref) || e.start > dayPick || (e.end || e.start) < dayPick) continue;
+      seen.add(e.ref);
+      events.push([e, area.name]);
+    }
+  }
+  events.sort((a, b) => SEV_ORDER.indexOf(a[0].sev) - SEV_ORDER.indexOf(b[0].sev)
+    || a[0].title.localeCompare(b[0].title));
+  const when = e => `${e.start === dayPick ? "published" : "from"} ${fmtDate(e.start, today)}`
+    + (e.hours == null ? "" : e.span_h ? ` · ${e.hours}h across ${e.span_h}h` : ` · ${e.hours}h`);
+  return `<div class="dayhead">${fmtDate(dayPick, today)} · ${events.length} ${pl(events.length, "notice")}</div>
+    ${events.map(([e, name]) => incident({ ...e, loc: name }, when)).join("")}`;
+}
+
+const SEV_ORDER = ["outage", "quality", "degraded", "maintenance"];
+
+// One delegated listener on the county view, beside statusui's caption one: a
+// cell carries no date, so the day is its position in the bar.
+document.getElementById("countyview").addEventListener("click", e => {
+  const cell = e.target.closest(".bar.tall i[data-cap]");
+  if (!cell || cell.classList.contains("future")) return;
+  const day = Array.prototype.indexOf.call(cell.parentNode.children, cell) + 1;
+  dayPick = `${curMonth}-${String(day).padStart(2, "0")}`;
+  loadHistory(county);
+  document.getElementById("dayEvents").innerHTML = dayEventsHtml();
+});
 
 // ---- routing ----
 
@@ -891,6 +1028,12 @@ function go(hash) {
   window.scrollTo(0, 0);
 }
 function goCounty(name) { go("#county/" + encodeURIComponent(name)); }
+// A modified click is the reader asking for a new tab or a saved link, so the
+// href is theirs to follow — jumping in the app instead would cancel it. Only
+// worth asking where the href is a real page rather than a hash.
+function newTab(e) {
+  return e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button;
+}
 // Both segments encoded: an area code is not URL-safe — 31 of them contain a
 // slash ("ed:Cavan:Dunmakeever/Benbrack/Derrynananta"), most contain colons,
 // several are non-ASCII. Encoding turns the slash into %2F, which is what keeps
@@ -898,13 +1041,14 @@ function goCounty(name) { go("#county/" + encodeURIComponent(name)); }
 function goArea(name, code) {
   go("#area/" + encodeURIComponent(name) + "/" + encodeURIComponent(code));
 }
-function setMonth(m) { curMonth = m; render(); }
+function setMonth(m) { curMonth = m; dayPick = null; render(); }
 function setTownSort(k) { townSort = k; render(); }
 function route() {
   // matched before the county pattern, which would otherwise never see it
   const am = location.hash.match(/^#area\/([^/]+)\/(.+)$/);
   const match = location.hash.match(/^#county\/([^/]+)$/);
   const name = match ? decodeURIComponent(match[1]) : null;
+  if (name !== county) dayPick = null;
   county = name && D.counties[name] ? name : null;
   areaCounty = am && D.counties[decodeURIComponent(am[1])] ? decodeURIComponent(am[1]) : null;
   areaCode = areaCounty ? decodeURIComponent(am[2]) : null;
@@ -914,8 +1058,10 @@ function route() {
   // published there, which is a better answer than silently going somewhere else.
   view = areaCounty ? "area"
     : county ? "county"
-    : location.hash === "#top" && TOP_MONTHS.length ? "top" : "overview";
+    : location.hash === "#top" && TOP_MONTHS.length ? "top"
+    : location.hash === "#open" ? "open" : "overview";
   if (areaCounty) loadHistory(areaCounty);
+  if (county) loadCounty(county);
   render();
 }
 // The footer's methodology is collapsed by default; anything that points a
@@ -926,13 +1072,24 @@ function openMethod() {
   d.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+// A hit is an entry point rather than a drill-down, so it is a real link: an
+// area goes straight to its page, and a county keeps its click in the app while
+// still yielding c/<county>.html to a middle-click. `slug` is ui.js's, which is
+// safe for a county because every one of them is one ASCII word; an area name
+// is not, which is why its slug rides in the index.
 bindSearch({
   input: document.getElementById("q"),
   results: document.getElementById("results"),
   counties: Object.keys(D.counties),
   src: "search.js" + cacheBust(D),
-  loaded: () => window.UISCE_SEARCH,
-  pick: goCounty
+  loaded: () => window.UISCE_PLACES,
+  href: (c, t) => t ? `a/${slug(c)}/${t}.html` : `c/${slug(c)}.html`,
+  // a name that can only reach its county says so: an "Around ..." Electoral
+  // Division has no page, and a hit that quietly does something else is worse
+  // than one that says what it will do. A town named for its county sits under
+  // the county's own row, so it says which of the two it is
+  note: (name, c, t) => t ? (name === c ? "town" : c) : name === c ? "" : `${c} · county`,
+  pick: (c, t) => { if (t) return false; goCounty(c); return true; }
 });
 window.addEventListener("hashchange", route);
 window.addEventListener("popstate", route);

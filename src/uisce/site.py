@@ -29,6 +29,7 @@ import csv
 import html
 import json
 import math
+import re
 import sqlite3
 import statistics
 from collections import Counter, defaultdict
@@ -36,6 +37,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import quote
+from xml.sax.saxutils import escape as xml_escape
 
 import statusui
 
@@ -51,10 +53,12 @@ from uisce.config import (
     SITE_DIR,
     describes_recurrence,
 )
+from uisce.pipeline import check_schema_version
 
 SITE_HTML = Path(__file__).parent / "site.html"
 AREAS_HTML = Path(__file__).parent / "areas.html"
 COUNTY_HTML = Path(__file__).parent / "county.html"
+AREA_HTML = Path(__file__).parent / "area.html"
 SITE_CSS = Path(__file__).parent / "site.css"
 AREAS_MARKER = "<!--AREAS-->"
 CANONICAL_MARKER = "<!--CANONICAL-->"
@@ -122,8 +126,9 @@ LIFT_OF = {
 
 IGNORE_CATS = set(LIFT_OF.values())  # a lift is good news, not an event
 
-# Boil notices are the weakest class in the dataset: only 1 of 23 has a real end
-# (see boil_notice_fate and notes/boil-notices.md). Setting this to True drops the
+# Boil notices are the weakest class in the dataset: only 1 of 17 events has a
+# real end, and the issue and lift populations are disjoint schemes, so that will
+# not grow (notes/boil-notices.md, 2026-09-05). Setting this to True drops the
 # class from the metrics entirely — a defensible position, since what survives is
 # a handful of events resting on a status flag known to go stale. Left False so
 # genuinely-live notices still show; flip it if the class stays this thin.
@@ -146,6 +151,36 @@ REPAIR_CATS = {"mains_repair", "valve_repair", "pump_repair"}
 KNOCK_CATS = {"boil_notice_issued", "consumption_notice_issued"}
 
 SCHEME_NOISE = {"public", "water", "supply", "scheme", "regional", "pws", "the"}
+
+
+def is_open(row, now):
+    """Open as far as the site is concerned: the feed says so, still serves the
+    case, and nothing the notice itself has said has ended it yet.
+
+    The feed's `status` is the weakest of the three signals. A case that dropped
+    out of the feed while Open never gets the transition closed_at records, so
+    vanished_at is its only close. And the feed closes a case a median 72h after
+    the notice's own update reports the works complete (p90 111h, measured
+    2026-09-05 on 3,783 closed cases), so 216 of that day's 562 Open cases were
+    past a completion their own text had announced. The extracted end is what
+    the accrual already stops charging at; reading `status` alone here put the
+    "Open now" badge and the arithmetic in contradiction on the same case.
+
+    Only an *observed* end closes a case here, the same line the published
+    median draws: a scheduled end is a plan the works may have overrun, and the
+    feed saying Open past one is the only evidence either way. A completion
+    reported for a future instant (an update written ahead of the works) leaves
+    the case open until then. See notes/statuspage-methodology.md ("The
+    notice's own completion closes it").
+    """
+    if row["status"] != "Open" or row["vanished_at"]:
+        return False
+    if row["end_source"] == "lifted_immediate":
+        return False
+    if row["end_source"] in OBSERVED_END_SOURCES:
+        end = reported_end_utc(row["end_local_date"], row["end_local_time"])
+        return end is None or end > now
+    return True
 
 
 def classify(row, recurring=False):
@@ -245,14 +280,13 @@ def boil_notice_fate(row, lifts, now):
     # only fire on a case carrying an extracted end, and this class never has
     # one — end_source was `not_found` for all 35 on file at 2026-08-18, and
     # structurally so, because the end is published as a different case rather
-    # than in this notice's text. Adding the guard would mean a
-    # fourth outcome and a rewrite of TestBoilNoticeFate's fixture (which does
-    # carry an end, unlike anything real) to protect against zero cases. If a
-    # prompt version ever starts extracting ends here, add it then.
+    # than in this notice's text. Adding the guard would mean a fourth outcome
+    # to protect against zero cases. If a prompt version ever starts extracting
+    # ends here, add it then.
     pairing = lift_pairing(row, lifts, start)
     if pairing is not None:
         return "paired", pairing
-    if row["status"] != "Open":
+    if not is_open(row, now):
         return "closed_no_signal", None
     if now - start > timedelta(days=CAP_DAYS):
         return "exclude", None
@@ -418,6 +452,8 @@ def grade(availability):
         return "C"
     if availability >= 99.0:
         return "D"
+    if availability >= 98.7:
+        return "E"
     return "F"
 
 
@@ -675,6 +711,13 @@ def case_ref(row):
     return row["reference_num"] or f"id:{row['id']}"
 
 
+def notice_url(ref):
+    """water.ie's page for a notice, or None: the HM-style codes, the `id:`
+    fallbacks and a reference with a stray space are not pages there."""
+    ref = (ref or "").strip()
+    return f"https://wtr.ie/{ref}" if re.fullmatch(r"[A-Z]{3}\d{8}", ref) else None
+
+
 def recurring_events(rows, windows):
     """Event keys whose notices describe a window repeating over a date range.
 
@@ -827,6 +870,10 @@ class Case(NamedTuple):
     # False: that is what keeps these out of the published median without
     # touching the filter that reads it.
     imputed: bool = False
+    # is_open(row, now), decided once here so the open list, the history's
+    # "still open", the county page's notice text and the Atom feed cannot
+    # disagree about a case
+    is_open: bool = False
 
     @property
     def county(self):
@@ -836,10 +883,6 @@ class Case(NamedTuple):
     def marker_intervals(self):
         """The intervals the health marker stands over — see `in_force`."""
         return self.in_force or self.intervals
-
-    @property
-    def is_open(self):
-        return self.row["status"] == "Open"
 
 
 def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, spans=None):
@@ -926,7 +969,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
             # a lift is a real, observed end, not a schedule
             in_force, end = pairing
             has_end = observed_end = True
-        elif r["status"] == "Open" and start < now and not already_over:
+        elif is_open(r, now) and start < now and not already_over:
             # ongoing with no inferred end: runs from start until now, capped
             end = min(now, start + cap)
         else:
@@ -965,6 +1008,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
                 row=r, sev=sev, ref=case_ref(r), start=start,
                 intervals=windows, sas=sa_index.affected(r["full_lat"], r["full_lon"]),
                 has_end=has_end, observed_end=observed_end, rec=rec,
+                is_open=is_open(r, now),
             )
 
     return Case(
@@ -979,6 +1023,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         rec=rec,
         imputed=imputed,
         in_force=tuple(in_force),
+        is_open=is_open(r, now),
     )
 
 
@@ -1029,6 +1074,7 @@ class Region:
             self.open_now.setdefault(
                 ref,
                 {
+                    "ref": ref,
                     "sev": sev,
                     "title": r["title"],
                     "loc": r["location"] or "",
@@ -1232,8 +1278,11 @@ def town_months(region, pop, months, now, placed=True):
             continue
         month = {"events": counts}
         if placed:
-            # two decimals is what the page renders; the third was never read
-            month["availability"] = round(stats["availability"], 2)
+            # two decimals is what the page renders; the third was never read,
+            # and a clear month's 100.0 is implied like every other zero here
+            availability = round(stats["availability"], 2)
+            if availability < 100:
+                month["availability"] = availability
             if stats["person_h"]:
                 month["person_h"] = stats["person_h"]
         if resolved.get(ym):
@@ -1262,6 +1311,12 @@ def county_town_data(regions, towns, county, months, now):
         # no open-case list here: each one is already in the county's, tagged with
         # its area, and holding both copies cost 80 KB to say the same thing twice
         area = {"name": towns.label(code), "months": by_month}
+        # Present exactly when the area has a page, so it is the flag as well as
+        # the value. ui.js's slug() is deliberately not this one - it would send
+        # 17 of these places to a URL that does not exist - so the app is told
+        # rather than left to work it out.
+        if area_has_page(code):
+            area["slug"] = statusui.slug(area["name"])
         if placed:
             area["pop"] = towns.pop[code]
         else:
@@ -1306,6 +1361,11 @@ def event_record(county, ref, meta, intervals, sas):
         span = (iv[-1][1] - iv[0][0]).total_seconds() / 3600
         if span - hours > 0.1:
             record["span_h"] = round(span, 1)
+        # the last charged day, which is what lets a day in the county's bar
+        # find its events; an event with no duration has only its start day
+        end = (iv[-1][1] - timedelta(seconds=1)).strftime("%Y-%m-%d")
+        if end != record["start"]:
+            record["end"] = end
     # the whole event's footprint, capped as Region.event_pop caps it — this
     # describes an event, not an area's accrual, so it is the same number the
     # national top ten prints for the same event
@@ -1372,7 +1432,13 @@ def area_history(event_meta, event_iv, event_sas, event_codes, towns):
         if len(codes) > 1:
             record["areas"] = len(codes)
         for code in codes:
-            area = out[county].setdefault(code, {"name": towns.label(code), "events": []})
+            # name, pop and slug ride here because the area view has nothing
+            # else to read them from: the county breakdown is its own shard
+            area = out[county].setdefault(code, {
+                "name": towns.label(code), "pop": towns.pop[code] or None, "events": [],
+            })
+            if area_has_page(code):
+                area["slug"] = statusui.slug(area["name"])
             area["events"].append(record)
     for areas in out.values():
         for area in areas.values():
@@ -1415,7 +1481,13 @@ def _area_items(county, areas, prefix=""):
     """
     items = []
     for code, name, pop, n in areas:
-        href = f"{prefix}index.html#area/{quote(county, safe='')}/{quote(code, safe='')}"
+        # the page when the area has one, the hash route when it does not:
+        # an ED is only ever reachable inside the app
+        href = (
+            f"{prefix}{area_path(county, name)}"
+            if area_has_page(code)
+            else f"{prefix}index.html#area/{quote(county, safe='')}/{quote(code, safe='')}"
+        )
         # The units ride on every row rather than in a column heading: the
         # heading scrolls away after the first county, and two bare
         # right-aligned integers are read in the wrong order by most people
@@ -1453,6 +1525,47 @@ def _area_index_html(index):
     return f"<nav>{nav}</nav>\n{''.join(sections)}"
 
 
+def area_has_page(code):
+    """Whether an area names a place a reader could search for.
+
+    Three kinds of code never do. An Electoral Division is the countryside
+    around somewhere rather than a place - all 2,808 are named "Around ...", and
+    1,193 of them have a notice; publishing that many near-identical pages is
+    what a search engine demotes as scaled thin content, and nobody searches the
+    name. A city's "-rest" code is the remainder of its Local Electoral Areas,
+    named "Elsewhere in Cork city". UNPLACED is a pin that could not be homed at
+    all. What is left is 697 CSO settlements and 42 city LEAs.
+
+    Deliberately not gated on a notice count as well. A floor would make a URL
+    appear the day an area's second notice arrives, and a permalink that comes
+    and goes is worse than a short one - the 122 pages currently holding a
+    single notice still answer "was the water off in Abbeydorney" for a real
+    place with a real population.
+    """
+    return (
+        code != UNPLACED
+        and not code.startswith("ed:")
+        and not code.endswith("-rest")
+    )
+
+
+def area_path(county, name):
+    """`a/<county>/<area>.html` for an area with a page.
+
+    Nested under the county because an area name is not unique nationally, and
+    keyed on the name rather than the code because a code is not a filename - 31
+    contain a slash and most contain colons, which is what kept the history
+    shards per county. The county-and-name pair is unique over every area in the
+    CSO file, asserted in the tests rather than assumed.
+
+    `statusui.slug` rather than the `slug` in ui.js: the two are deliberately
+    unpaired, and the JS one leaves a fada as a dash - it would send 17 of these
+    places to a URL that does not exist. The app is given the slug in the
+    payload for that reason.
+    """
+    return f"{AREA_DIR}/{county_slug(county)}/{statusui.slug(name)}.html"
+
+
 def county_slug(county):
     """The history shard filename for a county.
 
@@ -1472,16 +1585,6 @@ SEV_LABEL = {
     "degraded": "Restrictions / low pressure",
     "maintenance": "Works (planned / non-disruptive)",
 }
-
-# The county page is a document, not the app: past this many events a reader is
-# better served by the interactive view, and the page stays a few KB.
-COUNTY_EVENTS_SHOWN = 60
-
-# Cork has 46 notices open at once, which is enough to push everything else on
-# the page below the fold. Capped for the same reason resolved_by_month caps its
-# own list, and the true count is still printed beside the heading.
-COUNTY_OPEN_SHOWN = 20
-
 
 def county_events(areas_history):
     """Every event in one county, newest first, each appearing once.
@@ -1504,28 +1607,63 @@ def _fmt_day(iso):
     return statusui.fmt_date(iso, date.today())
 
 
-def _county_open_html(cdata, shown=COUNTY_OPEN_SHOWN):
+def notice_paragraphs(description):
+    """The feed's notice text as plain paragraphs, its markup gone.
+
+    The feed writes notices as HTML with <br><br> between paragraphs and <b>
+    around updates; none of that is trusted on a page, so tags are stripped and
+    the breaks kept. The trailing "LA01"-style code is a feed artefact, not
+    something the notice said.
+    """
+    text = re.sub(r"<br\s*/?>|</p>", "\n", description or "", flags=re.I)
+    text = html.unescape(re.sub(r"<[^>]+>", " ", text)).replace("\xa0", " ")
+    paragraphs = [" ".join(p.split()) for p in re.split(r"\n\s*\n", text)]
+    paragraphs = [p for p in paragraphs if p]
+    if paragraphs and re.fullmatch(r"[A-Z]{2}\d{2}", paragraphs[-1]):
+        paragraphs.pop()
+    return paragraphs
+
+
+def _notice_text_html(description):
+    paragraphs = notice_paragraphs(description)
+    if not paragraphs:
+        return ""
+    return (
+        "<details><summary>What the notice says</summary>"
+        + "".join(f"<p>{html.escape(p)}</p>" for p in paragraphs)
+        + "</details>"
+    )
+
+
+def _county_open_html(cdata, text=None):
     """Notices open right now — the one thing on the page a reader may have come
-    for today rather than for the record."""
+    for today rather than for the record. `text` is ref -> the notice's own
+    words, carried here and nowhere in the app payload: the open notices are
+    the ones a reader needs the wording of, to know whether their road is in it.
+    """
     if not cdata["open"]:
         return ""
+    text = text or {}
     rows = "".join(
         f'<li><span class="sev sev-{html.escape(o["sev"])}">'
         f'{html.escape(SEV_LABEL[o["sev"]])}</span> '
         f'<strong>{html.escape(o["title"])}</strong>'
         + (f' - {html.escape(o["loc"])}' if o["loc"] else "")
-        + f'<span class="when">since {_fmt_day(o["since"])}</span></li>'
-        for o in cdata["open"][:shown]
-    )
-    more = ""
-    if cdata["open_total"] > shown:
-        more = (
-            f'<p class="more">{cdata["open_total"] - shown:,} more open - '
-            f'see the interactive view.</p>'
+        + f'<span class="when">since {_fmt_day(o["since"])}'
+        + (
+            f' · <a href="{url}">{url.rsplit("/", 1)[1]}</a>'
+            if (url := notice_url(o["ref"]))
+            else ""
         )
+        + "</span>"
+        + _notice_text_html(text.get(o["ref"]))
+        + "</li>"
+        for o in cdata["open"]
+    )
     return (
-        f'<section id="open"><h2>Open now <span>· {cdata["open_total"]}</span></h2>'
-        f'<ul class="notices">{rows}</ul>{more}</section>'
+        f'<section id="open"><h2>Open now <span>'
+        f'· {cdata["open_total"]:,} notice{"" if cdata["open_total"] == 1 else "s"}'
+        f'</span></h2><ul class="notices">{rows}</ul></section>'
     )
 
 
@@ -1609,12 +1747,61 @@ def _county_months_html(cdata, months):
     )
 
 
-def _county_events_html(events, shown=COUNTY_EVENTS_SHOWN):
-    """The county's notice history, newest first."""
+def _area_months_html(area_months, months):
+    """One row per month with a notice, from the same area-month rows the app's
+    county breakdown charts. No grade: the A-F cuts are calibrated to county-
+    months, which is why the app's breakdown carries none either."""
+    rows = []
+    for ym in reversed(months):
+        m = area_months.get(ym)
+        if not m:
+            continue
+        ev = m["events"]
+        # the sparse rules of town_months, read back: an absent count is zero
+        # and an absent availability is a clear month
+        avail = m.get("availability", 100.0)
+        person_h = m.get("person_h", 0)
+        if person_h:
+            avail = min(avail, 99.99)
+        rows.append(
+            f'<tr><th scope="row">{ym}</th>'
+            f'<td>{avail:.2f}%</td>'
+            f'<td>{ev.get("outage", 0)}</td><td>{ev.get("quality", 0)}</td>'
+            f'<td>{ev.get("degraded", 0)}</td><td>{ev.get("maintenance", 0)}</td>'
+            f'<td>{person_h:,}</td></tr>'
+        )
+    if not rows:
+        return ""
+    return (
+        '<section id="months"><h2>Month by month</h2>'
+        '<div class="scroll"><table><thead><tr>'
+        '<th scope="col">Month</th>'
+        '<th scope="col" title="Against this area\'s own population">Availability</th>'
+        '<th scope="col" title="Supply disruptions">Outages</th>'
+        '<th scope="col" title="Boil water, do not drink, discolouration">Quality</th>'
+        '<th scope="col" title="Restrictions and low pressure">Restricted</th>'
+        '<th scope="col" title="Planned or non-disruptive works">Works</th>'
+        '<th scope="col" title="Population-weighted hours of lost supply">Person-hours</th>'
+        f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div></section>'
+    )
+
+
+def _events_html(events, heading="Notice history", multi_area=False):
+    """A list of notices, newest first. Shared by the county and area pages.
+
+    Uncapped on both. These pages exist to be the durable, indexable record, and
+    a county's whole history costs a few hundred KB of text — cheaper than a
+    document that presents itself as complete and is not.
+
+    `multi_area` adds the note the app's area view carries for the same reason:
+    one event published as pins in several areas is listed under each, so
+    meeting the same burst twice reads as double-counting unless the page says
+    so. The county list de-duplicates and must not carry it.
+    """
     if not events:
         return ""
     rows = []
-    for e in events[:shown]:
+    for e in events:
         bits = []
         if e.get("hours") is not None:
             # "so far" on an open event: the figure is time accrued to this
@@ -1639,19 +1826,66 @@ def _county_events_html(events, shown=COUNTY_EVENTS_SHOWN):
             + (f' - {html.escape(e["loc"])}' if e.get("loc") else "")
             + f'<span class="when">{_fmt_day(e["start"])}'
             + (f' · {meta}' if meta else "")
-            + '</span></li>'
+            + "</span>"
+            + (
+                f'<span class="also">Also published in '
+                f'{e["areas"] - 1} other area'
+                f'{"" if e["areas"] == 2 else "s"}, and listed in each'
+                # the figure above is the whole event's footprint, and this page
+                # states the area's own population two lines up; the app's badge
+                # carries the same caveat in its title
+                + (
+                    "; the people affected is the whole notice\u2019s, "
+                    "not this area\u2019s share"
+                    if e.get("people")
+                    else ""
+                )
+                + "</span>"
+                if multi_area and e.get("areas")
+                else ""
+            )
+            + "</li>"
         )
-    more = ""
-    if len(events) > shown:
-        more = f'<p class="more">{len(events) - shown:,} older notices not shown here.</p>'
     return (
-        f'<section id="notices"><h2>Notice history '
-        f'<span>· {len(events):,}</span></h2>'
-        f'<ul class="notices">{"".join(rows)}</ul>{more}</section>'
+        f'<section id="notices"><h2>{html.escape(heading)} '
+        f'<span>· {len(events):,} notice{"" if len(events) == 1 else "s"}</span></h2>'
+        f'<ul class="notices">{"".join(rows)}</ul></section>'
     )
 
 
-def county_page_html(county, cdata, areas, events, months, all_counties):
+def area_page_html(county, name, pop, events, area_months=None, months=()):
+    """The whole body of a/<county>/<area>.html.
+
+    Server-rendered in full and carrying no data.js, for the same reason the
+    county pages are: the hash route it replaces is not a URL a reader can keep
+    or a search engine can index.
+
+    The list is the same one the app's area view shows, uncapped, so the page
+    and the view are the same content - which is why the app links to it as a
+    permanent link rather than by naming what is on it.
+    """
+    # the county route, the same one county_page_html links to: the area route
+    # needs the code as a second segment, and a bare `#area/<county>` matches
+    # neither of the app's two patterns
+    app = f"../../index.html#county/{quote(county, safe='')}"
+    return (
+        f'<a class="back" href="../../{COUNTY_DIR}/{county_slug(county)}.html">'
+        f'← Co. {html.escape(county)}</a>'
+        f'<div class="chead"><h1>{html.escape(name)}</h1></div>'
+        f'<div class="sub">'
+        f'{f"{pop:,} people · Census 2022 · " if pop is not None else ""}'
+        f'Co.&nbsp;{html.escape(county)}</div>'
+        f'{_area_months_html(area_months or {}, months)}'
+        f'{_events_html(events, "Every notice published here", multi_area=True)}'
+        f'<section id="more"><h2>Elsewhere</h2><p class="links">'
+        f'<a href="../../{COUNTY_DIR}/{county_slug(county)}.html">'
+        f'Co. {html.escape(county)}\u2019s whole record</a> · '
+        f'<a href="{app}">Co.&nbsp;{html.escape(county)}\u2019s interactive view</a>'
+        f'</p></section>'
+    )
+
+
+def county_page_html(county, cdata, areas, events, months, all_counties, text=None):
     """The whole body of c/<slug>.html.
 
     Server-rendered in full and carrying no data.js: the point of these pages is
@@ -1673,11 +1907,11 @@ def county_page_html(county, cdata, areas, events, months, all_counties):
         f'Co. {html.escape(county)}</a> - daily bars, month switching and the '
         f'area drill-down.</p></header>'
         f'<nav>{nav}</nav>'
-        f'{_county_open_html(cdata)}'
+        f'{_county_open_html(cdata, text)}'
         f'{_county_months_html(cdata, months)}'
-        f'{_county_events_html(events)}'
+        f'{_events_html(events)}'
         f'<section id="areas"><h2>Areas with a notice '
-        f'<span>· {len(areas)}</span></h2>'
+        f'<span>· {len(areas):,} area{"" if len(areas) == 1 else "s"}</span></h2>'
         f'<ul class="areas">{_area_items(county, areas, "../")}</ul></section>'
     )
 
@@ -1805,6 +2039,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
     # pins to top_events rather than only the outage ones — see the build report.
     event_meta = {}
     recurrence = []  # every pin that claimed a window, for the report's detail lines
+    notice_text = defaultdict(dict)  # county -> ref -> the wording, open events only
     # every pin's outcome, claimed or not — the mixed-event check needs the ones
     # that made no claim, since those are what re-cover an expanded event's gaps
     pin_tags = defaultdict(list)
@@ -1826,9 +2061,12 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
             # first pin wins, matching how the event's open entry is recorded
             {"title": r["title"], "start": r["start_date"][:10], "first_pub": case.start,
              "pins": 0, "confirmed": 0, "scheduled": 0, "sev": case.sev,
-             "loc": r["location"] or "", "open": False, "closed": None, "health": False},
+             "loc": r["location"] or "", "open": False, "closed": None, "health": False,
+             "seen": r["first_seen"] or r["start_date"]},
         )
         meta["pins"] += 1
+        # the build that first saw any pin; NULL on every case before the column
+        meta["seen"] = min(meta["seen"], r["first_seen"] or r["start_date"])
         # the earliest publication across the event's pins, which is what
         # "started this month" means for the completion median. Not
         # setdefault: rows arrive in id order, not start_date order.
@@ -1844,6 +2082,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
         meta["health"] |= knocks_grade(r)
         if case.is_open:
             meta["open"] = True
+            notice_text[case.county].setdefault(case.ref, r["description"])
         elif meta["closed"] is None and r["closed_at"]:
             # first pin with a close stamp wins, so the history and the county's
             # "observed to close" list — which reads Region.resolved, filled the
@@ -1895,7 +2134,8 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
             "months": {},
             "open": sorted(
                 (
-                    {**case, "area": area_of[(county, ref)]}
+                    {**case, "area": area_of[(county, ref)],
+                     "name": towns.label(area_of[(county, ref)])}
                     if (county, ref) in area_of
                     else dict(case)
                     for ref, case in region.open_now.items()
@@ -2015,9 +2255,73 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
     site["history"] = (
         area_history(event_meta, event_iv, event_sas, event_codes, towns) if towns else {}
     )
+    # popped by write_site into the county pages; never part of the payload
+    site["notice_text"] = dict(notice_text)
+    site["feed"] = feed_entries(event_meta, area_of, towns)
     site["recurrence_report"] = recurrence_report(recurrence, pin_tags)
 
     return site
+
+
+FEED_SHOWN = 50
+
+
+def feed_entries(event_meta, area_of, towns):
+    """{county: [entry, ...]} of the newest FEED_SHOWN events by first sighting.
+
+    Sighting, not publication: `start_date` is re-stamped in place upstream, and
+    what a subscriber wants is the build that first saw the notice. Not part of
+    the payload; write_site pops it into the Atom files.
+    """
+    by_county = defaultdict(list)
+    for (county, ref), meta in event_meta.items():
+        entry = {
+            "ref": ref, "county": county, "title": meta["title"], "sev": meta["sev"],
+            "seen": meta["seen"], "start": meta["start"], "loc": meta["loc"],
+            "open": meta["open"], "closed": meta["closed"],
+        }
+        code = area_of.get((county, ref)) if towns is not None else None
+        if code is not None:
+            entry["area"] = towns.label(code)
+            if area_has_page(code):
+                entry["path"] = area_path(county, entry["area"])
+        by_county[county].append(entry)
+    return {
+        county: sorted(entries, key=lambda e: (e["seen"], e["ref"]), reverse=True)[:FEED_SHOWN]
+        for county, entries in by_county.items()
+    }
+
+
+def _atom_entry(e):
+    where = e.get("area") or e["loc"]
+    state = "still open" if e["open"] else f"closed {e['closed']}" if e["closed"] else "closed"
+    summary = " · ".join(
+        filter(None, [SEV_LABEL[e["sev"]], f"Co. {e['county']}", where,
+                      f"published {e['start']}", state])
+    )
+    link = e.get("path") or f"{COUNTY_DIR}/{county_slug(e['county'])}.html"
+    return (
+        # keyed by county as well as reference: 15 references span two counties
+        f"<entry><id>{BASE_URL}/n/{county_slug(e['county'])}/{xml_escape(e['ref'])}</id>"
+        f"<title>{xml_escape(e['title'] + (f': {where}' if where else ''))}</title>"
+        f"<updated>{xml_escape(e['seen'])}</updated>"
+        f'<link href="{xml_escape(f"{BASE_URL}/{link}", {chr(34): "&quot;"})}"/>'
+        f"<summary>{xml_escape(summary)}</summary></entry>"
+    )
+
+
+def atom_feed(title, path, entries, updated):
+    """An Atom document of `entries` (feed_entries' shape), newest first."""
+    if entries:
+        updated = entries[0]["seen"]
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<feed xmlns="http://www.w3.org/2005/Atom">'
+        f"<title>{xml_escape(title)}</title>"
+        f'<link href="{BASE_URL}/{path}" rel="self"/><link href="{BASE_URL}/"/>'
+        f"<id>{BASE_URL}/{path}</id><updated>{xml_escape(updated)}</updated>"
+        f"{''.join(_atom_entry(e) for e in entries)}</feed>"
+    )
 
 
 def data_horizon(conn):
@@ -2026,12 +2330,22 @@ def data_horizon(conn):
     return parse_dt(last_seen) if last_seen else None
 
 
+def read_cases(db_path=DB_PATH):
+    """The rows and horizon of the DB at `db_path`, carried to this code's schema
+    first: a UI deploy builds from whichever release is current, and that
+    release predates every column added since the last data build."""
+    with sqlite3.connect(db_path) as conn:
+        check_schema_version(conn, db_path)
+        return load_cases(conn), data_horizon(conn)
+
+
 def load_cases(conn):
     conn.row_factory = sqlite3.Row
     return conn.execute(
         """
         SELECT c.id, c.county, c.work_category, c.work_type, c.status, c.title,
-               c.reference_num, c.start_date, c.location, c.closed_at,
+               c.reference_num, c.start_date, c.location, c.closed_at, c.first_seen,
+               c.vanished_at,
                -- read only by describes_recurrence, which is why the severity
                -- rule no longer depends on the model having extracted a window
                c.description,
@@ -2047,12 +2361,19 @@ def load_cases(conn):
     ).fetchall()
 
 
+# index.html + data.js, what a reader downloads before touching anything. The
+# split of 2026-09-05 left it under 300 KB; the warning is for the next growth.
+INITIAL_BUDGET = 512 * 1024
+
 HISTORY_DIR = "h"
+COUNTY_SHARD_DIR = "t"
 COUNTY_DIR = "c"
+AREA_DIR = "a"
+FEED_DIR = "feed"
 
 
 def write_site(site, site_dir, towns=None):
-    """data.js, index.html, areas.html, c/<county>.html, and a history shard each.
+    """data.js, index.html, areas.html, c/<county>.html, and two shards per county.
 
     The c/ pages, sitemap.xml and robots.txt are the site's indexable surface.
     Before them the whole site was two URLs: everything a reader might search
@@ -2076,40 +2397,104 @@ def write_site(site, site_dir, towns=None):
     a reader is likely to open in a sitting, at a median 5 KB gzipped.
     """
     history = site.pop("history", {})
+    # the county view's own data, out of the payload the overview loads: the
+    # area breakdown alone was 61% of data.js and the overview never read it
+    county_data = {
+        county: {"towns": cdata.pop("towns", {}), "resolved": cdata.pop("resolved", {})}
+        for county, cdata in site["counties"].items()
+    }
+    notice_text = site.pop("notice_text", {})
+    feed = site.pop("feed", {})
     data = "window.UISCE_DATA = " + json.dumps(site) + ";"
     site_dir.mkdir(parents=True, exist_ok=True)
     (site_dir / "data.js").write_text(data)
-    (site_dir / "index.html").write_text(page_html(SITE_HTML, {"CANONICAL": f"{BASE_URL}/"}))
+    # the noscript fallback: the county pages carry the same figures statically
+    county_links = " · ".join(
+        f'<a href="{COUNTY_DIR}/{county_slug(c)}.html">{html.escape(c)}</a>'
+        for c in sorted(site["counties"])
+    )
+    (site_dir / "index.html").write_text(
+        page_html(SITE_HTML, {"CANONICAL": f"{BASE_URL}/", "COUNTY-LINKS": county_links})
+    )
+    sizes = {"feeds": 0}
+    feed_dir = site_dir / FEED_DIR
+    feed_dir.mkdir(exist_ok=True)
+    # the national feed is the newest of every county's, so a county's own can
+    # never carry a notice the national one skipped
+    national = sorted(
+        (e for entries in feed.values() for e in entries),
+        key=lambda e: (e["seen"], e["ref"]), reverse=True,
+    )[:FEED_SHOWN]
+    feeds = [("feed.xml", "Irish water supply disruptions", national)] + [
+        (f"{FEED_DIR}/{county_slug(c)}.xml", f"Co. {c} water supply disruptions", feed.get(c, []))
+        for c in site["counties"]
+    ]
+    for path, title, entries in feeds:
+        doc = atom_feed(title, path, entries, site["generated_iso"])
+        (site_dir / path).write_text(doc)
+        sizes["feeds"] += len(doc.encode())
 
-    shard_dir = site_dir / HISTORY_DIR
-    shard_dir.mkdir(exist_ok=True)
-    shard_bytes = 0
-    for county in site["counties"]:
-        # keyed by the county's real name, so the page never has to invert the
-        # slug; the ||= guard makes a shard self-sufficient and order-independent
-        body = (
-            "window.UISCE_HISTORY = window.UISCE_HISTORY || {};\n"
-            f"window.UISCE_HISTORY[{json.dumps(county)}] = "
-            f"{json.dumps(history.get(county, {}))};"
-        )
-        (shard_dir / f"{county_slug(county)}.js").write_text(body)
-        shard_bytes += len(body.encode())
+    shard_bytes = county_shard_bytes = 0
+    for name, sub, payload in (
+        ("UISCE_HISTORY", HISTORY_DIR, history),
+        ("UISCE_COUNTY", COUNTY_SHARD_DIR, county_data),
+    ):
+        shard_dir = site_dir / sub
+        shard_dir.mkdir(exist_ok=True)
+        for county in site["counties"]:
+            # keyed by the county's real name, so the page never has to invert
+            # the slug; the ||= guard makes a shard self-sufficient and
+            # order-independent
+            body = (
+                f"window.{name} = window.{name} || {{}};\n"
+                f"window.{name}[{json.dumps(county)}] = "
+                f"{json.dumps(payload.get(county, {}))};"
+            )
+            (shard_dir / f"{county_slug(county)}.js").write_text(body)
+            if sub == HISTORY_DIR:
+                shard_bytes += len(body.encode())
+            else:
+                county_shard_bytes += len(body.encode())
 
     # The directory. Substituted rather than copied, unlike index.html: the rows
     # are the page, and generating them into a template keeps the markup and CSS
     # in an HTML file instead of in Python string literals.
     index_bytes = county_bytes = n_county_pages = search_bytes = 0
+    n_area_pages = area_bytes = 0
     pages = ["", "areas.html"]
     if towns is not None:
         # The search index: every Census settlement, noticed or not, so a
         # reader finds their town even when it has never had a notice. Fetched
         # by bindSearch on the first keystroke, never in the initial payload.
+        #
+        # An entry is `[name, slug]` where the area has a page and a bare name
+        # where it does not, which is what lets a hit be a link straight to it.
+        # The gate is the payload's own slug rather than area_has_page: 904
+        # names are eligible but only the ones with notices get a page built,
+        # and the difference would be a search result that 404s.
         names = defaultdict(set)
         for code, name in towns.name.items():
-            if towns.county[code] in site["counties"]:
-                names[towns.county[code]].add(name)
-        search = "window.UISCE_SEARCH = " + statusui.dumps(
-            {c: sorted(v) for c, v in sorted(names.items())}
+            county = towns.county[code]
+            if county not in site["counties"]:
+                continue
+            area = county_data[county]["towns"].get(code) or {}
+            names[county].add((name, area["slug"]) if "slug" in area else name)
+
+        def entry(e):
+            return e if isinstance(e, str) else list(e)
+
+        def by_name(e):
+            return e if isinstance(e, str) else e[0]
+
+        # UISCE_PLACES, not UISCE_SEARCH: search.js is fetched lazily, so a tab
+        # opened before a deploy pairs its own inlined ui.js with the current
+        # file. The entries carry a slug now, and the old searchHits calls
+        # toLowerCase on them - renaming with the shape means that reader gets
+        # the box's own "unavailable, try reloading" rather than a dropdown
+        # stuck on "Searching".
+        search = "window.UISCE_PLACES = " + statusui.dumps(
+            {c: [entry(e) for e in sorted(v, key=by_name)]
+             for c, v in sorted(names.items())}
         ) + ";"
         (site_dir / "search.js").write_text(search)
         search_bytes = len(search.encode())
@@ -2135,18 +2520,25 @@ def write_site(site, site_dir, towns=None):
             areas = by_county.get(county, [])
             events = county_events(history.get(county, {}))
             body = county_page_html(
-                county, site["counties"][county], areas, events, site["months"], all_counties
+                county, site["counties"][county] | county_data[county], areas, events,
+                site["months"], all_counties, notice_text.get(county),
             )
             page = page_html(
                 COUNTY_HTML,
                 {
+                    "FEED": f"../{FEED_DIR}/{slug}.xml",
                     "TITLE": html.escape(
                         f"Co. {county} water supply disruptions - Uisce Éireann notices"
                     ),
+                    # The counts and the listing now agree, but the order still
+                    # matters: the record first, what the page holds after it, so
+                    # a snippet truncated by width leaves a true sentence.
                     "DESC": html.escape(
-                        f"Water outages, boil notices, restrictions and works announced by "
-                        f"Uisce Éireann in Co. {county} - {len(events):,} notices across "
-                        f"{len(areas):,} areas, updated twice daily."
+                        f"Co. {county}: {len(events):,} Uisce Éireann "
+                        f"notice{'' if len(events) == 1 else 's'} across {len(areas):,} "
+                        f"area{'' if len(areas) == 1 else 's'} - water outages, boil "
+                        f"notices, restrictions and works. Month-by-month totals and "
+                        f"every notice published."
                     ),
                     "CANONICAL": f"{BASE_URL}/{COUNTY_DIR}/{slug}.html",
                     "BODY": body,
@@ -2157,27 +2549,66 @@ def write_site(site, site_dir, towns=None):
             pages.append(f"{COUNTY_DIR}/{slug}.html")
         n_county_pages = len(all_counties)
 
+        # One page per area that names a place - see area_has_page. Written from
+        # the history that is already in hand, so this costs a render and no new
+        # arithmetic; the app's area view reads the same events out of the shard.
+        for county, areas in index:
+            for code, name, pop, _n in areas:
+                if not area_has_page(code):
+                    continue
+                events = history.get(county, {}).get(code, {}).get("events", [])
+                rel = area_path(county, name)
+                path = site_dir / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                page = page_html(
+                    AREA_HTML,
+                    {
+                        "FEED": f"../../{FEED_DIR}/{county_slug(county)}.xml",
+                        "TITLE": html.escape(
+                            f"{name}, Co. {county} - water outages and notices"
+                        ),
+                        "DESC": html.escape(
+                            f"{name}, Co. {county}"
+                            + (f" - {pop:,} people" if pop is not None else "")
+                            + f". {len(events):,} Uisce Éireann "
+                            f"notice{'' if len(events) == 1 else 's'} published here: "
+                            f"water outages, boil notices, restrictions and works, "
+                            f"every one of them, newest first."
+                        ),
+                        "CANONICAL": f"{BASE_URL}/{rel}",
+                        "BODY": area_page_html(
+                            county, name, pop, events,
+                            county_data[county]["towns"].get(code, {}).get("months"),
+                            site["months"],
+                        ),
+                    },
+                )
+                path.write_text(page)
+                area_bytes += len(page.encode())
+                pages.append(rel)
+                n_area_pages += 1
+
     # a sitemap over the pages, not the payload: data.js and the shards are
     # fetched by the app, never landed on
     (site_dir / "sitemap.xml").write_text(statusui.sitemap(BASE_URL, pages, site["generated_iso"]))
     (site_dir / "robots.txt").write_text(statusui.robots(BASE_URL))
-    return (
-        len(data.encode()),
-        shard_bytes,
-        sum(len(a) for a in history.values()),
-        index_bytes,
-        n_county_pages,
-        county_bytes,
-        search_bytes,
-    )
+    return sizes | {
+        "data.js": len(data.encode()),
+        "shards": shard_bytes + county_shard_bytes,
+        "n_areas": sum(len(a) for a in history.values()),
+        "areas.html": index_bytes,
+        "n_county_pages": n_county_pages,
+        "county_pages": county_bytes,
+        "search.js": search_bytes,
+        "n_area_pages": n_area_pages,
+        "area_pages": area_bytes,
+    }
 
 
 def run():
     sa_index = SmallAreaIndex.from_csv(SA_POP_PATH)
     towns = TownLookup.from_csv(SA_TOWNS_PATH, sa_index.pop)
-    with sqlite3.connect(DB_PATH) as conn:
-        rows = load_cases(conn)
-        data_as_of = data_horizon(conn)
+    rows, data_as_of = read_cases()
     site = build_site(rows, sa_index, datetime.now(timezone.utc), towns, data_as_of)
 
     # a diagnostic for the build log, not for the page
@@ -2186,23 +2617,31 @@ def run():
 
     n_counties, n_months = len(site["counties"]), len(site["months"])
     n_towns = sum(len(c["towns"]) for c in site["counties"].values())
-    (data_bytes, shard_bytes, n_areas, index_bytes, n_county_pages, county_bytes,
-     search_bytes) = write_site(site, SITE_DIR, towns)
+    s = write_site(site, SITE_DIR, towns)
     print(
         f"Wrote {SITE_DIR}/ ({n_counties} counties, "
         f"{n_towns} town breakdowns, {n_months} months)"
     )
     # the payload is the thing this site keeps having to defend; print it every
     # build so a regression is visible in the log rather than in the field
-    print(
-        f"  data.js {data_bytes:,} bytes  ·  {n_counties} history shards "
-        f"{shard_bytes:,} bytes over {n_areas} areas (loaded on demand)  ·  "
-        f"search.js {search_bytes:,} bytes (loaded on demand)  ·  "
-        f"areas.html {index_bytes:,} bytes"
+    initial, report = statusui.size_report(
+        SITE_DIR, INITIAL_BUDGET, COUNTY_DIR, "county pages",
+        extra=[("search.js", "loaded on demand"), ("areas.html", "the directory")],
     )
+    print(report)
+    print(
+        f"  {2 * n_counties} shards {s['shards']:,} bytes over {s['n_areas']} areas "
+        f"(one county's breakdown and one county's history, each loaded on demand)"
+    )
+    if initial > INITIAL_BUDGET:
+        # GitHub Actions surfaces this line on the run; a deploy must not fail
+        # on growth alone
+        print(f"::warning::initial load {initial:,} bytes is over the {INITIAL_BUDGET:,} budget")
     # the indexable surface, printed for the same reason: these pages exist to
     # be crawled, and one silently rendering empty is invisible from the field
     print(
-        f"  {n_county_pages} county pages {county_bytes:,} bytes  ·  "
-        f"sitemap {n_county_pages + 2} URLs"
+        f"  {s['n_county_pages']} county pages {s['county_pages']:,} bytes  ·  "
+        f"{s['n_area_pages']} area pages {s['area_pages']:,} bytes  ·  "
+        f"sitemap {s['n_county_pages'] + s['n_area_pages'] + 2} URLs  ·  "
+        f"{n_counties + 1} feeds {s['feeds']:,} bytes"
     )

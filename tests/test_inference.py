@@ -260,6 +260,27 @@ class TestHybridRun:
         assert record["model"] == MODEL_NAME
         assert record["end_source"] == "not_found"
 
+    def test_a_failed_case_is_counted_and_the_run_exits_non_zero(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        jsonl = self._wire(
+            tmp_path, monkeypatch, [(1, "2026-05-18T08:00:00+00:00", self.UNTEMPLATED)]
+        )
+        monkeypatch.setattr(inference, "make_session", lambda: object())
+
+        def failing_llm(session, start_date, description):
+            raise ValueError("response truncated")
+
+        monkeypatch.setattr(inference, "call_llm", failing_llm)
+
+        assert inference.run([]) == 1
+        assert "1 failed" in capsys.readouterr().out
+        assert jsonl.read_text() == ""
+
+    def test_a_clean_run_exits_zero(self, tmp_path, monkeypatch):
+        self._wire(tmp_path, monkeypatch, [(1, "2026-05-18T08:00:00+00:00", self.TEMPLATED)])
+        assert inference.run([]) == 0
+
     def test_multi_pin_dedupe_still_extracts_once(self, tmp_path, monkeypatch):
         jsonl = self._wire(
             tmp_path, monkeypatch,
@@ -279,6 +300,42 @@ class TestHybridRun:
         records = [json.loads(line) for line in jsonl.read_text().splitlines()]
         assert [r["case_id"] for r in records] == [1, 2]
         assert len(calls) == 1
+
+
+class TestCallLlm:
+    class FakeSession:
+        def __init__(self, body):
+            self.body = body
+
+        def post(self, url, json, timeout):
+            body = self.body
+
+            class Response:
+                def raise_for_status(self):
+                    pass
+
+                def json(self):
+                    return body
+
+            return Response()
+
+    def _body(self, finish_reason, content):
+        return {
+            "choices": [{"finish_reason": finish_reason,
+                         "message": {"content": content}}],
+            "usage": {"prompt_tokens": 4018, "completion_tokens": 78},
+        }
+
+    def test_returns_the_content_when_the_model_stopped_on_its_own(self):
+        session = self.FakeSession(self._body("stop", '{"end_source": "not_found"}'))
+        assert inference.call_llm(session, "2026-05-18T08:00:00+00:00", "notice") == (
+            '{"end_source": "not_found"}'
+        )
+
+    def test_truncation_is_named_rather_than_left_to_json(self):
+        session = self.FakeSession(self._body("length", '{"notes":"half a sen'))
+        with pytest.raises(ValueError, match="truncated"):
+            inference.call_llm(session, "2026-05-18T08:00:00+00:00", "notice")
 
 
 class TestParseResponse:

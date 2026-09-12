@@ -194,7 +194,22 @@ def call_llm(session, start_date, description):
     }
     resp = session.post(MODEL_URL, json=payload, timeout=LLM_TIMEOUT)
     resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
+    body = resp.json()
+    choice = body["choices"][0]
+
+    # A context too short for prompt + notice leaves the model a handful of
+    # tokens and it stops mid-string. Left to reach json.loads that surfaces as
+    # "Unterminated string", which reads like a bad answer rather than a
+    # truncated one, so name it here instead.
+    if choice.get("finish_reason") == "length":
+        usage = body.get("usage") or {}
+        raise ValueError(
+            f"response truncated: the model stopped after "
+            f"{usage.get('completion_tokens', '?')} tokens with "
+            f"{usage.get('prompt_tokens', '?')} of prompt. Raise the context "
+            f"length {MODEL_NAME} is loaded with in LM Studio."
+        )
+    return choice["message"]["content"]
 
 
 def parse_response(response_text):
@@ -251,6 +266,7 @@ def run(argv=None):
     results_by_hash = {}
     counts = {RULES_VERSION: 0, MODEL_NAME: 0}
     left_for_llm = 0
+    failed = 0
 
     with open(JSONL_PATH, "a") as out:
         for i, case in enumerate(cases):
@@ -287,8 +303,15 @@ def run(argv=None):
                 if i % 5 == 0:
                     print(f"{i}/{len(cases)} done")
             except Exception as e:
+                failed += 1
                 print(f"Failed case {case['id']}: {e}")
                 out.flush()
     print(f"{counts[RULES_VERSION]} cases answered by {RULES_VERSION}, "
           f"{counts[MODEL_NAME]} by {MODEL_NAME}"
-          + (f", {left_for_llm} left for the LLM" if args.rules_only else ""))
+          + (f", {left_for_llm} left for the LLM" if args.rules_only else "")
+          + (f", {failed} failed" if failed else ""))
+
+    # A failed case writes no record, so the next run picks it up again and the
+    # corpus is short one answer until it does. Exiting 0 on that made a run
+    # that extracted nothing look like a run with nothing to do.
+    return 1 if failed else 0

@@ -125,10 +125,12 @@ class FakeSession:
     def __init__(self, pages):
         self.pages = pages
         self.offsets_requested = []
+        self.params = []
 
     def get(self, url, params=None, timeout=None):
-        offset = params["resultOffset"]
+        offset = params.get("resultOffset")
         self.offsets_requested.append(offset)
+        self.params.append(params)
         return FakeResponse(self.pages[offset])
 
 
@@ -151,6 +153,16 @@ class TestDownloadCases:
     def test_stops_on_empty_page(self):
         session = FakeSession({0: {"features": []}})
         assert download_cases(session) == []
+
+    def test_a_short_download_is_refused_before_it_touches_the_db(self):
+        pipeline.check_download_complete([{}] * 990, 1000)
+        with pytest.raises(RuntimeError, match="truncated"):
+            pipeline.check_download_complete([{}] * 989, 1000)
+
+    def test_the_feed_count_is_read_from_the_count_endpoint(self):
+        session = FakeSession({None: {"count": 12097}})
+        assert pipeline.feed_count(session) == 12097
+        assert session.params[0]["returnCountOnly"] == "true"
 
     def test_raises_on_arcgis_error_payload(self):
         # ArcGIS reports errors in a 200 response body, not an HTTP status
@@ -379,6 +391,8 @@ class TestCategoryClassification:
             ("Meter Installation - Dublin", "meter_installation"),
             ("Meter Exchange Works - Wicklow", "meter_installation"),
             ("Mains Tie-In - Cork", "new_connection"),
+            ("Mains Flushing Works - Cork", "mains_flushing"),
+            ("Fire Hydrant Replacement - Dublin", "hydrant_repair"),
         ):
             assert classify_category(title).slug == slug, title
 
@@ -413,12 +427,23 @@ class TestCategoryClassification:
         assert classify_category("Burst Water Main- Cork").slug == "burst_main"  # no space
         assert classify_category("essential works –  dublin").slug == "essential_works"  # lower
         assert classify_category("  Mains Flushing – Kerry  ").slug == "mains_flushing"  # padded
+        # the feed also puts the space before the dash and none after, which
+        # swallowed the county into the category key for three cases (#67)
+        assert classify_category("Mains Repair Works -Meath").slug == "mains_repair"
+        assert classify_category("Burst Water Main -Kerry").slug == "burst_main"
+
+    def test_a_dash_with_no_whitespace_does_not_split(self):
+        # the split accepts whitespace on either side of the dash, so the
+        # invariant that keeps hyphenated words whole is "no whitespace, no split"
+        assert pipeline._title_category("Supply Re-direction") == "supply re-direction"
+        assert classify_category("Mains Tie-In - Cork").slug == "new_connection"
 
     def test_returns_none_for_unknown_or_empty(self):
         # the real survivors: a title the feed never filled in, and a bare
         # reference number. Neither carries recoverable category information.
         assert classify_category("KER00113058") is None
         assert classify_category("Something Novel – Kerry") is None
+        assert classify_category("Supply Re-direction") is None
         assert classify_category("unknown") is None
         assert classify_category(None) is None
 
@@ -528,6 +553,8 @@ def _cases_db(db_path, version=pipeline.SCHEMA_VERSION):
     extra = ["work_category TEXT", "first_seen TEXT", "last_seen TEXT"]
     if version >= 2:
         extra.append("closed_at TEXT")
+    if version >= 3:
+        extra.append("first_start_date TEXT")
     with sqlite3.connect(db_path) as conn:
         conn.execute(f"CREATE TABLE cases ({cols}, {', '.join(extra)})")
         conn.execute(f"PRAGMA user_version = {version}")
@@ -902,6 +929,44 @@ class TestLoadCasesClosedAt:
         pipeline.load_cases(conn, [self._record()], now="2026-07-01T00:00:00+00:00")
         pipeline.load_cases(conn, [self._record()], now="2026-07-08T00:00:00+00:00")
         assert self._closed_at(conn) is None
+
+
+class TestLoadCasesVanishedAt:
+    """A case the feed drops while Open can never send the transition closed_at
+    waits for, so its absence from a download is stamped instead."""
+
+    _conn = TestLoadCasesSeenStamps._conn
+    _record = TestLoadCasesSeenStamps._record
+
+    def _vanished(self, conn, case_id):
+        return conn.execute(
+            "SELECT vanished_at FROM cases WHERE id = ?", (case_id,)
+        ).fetchone()[0]
+
+    def test_absence_from_a_download_is_stamped_once(self):
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record(), self._record(id=2)],
+                            now="2026-07-01T00:00:00+00:00")
+        assert pipeline.load_cases(conn, [self._record()], now="2026-07-08T00:00:00+00:00") == 1
+        assert pipeline.load_cases(conn, [self._record()], now="2026-07-09T00:00:00+00:00") == 0
+        assert self._vanished(conn, 1) is None
+        assert self._vanished(conn, 2) == "2026-07-08T00:00:00+00:00"
+
+    def test_a_case_that_comes_back_is_no_longer_vanished(self):
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record()], now="2026-07-01T00:00:00+00:00")
+        pipeline.load_cases(conn, [], now="2026-07-08T00:00:00+00:00")
+        assert self._vanished(conn, 1) == "2026-07-08T00:00:00+00:00"
+        pipeline.load_cases(conn, [self._record()], now="2026-07-09T00:00:00+00:00")
+        assert self._vanished(conn, 1) is None
+
+    def test_a_closed_case_is_stamped_too(self):
+        # the stamp says the feed dropped it, whatever its status was
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record(status="Closed")],
+                            now="2026-07-01T00:00:00+00:00")
+        pipeline.load_cases(conn, [], now="2026-07-08T00:00:00+00:00")
+        assert self._vanished(conn, 1) == "2026-07-08T00:00:00+00:00"
 
 
 class TestBackfillReducedPressure:

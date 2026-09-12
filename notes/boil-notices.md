@@ -23,6 +23,48 @@ Uisce publishes the lifting of a boil notice as a **separate case**, with a new 
 
 One in twenty-three. Every other lift in the DB refers to a notice issued **before collection began** (2026-04-20), so it has nothing to pair with. Coverage should improve as history accumulates — the currently-open notices are the natural test — but it is thin now and the policy has to be honest about that.
 
+### Re-measured 2026-09-05: still one, and it will not improve by waiting
+
+The paragraph above expected pairing to grow with history. Seven weeks on, measured on the
+2026-09-04 release through `collect_lifts` and `boil_notice_fate` themselves:
+
+| | count |
+|---|---|
+| `boil_notice_issued` pins / events | 37 / 17 |
+| paired | **1** pin, 1 event (Donegal / Downings, still) |
+| accrue (Open, younger than the cap, no lift) | 6 pins, 2 events |
+| exclude (Open, older than the cap, no lift) | 29 pins, 13 events |
+| closed_no_signal | 1 pin, 1 event |
+| `boil_notice_lifted` pins / events | 52 / 27, of which 16 events since collection began |
+
+The reason is not history, it is disjoint populations. The 10 issue events published since
+collection began name Ardfinnan, Ballymacarbry Upper, Cashel, Golden, Emly, Galbally,
+Inishturk, Carrick-on-Suir and Foxrock Park. The 16 lift events published in the same period
+name Lissava, Downings, Carrigart, Newport, Ballyshoneen, Pettigo, Kiladysart, Skibbereen,
+Glenary, Tullohea, Achill, Cappamore, Tully, Letterfrack and Pomeroy Park. Downings is the one
+scheme on both lists. For every other lift, the archive holds no case of any category naming
+that scheme in the 90 days before it, save ordinary works (a burst at Achill, a plant
+interruption at Letterfrack the same day). The feed publishes the *issue* for some notices
+and the *lift* for others, and almost never both; for the lifts, the issue date the text
+states is the lift record's own `start_date` half the time (pattern 2 above), so the notice
+was never a separate case. Nothing this pipeline can do makes a lift pair with an issue that
+was never published.
+
+What that leaves: 13 of the 17 issue events are `Open` in the feed, older than the cap and
+never lifted, and the site excludes them, which is right for the availability arithmetic and
+wrong for a reader if any of them is a boil notice genuinely still standing (Carrignagower
+since January 2025, Tipperary Town since February). Whether they are standing cannot be told
+from the feed, and that is the class's whole problem.
+
+**Recommendation: leave `IGNORE_BOIL_NOTICES` off.** The class carries no duration and never
+will, but the two accruing notices and the one paired one are the live drinking-water warnings
+the health marker exists for, and flipping the switch removes those to tidy up a number the
+site already refuses to publish for this class. The July hope that coverage would grow is
+withdrawn; re-measure only if the feed starts publishing issues and lifts for the same
+schemes. Do-not-consume: no case in the release carries either `consumption_notice_*`
+category any more (the 2026-08-10 purge, see data-quality.md, took them), so the pairing
+code for that class is currently exercised by tests alone.
+
 ## Why unpaired notices can't simply accrue
 
 Before 2026-07-18 an unpaired open notice accrued from its start until now, capped at `CAP_DAYS`. That rests entirely on the feed's `status` field, which goes stale: 8 unpaired notices were older than the 14-day cap, and case **221165** had sat `Open` since 2025-11-13 while *its own description* said the notice had been lifted with immediate effect.
