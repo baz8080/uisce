@@ -275,3 +275,34 @@ Chapters quote from here rather than re-deriving; a missing figure is written in
 | Clear-days copy fix | "elapsed days with no notice" → "clear of supply disruption" | PR #61 |
 | Tests | 440 (#54–#57) → 443 (#61) | PRs |
 | PR #53 | does not exist (number skipped) | gh, 26 Aug 2026 |
+
+## Chapters 17-19b (added 12 Sep 2026)
+
+| Figure | Value | Source |
+|---|---|---|
+| Areas with a notice | 1,960: 697 settlements, 42 city LEAs, 1,193 EDs, 5 `-rest`, 23 unplaced | PR #63 |
+| Area pages built | 739 at `a/<county>/<area>.html`; indexable URLs 28 to 767 | PR #63 |
+| Notice-count floor | none; a floor of 2 would drop 122 pages; median 5, mean 9.0, max 83 (Dun Laoghaire) | PR #63 |
+| Slug divergence | 17 fadas + 3 punctuation = 20 names that would 404 if derived in the browser | PR #63 |
+| Path key | county+name unique over 3,717 areas; name alone repeats 185 times; 31 codes contain a slash | PR #63 |
+| Area page cost | 15.1 MB raw / 4.58 MB gzipped; ~6.2 KB gzipped per cold landing; payload +4,517 B gzipped (+4.4%); 84% of a small page is inlined CSS | PR #63 |
+| County link label | "every notice" false against `COUNTY_EVENTS_SHOWN = 60`; changed to the months | PR #62 |
+| Search index gate | 904 eligible names vs 739 pages built; gated on the payload slug | PR #66 |
+| County page cap | removed; 251 bytes per row; largest measured Dublin 384,115 B, Cork 335,599, Kerry 245,632 | PRs #68, #87 |
+| Graded county-months (29 Aug) | 130; F population 98.459% to 98.900% | PR #71 |
+| E cut candidates | 98.7 -> E 9 / F 2; 98.5 -> 10 / 1; 98.4 -> 11 / 0; 98.0 -> 11 / 0 | PR #71 |
+| Grade mix | A 9, B 26, C 53, D 31, F 11 -> A 9, B 26, C 53, D 31, E 9, F 2 | PR #71 |
+| Chip contrast (APCA) | dark ink on B Lc 38.6 vs white 69.2; D delta-E 20.6 from F, 20.2 from E; no two chips closer than 20.2 | PR #71; frontend-notes 30 Aug amendment |
+| Em/en dashes in repo | 905 em, 335 en across 45 files; `data/eval/*.csv` never re-punctuated | PR #70 |
+| Truncated LLM response | case 243245, 4,448 chars, 4,018 of 4,096 prompt tokens, 78 left; 49 descriptions over 3,000 chars (max 5,093) extracted cleanly 2 Aug | PR #74 |
+| Open notices nationally (4 Sep) | 426 rows, 295 area groups, 26 cards | PR #77 |
+| Atom feeds | 27 feeds, 499 KB; newest 50 by `first_seen`; 15 references span two counties | PR #78 |
+| Notice text | ~7 MB archive-wide vs ~500 KB for open notices; 423 wtr.ie links on 26 pages | PR #80 |
+| History shards | 2,406,853 -> 2,513,470 bytes with the `end` day; Cork 14 Aug lists 25 notices | PR #81 |
+| data.js before the split | 955,516 B: towns 583,560 (61%), resolved 164,809 (17%), months 133,842 (14%), open 58,212 (6%) | PR #82 |
+| data.js after the split | 212,116 B (28,640 gzipped) vs 955,516 (123,950); Cork shard 69,925; 1,218 of 4,833 rows drop an implied 100.0; `INITIAL_BUDGET` 512 KB, warned never failed | PR #82 |
+| Feed purge | 9,052 cases unserved since 2026-08-10: May 2,367, Jun 2,563, Jul 3,205, Aug 46; not a rolling window; one case since | PR #83 |
+| Vanished guard | `FEED_COUNT_TOLERANCE` 1%; ten Open cases stamped, nine gone over 14 days | PR #83 |
+| Boil pairing (4 Sep) | still 1 of 17 events; 37 issued pins, 52 lift pins / 27 events, 16 since collection; schemes disjoint but Downings | PR #84 |
+| Open vs completion (5 Sep) | 216 of 562 Open cases past their own completion (177 of 437 events); feed closes a median 72 h late, p90 111 h, over 3,783 closed; 0 of 7,667 completions ever followed by a newer update; open events 437 -> 260; no published figure moved | PR #90 |
+| Archive (12 Sep 2026) | 12,430 cases, 10,133 distinct references, 9,281 vanished, 747 status Open | measured against `out/uisce.db` (feed read 9 Sep) |

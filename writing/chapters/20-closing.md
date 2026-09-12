@@ -1,8 +1,8 @@
-# 17. Closing: what the site can say, and what it cannot
+# 20. Closing: what the site can say, and what it cannot
 *~10 min read · with a glossary*
 
-*Where we are:* the end of the account, on 26 August 2026, with the repository at pull request
-#61. Chapters 1–12 were written on 18 August; chapters 14–16 cover what came after. This chapter returns to the question, sets out plainly what the site can and cannot claim,
+*Where we are:* the end of the account, on 12 September 2026, with the repository at pull request
+#90. Chapters 1-12 were written on 18 August; chapters 14-19b cover what came after. This chapter returns to the question, sets out plainly what the site can and cannot claim,
 lists what was learned in the form the repository itself keeps it, and collects every concept
 box into a glossary.
 
@@ -88,6 +88,10 @@ list of "things that were measured, and closed". In plain language:
 | Keep sending every notice to the language model | ~93% of notices are a rigid template; rules answer those with zero wrong emissions on 354 labelled rows and abstain to the model for the rest (chapter 15). |
 | Let rules emit "not found", or handle repeating windows | Absence of a match is evidence about the rules, not the notice; the window values are what needed a model (chapter 15). |
 | Colour the day bars by water-quality notices too | The bars answer "was the supply disrupted?"; safety lives in the health marker, tiles and county pages. A quality-only day counts clear, accepted and noted (chapter 16). |
+| Give every area a page, or set a notice-count floor | Countryside "Around ..." divisions are not addresses and 1,193 near-identical pages read as thin content; but a floor would make a permalink appear on an area's second notice, and one that comes and goes is worse than a short one (chapter 17). |
+| Continue the band widths to put E at 98.4% | The whole F population lies between 98.459% and 98.900%, so the tidy cut empties the bottom band; 98.7% keeps both bands meaningful (chapter 18). |
+| Keep believing the feed never deletes | 9,052 notices stopped being served on 10 August; the release database is the only record of four months of disruptions (chapter 19b). |
+| Let the badge read the feed's status while the arithmetic reads the notice | 216 of 562 "open" cases were past their own reported completion, and the feed closes a case a median 72 hours late; a signal trusted for the arithmetic is trusted for the display (chapter 19b). |
 
 Two conventions sit under all of it and are worth naming last. **Decisions go in the notes,
 dated, with the rejected alternatives and their numbers** — so a future session, human or
@@ -143,9 +147,18 @@ full box and its worked example live.
 - **Two writers, one append-only file** — append-only plus `merge=union` plus latest-per-case by timestamp lets CI and a laptop both add records safely (15).
 - **Promoted on the second user** — a helper starts site-local and moves upstream the moment a second site wants it; the no-redeclare guard makes the move mandatory (16).
 - **The bars answer one question** — day cells show supply disruption only; safety is the health marker's job, and the split must happen when the cell is computed (16).
+- **Thin content at scale** - a thousand near-identical pages are demoted as a group, so "a page for every area" needs a predicate: settlements and city electoral areas, not countryside divisions (17).
+- **The flag and the value are the same field** - the filename ships in the data only when a file was written, so anything that reads it cannot offer a URL that does not exist (17).
+- **Fit the cut to your own tail** - a band nothing ever reaches teaches the reader the scale is mis-set; E sits at 98.7% because 98.4% empties F (18).
+- **Two ways to measure contrast** - WCAG 2.1 reads a luminance ratio, APCA accounts for which colour is the ink; dark text on B measured Lc 38.6 against white's 69.2 (18).
+- **A guard that reads a shorter list passes by seeing fewer names** - a check built from a list it parses stops covering what leaves the list, silently (18).
+- **A feed is the site's own change log** - ordered by the build that first saw a notice, not by its publication date, or a backfilled old notice lands where nobody looks (19a).
+- **The initial payload is what everyone pays for** - the front page's data file is downloaded by every reader, so anything only one view reads belongs in a per-county file (19a).
+- **A stamp is only as safe as the download it is inferred from** - absence is evidence only if you can prove you looked; the feed's own count gates the vanished stamp at 1% (19b).
+- **A signal trusted for the arithmetic is trusted for the display** - and deferring a trade-off to the owner means measuring both sides first (19b).
 
 ## Notes
 
 - Kildare July 2026 figures: `out/site/data.js` built 18 Aug 2026 14:37Z (chapter 8b).
 - The settled-decisions table paraphrases the repository's `CLAUDE.md` index; each row's evidence is in the `notes/` section that row names.
-- Concept boxes: 43 across chapters 1–16; this glossary lists each once.
+- Concept boxes: 52 across chapters 1-19b; this glossary lists each once.

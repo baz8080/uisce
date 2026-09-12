@@ -111,7 +111,7 @@ Measured against the 5 September release:
   So the false-negative risk that justified the caution, a notice saying it was finished and then
   resuming, has never once occurred in the archive.
 
-Two days of deferral and one measurement later, the fix went in (PR #90, 5 Sep 2026).
+One measurement later, the same day, the fix went in (PR #90, 5 Sep 2026).
 
 > **Concept: a signal trusted for the arithmetic is trusted for the display.** If the site is
 > confident enough in its extracted end time to stop charging a county's availability at that

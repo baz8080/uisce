@@ -59,7 +59,10 @@ short essay on one problem.
 | **14** | *One design, three sites* | The look moves into a layer shared with two sibling sites; a phone review; a copy that drifted in a day and became a pinned dependency. |
 | **15** | *Rules first, model second* | Ninety-three per cent of the notices are a template; rules answer those in under a second and the model keeps the rest, and the scheduled build runs the rules half itself. |
 | **16** | *Stop sounding like the author* | A copy pass in the reader's own words, two helpers promoted into the shared layer, and the design alignment with the sibling sites. |
-| **17** | *Closing* | What the site can say, what it cannot, what was learned, and a glossary. |
+| **17** | *A page for every place* | 739 areas get their own address, and four link labels turn out to promise more than their pages hold. |
+| **18** | *The letter with nowhere to sit* | The grade scale gains an E, fitted to the tail rather than to the pattern; and three checks that could not have failed. |
+| **19a-19b** | *Nine things it could not do* · *Trusting the feed less* | A survey of what was missing, worked through in a day; then the discovery that the feed had quietly dropped four months of notices, and that the site's "open" badge disagreed with the notices themselves. |
+| **20** | *Closing* | What the site can say, what it cannot, what was learned, and a glossary. |
 
 ## How it was built, said once
 

@@ -1,4 +1,4 @@
-# Outline — 12 chapters, chronological (+ 14–16 added as PRs landed)
+# Outline — 12 chapters, chronological (+ 14-19b added as PRs landed)
 
 Each entry: PRs · thesis (what the site now thinks) · concepts to box · worked example · diagram ·
 reading list beyond `sources/chNN.md`. Read notes *by section heading only* (grep the heading,
@@ -289,3 +289,51 @@ alphabetical + chevron + card reorder; tests repurposed, 443.
 sentence.  **Diagram.** None — nothing spatial.
 
 **Reading.** `sources/ch16.md`; `notes/frontend-notes.md` design-alignment section.
+
+## Ch 17 - A page for every place - #62-#66, #68 - 26-27 Aug (added 12 Sep 2026)
+
+**Thesis.** Ch 11 gave 28 indexable URLs; the long tail had none. #62 link out of the footer, row
+href onto the static page, and the label that promised "every notice" against a 60-cap. #63 739
+pages of 1,960 noticed areas (697 settlements + 42 LEAs; EDs/`-rest`/unplaced excluded as thin
+content), no notice-count floor, the slug shipped because the two slug functions diverge on 20
+names, path keyed county+name. #65 directory filter over-matching. #66 search hits become real
+links, gated on the slug (904 eligible vs 739 built). #68 caps off, one name per thing. #64 a test
+that a rule *applies*.
+
+**Concepts.** *Thin content at scale* · *the flag and the value are the same field*.
+**Worked examples.** The false link label; the fada that would 404 twenty places.
+**Reading.** `sources/ch17.md`; `notes/frontend-notes.md` "The area pages", "The county-page link
+came up out of the footer", "Search reaches the area", "The copy and consistency pass".
+
+## Ch 18 - The letter with nowhere to sit - #69-#75 - 29 Aug-3 Sep (added 12 Sep 2026)
+
+**Thesis.** E at 98.7% fitted to the tail (F population 98.459-98.900; 98.4 empties F); the
+contrast decision reopened without being read and reconciled on APCA; the em-dash rule written
+where a cloud session can see it; three checks that could not fail (the globals guard reading a
+halved file, the truncated LLM response, the dash-separated titles).
+
+**Concepts.** *Fit the cut to your own tail* · *two ways to measure contrast* · *a guard that reads
+a shorter list passes by seeing fewer names*.
+**Worked examples.** Four candidate cuts against 130 county-months; case 243245's 78 spare tokens.
+**Reading.** `sources/ch18.md`; `notes/statuspage-methodology.md` "The scale grew an E";
+`notes/frontend-notes.md` "Contrast pass 2026-08-18" + 30 Aug amendment.
+
+## Ch 19a/19b - the 5 September batch - #76-#90 (added 12 Sep 2026)
+
+**19a thesis.** A missing-features survey, nine PRs in a day, none needing new data: noscript
+pointer, national open view, Atom feeds (27, 499 KB, ordered by first sighting), area month
+tables, notice wording under open rows (+423 wtr.ie links), day drill-down, the payload split
+(955,516 to 212,116 bytes), the county-named-town search label, `notes/roadmap.md`.
+
+**19b thesis.** Two things the site was wrong about: the feed purged 9,052 cases on 10 Aug
+(superseding the July "never deletes" finding; `vanished_at` behind a 1% feed-count guard), and
+`is_open` read the feed's status while the arithmetic read the notice (216 of 562; feed 72 h late;
+0 of 7,667 completions ever resumed; open events 437 to 260, no published figure moved). Plus #89
+(release DB migrated before the site reads it) and #84 (boil pairing still 1, disjoint schemes).
+
+**Concepts.** *A feed is the site's own change log* · *the initial payload is what everyone pays
+for* · *a stamp is only as safe as the download it is inferred from* · *a signal trusted for the
+arithmetic is trusted for the display*.
+**Reading.** `sources/ch19.md`; `notes/data-quality.md` "Cases that vanish from the feed";
+`notes/statuspage-methodology.md` "The notice's own completion closes it";
+`notes/frontend-notes.md` "The county's own data left data.js"; `notes/boil-notices.md`.

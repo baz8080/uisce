@@ -26,8 +26,12 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 | 12 | Put a number on what you don't know | #40–41 | reviewed | 2,623 |
 | 14 | One design, three sites | #42, #44–#49 | reviewed | 2,765 |
 | 15 | Rules first, model second | #46, #50–#52 | reviewed | 2,916 |
-| 16 | Stop sounding like the author | #54–#61 | drafted | 2,070 |
-| 17 | Closing: what the site can say, and what it cannot (+ glossary) (was 13) | — | reviewed | 2,197 |
+| 16 | Stop sounding like the author | #54–#61 | reviewed | 2,070 |
+| 17 | A page for every place | #62-#66, #68 | drafted | 2,589 |
+| 18 | The letter with nowhere to sit | #69-#75 | drafted | 2,553 |
+| 19a | Nine things it could not do | #76-#82, #85, #87 | drafted | 2,271 |
+| 19b | Trusting the feed less | #83, #84, #88-#90 | drafted | 2,281 |
+| 20 | Closing: what the site can say, and what it cannot (+ glossary) (was 13) | — | reviewed | 2,197 |
 
 ## Chapter summaries (3 lines each, added when drafted)
 
@@ -159,6 +163,26 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
   alignment: quality leaves the bars (concept box; server-side; clear-days copy fix), ramp →
   solid tokens 2.50/4.56/8.44, severity-word captions, shared search (~66 KB), 443 tests.
   Ends: two published numbers moved knowingly; the vocabulary irony.
+- **17** The long tail had no addresses. #62 link out of the footer + row href; the label that
+  promised "every notice" against a 60-cap, corrected to the months, then the cap came off in
+  #68. #63 739 pages of 1,960 noticed areas (concept box thin content at scale), no floor, the
+  slug shipped (20 names would 404). #66 search hits become links, gated on the slug (concept
+  box flag and value). #64 a test that a rule applies. Ends: 767 URLs; the stretch was mostly
+  about promises, not pages.
+- **18** E at 98.7% fitted to the tail (concept box; 130 county-months, F 98.459-98.900, 98.4
+  empties F); the contrast decision reopened unread and reconciled on APCA (concept box); the
+  em-dash rule written where a cloud session can see it - this is the first chapter under it;
+  three checks that could not fail (concept box: a shorter list passes by seeing fewer names;
+  case 243245 truncated at 78 spare tokens; dash-separated titles).
+- **19a** The missing-features survey: noscript, national open view, Atom feeds (concept box: a
+  feed is the change log, ordered by first sighting), area month tables, notice wording + 423
+  wtr.ie links, day drill-down, the payload split (concept box + block table, 955,516 to
+  212,116), "Sligo town", roadmap.md. Ends: none of the seven needed new data.
+- **19b** Two things the site was wrong about. The purge (9,052 cases since 10 Aug; supersedes
+  Ch 7's "never deletes"; concept box on the 1% count guard) and is_open (reader-reported
+  CAR00119809; 216 of 562; feed 72 h late; 0 of 7,667; concept box "trusted for the arithmetic,
+  trusted for the display"; 437 to 260, no published figure moved). #89, #84. Ends: the first
+  stranger to write in noticed the badge, not the arithmetic.
 
 ## Open threads
 
@@ -168,19 +192,20 @@ Statuses: `todo` → `drafted` → `reviewed` (continuity pass done by a later s
 - PR #23's Kildare table shows Naas at 25,824; the corrected settlement figure is 26,180. When
   quoting the table say "as published in PR #23" and note the correction once.
 
-## Status: 21 posts; chapter 16 drafted 26 Aug 2026, not yet continuity-reviewed
+## Status: 25 posts; chapters 17-19b drafted 12 Sep 2026, not yet continuity-reviewed
 
-Chapter 16 (PRs #54–#61) added 26 Aug 2026; the closing moved 16 → 17 (one settled row, two
-glossary entries; 43 concept boxes). Chapters 14–15 passed their continuity check 26 Aug
-(cross-refs land, no verify markers) and are `reviewed`. Next session: continuity-read 16;
-new chapters follow the same pattern — sources pack, chapter, closing renumber. The original
+Chapters 17, 18, 19a and 19b (PRs #62-#90) added 12 Sep 2026; the closing moved 17 -> 20 (five settled rows, nine glossary entries;
+settled rows, ten glossary entries; 52 concept boxes). Chapter 16 passed its continuity check
+12 Sep and is `reviewed`. **From chapter 17 the no-em-dash rule in CLAUDE.md binds new prose**
+(PR #70): spaced hyphens only, and earlier chapters are not re-punctuated. Next session:
+continuity-read 17-19b. The original
 18 posts had their full continuity pass on 18 Aug (no verify markers, read times, cross-refs,
 vocabulary).
 
 **How to publish.** Each file in `chapters/` is a standalone post: title, read time, "where we
 are", concept boxes as blockquotes, worked examples, notes. Diagrams are relative links to
 `../diagrams/*.svg` (11 files) and mermaid fences (4) — a blog host needs mermaid support or
-the fences pre-rendered. Publish in file order (00 → 17). For a paper, `figures.md` is the
+the fences pre-rendered. Publish in file order (00 → 20). For a paper, `figures.md` is the
 figure registry and `outline.md` the structure; the settled-decisions table in Ch 13 is the
 discussion section in embryo.
 
@@ -367,6 +392,10 @@ chapter 3"; Ch 2 ended on the same line. Register figures. Update this file. Com
 
 ## Session log
 
+- 2026-09-12 · Session 14 · merged main; source packs ch17/ch18/ch19; drafted Ch 17 (2,589 w),
+  18 (2,553 w), 19a (2,271 w) and 19b (2,281 w) for PRs #62-#90; closing renumbered 17->20
+  (+5 settled rows, +10 glossary); Ch 16 continuity-checked → reviewed; first chapters written
+  under the no-em-dash rule.
 - 2026-08-26 · Session 13 · merged main; drafted Ch 16 (2,070 w) for PRs #54–#61; closing
   renumbered 16→17 (+1 settled row, +2 glossary); 14–15 continuity-checked → reviewed;
   sources/ch16.md; there is no PR #53.
