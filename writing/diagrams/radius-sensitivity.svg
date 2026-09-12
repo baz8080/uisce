@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300" width="600" height="300" font-family="system-ui, sans-serif" font-size="13">
+  <!-- three concentric circles around the Leixlip pin: 300 m, 500 m, 1 km, with the populations each captures -->
+  <circle cx="200" cy="150" r="130" fill="#f5e6c8" fill-opacity="0.35" stroke="#b8860b" stroke-width="1.5"/>
+  <circle cx="200" cy="150" r="65" fill="#cfe3f5" fill-opacity="0.5" stroke="#3b6ea5" stroke-width="2"/>
+  <circle cx="200" cy="150" r="39" fill="#d9ead3" fill-opacity="0.6" stroke="#4a7c3f" stroke-width="1.5"/>
+  <path d="M200 135 l-6 12 a6 6 0 1 0 12 0 z" fill="#c0392b"/>
+  <!-- labels -->
+  <g font-size="12">
+    <line x1="200" y1="150" x2="239" y2="150" stroke="#4a7c3f" stroke-dasharray="3 2"/><text x="205" y="146" fill="#4a7c3f">300 m</text>
+    <line x1="200" y1="150" x2="200" y2="85" stroke="#3b6ea5" stroke-dasharray="3 2"/><text x="204" y="100" fill="#1f3a5a">500 m</text>
+    <line x1="200" y1="150" x2="200" y2="280" stroke="#b8860b" stroke-dasharray="3 2"/><text x="204" y="270" fill="#7a5a00">1 km</text>
+  </g>
+  <!-- table on the right -->
+  <g font-size="13" fill="#333">
+    <text x="360" y="60" font-weight="600">KLD00118059, Forest Park, Leixlip</text>
+    <text x="360" y="90" fill="#4a7c3f">300 m</text><text x="430" y="90">8 Small Areas</text><text x="540" y="90" text-anchor="end" font-weight="600">1,966</text>
+    <text x="360" y="115" fill="#1f3a5a">500 m</text><text x="430" y="115">12 Small Areas</text><text x="540" y="115" text-anchor="end" font-weight="600">3,255</text>
+    <text x="360" y="140" fill="#7a5a00">1 km</text><text x="430" y="140">29 Small Areas</text><text x="540" y="140" text-anchor="end" font-weight="600">8,440</text>
+    <line x1="360" y1="150" x2="560" y2="150" stroke="#999"/>
+    <text x="360" y="172" font-size="12">people affected ≈ radius²: 1 km ≈ 4× 500 m</text>
+    <text x="360" y="200" font-size="12">× 14.72 h → 28,900 / 47,900 / 124,200</text>
+    <text x="360" y="218" font-size="12">person-hours for the same event</text>
+    <text x="360" y="250" font-size="12" fill="#666">County rankings barely move (ρ ≈ 0.9);</text>
+    <text x="360" y="266" font-size="12" fill="#666">48 of 52 county-months change letter.</text>
+  </g>
+</svg>
