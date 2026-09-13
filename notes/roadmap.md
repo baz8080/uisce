@@ -76,18 +76,6 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
 - **A closure series**, if one is ever published from `closed_at`: record the build cadence
   beside the data so the series can be corrected rather than annotated (data-quality.md,
   "`closed_at` is a floor").
-- **A window that first opens after the works end**, 3 of 96 recurring claims on 2026-09-13
-  and all three the same event (data-quality.md, "A pin can report half a window"): the model
-  reads a range's only date, which is its last, as `window_first_date`. It fails safe today
-  through the "single window in span" refusal, so a coherence check would have nothing else to
-  do. Build one if the count grows, or if an event ever appears whose claimed first date sits
-  inside the span rather than past its end - that one would silently shorten a real series.
-- **An incomplete claim borrowing a sibling's window.** A pin claiming a window of its own
-  never falls back to the shared one, even when its own is unusable, so the five `NULL`-first-date
-  pins of `TIP00116073` stay continuous while three siblings hold a complete window. Worth 0h
-  today: the complete window's first date (2026-08-14) is past the 14-day cap on every one of
-  those pins, so the borrowed series would be empty anyway. Re-measure if the mixed-pin warning
-  ever names an event with both shapes and an uncapped span.
 
 ## Noted and not taken
 
