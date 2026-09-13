@@ -747,7 +747,7 @@ def recurring_events(rows, windows):
 
 
 def event_windows(rows):
-    """{(county, ref): (open, close, first_date)} for events any pin gave a window.
+    """{(county, ref): (open, close, first_date) or None} per event a pin claimed.
 
     A repeating window is a property of the *works*, not of the notice that
     happens to describe them. Uisce publishes one event as many pins over several
@@ -763,8 +763,12 @@ def event_windows(rows):
     at the moment it says the works stopped.
 
     Where pins disagree the commonest window wins, ties broken by sorting so a
-    rebuild is reproducible. No event in the corpus currently disagrees; the rule
-    exists so that one does not resolve itself differently build to build.
+    rebuild is reproducible. Only a window with all three fields stands for
+    election: an incomplete one is refused wherever it is read, so letting it win
+    the vote would deny a sibling the usable window another pin did report. The
+    value is then None, but the *key* is kept either way, because the key set is
+    also the recurrence signal recurring_events seeds from and a window the
+    extraction only half-reported is still a window the notice described.
     """
     claims = defaultdict(list)
     for r in rows:
@@ -772,10 +776,11 @@ def event_windows(rows):
             claims[(r["county"], case_ref(r))].append(
                 (r["end_window_open"], r["end_window_close"], r["end_window_first_date"])
             )
-    return {
-        key: max(sorted(set(windows)), key=windows.count)
-        for key, windows in claims.items()
-    }
+    windows = {}
+    for key, claimed in claims.items():
+        usable = [w for w in claimed if all(w)]
+        windows[key] = max(sorted(set(usable)), key=usable.count) if usable else None
+    return windows
 
 
 def recurring_intervals(row, start, end, shared=None):

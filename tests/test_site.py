@@ -1548,6 +1548,31 @@ class TestSharedWindows:
         ]
         assert event_windows(rows)[("Carlow", "CAR00000001")] == ("22:00", "07:00", "2026-05-01")
 
+    def test_an_incomplete_window_does_not_stand_in_the_vote(self):
+        """TIP00116073, 2026-09-13: "nightly from 8pm until 10am until 18
+        September" names no first date, so five of its eight pins reported none
+        and three did. Sorting the two shapes against each other raised a
+        TypeError and failed the build; an incomplete window is refused wherever
+        it is read, so it does not get to deny a sibling a usable one either."""
+        rows = [
+            _recurring(id=1, end_window_first_date=None),
+            _recurring(id=2, end_window_first_date=None),
+            _recurring(id=3),
+        ]
+        assert event_windows(rows)[("Carlow", "CAR00000001")] == ("22:00", "07:00", "2026-05-01")
+
+    def test_an_event_whose_every_window_is_incomplete_keeps_its_key(self):
+        """The key set is the recurrence signal recurring_events seeds from, so a
+        window the extraction only half-reported must not quietly turn the event
+        back into an outage. There is just nothing for a sibling to inherit."""
+        rows = [_recurring(id=1, end_window_open=None), self._completion_pin()]
+        shared = event_windows(rows)
+        assert shared == {("Carlow", "CAR00000001"): None}
+        assert ("Carlow", "CAR00000001") in recurring_events(rows, shared)
+        case = resolve_case(rows[1], SA_INDEX, {}, NOW, shared[("Carlow", "CAR00000001")])
+        assert case.rec == "none"
+        assert len(case.intervals) == 1
+
     def test_an_inherited_pin_counts_as_expanded_in_the_report(self):
         """Its tag has to start with "expanded" or the mixed-event check would
         flag the very event inheritance just repaired."""
