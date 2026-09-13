@@ -746,8 +746,28 @@ def recurring_events(rows, windows):
     return keys
 
 
+def _read_window(window):
+    """(open, close, first_date) as objects, or (None, why it cannot be honoured).
+
+    One reading for both callers. A window `event_windows` elects has to be one
+    `recurring_intervals` could honour, or the vote hands a sibling a window that
+    is refused the moment it is read - and two separate lists of checks would
+    drift apart the first time one of them grew a case.
+    """
+    open_t, close_t, first_date = (
+        _parse_time(window[0]), _parse_time(window[1]), _parse_date(window[2])
+    )
+    if open_t is None or close_t is None or first_date is None:
+        return None, "window fields missing or unparseable"
+    if open_t == close_t:
+        # a window covering the whole day is a continuous event; say so rather
+        # than inventing touching intervals that merge would rejoin anyway
+        return None, "window covers the whole day"
+    return (open_t, close_t, first_date), None
+
+
 def event_windows(rows):
-    """{(county, ref): (open, close, first_date)} for events any pin gave a window.
+    """{(county, ref): (open, close, first_date) or None} per event a pin claimed.
 
     A repeating window is a property of the *works*, not of the notice that
     happens to describe them. Uisce publishes one event as many pins over several
@@ -763,8 +783,12 @@ def event_windows(rows):
     at the moment it says the works stopped.
 
     Where pins disagree the commonest window wins, ties broken by sorting so a
-    rebuild is reproducible. No event in the corpus currently disagrees; the rule
-    exists so that one does not resolve itself differently build to build.
+    rebuild is reproducible. Only a window `_read_window` can honour stands for
+    election: one that is refused wherever it is read must not win the vote and
+    deny a sibling the window another pin did report. The value is then None, but
+    the *key* is kept either way, because the key set is also the recurrence
+    signal recurring_events seeds from and a window the extraction half-reported
+    is still a window the notice described.
     """
     claims = defaultdict(list)
     for r in rows:
@@ -772,10 +796,11 @@ def event_windows(rows):
             claims[(r["county"], case_ref(r))].append(
                 (r["end_window_open"], r["end_window_close"], r["end_window_first_date"])
             )
-    return {
-        key: max(sorted(set(windows)), key=windows.count)
-        for key, windows in claims.items()
-    }
+    windows = {}
+    for key, claimed in claims.items():
+        usable = [w for w in claimed if _read_window(w)[0] is not None]
+        windows[key] = max(sorted(set(usable)), key=usable.count) if usable else None
+    return windows
 
 
 def recurring_intervals(row, start, end, shared=None):
@@ -804,15 +829,10 @@ def recurring_intervals(row, start, end, shared=None):
     else:
         return None, "none"
 
-    open_t, close_t, first_date = (
-        _parse_time(window[0]), _parse_time(window[1]), _parse_date(window[2])
-    )
-    if open_t is None or close_t is None or first_date is None:
-        return None, "refused: window fields missing or unparseable"
-    if open_t == close_t:
-        # a window covering the whole day is a continuous event; say so rather
-        # than inventing touching intervals that merge would rejoin anyway
-        return None, "refused: window covers the whole day"
+    read, unreadable = _read_window(window)
+    if unreadable:
+        return None, f"refused: {unreadable}"
+    open_t, close_t, first_date = read
 
     # An inherited window faces the same cross-check as a claimed one: if a
     # sibling's closing time disagrees with this pin's own scheduled end, the two
@@ -892,8 +912,11 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
     when this particular notice reported none of its own — see event_windows.
     `recurring` is whether the event announces a repeating window by either
     signal (see recurring_events); it decides severity, while shared_window
-    decides the intervals. Left None, it falls back to this row's own fields,
-    which is enough for a single-notice caller.
+    decides the intervals. Left None, it falls back to this row's own fields plus
+    shared_window, which is enough for a single-notice caller but is *not* the
+    event-level signal: an event whose every claimed window is unreadable has no
+    window to share, so a pin of it that claimed nothing would classify on its
+    own title. Pass `key in recurring_events(...)`, as every corpus caller does.
 
     `spans` is the SpanTable used to charge a case whose end signal is unusable.
     Left None, such a case keeps the token 1-second footprint this replaced,

@@ -1548,6 +1548,50 @@ class TestSharedWindows:
         ]
         assert event_windows(rows)[("Carlow", "CAR00000001")] == ("22:00", "07:00", "2026-05-01")
 
+    def test_an_incomplete_window_does_not_stand_in_the_vote(self):
+        """TIP00116073, 2026-09-13: "nightly from 8pm until 10am until 18
+        September" names no first date, so five of its eight pins reported none
+        and three did. Sorting the two shapes against each other raised a
+        TypeError and failed the build; an incomplete window is refused wherever
+        it is read, so it does not get to deny a sibling a usable one either."""
+        rows = [
+            _recurring(id=1, end_window_first_date=None),
+            _recurring(id=2, end_window_first_date=None),
+            _recurring(id=3),
+        ]
+        assert event_windows(rows)[("Carlow", "CAR00000001")] == ("22:00", "07:00", "2026-05-01")
+
+    def test_an_event_whose_every_window_is_incomplete_keeps_its_key(self):
+        """The key set is the recurrence signal recurring_events seeds from, so a
+        window the extraction only half-reported must not quietly turn the event
+        back into an outage. There is just nothing for a sibling to inherit."""
+        key = ("Carlow", "CAR00000001")
+        rows = [_recurring(id=1, end_window_open=None), self._completion_pin()]
+        shared = event_windows(rows)
+        assert shared == {key: None}
+        keys = recurring_events(rows, shared)
+        assert key in keys
+        # as every corpus caller resolves it: the severity signal is the key, not
+        # the window, so the sibling stays inside a restriction with nothing to
+        # inherit rather than becoming an outage pin in the middle of one
+        case = resolve_case(rows[1], SA_INDEX, {}, NOW, shared[key], key in keys)
+        assert case.sev == "degraded"
+        assert case.rec == "none"
+        assert len(case.intervals) == 1
+
+    def test_a_whole_day_window_does_not_stand_in_the_vote_either(self):
+        """`_read_window` decides what stands for election, so the vote and the
+        refusal cannot disagree about what is honourable. Two whole-day claims are
+        live in the corpus (2026-09-13: COR00115518 16:00-16:00, WAT00118181
+        12:00-12:00), each the only pin of its event, so this costs nothing today
+        and stops a pin's usable window losing to one when it does not."""
+        rows = [
+            _recurring(id=1, end_window_open="16:00", end_window_close="16:00"),
+            _recurring(id=2, end_window_open="16:00", end_window_close="16:00"),
+            _recurring(id=3),
+        ]
+        assert event_windows(rows)[("Carlow", "CAR00000001")] == ("22:00", "07:00", "2026-05-01")
+
     def test_an_inherited_pin_counts_as_expanded_in_the_report(self):
         """Its tag has to start with "expanded" or the mixed-event check would
         flag the very event inheritance just repaired."""
