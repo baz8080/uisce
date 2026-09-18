@@ -9,11 +9,11 @@ from uisce.rules import RULES_VERSION
 from uisce.rules import extract as rules_extract
 
 MODEL_URL = "http://localhost:1234/v1/chat/completions"
-MODEL_NAME = "gemma-4-12b-qat"
+MODEL_NAME = "gemma-4-12b-qat"  # recorded identity; predates the publisher prefix below
+MODEL_API_ID = "google/gemma-4-12b-qat"  # LM Studio now refuses the bare name
 PROMPT_VERSION = 3
 LLM_TIMEOUT = 120  # local model; long descriptions can take well over 15s
 
-# might also need {%- set enable_thinking = false %} in system prompt for LM studio
 PROMPT = """
 You are a data extraction assistant. You read a single water outage / works notice and extract the raw end-time signal. You do NOT do any date maths or timezone conversion. Python does that afterwards. Your job is to read the text, decide which end-time signal is present, and report the date and a 24-hour local time.
 
@@ -183,7 +183,7 @@ def get_cases_needing_inference(db_path, last_state_by_case_id, force=False):
 
 def call_llm(session, start_date, description):
     payload = {
-        "model": MODEL_NAME,
+        "model": MODEL_API_ID,
         "messages": [
             {
                 "role": "user",
@@ -191,6 +191,9 @@ def call_llm(session, start_date, description):
             }
         ],
         "temperature": 0,
+        # gemma-4 defaults to thinking mode in LM Studio; per-call override is the
+        # only thing that works, same as qwen (see model-and-runtime-benchmarks.md).
+        "reasoning_effort": "none",
     }
     resp = session.post(MODEL_URL, json=payload, timeout=LLM_TIMEOUT)
     resp.raise_for_status()

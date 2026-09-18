@@ -24,6 +24,8 @@ LM Studio serializes requests by default (4 parallel requests = same wall time a
 
 Operational note: Qwen models in LM Studio default to thinking mode (~4,000 reasoning tokens, ~49s/call). The only thing that disables it through the API is a top-level `"reasoning_effort": "none"` in the request payload — `chat_template_kwargs` and `/no_think` do not work.
 
+**2026-09-18 addendum:** gemma-4-12b-qat picked up the same default. It had been running with thinking off via an LM Studio model-level setting, which is not something `uisce-infer` can rely on unattended — a fresh load or a settings reset silently turns it back on. Verified live: a trivial prompt cost 44 reasoning tokens with thinking on, 0 with `"reasoning_effort": "none"` in the payload, same behaviour as Qwen above. `call_llm` now sends it on every call. Separately, LM Studio also stopped accepting the bare `gemma-4-12b-qat` identifier in the `model` field (`model_not_found`) — it now requires the `google/` publisher prefix. `MODEL_NAME` stays the bare name for JSONL/eval-filename continuity with the existing history; a new `MODEL_API_ID` ("google/gemma-4-12b-qat") is what actually goes on the wire.
+
 ## Speculative decoding: blocked by the current GGUF
 
 Would be the natural speed lever (formulaic JSON output → high draft acceptance, identical output at temperature 0), but every route is closed with the current model file:
