@@ -80,9 +80,14 @@ with the evidence that closed them.
 - Follow-ups go in [notes/roadmap.md](notes/roadmap.md): work agreed and not started, checks
   that gate it, decisions waiting on the owner, re-measurements with a trigger. Delete the entry
   when it closes and put the outcome where it belongs.
-- Comments earn their place or they go. Say **why**, not what — never a paraphrase of the line
-  below, a heading for an obviously-named block, or an explanation of a standard flag. One line
-  where one will do; a paragraph of reasoning belongs in the commit message or `notes/`.
+- **Comment sparingly.** Say **why**, not what - never a paraphrase of the line below, a heading
+  for an obviously-named block, or an explanation of a standard flag, and never restate a settled
+  decision at each site that follows it: state it once, in `notes/` or the PR, and let the code
+  stand. A comment earns its place only when it records something the reader cannot see: the
+  feed's behaviour, a measurement, or a trap that would otherwise be refactored away - a
+  re-stamped `start_date` or a `status` the extraction outranks is what that looks like in code.
+  One line where one will do; a paragraph of reasoning belongs in the commit message or `notes/`.
+  No docstring on a test whose name already says what it asserts.
 - `uv run ruff check` and `uv run pytest` before anything ships, in that order — it is the order
   CI runs them in, and ruff failing first means the suite never runs there at all. The payload-shape tests in `tests/test_site.py` are guards:
   when one fails because a key was added, that is the guard working.
