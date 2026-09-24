@@ -1071,6 +1071,12 @@ class TestLoadCasesVanishedAt:
         assert self._vanished(conn, 1) is None
         assert self._vanished(conn, 2) == "2026-07-08T00:00:00+00:00"
 
+    def test_a_vanished_case_never_gets_closed_at(self):
+        conn = self._conn()
+        pipeline.load_cases(conn, [self._record()], now="2026-07-01T00:00:00+00:00")
+        pipeline.load_cases(conn, [], now="2026-07-08T00:00:00+00:00")
+        assert conn.execute("SELECT closed_at FROM cases").fetchone() == (None,)
+
     def test_a_case_that_comes_back_is_no_longer_vanished(self):
         conn = self._conn()
         pipeline.load_cases(conn, [self._record()], now="2026-07-01T00:00:00+00:00")
