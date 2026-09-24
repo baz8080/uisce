@@ -1035,6 +1035,15 @@ class TestOpenReading:
         assert county["open_total"] == 0 and county["months"]["2026-05"]["health_now"] == 0
         assert county["months"]["2026-05"]["events"]["quality"] == 1
 
+    def test_the_cap_closes_a_standing_notice_whatever_end_it_reported(self):
+        row = self._standing(end_source="scheduled_end_with_time",
+                             end_local_date="2026-05-03", end_local_time="12:00",
+                             notice_to_end_seconds=2.5 * 86400)
+        now = datetime(2026, 5, 20, tzinfo=UTC)
+        assert is_open(row, now)
+        county = build_site([row], SA_INDEX, now, TOWNS)["counties"]["Carlow"]
+        assert county["open_total"] == 0
+
     def test_the_feed_and_the_vanished_stamp_still_close_it_first(self):
         assert not is_open(_open(status="Closed"), NOW)
         assert not is_open(_open(vanished_at="2026-05-05T12:00:00+00:00"), NOW)

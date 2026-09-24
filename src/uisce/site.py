@@ -154,8 +154,10 @@ SCHEME_NOISE = {"public", "water", "supply", "scheme", "regional", "pws", "the"}
 
 
 def is_open(row, now):
-    """Open as far as the site is concerned: the feed says so, still serves the
-    case, and nothing the notice itself has said has ended it yet.
+    """Open as far as the row alone can say: the feed says so, still serves the
+    case, and nothing the notice itself has said has ended it yet. A paired lift
+    or the cap on a standing notice can close it further; `Case.is_open` carries
+    that, and every surface reads it.
 
     The feed's `status` is the weakest of the three signals. A case that dropped
     out of the feed while Open never gets the transition closed_at records, so
@@ -318,18 +320,9 @@ def lift_pairing(row, lifts, start):
 
 
 def paired_end(lift, start):
-    """When a paired lift says the notice actually stood until.
-
-    Clamped below to one second after `start` only: multi-pin publishing is not
-    chronologically tidy, so a lift can be stamped before the issue it lifts, and
-    a notice may not end before it began. The second is the token an unpaired
-    closed notice keeps; a zero-length interval dropped Downings (232476) from
-    its month's quality count and health_n altogether. Deliberately *not*
-    capped: this is a statement about the world, and the lift is direct
-    evidence for it. `charged_end` caps what that span may charge;
-    `Case.in_force` carries this one, so the health marker can stand on the
-    evidence while the arithmetic stays bounded.
-    """
+    """When a paired lift says the notice actually stood until: never before the
+    token second after `start` (a lift can be stamped before its issue), and not
+    capped; `charged_end` caps what it charges. See statuspage-methodology.md."""
     return max(lift, start + timedelta(seconds=1))
 
 
@@ -897,9 +890,10 @@ class Case(NamedTuple):
     # False: that is what keeps these out of the published median without
     # touching the filter that reads it.
     imputed: bool = False
-    # is_open(row, now), decided once here so the open list, the history's
-    # "still open", the county page's notice text and the Atom feed cannot
-    # disagree about a case
+    # is_open(row, now), less what only resolve_case knows (a paired lift, the
+    # cap on a standing notice); decided once here so the open list, the
+    # history's "still open", the county page's notice text and the Atom feed
+    # cannot disagree about a case. Read this, not is_open().
     is_open: bool = False
 
     @property
@@ -961,6 +955,10 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
     # event belongs to, and that is a fact about the notice, not the works.
     iv_start = start
     open_now = is_open(r, now)
+    # a standing notice no lift has closed closes at the cap, where its marker
+    # stops, whichever branch below it takes (owner decision, 2026-09-24)
+    if r["work_category"] in LIFT_OF and now - start > cap:
+        open_now = False
 
     if r["work_category"] == "boil_notice_issued":
         # This class never ends itself; boil_notice_fate owns the whole decision.
@@ -1006,9 +1004,6 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         elif open_now and start < now and not already_over:
             # ongoing with no inferred end: runs from start until now, capped
             end = min(now, start + cap)
-            # an unlifted standing notice closes at the cap, where its marker
-            # stops, rather than staying open with no marker (owner, 2026-09-24)
-            open_now = r["work_category"] not in LIFT_OF or now - start <= cap
         else:
             # Closed with no usable end signal, or already over per the notice's
             # own text. These used to take a token 1-second footprint, which kept
