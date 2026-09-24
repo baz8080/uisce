@@ -4,6 +4,7 @@ import sqlite3
 from datetime import date, datetime, time, timezone
 
 from uisce.config import DB_PATH, DUBLIN, JSONL_PATH, RECURRING
+from uisce.inference import is_current, record_state, unreadable_fields
 
 NO_END_SIGNAL_SOURCES = {"not_found", "lifted_immediate"}
 
@@ -159,6 +160,7 @@ def unquotable_windows(conn):
 
 
 UNQUOTABLE_SHOWN = 15
+STALE_SHOWN = 50
 
 
 def latest_per_case(records):
@@ -191,6 +193,19 @@ def count_never_inferred(conn):
     ).fetchone()
 
 
+def stale_cases(conn, latest):
+    """(case_id, status) for each published record `uisce-infer` would redo:
+    its description has changed since, or its extractor or prompt is retired.
+    It is still the best answer there is until the LLM residue run replaces it."""
+    by_case = {r["case_id"]: r for r in latest}
+    return [
+        (case_id, status)
+        for case_id, description, status in conn.execute(
+            "SELECT id, description, status FROM cases WHERE description IS NOT NULL")
+        if case_id in by_case and not is_current(record_state(by_case[case_id]), description)
+    ]
+
+
 def check_cases_cover(conn, case_ids):
     known_ids = {row[0] for row in conn.execute("SELECT id FROM cases")}
     missing = sorted(case_ids - known_ids)
@@ -208,7 +223,9 @@ def run():
         records = [json.loads(line) for line in f if line.strip()]
 
     first_start_dates = first_start_date_per_case(records)
-    latest = list(latest_per_case(records))
+    unreadable = [(r["case_id"], unreadable_fields(r)) for r in records]
+    unreadable = [(case_id, fields) for case_id, fields in unreadable if fields]
+    latest = list(latest_per_case(r for r in records if not unreadable_fields(r)))
 
     rows = [
         (
@@ -240,6 +257,9 @@ def run():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
         check_cases_cover(conn, {r["case_id"] for r in latest})
+        # DROP and CREATE autocommit outside an explicit transaction, so a
+        # failure after them would leave the site an empty table.
+        conn.execute("BEGIN")
         create_table(conn)
         conn.executemany(
             """
@@ -253,9 +273,14 @@ def run():
             rows,
         )
         never_inferred, never_inferred_open = count_never_inferred(conn)
+        stale = stale_cases(conn, latest)
         unquotable, inferred_first_dates = unquotable_windows(conn)
 
     print(f"Upserted {len(rows)} rows into inferred_cases")
+    if unreadable:
+        print(f"::warning::{len(unreadable)} record(s) in {JSONL_PATH} carry a value build "
+              "cannot read and are left out, so uisce-infer tries their cases again: "
+              + ", ".join(f"{case_id} ({', '.join(fields)})" for case_id, fields in unreadable))
     if unquotable:
         print(f"{len(unquotable)} recurring window(s) with a value not in the notice's own text:")
         for case_id, missing in unquotable[:UNQUOTABLE_SHOWN]:
@@ -269,4 +294,12 @@ def run():
         print(
             f"{never_inferred} case(s) have no inference yet ({never_inferred_open} open) — "
             "open ones accrue to now on the site until uisce-infer runs"
+        )
+    if stale:
+        shown = ", ".join(str(case_id) for case_id, _ in stale[:STALE_SHOWN])
+        more = f" and {len(stale) - STALE_SHOWN} more" if len(stale) > STALE_SHOWN else ""
+        print(
+            f"::warning::{len(stale)} case(s) ({sum(s == 'Open' for _, s in stale)} open) "
+            "publish a record uisce-infer would redo, its description or extractor having "
+            f"changed; each stands until a run replaces it: {shown}{more}"
         )

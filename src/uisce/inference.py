@@ -1,8 +1,9 @@
 import argparse
 import hashlib
 import json
+import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from uisce.config import DB_PATH, JSONL_PATH, make_session
 from uisce.rules import RULES_VERSION
@@ -134,11 +135,42 @@ def hash_description(description):
     return hashlib.sha256(description.encode("utf-8")).hexdigest()
 
 
+_CLOCK = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
+_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def _is_iso_date(value):
+    try:
+        return bool(_ISO_DATE.fullmatch(value)) and bool(date.fromisoformat(value))
+    except ValueError:
+        return False
+
+
+def unreadable_fields(result):
+    """The fields build.py could not read, in a model reply or a JSONL record.
+
+    The prompt asks for "HH:MM" and "YYYY-MM-DD", and nothing made the model
+    comply: a "24:00", "5pm" or "28/04/2026" written to the JSONL raised in
+    build.py and failed every CI build after it."""
+    fields = [f for f in ("local_time", "window_open", "window_close")
+              if result.get(f) is not None
+              and not (isinstance(result[f], str) and _CLOCK.fullmatch(result[f]))]
+    fields += [f for f in ("local_date", "window_first_date")
+               if result.get(f) is not None
+               and not (isinstance(result[f], str) and _is_iso_date(result[f]))]
+    return fields
+
+
+def record_state(record):
+    return (record["description_hash"], record.get("prompt_version"), record.get("model"))
+
+
 def get_last_hash_by_case_id(jsonl_path):
     """Latest (description_hash, prompt_version, model) per case. A case is up
     to date only when the hash and version still match AND its record came from
     a current extractor, so bumping PROMPT_VERSION re-infers the whole corpus
-    while bumping RULES_VERSION re-runs only the rules-produced cases."""
+    while bumping RULES_VERSION re-runs only the rules-produced cases. A record
+    build.py cannot read counts as absent, so its case is tried again."""
     if not jsonl_path.exists():
         return {}
     latest = {}
@@ -147,17 +179,15 @@ def get_last_hash_by_case_id(jsonl_path):
             if not line.strip():
                 continue
             record = json.loads(line)
+            if unreadable_fields(record):
+                continue
             current = latest.get(record["case_id"])
             if current is None or record["inferred_at"] > current["inferred_at"]:
                 latest[record["case_id"]] = record
-    return {
-        case_id: (record["description_hash"], record.get("prompt_version"),
-                  record.get("model"))
-        for case_id, record in latest.items()
-    }
+    return {case_id: record_state(record) for case_id, record in latest.items()}
 
 
-def _is_current(state, description):
+def is_current(state, description):
     if state is None:
         return False
     digest, version, model = state
@@ -175,7 +205,7 @@ def get_cases_needing_inference(db_path, last_state_by_case_id, force=False):
     cases = [
         row
         for row in cur
-        if force or not _is_current(last_state_by_case_id.get(row["id"]), row["description"])
+        if force or not is_current(last_state_by_case_id.get(row["id"]), row["description"])
     ]
     conn.close()
     return cases
@@ -219,6 +249,8 @@ def parse_response(response_text):
     result = json.loads(response_text)
     if not isinstance(result, dict):
         raise ValueError(f"Expected a JSON object, got: {response_text[:80]!r}")
+    if unreadable := unreadable_fields(result):
+        raise ValueError("unreadable " + ", ".join(f"{f} {result[f]!r}" for f in unreadable))
     return result
 
 
