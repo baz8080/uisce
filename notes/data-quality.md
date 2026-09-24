@@ -257,6 +257,20 @@ If a closure *series* is ever published (month-over-month counts, or a time-to-c
 
 A dry run of `uisce-replay-closed-at` over all 75 release snapshots (2026-06-30 to 2026-09-23) against a copy of the 2026-09-23 release finds 6,961 transitions, and every one of those cases already carries a `closed_at` on the same date as the replayed tag: **0 rows to stamp, and 0 that would change** even if the replay were allowed to overwrite. None of the 5,872 closed cases with a NULL `closed_at` appears in the replay at all; they closed before the first snapshot or were never seen `Open`. Since the v2 schema landed, the live upsert has stamped every transition a snapshot can see, so the `replay_closed_at` dispatch input was dropped from Build DB (owner, 2026-09-24). The script stays for the one case it still serves, a DB restored from an older release, and is run by hand as its docstring shows.
 
+### One release per build (2026-09-24)
+
+Until this date each day had one release, and the second build of the day replaced its
+`uisce.db` with `gh release upload --clobber`, which deletes the old asset before uploading
+the new one: a failure in between left the day's release with no DB, and every later build
+and Pages deploy, which all start from the latest release, failed until someone fixed it by
+hand. A same-day swap (upload as `uisce.db.next`, then delete and rename) was built and
+rejected on two rounds of review: each round found another state it could strand, all of
+them coming from juggling two names inside one release. From this date every build publishes
+its own release, tagged `YYYY-MM-DD-HHMM` (UTC); `gh release create` makes a draft, uploads,
+then publishes, so the latest release always holds a complete `uisce.db`. About two releases
+a day instead of one. `uisce-replay-closed-at` reads the date from the tag's first ten
+characters, so the daily and per-build names replay alike.
+
 ### Twice-daily builds: why, and why not three (2026-07-31)
 
 The second daily build slot exists for publication latency, not to sharpen `closed_at` (see above — past a daily cadence, Uisce Éireann's own administrative lag dominates, not the build gap). Notices publish between 07:00 and 16:00 UTC (staffed office hours), so a second build only helps if it lands inside that window: measured over 8,135 cases, a single evening build leaves a mean **7.7h** from publication to the site, a midday build halves that to **3.9h**, and an overnight build would only have bought **0.9h**. A third build takes 3.9h to 3.5h — not worth the run.

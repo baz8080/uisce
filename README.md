@@ -14,8 +14,8 @@ Grab the latest `uisce.db` from [releases](https://github.com/baz8080/uisce/rele
 scripts/fetch-db.sh
 ```
 
-It wraps `gh release download --pattern uisce.db`, falling back to `uisce.db.next` in the
-moment a build is swapping a new copy in.
+It wraps `gh release download --pattern uisce.db`; every data build publishes its own
+release, so the latest one always holds a complete DB.
 
 Tables:
 

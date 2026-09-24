@@ -40,8 +40,8 @@ jobs:
 
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          # the uv the lock was checked with; bump together with uv.lock
-          version: "0.8.17"
+          # checked with `uv lock --check` on 0.12.18; bump deliberately, with uv.lock
+          version: "0.12.18"
           enable-cache: true
           prune-cache: true
 
@@ -66,7 +66,6 @@ jobs:
       - name: Build inferred cases table
         run: uv run uisce-build-inferred
 
-      # The swap and its recovery are in the script; see its header.
       - name: Publish DB
         run: scripts/publish-db.sh out/uisce.db
         env:

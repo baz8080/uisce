@@ -9,7 +9,7 @@ two inherent limits (pre-earliest-snapshot closures, single-gap open/closes).
 
 Download the snapshots first; they are ~10-20MB each:
 
-    for T in $(gh release list --limit 1000 --json tagName --jq '.[].tagName'); do
+    for T in $(gh release list --limit 1000 --exclude-drafts --json tagName --jq '.[].tagName'); do
         scripts/fetch-db.sh "$T" "snaps/$T.db"
     done
 """
@@ -21,17 +21,18 @@ from pathlib import Path
 
 from uisce.config import DB_PATH
 
-# Snapshot files are named for their release tag (YYYY-MM-DD.db), which is also
-# the value written to closed_at, so replayed rows carry the date of the build
+# Snapshot files are named for their release tag: YYYY-MM-DD for the daily
+# releases, YYYY-MM-DD-HHMM for the per-build ones from 2026-09-24. The date part
+# is the value written to closed_at, so replayed rows carry the date of the build
 # that observed the closure.
 SNAPSHOT_GLOB = "*.db"
 
 
 def snapshot_files(directory):
-    """Snapshot paths in tag order. Names are ISO dates, so lexical sort is
-    chronological; anything else is a caller error rather than something to
-    guess at."""
-    paths = sorted(Path(directory).glob(SNAPSHOT_GLOB))
+    """Snapshot paths in tag order. Tags are ISO dates, with a time on the
+    per-build ones, so sorting the tags is chronological; the file names are not
+    ("-" sorts before ".db"). Anything else is a caller error, not a guess."""
+    paths = sorted(Path(directory).glob(SNAPSHOT_GLOB), key=lambda p: p.stem)
     if not paths:
         raise SystemExit(f"No {SNAPSHOT_GLOB} snapshots in {directory}")
     return [(p.stem, p) for p in paths]
@@ -58,7 +59,7 @@ def replay(snapshots):
                 seen_open.add(case_id)
                 closed_at.pop(case_id, None)
             elif case_id in seen_open and case_id not in closed_at:
-                closed_at[case_id] = tag
+                closed_at[case_id] = tag[:10]
     return closed_at
 
 
