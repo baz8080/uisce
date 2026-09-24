@@ -52,7 +52,10 @@ jobs:
         run: uv sync --locked
 
       - name: Download existing DB
-        run: gh release download --pattern "uisce.db" --dir out/
+        run: |
+          mkdir -p out
+          gh release download --pattern "uisce.db" --dir out/ \
+            || gh release download --pattern "uisce.db.next" -O out/uisce.db --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -85,13 +88,38 @@ jobs:
       - name: Build inferred cases table
         run: uv run uisce-build-inferred
 
+      # A second build the same day replaces the asset. --clobber deletes the old
+      # one before uploading, so the upload goes to uisce.db.next and only a
+      # landed upload is swapped in. If a run dies between the delete and the
+      # rename, the downloads fall back to uisce.db.next and the next run here
+      # finishes the swap before it stages anything.
       - name: Publish DB
         run: |
           TAG="$(date +%Y-%m-%d)"
-          gh release create "$TAG" out/uisce.db \
-            --title "$TAG" \
-            --notes "Data refresh" \
-          || gh release upload "$TAG" out/uisce.db --clobber
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            gh release create "$TAG" out/uisce.db --title "$TAG" --notes "Data refresh"
+            exit 0
+          fi
+          asset_id() {
+            gh api "repos/{owner}/{repo}/releases/tags/$TAG" \
+              --jq ".assets[] | select(.name == \"$1\") | .id"
+          }
+          rename() {
+            gh api -X PATCH "repos/{owner}/{repo}/releases/assets/$1" -f name=uisce.db > /dev/null
+          }
+          OLD="$(asset_id uisce.db)"
+          NEXT="$(asset_id uisce.db.next)"
+          if [ -z "$OLD" ] && [ -n "$NEXT" ]; then
+            rename "$NEXT"
+          fi
+          ln -f out/uisce.db out/uisce.db.next
+          gh release upload "$TAG" out/uisce.db.next --clobber
+          OLD="$(asset_id uisce.db)"
+          NEXT="$(asset_id uisce.db.next)"
+          if [ -n "$OLD" ]; then
+            gh api -X DELETE "repos/{owner}/{repo}/releases/assets/$OLD"
+          fi
+          rename "$NEXT"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
