@@ -1,6 +1,7 @@
 import json
 import re
 import sqlite3
+from contextlib import closing
 
 import pytest
 import requests
@@ -142,7 +143,9 @@ class TestRestorePins:
     def test_a_db_with_no_cases_table_yet_sets_them_aside(self, tmp_path):
         # geocode_all creates the file before create_db has run
         db_path = tmp_path / "u.db"
-        sqlite3.connect(db_path).execute("CREATE TABLE geocode_cache (x)").connection.commit()
+        with closing(sqlite3.connect(db_path)) as conn:
+            conn.execute("CREATE TABLE geocode_cache (x)")
+            conn.commit()
         assert pipeline.restore_pins([case_record(id=2)], db_path) == ([], [2])
         assert pipeline.unvanished_cases(db_path) == 0
 
@@ -255,10 +258,17 @@ class TestDownloadCases:
         with pytest.raises(RuntimeError, match="truncated"):
             pipeline.check_download_complete([{}] * 989, 1000)
 
-    def test_a_feed_reporting_nothing_is_refused_while_the_db_holds_cases(self):
-        with pytest.raises(RuntimeError, match="reports 0 cases"):
+    def test_an_empty_download_is_refused_while_the_db_holds_cases(self):
+        with pytest.raises(RuntimeError, match="download is empty"):
             pipeline.check_download_complete([], 0, unvanished=498)
         pipeline.check_download_complete([], 0, unvanished=0)
+
+    def test_a_full_download_builds_even_if_the_count_says_zero(self):
+        pipeline.check_download_complete([{}] * 1000, 0, unvanished=498)
+
+    def test_an_empty_download_against_a_nonzero_count_is_a_truncation(self):
+        with pytest.raises(RuntimeError, match="truncated"):
+            pipeline.check_download_complete([], 1000, unvanished=498)
 
     def test_the_guard_counts_every_row_the_stamp_would_touch(self, tmp_path):
         # closed rows are stamped vanished too, so they count
@@ -276,6 +286,22 @@ class TestDownloadCases:
     def test_the_download_asks_for_key_order(self, monkeypatch):
         monkeypatch.setattr(pipeline, "ARCGIS_PAGE_SIZE", 2)
         assert self._ids(download_cases(LiveFeed([9, 3, 7]))) == [3, 7, 9]
+
+    def test_a_server_that_ignores_the_key_filter_is_refused(self, monkeypatch):
+        # re-serves the first page whatever `OBJECTID > n` says
+        monkeypatch.setattr(pipeline, "ARCGIS_PAGE_SIZE", 2)
+        served = []
+
+        def first_page_again(url, params=None, timeout=None):
+            served.append(params["where"])
+            assert len(served) < 5, "kept paging over the same rows"
+            return FakeResponse({"features": [{"attributes": {"OBJECTID": i}} for i in (3, 7)],
+                                 "exceededTransferLimit": True})
+
+        feed = LiveFeed([3, 7, 9])
+        feed.get = first_page_again
+        with pytest.raises(RuntimeError, match="strictly ascending"):
+            download_cases(feed)
 
     def test_a_page_out_of_order_is_refused(self, monkeypatch):
         monkeypatch.setattr(pipeline, "ARCGIS_PAGE_SIZE", 2)

@@ -296,7 +296,7 @@ which is right: that is what happened.
 
 *2026-09-24:* the tolerance passes an empty feed, 0 downloaded of 0 reported, and that build
 would stamp vanished every row not yet vanished, closed ones included (4,306 on the 2026-09-23
-release, 498 of them open). `run` now also refuses a download when the feed reports 0 cases
+release, 498 of them open). `run` now also refuses an empty download
 while the DB holds rows not yet vanished; the guard counts what the stamp touches, not the
 open ones only. No real purge has emptied the feed; the 2026-08-10 one left 3,044 cases, so a
 partial purge is still stamped as before. The same review moved `download_cases` from

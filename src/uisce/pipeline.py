@@ -6,8 +6,10 @@ import re
 import sqlite3
 import time
 from collections import Counter
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from itertools import pairwise
 from pathlib import Path
 
 import requests
@@ -183,29 +185,28 @@ def feed_count(session):
     return data["count"]
 
 
-def _read_cases_table(db_path):
-    """A read-only connection to db_path, or None if it holds no cases table yet
-    (geocode_all can create the file before create_db has run)."""
+@contextmanager
+def _cases_table(db_path):
+    """(read-only connection, cases columns), or (None, set()) while db_path holds
+    no cases table (geocode_all can create the file before create_db has run)."""
     if not db_path.exists():
-        return None
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-    if not conn.execute("PRAGMA table_info(cases)").fetchall():
+        yield None, set()
+        return
+    conn = sqlite3.connect(f"{Path(db_path).resolve().as_uri()}?mode=ro", uri=True)
+    try:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(cases)")}
+        yield (conn if columns else None), columns
+    finally:
         conn.close()
-        return None
-    return conn
 
 
 def unvanished_cases(db_path=DB_PATH):
     """Rows load_cases would stamp vanished if the download held none of them."""
-    conn = _read_cases_table(db_path)
-    if conn is None:
-        return 0
-    with conn:
-        columns = {row[1] for row in conn.execute("PRAGMA table_info(cases)")}
+    with _cases_table(db_path) as (conn, columns):
+        if conn is None:
+            return 0
         live = " WHERE vanished_at IS NULL" if "vanished_at" in columns else ""
-        count = conn.execute(f"SELECT COUNT(*) FROM cases{live}").fetchone()[0]
-    conn.close()
-    return count
+        return conn.execute(f"SELECT COUNT(*) FROM cases{live}").fetchone()[0]
 
 
 def check_download_complete(features, expected, unvanished=0):
@@ -214,11 +215,11 @@ def check_download_complete(features, expected, unvanished=0):
             f"downloaded {len(features)} cases but the feed reports {expected}; "
             "refusing to build from a truncated download"
         )
-    # the tolerance passes 0 of 0, which would stamp every stored case vanished
-    if unvanished and expected == 0:
+    # the tolerance passes 0 of 0, and an empty download stamps every stored case vanished
+    if unvanished and not features:
         raise RuntimeError(
-            f"the feed reports 0 cases ({len(features)} downloaded) but the DB holds "
-            f"{unvanished} not yet vanished; refusing to stamp them all"
+            f"the download is empty (the feed reports {expected}) but the DB holds "
+            f"{unvanished} cases not yet vanished; refusing to stamp them all"
         )
 
 
@@ -248,10 +249,13 @@ def download_cases(session):
         if not features:
             break
 
-        ids = [f["attributes"]["OBJECTID"] for f in features]
-        # key paging is only sound on ids the server returned in order
-        if ids != sorted(set(ids)) or ids[0] <= last_id:
-            raise RuntimeError(f"ArcGIS page after OBJECTID {last_id} is not in ascending order")
+        ids = [(f.get("attributes") or {}).get("OBJECTID") for f in features]
+        # key paging is only sound on ids strictly above the last page's, in order
+        if None in ids or not all(a < b for a, b in pairwise([last_id, *ids])):
+            raise RuntimeError(
+                f"ArcGIS page after OBJECTID {last_id} is not strictly ascending: "
+                f"{ids[:5]}{'...' if len(ids) > 5 else ''}"
+            )
         all_features.extend(features)
         print(f"Fetched {len(all_features)}")
 
@@ -343,16 +347,14 @@ def restore_pins(cases, db_path=DB_PATH):
     if not missing:
         return cases, []
     stored = {}
-    conn = _read_cases_table(db_path)
-    if conn is not None:
-        with conn:
+    with _cases_table(db_path) as (conn, _):
+        if conn is not None:
             marks = ", ".join("?" * len(missing))
             rows = conn.execute(
                 f"SELECT id, {', '.join(COORD_COLUMNS)} FROM cases WHERE id IN ({marks})",
                 missing,
             )
             stored = {row[0]: dict(zip(COORD_COLUMNS, row[1:])) for row in rows}
-        conn.close()
     kept, unplaced = [], []
     for case in cases:
         if case["full_lat"] is not None:
