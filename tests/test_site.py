@@ -281,6 +281,57 @@ class TestIntervals:
         assert secs == 6 * 3600
 
 
+class TestRestampedStart:
+    """build.py measures a span from the start it pinned at first inference; the
+    feed can re-stamp start_date after that."""
+
+    @staticmethod
+    def _restamped(**overrides):
+        # completion at 12:00 Irish time on 5 May is 11:00 UTC, 98h after the pinned start
+        base = dict(start_date="2026-05-05T09:00:00+00:00",
+                    end_input_start_date="2026-05-01T09:00:00+00:00",
+                    notice_to_end_seconds=98 * 3600.0, end_local_date="2026-05-05",
+                    end_local_time="12:00")
+        return _case(**(base | overrides))
+
+    def test_the_span_runs_from_the_start_it_was_measured_from(self):
+        case = resolve_case(self._restamped(), SA_INDEX, {}, NOW)
+        assert case.intervals == [(_dt("2026-05-01T09:00:00+00:00"),
+                                   _dt("2026-05-05T11:00:00+00:00"))]
+        assert case.start == _dt("2026-05-01T09:00:00+00:00")
+
+    def test_the_charged_hours_stop_at_the_notice_own_end(self):
+        month = build_site([self._restamped()], SA_INDEX, AFTER_MAY)["counties"]["Carlow"]
+        month = month["months"]["2026-05"]
+        assert month["person_h"] == 98 * 1000
+        assert [d[0] for d in month["days"][5:9]] == [""] * 4
+
+    def test_every_surface_dates_the_event_from_the_same_start(self):
+        # re-stamped forward a month: the hours, the history, the top ten and
+        # the completion median all belong to the pinned month
+        row = self._restamped(start_date="2026-06-05T09:00:00+00:00")
+        site = build_site([row], SA_INDEX, datetime(2026, 7, 5, tzinfo=UTC), TOWNS)
+        record = site["history"]["Carlow"]["T1"]["events"][0]
+        assert record["start"] == "2026-05-01" and record["end"] == "2026-05-05"
+        assert site["top"]["2026-05"][0]["start"] == "2026-05-01"
+        months = site["counties"]["Carlow"]["months"]
+        assert months["2026-05"]["completed_n"] == 1
+        assert months["2026-06"]["completed_n"] == 0
+        assert months["2026-06"]["events"]["outage"] == 0
+
+    def test_a_recurring_window_is_clipped_to_the_pinned_start(self):
+        row = self._restamped(
+            start_date="2026-05-03T09:00:00+00:00", end_source="scheduled_end_with_time",
+            end_local_date="2026-05-05", end_local_time="07:00",
+            notice_to_end_seconds=(3 * 24 + 21) * 3600.0, end_recurrence="daily",
+            end_window_open="22:00", end_window_close="07:00",
+            end_window_first_date="2026-05-01")
+        case = resolve_case(row, SA_INDEX, {}, NOW, recurring=True)
+        assert case.rec == "expanded"
+        assert case.intervals[0][0] >= case.start == _dt("2026-05-01T09:00:00+00:00")
+        assert len(case.intervals) == 4
+
+
 class TestMonths:
     def test_month_list_spans_year_boundary(self):
         months = month_list(datetime(2026, 11, 20, tzinfo=UTC), datetime(2027, 1, 5, tzinfo=UTC))
@@ -1180,6 +1231,25 @@ class TestTopEvents:
         rows = [_case(id=1, full_lat=52.836), _case(id=2, full_lat=52.837)]
         top = build_site(rows, sa, AFTER_MAY, towns)["top"]["2026-05"]
         assert top[0]["area"] == "Bigtown"
+
+    def test_a_padded_reference_is_the_same_event(self):
+        rows = [_case(id=1, reference_num="CAR1"),
+                _case(id=2, reference_num="CAR1 ", full_lat=52.837),
+                _case(id=3, reference_num="CAR1\xa0", full_lat=52.838)]
+        site = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)
+        assert [(r["ref"], r["pins"]) for r in site["top"]["2026-05"]] == [("CAR1", 3)]
+        assert site["counties"]["Carlow"]["months"]["2026-05"]["events"]["outage"] == 1
+
+    def test_the_history_counts_every_pin_and_the_top_ten_the_outage_ones(self):
+        # one reference, an outage pin and a low-pressure pin over different areas
+        sa = SmallAreaIndex([(52.836, -6.926, "SA1", 1000), (52.846, -6.926, "SA2", 900)])
+        towns = TownLookup([("SA1", "T1", "Testtown", "Carlow"),
+                            ("SA2", "T1", "Testtown", "Carlow")], sa.pop)
+        rows = [_case(id=1), _case(id=2, full_lat=52.846, reduced_pressure=1)]
+        site = build_site(rows, sa, AFTER_MAY, towns)
+        top = site["top"]["2026-05"][0]
+        history = _history(rows, now=AFTER_MAY, towns=towns, sa=sa)
+        assert (top["people"], history[0]["people"]) == (1000, 1900)
 
     def test_the_ranking_works_without_a_town_lookup(self):
         # every TestBuildSite case calls build_site this way
@@ -2709,8 +2779,9 @@ class TestReleaseDb:
                 list(row.values()),
             )
             conn.execute(
-                "CREATE TABLE inferred_cases (case_id, notice_to_end_seconds, end_source, "
-                "end_local_date, end_local_time, end_recurrence, end_window_open, "
+                "CREATE TABLE inferred_cases (case_id, notice_to_end_seconds, "
+                "end_input_start_date, end_source, end_local_date, end_local_time, "
+                "end_recurrence, end_window_open, "
                 "end_window_close, end_window_first_date)"
             )
 
