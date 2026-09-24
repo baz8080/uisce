@@ -263,7 +263,7 @@
       <p>About one incident in twenty never reports an end at all - the count is shown beside the county's disruption count each month. Those stay out of the figure above: checked both ways, they run <em>shorter</em> than average, so leaving them out moves the typical duration <em>up</em>, not down. <span id="sensNote"></span> They still count in full in the availability percentages and person-hours, where leaving something out would mean calling it zero.</p>
 
       <h4>When a notice closed</h4>
-      <p>A notice counts as closed the first time a twice-daily check finds it gone, so close dates are approximate and the closed-in-month lists are minimums.</p>
+      <p>A notice counts as closed on the day its own update reports the works complete. One that never says so counts as closed the first time a twice-daily check finds it gone, so those dates run late and the closed-in-month lists are minimums.</p>
 
       <h4>What counts as a disruption</h4>
       <p>Only hard disruptions count against availability: bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages and unplanned repairs. Restrictions, low pressure, discolouration and routine works are shown but never count. A closed notice with no usable end is charged the typical length of a completed notice of the same kind of works, rather than nothing at all.</p>
@@ -424,7 +424,8 @@ function jsArg(s) { return esc(JSON.stringify(String(s))); }
 // each case's current status, not a history, so there is no such figure for a
 // past month and none can be reconstructed. Show them only on the month the
 // snapshot belongs to. `resolved` is the one thing that *does* carry a month,
-// via cases.closed_at, so a past month is not left with nothing to say.
+// via each case's close date (closed_on), so a past month is not left with
+// nothing to say.
 function isLatest() { return curMonth === LATEST; }
 
 function isPartial() { return curMonth === today.slice(0, 7); }
@@ -640,7 +641,7 @@ function townRows(c) {
       <th title="Restrictions, low pressure, and planned or non-disruptive works">Works</th>
       ${th("impact", "Person-hours", "How many people, multiplied by how long - sort by this", "people × hours")}
       ${th("avail", "Availability", "Sort worst first", "vs this area's own population")}
-      ${isLatest() ? '<th title="Notices Uisce Éireann still shows as open">Open</th>' : ""}
+      ${isLatest() ? '<th title="Notices Uisce Éireann still shows as open, less any whose own text already reports the works complete and any boil-water or do-not-drink notice closed by its lift or after 14 days with no lift">Open</th>' : ""}
     </tr></thead>
     <tbody>${body}</tbody>
   </table></div>`;
@@ -656,7 +657,7 @@ function openGroups(c) {
   }
   const named = [...groups].map(([, cases]) => [cases[0].name || "—", cases]);
   named.sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
-  const when = o => `${o.since > today ? "from" : "since"} ${fmtDate(o.since, today)}`;
+  const when = o => `${o.ahead || o.since > today ? "from" : "since"} ${fmtDate(o.since, today)}`;
   return named.map(([name, cases]) => `<div class="tgroup">
       <div class="tname">${esc(name)}</div>
       ${cases.map(o => incident(o, when)).join("")}
@@ -665,8 +666,9 @@ function openGroups(c) {
 
 // The reading is Case.is_open's: a notice whose own text reports the works
 // complete is not listed, however long the feed goes on saying Open (a median
-// of three days, notes/statuspage-methodology.md, 2026-09-05).
-const OPEN_NOTE = "Notices Uisce Éireann still shows as open right now, less any whose own text already reports the works complete. Some are advance warning of planned works; a few were never taken down.";
+// of three days, notes/statuspage-methodology.md, 2026-09-05), and nor is a
+// standing notice a lift or the 14-day cap has closed.
+const OPEN_NOTE = "Notices Uisce Éireann still shows as open right now, less any whose own text already reports the works complete and any boil-water or do-not-drink notice closed by its lift or after 14 days with no lift. Some are advance warning of planned works; a few were never taken down.";
 
 function openSection(c) {
   if (!isLatest()) return "";
@@ -784,15 +786,16 @@ function fmtPersonH(h) {
 // `open` distinguishes the two ways an event can carry no end signal, which the
 // top ten never had to separate because every event it ranks accrued time. An
 // open case is still running and counted to the cap; a *closed* one never
-// reported an end at all and was charged nothing — saying "capped at 14 days"
-// there would claim a measurement that was never made. Left undefined, the
+// reported an end at all, so there is no measurement to state. Left undefined, the
 // wording is the top ten's, unchanged.
 function endBadge(r, open) {
   if (r.confirmed && !r.scheduled) return `<span class="badge confirmed">completion confirmed</span>`;
   if (r.confirmed) return `<span class="badge partial">partly confirmed - ${r.confirmed} of ${r.pins} notices reported complete</span>`;
   if (r.scheduled) return `<span class="badge sched">scheduled to end, but no completion reported</span>`;
+  if (open && r.ahead) return "";  // historyDuration says it has not started
   if (open === undefined || open) return `<span class="badge sched">still running - counted up to 14 days</span>`;
-  return `<span class="badge none" title="The notice was withdrawn without an update saying the works had finished, so there is no duration to report. It is counted as an incident but adds no disruption time.">withdrawn without a completion update</span>`;
+  if (r.health) return `<span class="badge none" title="No lift was published for this notice. It counts as closed once Uisce Éireann stops listing it, or 14 days after it was issued if that comes first. It is counted as an incident.">no lift published</span>`;
+  return `<span class="badge none" title="The notice was withdrawn without an update saying the works had finished, so there is no measured duration to report. It is counted as an incident. A supply disruption is charged the typical time its kind of works takes; any other notice is shown on the days it covered but does not count against availability.">withdrawn without a completion update</span>`;
 }
 
 function topMonth() {
@@ -885,9 +888,11 @@ function loadHistory(name) {
 }
 
 // A duration is only ever a floor: every span is measured from when the notice
-// was published, not from when supply actually went. `hours` is absent entirely
-// for an event that closed without reporting an end — see endBadge.
+// was published, not from when supply actually went. `hours` is absent for an
+// event with nothing measured to state - see endBadge - and `ahead` marks an
+// open one that has not started by the build.
 function historyDuration(e) {
+  if (e.ahead) return "not started yet";
   if (e.hours == null) return "";
   if (e.span_h) return `${e.hours}h of works, spread across ${e.span_h}h`;
   return e.open ? `at least ${e.hours}h so far` : `${e.hours}h`;
@@ -896,7 +901,7 @@ function historyDuration(e) {
 function historyRow(e) {
   const bits = [
     e.loc ? esc(e.loc) : "",
-    e.open ? `open since ${fmtDate(e.start, today)}` : `from ${fmtDate(e.start, today)}`,
+    e.open && !e.ahead ? `open since ${fmtDate(e.start, today)}` : `from ${fmtDate(e.start, today)}`,
     historyDuration(e),
     e.people ? `~${e.people.toLocaleString()} people` : "",
     // 15 notices stopped being listed before the date they announced. "Closed"
@@ -985,15 +990,15 @@ function dayEventsHtml() {
   const seen = new Set(), events = [];
   for (const area of Object.values(HISTORY[county])) {
     for (const e of area.events) {
-      if (seen.has(e.ref) || e.start > dayPick || (e.end || e.start) < dayPick) continue;
+      if (seen.has(e.ref) || (e.from || e.start) > dayPick || (e.end || e.start) < dayPick) continue;
       seen.add(e.ref);
       events.push([e, area.name]);
     }
   }
   events.sort((a, b) => SEV_ORDER.indexOf(a[0].sev) - SEV_ORDER.indexOf(b[0].sev)
     || a[0].title.localeCompare(b[0].title));
-  const when = e => `${e.start === dayPick ? "published" : "from"} ${fmtDate(e.start, today)}`
-    + (e.hours == null ? "" : e.span_h ? ` · ${e.hours}h across ${e.span_h}h` : ` · ${e.hours}h`);
+  const when = e => [`${e.start < dayPick ? "from" : "published"} ${fmtDate(e.start, today)}`,
+    historyDuration(e)].filter(Boolean).join(" · ");
   return `<div class="dayhead">${fmtDate(dayPick, today)} · ${events.length} ${pl(events.length, "notice")}</div>
     ${events.map(([e, name]) => incident({ ...e, loc: name }, when)).join("")}`;
 }
