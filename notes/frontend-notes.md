@@ -357,6 +357,8 @@ The towns rows did carry the same hole the county rows had, though: their `href`
 
 `area_has_page` is a predicate on the *name*: 904 of the 3,717 areas pass it. Only the ones that have had a notice get a page built, so gating the index on the predicate would have put ~165 names on a URL that does not exist. `site["counties"][c]["towns"][code]["slug"]` is present exactly when a page was written, so it is the flag as well as the value, and the test asserts every slug the index emits has a file behind it.
 
+*Amended 2026-09-24:* the breakdown's row is not the whole payload. An area whose every notice is still ahead of the build has no month row, so it had a page and no slug in the index: 1 of 763 on the 2026-09-23 release, Laragh in Wicklow. The index now reads the slug off the history entry too, which carries it on the same rule; 763 of 763 pages are reachable from the box.
+
 The slug and not the whole href: measured on `sa_towns.csv`, `search.js` goes 66,477 → 79,784 bytes (+20.0%) carrying slugs, against 92,704 (+39.5%) carrying full paths. Both sites already share the `a/<county>/<area>.html` shape, so each assembles it in one line. Shipping the *code* instead would have been cheaper still (+9,766) — settlement codes are five digits where the long colon-and-slash ones all belong to EDs — but the code only addresses the in-app view, which is not where the hit goes.
 
 `search.js` is fetched on the first keystroke and never in the initial payload, so none of this lands on a reader who does not search. It assigns `UISCE_PLACES` rather than `UISCE_SEARCH`, and the rename is load-bearing: fetching it lazily means a tab opened before a deploy pairs its own inlined `ui.js` with the current file, and the cache-bust is a query string the server ignores rather than a version it selects. The old `searchHits` calls `toLowerCase` on an entry, which throws on the pair, before the dropdown's markup is assigned — leaving it stuck on "Searching…" until a reload. Renaming with the shape means that reader gets "Search is unavailable - try reloading" instead, which is the box's own state and tells them what to do. esb took the same rename.
@@ -526,3 +528,54 @@ serving stale data until someone noticed.
 Rejected: folding the breakdown into the history shard. It would have made one file and one
 request per county, but the county view would wait for 2.4 MB of history it does not read,
 and the area view would carry a breakdown it does not read either.
+
+## The day list and "so far" read the charged span - 2026-09-24
+
+Measured on the 2026-09-23 release with the clock pinned to 2026-09-24 06:00 UTC, and again
+by running the app's own `dayEventsHtml` over every coloured cell up to today in Chromium.
+
+**The day list.** `event_record` set `end` only inside the branch that publishes `hours`, so
+an event charged an imputed span (closed, no usable end) carried its publication day and
+nothing else, and the negative-span family, charged backwards from its reported end, was
+filed under a publication day after every day it coloured. Of 3,420 coloured county-bar
+days, 46 listed "0 notices" when tapped (Cavan 17 Aug: CAV00120687, published 16 Sep) and
+9 more listed nothing of the bar's colour. The record now carries `end` for any event with
+an interval and `from`, the first charged day, when it is not the publication day; the day
+list matches on `[from || start, end || start]`. After: **0** and **0**, both counted in
+Python and in the browser. `from` is on 619 events (617 of them earlier than publication),
+`end` on 490 more; the history shards grew 2,862,985 to 2,887,669 bytes and `data.js` is
+untouched. A row whose publication is on or after the tapped day reads "published <date>"
+rather than "from <date>", which read backwards on those 617.
+
+**"Nh so far".** An open event's `hours` summed its charged intervals, which run to a
+scheduled or imputed end, so "so far" printed time that had not happened: Louth
+LOU00120479 read 240.8h when 183.3h had passed since it went up, and 38 of 271 open events
+had not started at all (Cork COR00120817, "Mon 5 Oct · 7.2h so far · 236 people · still
+open" on 24 September). Another 37 start later on the build day and read the same way.
+`hours` on an open event is now clipped to the build (LOU00120479: 183.3h), and dropped for
+all 75 that have not started; an open record with no `hours` is how the pages know, so
+there is no new key. The county and area pages print "not started yet" in place of the
+hours and "still open"; the app prints "from <date> · not started yet" in place of "open
+since" and the hours, drops the "still running" badge on the 6 of them with no end signal,
+and the day list reuses the same wording. `end` is not clipped: the bar still shows the days ahead.
+
+The county page's open list said "since" a date to come on the same 38; it now says "from",
+the word the app's `openGroups` already used.
+
+**Amended after code review, same day.** Three things changed from the text above.
+- **`ahead` is a key after all.** Reading "not started" from a missing `hours` broke once
+  hours stopped including estimates, so an open record that has not started carries
+  `ahead: 1`, and so does an open entry in `data.js` (sparse). The county page and
+  `openGroups` read it as well as the date. The 37 starting later on the build day used to
+  read "since <today>" beside a history saying "not started yet"; they now read "from".
+- **Hours are measured hours.** `hours` sums only pins that did not take a `SpanTable`
+  estimate, and is clipped to the build for every event, open or closed. An open notice
+  already over by its own text (charged an estimate) printed that estimate as "at least Nh
+  so far", and a closed event with a scheduled end still ahead printed the unelapsed time.
+- **Standing notices.** After #97 the Open column and `OPEN_NOTE` also leave out a
+  boil-water or do-not-drink notice closed by its lift or after 14 days with no lift, and
+  say so; such a notice closed with no lift reads "no lift published", not "withdrawn".
+
+Re-measured on the same release: 0 days listing 0 notices, 0 "so far" on a future start,
+0 "since" on a future date including the build day, Atom well-formed, 763 of 763 area
+pages reachable from search (the slug is now read from the history alone).
