@@ -23,24 +23,29 @@ concurrency:
 
 jobs:
   build:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
+          # checked with `uv lock --check` on 0.12.18; bump deliberately, with uv.lock
+          version: "0.12.18"
           enable-cache: true
           prune-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       # The site is a projection of the published DB, so a UI change deploys
       # from the latest release without re-reading the feed. The freshness
       # banner follows the DB, not this build's clock.
       - name: Download the published DB
-        run: gh release download --pattern "uisce.db" --dir out/
+        run: scripts/fetch-db.sh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

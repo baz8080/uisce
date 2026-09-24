@@ -9,7 +9,7 @@
 `uisce-build-inferred` (`src/uisce/build.py`) checks for this up front and fails with a clear message naming the missing case_id range, rather than a raw `sqlite3.IntegrityError`. The fix is always the same: get a DB that's at least as new as whatever the inference run used, e.g.:
 
 ```
-gh release download --pattern uisce.db --dir out/ --clobber
+scripts/fetch-db.sh
 ```
 
 (defaults to the latest release; pass a specific tag if you know which one you need). There's no automatic reconciliation here on purpose — the inference run itself doesn't record which DB snapshot it used (see the description-hash discussion elsewhere in this repo's history for why the hash alone is enough for correctness, just not for provenance), so "grab the latest release" is the practical default rather than something that could be automated reliably.

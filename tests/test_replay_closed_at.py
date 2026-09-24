@@ -37,6 +37,14 @@ class TestReplay:
         # the later snapshots must not drag the stamp forward
         assert replay(snaps) == {1: "2026-07-08"}
 
+    def test_a_per_build_tag_stamps_its_date(self, tmp_path):
+        snaps = [
+            _snapshot(tmp_path, "2026-09-24", [(1, "Open")]),
+            _snapshot(tmp_path, "2026-09-24-1845", [(1, "Closed")]),
+        ]
+        assert [tag for tag, _ in snapshot_files(tmp_path)] == ["2026-09-24", "2026-09-24-1845"]
+        assert replay(snaps) == {1: "2026-09-24"}
+
     def test_case_never_seen_open_is_not_stamped(self, tmp_path):
         # Created and closed inside one gap: no transition was ever observed, so
         # there is nothing to recover. ~12% of new cases look like this.

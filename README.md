@@ -8,11 +8,14 @@ The [website that this repo generates](https://baz8080.github.io/uisce/) is rebu
 
 ## Just want the data?
 
-Grab the latest `uisce.db` from [releases](https://github.com/baz8080/uisce/releases) — no setup needed:
+Grab the latest `uisce.db` from [releases](https://github.com/baz8080/uisce/releases) - no setup needed:
 
 ```
-gh release download --clobber --pattern "uisce.db" --dir out/
+scripts/fetch-db.sh
 ```
+
+It wraps `gh release download --pattern uisce.db`; every data build publishes its own
+release, so the latest one always holds a complete DB.
 
 Tables:
 
@@ -97,7 +100,7 @@ CI runs the rules half on every data build (`uisce-infer --rules-only`) and comm
 
 1. `git pull` — CI appends to `data/inferred_end_times.jsonl`; `.gitattributes` merges a concurrent local append rather than conflicting
 2. Start the LLM server on :1234
-3. `gh release download --clobber --pattern "uisce.db" --dir out/`
+3. `scripts/fetch-db.sh`
 4. `uv run uisce-infer` — appends results to `data/inferred_end_times.jsonl` (committed to the repo; only new/changed descriptions are processed); commit and push
 5. (Local check only — CI rebuilds the table itself) `uv run uisce-build-inferred`
 

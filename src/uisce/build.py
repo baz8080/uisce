@@ -205,7 +205,7 @@ def check_cases_cover(conn, case_ids):
             f"{len(missing)} case_id(s) in {JSONL_PATH} are not present in {DB_PATH} "
             f"(range {missing[0]}-{missing[-1]}). The local DB is likely older than "
             "whatever DB the inference run used. Refresh it first, e.g.:\n"
-            "  gh release download --pattern uisce.db --dir out/ --clobber"
+            "  scripts/fetch-db.sh"
         )
 
 
