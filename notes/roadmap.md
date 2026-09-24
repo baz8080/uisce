@@ -44,8 +44,8 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
 
 ## Decisions waiting on the owner
 
-- **LLM prompt reads "until midnight on D" as the start of D.** Waiting on the owner, because
-  a prompt change needs its own care. The prompt line `- 12 noon (12:00pm) is 12:00. 12
+- **LLM prompt reads "until midnight on D" as the start of D.** Deferred by the owner on
+  2026-09-24 and tracked in issue #102; a prompt change needs its own care. The prompt line `- 12 noon (12:00pm) is 12:00. 12
   midnight (12:00am) is 00:00.` (`inference.py`, PROMPT) makes gemma make the mistake
   rules-v2 fixed on 2026-09-24 (rules-vs-llm-end-times.md, "rules-v2"). On the 2026-09-23
   release, 16 published latest LLM records read a same-day "from X until midnight on D" as D
