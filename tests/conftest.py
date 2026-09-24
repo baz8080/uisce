@@ -55,6 +55,8 @@ def site_case(**overrides):
         "water_restrictions": 0,
         "reduced_pressure": 0,
         "notice_to_end_seconds": 86400.0,
+        # the start build.py measured the span from; None reads as start_date
+        "end_input_start_date": None,
         "end_source": "completion_update",
         "end_local_date": "2026-05-02",
         "end_local_time": "00:00",

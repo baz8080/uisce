@@ -708,7 +708,8 @@ def _parse_date(value):
 
 def case_ref(row):
     """The key that groups a multi-pin publication into one event."""
-    return row["reference_num"] or f"id:{row['id']}"
+    # the feed pads some references with a space or \xa0; unstripped, 15 events split in two
+    return (row["reference_num"] or "").strip() or f"id:{row['id']}"
 
 
 def notice_url(ref):
@@ -873,7 +874,10 @@ class Case(NamedTuple):
     row: object
     sev: str
     ref: str
-    start: datetime  # publication, which is also where the intervals are anchored
+    # publication: the start the span was measured from where build.py pinned
+    # one, else start_date. The intervals open here, except an imputed
+    # negative-span case, which is anchored back from the end it knows.
+    start: datetime
     intervals: list
     sas: dict
     has_end: bool
@@ -947,7 +951,8 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
     imputed = False
     in_force = ()  # empty: the charged intervals are the in-force ones
     # where the disruption interval opens. Publication for everything with an
-    # end signal, but an imputed negative-span case is anchored to the end it
+    # end signal (re-pinned below where the span says so), but an imputed
+    # negative-span case is anchored to the end it
     # does know and runs backwards from there, so the two come apart. `start`
     # stays publication either way: first_pub reads it to decide which month an
     # event belongs to, and that is a fact about the notice, not the works.
@@ -1020,12 +1025,18 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
                 else:
                     iv_start, end = known_end - charge, known_end
     else:
-        end = start + min(timedelta(seconds=notice_to_end), cap)
+        # The span was measured from the start build.py pinned at first inference;
+        # start_date may have been re-stamped since, and adding the span to the
+        # new one charges hours past the notice's own end (21 cases, 2026-09-24).
+        # The pinned start is the publication for everything that reads one.
+        if r["end_input_start_date"]:
+            start = iv_start = parse_dt(r["end_input_start_date"])
+        end = iv_start + min(timedelta(seconds=notice_to_end), cap)
         # Recurrence lives strictly under has_end, which keeps it away from the
         # branches above: a boil notice's end is a paired lift and never its own
         # text, and the no-signal branches own the 532 cases whose span build.py
         # nulled because the notice was published after its own works window.
-        windows, rec = recurring_intervals(r, start, end, shared_window)
+        windows, rec = recurring_intervals(r, iv_start, end, shared_window)
         if windows:
             return Case(
                 row=r, sev=sev, ref=case_ref(r), start=start,
@@ -1101,7 +1112,7 @@ class Region:
                     "sev": sev,
                     "title": r["title"],
                     "loc": r["location"] or "",
-                    "since": r["start_date"][:10],
+                    "since": case.start.strftime("%Y-%m-%d"),
                 },
             )
         elif r["closed_at"]:
@@ -1116,7 +1127,7 @@ class Region:
                     "sev": sev,
                     "title": r["title"],
                     "loc": r["location"] or "",
-                    "since": r["start_date"][:10],
+                    "since": case.start.strftime("%Y-%m-%d"),
                     "closed": r["closed_at"][:10],
                 },
             )
@@ -1389,9 +1400,10 @@ def event_record(county, ref, meta, intervals, sas):
         end = (iv[-1][1] - timedelta(seconds=1)).strftime("%Y-%m-%d")
         if end != record["start"]:
             record["end"] = end
-    # the whole event's footprint, capped as Region.event_pop caps it — this
-    # describes an event, not an area's accrual, so it is the same number the
-    # national top ten prints for the same event
+    # the whole event's footprint across every class of pin, capped as
+    # Region.event_pop caps it. This describes the event, as `hours` does; the
+    # national top ten prints the outage pins' footprint only, so the two
+    # differ for the few events whose pins disagree on class.
     people = min(sum(sas.values()), COUNTY_POP[county])
     if people:
         record["people"] = people
@@ -2082,7 +2094,8 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
         meta = event_meta.setdefault(
             (case.county, case.ref),
             # first pin wins, matching how the event's open entry is recorded
-            {"title": r["title"], "start": r["start_date"][:10], "first_pub": case.start,
+            {"title": r["title"], "start": case.start.strftime("%Y-%m-%d"),
+             "first_pub": case.start,
              "pins": 0, "confirmed": 0, "scheduled": 0, "sev": case.sev,
              "loc": r["location"] or "", "open": False, "closed": None, "health": False,
              "seen": r["first_seen"] or r["start_date"]},
@@ -2375,7 +2388,8 @@ def load_cases(conn):
                c.full_lat, c.full_lon,
                c.boil_water_notice, c.do_not_drink, c.water_restrictions,
                c.reduced_pressure,
-               i.notice_to_end_seconds, i.end_source, i.end_local_date, i.end_local_time,
+               i.notice_to_end_seconds, i.end_input_start_date, i.end_source,
+               i.end_local_date, i.end_local_time,
                i.end_recurrence, i.end_window_open, i.end_window_close, i.end_window_first_date
         FROM cases c
         LEFT JOIN inferred_cases i ON i.case_id = c.id
