@@ -54,6 +54,12 @@ UTC = timezone.utc
 APP = SITE_HTML.read_text()
 
 
+def _app_fn(name):
+    """The body of one function in site.html's inline script."""
+    body = APP[APP.index(f"function {name}("):]
+    return body[: body.index("\n}\n")]
+
+
 def _dt(iso):
     return datetime.fromisoformat(iso).astimezone(UTC)
 
@@ -2076,9 +2082,7 @@ class TestAreaHistory:
             assert any(e["sev"] == sev for e in listed), day
 
     def test_the_day_list_reads_the_first_charged_day(self):
-        body = APP[APP.index("function dayEventsHtml("):]
-        body = body[: body.index("\n}\n")]
-        assert "(e.from || e.start) > dayPick" in body
+        assert "(e.from || e.start) > dayPick" in _app_fn("dayEventsHtml")
 
     def test_an_open_event_counts_its_hours_to_the_build_not_its_scheduled_end(self):
         """Louth LOU00120479 read 240.8h "so far" 198h after it went up."""
@@ -2098,17 +2102,32 @@ class TestAreaHistory:
                       end_local_date="2026-05-20", end_local_time="17:00")]
         event = _history(rows)[0]
         assert event["open"] == 1 and event["scheduled"] == 1
-        assert "hours" not in event and "span_h" not in event
+        assert "hours" not in event and "span_h" not in event and event["ahead"] == 1
         row = _events_html([event])
         assert "so far" not in row and "still open" not in row
         assert "not started yet" in row
 
+    def test_an_estimate_is_never_printed_as_hours_so_far(self):
+        # open in the feed, its own scheduled end before publication: charged a
+        # SpanTable estimate, which is not a measurement
+        rows = [_open(id=1, reference_num="EST1", end_source="scheduled_end_with_time",
+                      notice_to_end_seconds=None, end_local_date="2026-05-02",
+                      end_local_time="12:00", start_date="2026-05-03T09:00:00+00:00")]
+        rows += [_case(id=i, reference_num=f"CAR{i}", status="Closed") for i in range(2, 7)]
+        events = {e["ref"]: e for e in _history(rows)}
+        assert events["EST1"]["open"] == 1
+        assert "hours" not in events["EST1"] and "ahead" not in events["EST1"]
+
+    def test_a_closed_event_counts_only_the_hours_already_past(self):
+        rows = [_case(status="Closed", start_date="2026-05-08T00:00:00+00:00",
+                      notice_to_end_seconds=5 * 86400.0, end_source="scheduled_end_with_time",
+                      end_local_date="2026-05-13", end_local_time="01:00")]
+        assert _history(rows)[0]["hours"] == 48.0
+
     def test_the_app_says_an_open_event_has_not_started(self):
-        duration = APP[APP.index("function historyDuration("):]
-        duration = duration[: duration.index("\n}\n")]
-        assert 'if (e.hours == null) return e.open ? "not started yet" : "";' in duration
-        row = APP[APP.index("function historyRow("):]
-        assert "e.open && e.hours != null ? `open since" in row[: row.index("\n}\n")]
+        assert 'if (e.ahead) return "not started yet";' in _app_fn("historyDuration")
+        assert "e.open && !e.ahead ? `open since" in _app_fn("historyRow")
+        assert "o.ahead || o.since > today" in _app_fn("openGroups")
 
     def test_a_multi_pin_event_is_one_record_counting_its_pins(self):
         """The same rule the top ten uses: "was this confirmed complete?" is a
@@ -2486,6 +2505,17 @@ class TestNoticeText:
         block = re.search(r'<section id="open">.*?</section>', page, re.S).group(0)
         when = dict(re.findall(r'<strong>(.*?)</strong>.*?<span class="when">(\w+)', block))
         assert when == {"Running": "since", "Ahead": "from"}
+
+    def test_a_notice_starting_later_on_the_build_day_reads_from(self, tmp_path):
+        rows = [_open(title="Later today", start_date="2026-05-10T14:00:00+00:00")]
+        site = build_site(rows, SA_INDEX, NOW + timedelta(hours=6), TOWNS)
+        assert site["counties"]["Carlow"]["open"][0]["ahead"] == 1
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, TOWNS)
+        page = (tmp_path / "c" / "carlow.html").read_text()
+        assert '<span class="when">from ' in page and '<span class="when">since ' not in page
+
+
 class TestFeeds:
     """One Atom file nationally and one per county, written from a block that
     write_site pops the way it pops the history: a subscriber gets the newest
@@ -3035,18 +3065,20 @@ class TestReleaseDb:
 
 
 class TestDisplayCopy:
-    @staticmethod
-    def _fn(name):
-        body = APP[APP.index(f"function {name}("):]
-        return body[: body.index("\n}\n")]
-
     def test_the_open_column_counts_what_the_open_list_does(self):
         """The number under it is Case.is_open's, not the feed's status."""
         title = re.search(r'<th title="([^"]*)">Open</th>', APP).group(1)
-        assert title.endswith("less any whose own text already reports the works complete")
+        assert "own text already reports the works complete" in title
+        assert "after 14 days with no lift" in title
+        assert title in re.search(r'const OPEN_NOTE = "([^"]*)"', APP).group(1).replace(
+            " right now", "")
+
+    def test_an_unlifted_health_notice_is_not_said_to_be_withdrawn(self):
+        badge = _app_fn("endBadge")
+        assert badge.index("if (r.health)") < badge.index("withdrawn without")
 
     def test_a_notice_with_no_end_is_not_said_to_add_no_time(self):
         """An outage-class one is charged a typical span (2026-08-15)."""
-        badge = self._fn("endBadge")
+        badge = _app_fn("endBadge")
         assert "It is counted as an incident but adds no disruption time." not in badge
         assert "typical" in badge

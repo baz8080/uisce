@@ -641,7 +641,7 @@ function townRows(c) {
       <th title="Restrictions, low pressure, and planned or non-disruptive works">Works</th>
       ${th("impact", "Person-hours", "How many people, multiplied by how long - sort by this", "people × hours")}
       ${th("avail", "Availability", "Sort worst first", "vs this area's own population")}
-      ${isLatest() ? '<th title="Notices Uisce Éireann still shows as open, less any whose own text already reports the works complete">Open</th>' : ""}
+      ${isLatest() ? '<th title="Notices Uisce Éireann still shows as open, less any whose own text already reports the works complete and any boil-water or do-not-drink notice closed by its lift or after 14 days with no lift">Open</th>' : ""}
     </tr></thead>
     <tbody>${body}</tbody>
   </table></div>`;
@@ -657,7 +657,7 @@ function openGroups(c) {
   }
   const named = [...groups].map(([, cases]) => [cases[0].name || "—", cases]);
   named.sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
-  const when = o => `${o.since > today ? "from" : "since"} ${fmtDate(o.since, today)}`;
+  const when = o => `${o.ahead || o.since > today ? "from" : "since"} ${fmtDate(o.since, today)}`;
   return named.map(([name, cases]) => `<div class="tgroup">
       <div class="tname">${esc(name)}</div>
       ${cases.map(o => incident(o, when)).join("")}
@@ -666,8 +666,9 @@ function openGroups(c) {
 
 // The reading is Case.is_open's: a notice whose own text reports the works
 // complete is not listed, however long the feed goes on saying Open (a median
-// of three days, notes/statuspage-methodology.md, 2026-09-05).
-const OPEN_NOTE = "Notices Uisce Éireann still shows as open right now, less any whose own text already reports the works complete. Some are advance warning of planned works; a few were never taken down.";
+// of three days, notes/statuspage-methodology.md, 2026-09-05), and nor is a
+// standing notice a lift or the 14-day cap has closed.
+const OPEN_NOTE = "Notices Uisce Éireann still shows as open right now, less any whose own text already reports the works complete and any boil-water or do-not-drink notice closed by its lift or after 14 days with no lift. Some are advance warning of planned works; a few were never taken down.";
 
 function openSection(c) {
   if (!isLatest()) return "";
@@ -791,9 +792,10 @@ function endBadge(r, open) {
   if (r.confirmed && !r.scheduled) return `<span class="badge confirmed">completion confirmed</span>`;
   if (r.confirmed) return `<span class="badge partial">partly confirmed - ${r.confirmed} of ${r.pins} notices reported complete</span>`;
   if (r.scheduled) return `<span class="badge sched">scheduled to end, but no completion reported</span>`;
-  if (open && r.hours == null) return "";  // historyDuration says it has not started
+  if (open && r.ahead) return "";  // historyDuration says it has not started
   if (open === undefined || open) return `<span class="badge sched">still running - counted up to 14 days</span>`;
-  return `<span class="badge none" title="The notice was withdrawn without an update saying the works had finished, so there is no measured duration to report. It is counted as an incident. A supply disruption is charged the typical time its kind of works takes; any other notice adds no disruption time.">withdrawn without a completion update</span>`;
+  if (r.health) return `<span class="badge none" title="No lift was published for this notice. It counts as closed once Uisce Éireann stops listing it, or 14 days after it was issued if that comes first. It is counted as an incident.">no lift published</span>`;
+  return `<span class="badge none" title="The notice was withdrawn without an update saying the works had finished, so there is no measured duration to report. It is counted as an incident. A supply disruption is charged the typical time its kind of works takes; any other notice is shown on the days it covered but does not count against availability.">withdrawn without a completion update</span>`;
 }
 
 function topMonth() {
@@ -886,11 +888,12 @@ function loadHistory(name) {
 }
 
 // A duration is only ever a floor: every span is measured from when the notice
-// was published, not from when supply actually went. `hours` is absent entirely
-// for an event that closed without reporting an end - see endBadge - and for an
+// was published, not from when supply actually went. `hours` is absent for an
+// event with nothing measured to state - see endBadge - and `ahead` marks an
 // open one that has not started by the build.
 function historyDuration(e) {
-  if (e.hours == null) return e.open ? "not started yet" : "";
+  if (e.ahead) return "not started yet";
+  if (e.hours == null) return "";
   if (e.span_h) return `${e.hours}h of works, spread across ${e.span_h}h`;
   return e.open ? `at least ${e.hours}h so far` : `${e.hours}h`;
 }
@@ -898,7 +901,7 @@ function historyDuration(e) {
 function historyRow(e) {
   const bits = [
     e.loc ? esc(e.loc) : "",
-    e.open && e.hours != null ? `open since ${fmtDate(e.start, today)}` : `from ${fmtDate(e.start, today)}`,
+    e.open && !e.ahead ? `open since ${fmtDate(e.start, today)}` : `from ${fmtDate(e.start, today)}`,
     historyDuration(e),
     e.people ? `~${e.people.toLocaleString()} people` : "",
     // 15 notices stopped being listed before the date they announced. "Closed"

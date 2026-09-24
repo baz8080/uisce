@@ -917,6 +917,8 @@ class Case(NamedTuple):
     is_open: bool = False
     # closed_on(...): the day every "closed" surface prints; None while open
     closed: str | None = None
+    # open and not yet started at the build: every surface says "from", not "since"
+    ahead: bool = False
 
     @property
     def county(self):
@@ -1075,6 +1077,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
                 intervals=windows, sas=sa_index.affected(r["full_lat"], r["full_lon"]),
                 has_end=has_end, observed_end=observed_end, rec=rec,
                 is_open=open_now, closed=None if open_now else closed_on(r, now, start),
+                ahead=open_now and windows[0][0] > now,
             )
 
     return Case(
@@ -1091,6 +1094,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         in_force=tuple(in_force),
         is_open=open_now,
         closed=None if open_now else closed_on(r, now, start, closed_by),
+        ahead=open_now and iv_start > now,
     )
 
 
@@ -1138,7 +1142,7 @@ class Region:
             self.knock_iv[ref].extend(case.marker_intervals)
         r = case.row
         if case.is_open:
-            self.open_now.setdefault(
+            entry = self.open_now.setdefault(
                 ref,
                 {
                     "ref": ref,
@@ -1146,8 +1150,10 @@ class Region:
                     "title": r["title"],
                     "loc": r["location"] or "",
                     "since": case.start.strftime("%Y-%m-%d"),
-                },
+                } | ({"ahead": 1} if case.ahead else {}),
             )
+            if not case.ahead:
+                entry.pop("ahead", None)
         elif case.closed:
             held = self.resolved.get(ref)
             # the earliest close across the event's pins, as event_meta takes it
@@ -1405,9 +1411,9 @@ def event_record(county, ref, meta, intervals, sas, now):
     footprint, so publishing the number would print an estimate, or "0.0h" for
     801 events, as a measurement. The page says no end was ever reported instead.
 
-    `hours` on an open event is what has accrued by `now`, not the scheduled or
-    imputed span it is charged, and it is dropped for one that has not started:
-    the pages read its absence on an open event as "not started yet".
+    `hours` is what has elapsed by `now` on the pins that measured something,
+    never a SpanTable estimate nor time still ahead. An open event with nothing
+    elapsed yet carries `ahead` instead, which the pages read as "not started".
 
     `span_h` appears only when a recurring window makes it differ from `hours`.
     Covered time is what the works took; elapsed time is what the notice spanned,
@@ -1428,7 +1434,9 @@ def event_record(county, ref, meta, intervals, sas, now):
         "start": meta["first_pub"].strftime("%Y-%m-%d"),
         "pins": meta["pins"],
     }
-    counted = [(s, min(e, now)) for s, e in iv if s < now] if meta["open"] else iv
+    counted = [(s, min(e, now)) for s, e in merge(meta["measured"]) if s < now]
+    if meta["open"] and not any(s < now for s, _ in iv):
+        record["ahead"] = 1
     if counted and (meta["open"] or meta["confirmed"] or meta["scheduled"]):
         hours = sum((e - s).total_seconds() for s, e in counted) / 3600
         record["hours"] = round(hours, 1)
@@ -1731,7 +1739,7 @@ def _county_open_html(cdata, today, text=None):
         f'<strong>{html.escape(o["title"])}</strong>'
         + (f' - {html.escape(o["loc"])}' if o["loc"] else "")
         # "from" for one still ahead of the build, as the app's openGroups says it
-        + f'<span class="when">{"from" if o["since"] > today else "since"} '
+        + f'<span class="when">{"from" if o.get("ahead") or o["since"] > today else "since"} '
         + _fmt_day(o["since"])
         + (
             f' · <a href="{url}">{url.rsplit("/", 1)[1]}</a>'
@@ -1886,8 +1894,8 @@ def _events_html(events, heading="Notice history", multi_area=False):
     rows = []
     for e in events:
         bits = []
-        started = e.get("hours") is not None
-        if started:
+        started = not e.get("ahead")
+        if e.get("hours") is not None:
             # "so far" on an open event: the figure is time accrued to this
             # build, not what the works took, and a bare "0h · still open" on
             # something published this morning reads as a completed nothing
@@ -2147,6 +2155,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
              "first_pub": case.start,
              "pins": 0, "confirmed": 0, "scheduled": 0, "sev": case.sev,
              "loc": r["location"] or "", "open": False, "closed": None, "health": False,
+             "measured": [],
              "seen": r["first_seen"] or r["start_date"]},
         )
         meta["pins"] += 1
@@ -2173,6 +2182,8 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
             # takes it, so the history and the closed list agree on the day
             meta["closed"] = case.closed
         event_iv[(case.county, case.ref)].extend(case.intervals)
+        if not case.imputed:
+            meta["measured"].extend(case.intervals)
         if towns is not None:
             # the breakdown still homes each pin individually, with `within`
             # clipping its footprint, so an area only accrues its own people
@@ -2394,11 +2405,10 @@ def _atom_entry(e):
     )
     link = e.get("path") or f"{COUNTY_DIR}/{county_slug(e['county'])}.html"
     return (
-        # keyed by county as well as reference: 15 references span two counties
-        # stripped of the padding a few references carry and percent-encoded so
-        # it is an IRI; a clean reference keeps the id it always had
+        # keyed by county as well as reference: 15 references span two counties.
+        # Percent-encoded so it is an IRI; a clean reference keeps its old id
         f"<entry><id>{BASE_URL}/n/{county_slug(e['county'])}/"
-        f"{_xml_text(quote(e['ref'].strip(), safe=':@'))}</id>"
+        f"{quote(e['ref'], safe=':@')}</id>"
         f"<title>{_xml_text(e['title'] + (f': {where}' if where else ''))}</title>"
         f"<updated>{_xml_text(e['seen'])}</updated>"
         f'<link href="{xml_escape(f"{BASE_URL}/{link}", {chr(34): "&quot;"})}"/>'
@@ -2574,10 +2584,9 @@ def write_site(site, site_dir, towns=None):
             county = towns.county[code]
             if county not in site["counties"]:
                 continue
-            # the history as well as the breakdown: an area whose every notice
-            # is still ahead has no month row, but its page is built all the same
-            area = (county_data[county]["towns"].get(code)
-                    or history.get(county, {}).get(code) or {})
+            # the history, not the breakdown: an area whose every notice is still
+            # ahead has no month row, but its page is built all the same
+            area = history.get(county, {}).get(code) or {}
             names[county].add((name, area["slug"]) if "slug" in area else name)
 
         def entry(e):

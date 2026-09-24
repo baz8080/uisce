@@ -561,3 +561,21 @@ and the day list reuses the same wording. `end` is not clipped: the bar still sh
 
 The county page's open list said "since" a date to come on the same 38; it now says "from",
 the word the app's `openGroups` already used.
+
+**Amended after code review, same day.** Three things changed from the text above.
+- **`ahead` is a key after all.** Reading "not started" from a missing `hours` broke once
+  hours stopped including estimates, so an open record that has not started carries
+  `ahead: 1`, and so does an open entry in `data.js` (sparse). The county page and
+  `openGroups` read it as well as the date. The 37 starting later on the build day used to
+  read "since <today>" beside a history saying "not started yet"; they now read "from".
+- **Hours are measured hours.** `hours` sums only pins that did not take a `SpanTable`
+  estimate, and is clipped to the build for every event, open or closed. An open notice
+  already over by its own text (charged an estimate) printed that estimate as "at least Nh
+  so far", and a closed event with a scheduled end still ahead printed the unelapsed time.
+- **Standing notices.** After #97 the Open column and `OPEN_NOTE` also leave out a
+  boil-water or do-not-drink notice closed by its lift or after 14 days with no lift, and
+  say so; such a notice closed with no lift reads "no lift published", not "withdrawn".
+
+Re-measured on the same release: 0 days listing 0 notices, 0 "so far" on a future start,
+0 "since" on a future date including the build day, Atom well-formed, 763 of 763 area
+pages reachable from search (the slug is now read from the history alone).
