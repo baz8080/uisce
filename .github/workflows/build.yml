@@ -33,15 +33,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # A dispatch from a branch would publish that branch's DB as the latest
+      # release and push to main. Failed rather than skipped, so it is seen.
+      - name: Refuse to run off main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Build DB publishes the latest release and pushes to main; dispatch it from main, not $GITHUB_REF"
+          exit 1
+
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
           prune-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Download existing DB
         run: gh release download --pattern "uisce.db" --dir out/
