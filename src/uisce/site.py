@@ -180,25 +180,28 @@ def is_open(row, now):
     if row["end_source"] == "lifted_immediate":
         return False
     if row["end_source"] in OBSERVED_END_SOURCES:
-        end = reported_end_utc(row["end_local_date"], row["end_local_time"])
+        end = observed_end_utc(row)
         return end is None or end > now
     return True
 
 
-def closed_on(row, now, start):
-    """The day the site reads a case as closed: its own reported completion
-    where it has one, else the build that saw the feed close it.
+def observed_end_utc(row):
+    """When the notice's own text reported the works complete, or None."""
+    if row["end_source"] not in OBSERVED_END_SOURCES:
+        return None
+    return reported_end_utc(row["end_local_date"], row["end_local_time"])
 
-    The feed closes a case a median 72h after its completion (is_open), and
-    closed_at is NULL before schema v2, so it alone misfiled or dropped most
-    closes (notes/statuspage-methodology.md, 2026-09-24). A completion dated
-    before the (re-stamped) start falls back to closed_at: the history reads a
-    close before the start as a withdrawal.
-    """
-    if row["end_source"] in OBSERVED_END_SOURCES and row["end_local_date"]:
-        end = reported_end_utc(row["end_local_date"], row["end_local_time"])
-        if end is not None and end <= now and row["end_local_date"] >= start.strftime("%Y-%m-%d"):
-            return row["end_local_date"]
+
+def closed_on(row, now, start, closed_by=None):
+    """The day a closed case closed: its own completion, else the lift or cap
+    that closed it (`closed_by`), else closed_at. A completion before `start`
+    is not used: the history reads a close before the start as a withdrawal.
+    See notes/statuspage-methodology.md, 2026-09-24."""
+    end = observed_end_utc(row)
+    if end is not None and start <= end <= now:
+        return row["end_local_date"]
+    if closed_by is not None:
+        return closed_by.strftime("%Y-%m-%d")
     return row["closed_at"][:10] if row["closed_at"] else None
 
 
@@ -912,7 +915,7 @@ class Case(NamedTuple):
     # history's "still open", the county page's notice text and the Atom feed
     # cannot disagree about a case. Read this, not is_open().
     is_open: bool = False
-    # closed_on(row, now, start): the day every "closed" surface prints
+    # closed_on(...): the day every "closed" surface prints; None while open
     closed: str | None = None
 
     @property
@@ -974,9 +977,12 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
     # event belongs to, and that is a fact about the notice, not the works.
     iv_start = start
     open_now = is_open(r, now)
+    closed_by = None  # when a lift or the cap closed it, for closed_on
     # a standing notice no lift has closed closes at the cap, where its marker
     # stops, whichever branch below it takes (owner decision, 2026-09-24)
     if r["work_category"] in LIFT_OF and now - start > cap:
+        if open_now:
+            closed_by = start + cap
         open_now = False
 
     if r["work_category"] == "boil_notice_issued":
@@ -993,6 +999,8 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
             end = start + timedelta(seconds=1)
         else:
             in_force, end = fate
+            if has_end:
+                closed_by = in_force[-1][1]
     elif not has_end:
         # A do-not-consume notice cannot state its own end either — the lift is a
         # separate case, exactly as for a boil notice — so pairing one is strictly
@@ -1020,6 +1028,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
             in_force, end = pairing
             has_end = observed_end = True
             open_now = False
+            closed_by = in_force[-1][1]
         elif open_now and start < now and not already_over:
             # ongoing with no inferred end: runs from start until now, capped
             end = min(now, start + cap)
@@ -1065,7 +1074,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
                 row=r, sev=sev, ref=case_ref(r), start=start,
                 intervals=windows, sas=sa_index.affected(r["full_lat"], r["full_lon"]),
                 has_end=has_end, observed_end=observed_end, rec=rec,
-                is_open=open_now, closed=closed_on(r, now, start),
+                is_open=open_now, closed=None if open_now else closed_on(r, now, start),
             )
 
     return Case(
@@ -1081,7 +1090,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         imputed=imputed,
         in_force=tuple(in_force),
         is_open=open_now,
-        closed=closed_on(r, now, start),
+        closed=None if open_now else closed_on(r, now, start, closed_by),
     )
 
 
@@ -1140,16 +1149,16 @@ class Region:
                 },
             )
         elif case.closed:
-            self.resolved.setdefault(
-                ref,
-                {
+            held = self.resolved.get(ref)
+            # the earliest close across the event's pins, as event_meta takes it
+            if held is None or case.closed < held["closed"]:
+                self.resolved[ref] = {
                     "sev": sev,
                     "title": r["title"],
                     "loc": r["location"] or "",
                     "since": case.start.strftime("%Y-%m-%d"),
                     "closed": case.closed,
-                },
-            )
+                }
 
     def merged(self):
         return {sev: merge(self.sev_iv[sev]) for sev in SEV_ORDER}
@@ -1245,8 +1254,12 @@ def resolved_by_month(region, shown=None):
     handful, not 200 titles.
     """
     by_month = defaultdict(list)
-    for event in region.resolved.values():
-        by_month[event["closed"][:7]].append(event)
+    for ref, event in region.resolved.items():
+        # an event with a pin still open is open, whatever its siblings say; a
+        # close before collection began (a standing notice capped years ago) is
+        # in no month the site shows
+        if ref not in region.open_now and event["closed"] >= f"{COLLECTION_START:%Y-%m-%d}":
+            by_month[event["closed"][:7]].append(event)
     out = {}
     for ym, events in by_month.items():
         events.sort(key=lambda e: e["closed"], reverse=True)
@@ -1431,7 +1444,7 @@ def event_record(county, ref, meta, intervals, sas):
             record[field] = meta[field]
     if meta["open"]:
         record["open"] = 1
-    if meta["closed"]:
+    if meta["closed"] and not meta["open"]:
         record["closed"] = meta["closed"]
     if meta["loc"]:
         # the vernacular name the settlement it was homed to does not carry:
@@ -2138,10 +2151,9 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
         if case.is_open:
             meta["open"] = True
             notice_text[case.county].setdefault(case.ref, r["description"])
-        elif meta["closed"] is None and case.closed:
-            # first pin with a close stamp wins, so the history and the county's
-            # "observed to close" list — which reads Region.resolved, filled the
-            # same way — cannot disagree about when an event ended
+        elif case.closed and (meta["closed"] is None or case.closed < meta["closed"]):
+            # the earliest close across the pins, which is how Region.resolved
+            # takes it, so the history and the closed list agree on the day
             meta["closed"] = case.closed
         event_iv[(case.county, case.ref)].extend(case.intervals)
         if towns is not None:

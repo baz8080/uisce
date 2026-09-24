@@ -65,12 +65,12 @@ def _open(**overrides):
     return _case(**(base | overrides))
 
 
-# one Small Area of 1,000 people sitting right on the test pin
 def _scheduled(**overrides):
     """Closed with a scheduled end only, so closed_at is its only close date."""
     return _case(**({"end_source": "scheduled_end_with_time"} | overrides))
 
 
+# one Small Area of 1,000 people sitting right on the test pin
 SA_INDEX = SmallAreaIndex([(52.836, -6.926, "SA1", 1000)])
 NOW = datetime(2026, 5, 10, tzinfo=UTC)
 
@@ -1076,6 +1076,49 @@ class TestResolved:
                       notice_to_end_seconds=7 * 3600.0, closed_at="2026-05-03T04:00:00+00:00")]
         county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
         assert set(county["resolved"]) == {"2026-04"}
+
+    def test_an_event_with_a_pin_still_open_is_not_listed_closed(self):
+        rows = [_open(id=1), _case(id=2, status="Open", full_lat=52.837)]
+        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        county = site["counties"]["Carlow"]
+        assert county["open_total"] == 1 and county["resolved"] == {}
+        assert "closed" not in site["history"]["Carlow"]["T1"]["events"][0]
+
+    def test_an_event_closes_on_its_earliest_pin(self):
+        rows = [_scheduled(id=10, status="Closed", closed_at="2026-05-06T04:00:00+00:00"),
+                _case(id=11, status="Closed", full_lat=52.837)]
+        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        assert site["counties"]["Carlow"]["resolved"]["2026-05"]["cases"][0]["closed"] == (
+            "2026-05-02")
+        assert site["history"]["Carlow"]["T1"]["events"][0]["closed"] == "2026-05-02"
+
+    def test_a_paired_lift_dates_the_close(self):
+        issue = _case(work_category="consumption_notice_issued", status="Open",
+                      notice_to_end_seconds=None, end_source="not_found", end_local_date=None,
+                      end_local_time=None, location="Downings", reference_num="ISS1")
+        lift = _case(id=99, work_category="consumption_notice_lifted", status="Closed",
+                     notice_to_end_seconds=None, end_source="not_found", end_local_date=None,
+                     location="Downings", reference_num="LIFT1",
+                     start_date="2026-05-03T10:00:00+00:00")
+        county = build_site([issue, lift], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert county["resolved"]["2026-05"]["cases"][0]["closed"] == "2026-05-03"
+
+    def test_the_cap_dates_the_close_of_a_standing_notice(self):
+        row = _case(work_category="consumption_notice_issued", status="Open",
+                    notice_to_end_seconds=None, end_source="not_found", end_local_date=None,
+                    end_local_time=None)
+        now = datetime(2026, 5, 20, tzinfo=UTC)
+        county = build_site([row], SA_INDEX, now, TOWNS)["counties"]["Carlow"]
+        assert county["resolved"]["2026-05"]["cases"][0]["closed"] == "2026-05-15"
+
+    def test_a_completion_before_a_start_is_compared_as_instants(self):
+        # 00:10 Irish time on 1 June is 23:10 UTC on 31 May, before a 23:30 start
+        row = _case(status="Closed", start_date="2026-05-31T23:30:00+00:00",
+                    notice_to_end_seconds=None, end_local_date="2026-06-01",
+                    end_local_time="00:10", closed_at="2026-06-02T04:00:00+00:00")
+        county = build_site([row], SA_INDEX, datetime(2026, 6, 10, tzinfo=UTC), TOWNS)
+        assert county["counties"]["Carlow"]["resolved"]["2026-06"]["cases"][0]["closed"] == (
+            "2026-06-02")
 
     def test_a_completion_before_a_restamped_start_falls_back_to_closed_at(self):
         """The history reads a close before the start as a withdrawal."""
