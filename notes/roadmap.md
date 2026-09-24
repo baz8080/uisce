@@ -44,6 +44,10 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
 
 ## Decisions waiting on the owner
 
+- **Keep the `replay_closed_at` dispatch input?** A dry run over all 75 releases on
+  2026-09-24 found 0 values to stamp or change (data-quality.md, "The replay has nothing left
+  to recover"). It only earns its place if the DB is ever restored from an older release. If
+  it stays, its `gh release list --limit 100` needs raising before about 2026-10-19.
 - **`IGNORE_BOIL_NOTICES`.** Recommendation is to leave it off (boil-notices.md, re-measured
   2026-09-05): the two accruing notices and the one paired one are the live warnings the health
   marker exists for. The cost of leaving it off is 13 of 17 issue events excluded as stale
