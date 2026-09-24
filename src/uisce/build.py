@@ -4,7 +4,7 @@ import sqlite3
 from datetime import date, datetime, time, timezone
 
 from uisce.config import DB_PATH, DUBLIN, JSONL_PATH, RECURRING
-from uisce.inference import get_cases_needing_inference, readable_latest, record_state
+from uisce.inference import cases_needing_inference, current_states, readable_latest
 
 NO_END_SIGNAL_SOURCES = {"not_found", "lifted_immediate"}
 
@@ -184,14 +184,17 @@ def count_never_inferred(conn):
     ).fetchone()
 
 
-def stale_cases(latest):
+def stale_cases(conn, latest, unreadable):
     """Case ids whose published record `uisce-infer` would redo: its description
     has changed since, or its extractor or prompt is retired. Asked of inference's
-    own selection, so the warning and the redo cannot disagree. The record is
-    still the best answer there is until a run replaces it."""
-    states = {case_id: record_state(r) for case_id, r in latest.items()}
-    return sorted(row["id"] for row in get_cases_needing_inference(DB_PATH, states)
-                  if row["id"] in latest)
+    own selection and states, so the warning and the redo cannot disagree; a case
+    whose newest record is unreadable has its own warning. The record is still
+    the best answer there is until a run replaces it."""
+    redo_unreadable = {r["case_id"] for r in unreadable}
+    return sorted(
+        row["id"] for row in cases_needing_inference(conn, current_states(latest, unreadable))
+        if row["id"] in latest and row["id"] not in redo_unreadable
+    )
 
 
 def check_cases_cover(conn, case_ids):
@@ -261,7 +264,7 @@ def run():
         )
         never_inferred, never_inferred_open = count_never_inferred(conn)
         unquotable, inferred_first_dates = unquotable_windows(conn)
-    stale = stale_cases(latest_by_case)
+        stale = stale_cases(conn, latest_by_case, unreadable)
 
     print(f"Upserted {len(rows)} rows into inferred_cases")
     if unreadable:

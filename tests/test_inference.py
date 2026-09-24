@@ -277,7 +277,7 @@ class TestHybridRun:
         assert "1 failed" in capsys.readouterr().out
         assert jsonl.read_text() == ""
 
-    def test_an_unreadable_llm_value_is_stored_as_not_found_and_not_resent(
+    def test_an_unreadable_llm_value_fails_the_case_and_writes_nothing(
         self, tmp_path, monkeypatch, capsys
     ):
         jsonl = self._wire(
@@ -291,12 +291,10 @@ class TestHybridRun:
                 "local_time": "5pm"}),
         )
 
-        assert inference.run([]) == 0
-        record = json.loads(jsonl.read_text())
-        assert record["end_source"] == "not_found"
-        assert "local_time '5pm'" in record["notes"]
-        # a temperature-0 retry would return the same reply, so it is not resent
-        assert inference.get_last_hash_by_case_id(jsonl)[1][0] == record["description_hash"]
+        # failing, not a silent not_found: the case keeps its previous record
+        assert inference.run([]) == 1
+        assert "1 failed" in capsys.readouterr().out
+        assert jsonl.read_text() == ""
 
     def test_a_clean_run_exits_zero(self, tmp_path, monkeypatch):
         self._wire(tmp_path, monkeypatch, [(1, "2026-05-18T08:00:00+00:00", self.TEMPLATED)])
@@ -399,12 +397,16 @@ class TestParseResponse:
         ("local_date", "20260428"),
         ("window_first_date", "9 July"),
     ])
-    def test_an_unreadable_value_becomes_not_found(self, field, value):
-        result = parse_response(json.dumps({"end_source": "scheduled_end_with_time",
-                                            "local_date": "2026-05-18", "local_time": "17:00",
-                                            field: value}))
-        assert result["end_source"] == "not_found" and result["local_date"] is None
-        assert field in result["notes"]
+    def test_rejects_a_value_build_cannot_read(self, field, value):
+        with pytest.raises(ValueError, match=field):
+            parse_response(json.dumps({"end_source": "scheduled_end_with_time",
+                                       "local_date": "2026-05-18", "local_time": "17:00",
+                                       field: value}))
+
+    def test_a_midnight_with_a_non_string_date_is_rejected_not_crashed(self):
+        with pytest.raises(ValueError, match="local_date"):
+            parse_response(json.dumps({"end_source": "scheduled_end_with_time",
+                                       "local_date": 20260518, "local_time": "24:00"}))
 
 
 def test_a_malformed_record_already_written_is_inferred_again(tmp_path):

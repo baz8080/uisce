@@ -3,6 +3,7 @@ import hashlib
 import json
 import re
 import sqlite3
+from contextlib import closing
 from datetime import date, datetime, timedelta, timezone
 
 from uisce.config import DB_PATH, JSONL_PATH, make_session
@@ -180,6 +181,13 @@ def readable_latest(records):
     return latest, newer
 
 
+def current_states(latest, newer_unreadable):
+    """The state each case is judged current by: its latest readable record's,
+    unless a newer unreadable record means it must be redone."""
+    redo = {r["case_id"] for r in newer_unreadable}
+    return {case_id: record_state(r) for case_id, r in latest.items() if case_id not in redo}
+
+
 def get_last_hash_by_case_id(jsonl_path):
     """Latest (description_hash, prompt_version, model) per case. A case is up
     to date only when the hash and version still match AND its record came from
@@ -189,9 +197,7 @@ def get_last_hash_by_case_id(jsonl_path):
     if not jsonl_path.exists():
         return {}
     with open(jsonl_path) as f:
-        latest, newer = readable_latest(json.loads(line) for line in f if line.strip())
-    redo = {r["case_id"] for r in newer}
-    return {case_id: record_state(r) for case_id, r in latest.items() if case_id not in redo}
+        return current_states(*readable_latest(json.loads(line) for line in f if line.strip()))
 
 
 def is_current(state, description):
@@ -203,19 +209,20 @@ def is_current(state, description):
             and model in (MODEL_NAME, RULES_VERSION))
 
 
-def get_cases_needing_inference(db_path, last_state_by_case_id, force=False):
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+def cases_needing_inference(conn, last_state_by_case_id, force=False):
     cur = conn.execute(
         "SELECT id, start_date, description FROM cases WHERE description IS NOT NULL"
     )
-    cases = [
-        row
-        for row in cur
-        if force or not is_current(last_state_by_case_id.get(row["id"]), row["description"])
+    return [
+        {"id": case_id, "start_date": start_date, "description": description}
+        for case_id, start_date, description in cur
+        if force or not is_current(last_state_by_case_id.get(case_id), description)
     ]
-    conn.close()
-    return cases
+
+
+def get_cases_needing_inference(db_path, last_state_by_case_id, force=False):
+    with closing(sqlite3.connect(db_path)) as conn:
+        return cases_needing_inference(conn, last_state_by_case_id, force)
 
 
 def call_llm(session, start_date, description):
@@ -261,7 +268,9 @@ def _normalise(result):
             result[field] = "0" + value
     if result.get("window_close") == "24:00":
         result["window_close"] = "00:00"
-    if result.get("local_time") == "24:00" and _is_iso_date(result.get("local_date") or ""):
+    local_date = result.get("local_date")
+    if result.get("local_time") == "24:00" and isinstance(local_date, str) \
+            and _is_iso_date(local_date):
         result["local_date"] = (date.fromisoformat(result["local_date"])
                                 + timedelta(days=1)).isoformat()
         result["local_time"] = "00:00"
@@ -269,21 +278,15 @@ def _normalise(result):
 
 
 def parse_response(response_text):
-    """The model's answer, or a not_found record naming what could not be read.
-    Not a failure: at temperature 0 a retry returns the same reply, so a raise
-    would leave the case re-sent, and uninferred, on every run."""
+    """The model's answer, near-misses normalised. Anything still unreadable fails
+    the case loudly, so it keeps its previous record; storing it as not_found
+    would silently replace a good published answer with none."""
     result = json.loads(response_text)
     if not isinstance(result, dict):
         raise ValueError(f"Expected a JSON object, got: {response_text[:80]!r}")
     result = _normalise(result)
     if unreadable := unreadable_fields(result):
-        return {
-            "notes": "unreadable model reply: "
-                     + ", ".join(f"{f} {result[f]!r}" for f in unreadable),
-            "end_source": "not_found", "local_date": None, "local_time": None,
-            "recurrence": "none", "window_open": None, "window_close": None,
-            "window_first_date": None,
-        }
+        raise ValueError("unreadable " + ", ".join(f"{f} {result[f]!r}" for f in unreadable))
     return result
 
 

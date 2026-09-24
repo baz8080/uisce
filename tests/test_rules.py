@@ -136,6 +136,13 @@ class TestBilingualCompletions:
                        "**11:31rn 23/09/2026 - " + IRISH_COMPLETION_BLOCK
                        + ENGLISH_ORIGINAL) is None
 
+    def test_an_irish_header_with_a_dotted_time_is_dated_from_its_header(self):
+        result = extract("2026-07-22T13:18:00+00:00",
+                         "**10.15rn 23/07/2026** " + IRISH_COMPLETION_BLOCK
+                         + "**Update 10:15am 23/07/2026** Works are now complete. "
+                         + ENGLISH_ORIGINAL)
+        assert (result["local_date"], result["local_time"]) == ("2026-07-23", "10:15")
+
     def test_an_irish_completion_does_not_read_an_older_english_update(self):
         assert extract("2026-07-21T13:18:00+00:00",
                        "**10in 23/07/2026** " + IRISH_COMPLETION_BLOCK
@@ -247,6 +254,11 @@ class TestScheduledEnds:
         result = extract(START, "Works at the wastewater station may cause disruption "
                                 "from 9am until 5pm on 22 July." + BOILERPLATE)
         assert (result["local_date"], result["local_time"]) == ("2026-07-22", "17:00")
+
+    def test_midnight_after_an_evening_start_the_day_before_abstains_too(self):
+        # 6h or 30h; only a literal "12am on D" names the start of D
+        assert extract(START, "Works are scheduled to take place from 6pm on 21 July "
+                              "until midnight on 22 July." + BOILERPLATE) is None
 
     def test_midnight_after_a_daytime_start_the_day_before_abstains(self):
         # 15h or 39h: the text does not say which

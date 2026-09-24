@@ -111,10 +111,7 @@ FROM_BEFORE = re.compile(
 ALTERNATIVE_SUPPLY = re.compile(
     r"\b(?:alternative\s+(?:drinking\s+)?water|tankers?|bowsers?|water\s+stations?"
     r"|bottled\s+water|water\s+bottles|standpipes?)\b", re.IGNORECASE)
-LEADING_DATE = re.compile(rf"\W*[^.]{{0,20}}?{_DATE}", _FLAGS)
-# a start the day before only fixes "until midnight on D" as the start of D when
-# it is late: "from 9pm on 21 May"; "from 9am on 21 July" could be either
-LATE_START = "18:00"
+LEADING_DATE = re.compile(rf"\W*.{{0,40}}?{_DATE}", _FLAGS)
 SENTENCE_END = re.compile(r"(?<!\bCo)(?<!\bSt)[.!?](?=\s)")
 
 _TAGS = re.compile(r"<[^>]+>")
@@ -185,12 +182,13 @@ def _match_date(m, start_date):
     return resolved.isoformat() if resolved else None
 
 
-def _midnight_end_date(before, end_date, start_date):
+def _midnight_end_date(before, end_date, start_date, said_midnight):
     """The date a 00:00 end falls on, or None when the text leaves it open.
 
     "until midnight on D" alone is either end of D. A start earlier on D makes
-    it the end of D, so the instant is D+1 00:00; a late-evening start the day
-    before makes it the start of D ("from 9pm on 21 May until 12am on 22 May")."""
+    it the end of D, so the instant is D+1 00:00. After a start the day before,
+    only "12am on D" is the start of D ("from 9pm on 21 May until 12am on 22
+    May"); the word "midnight" there still leaves it open."""
     m = FROM_BEFORE.search(before)
     from_time = m and _match_time(m)
     if not from_time or from_time == "00:00":
@@ -201,14 +199,17 @@ def _midnight_end_date(before, end_date, start_date):
     end = date.fromisoformat(end_date)
     if from_date == end_date:
         return (end + timedelta(days=1)).isoformat()
-    if from_date == (end - timedelta(days=1)).isoformat() and from_time >= LATE_START:
+    if from_date == (end - timedelta(days=1)).isoformat() and not said_midnight:
         return end_date
     return None
 
 
-def _leading_date(block, start_date):
-    """The date an update block opens with, read even when its time is too
-    garbled for UPDATE_HEADER ("** 9:38 rn 22/09/2026", case 244845)."""
+def _block_date(header, block, start_date):
+    """The date an update block is headed with: its parsed header's, else the date
+    it opens with, for a time too garbled for UPDATE_HEADER ("** 9:38 rn
+    22/09/2026", case 244845)."""
+    if header is not None:
+        return _match_date(header, start_date)
     m = LEADING_DATE.match(block)
     return _match_date(m, start_date) if m else None
 
@@ -284,7 +285,7 @@ def extract(start_date, description):
             # not an older one; otherwise the Irish needs the model.
             following_header, following = next(
                 ((h, b) for h, b in segments[i + 1:] if _body(h, b).strip()), (None, ""))
-            irish_date = _leading_date(block, start_date)
+            irish_date = _block_date(header, block, start_date)
             same_day = (following_header is not None and irish_date is not None
                         and irish_date == _match_date(following_header, start_date))
             if not (same_day and COMPLETION.search(following)):
@@ -321,7 +322,8 @@ def extract(start_date, description):
         local_time = _match_time(m)
         local_date = _match_date(m, start_date)
         if local_time == "00:00" and local_date:
-            local_date = _midnight_end_date(before, local_date, start_date)
+            local_date = _midnight_end_date(
+                before, local_date, start_date, (m.group("word") or "").lower() == "midnight")
         if not local_time or not local_date:
             return None
         candidates[(local_date, local_time)] = m.group(0).strip()

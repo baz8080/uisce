@@ -303,25 +303,32 @@ model, against the abstain-on-ambiguity rule, and changed them before merge:
   abstain, as v1 effectively did, so the 29 newly answered above go back to the model; the
   3 tanker emissions (239696-239698) still abstain. `ALTERNATIVE_SUPPLY` also gained word
   boundaries, so "wastewater station" is not a water station.
-- **Midnight after a start the day before needs a late start.** "from 9am on 21 July until
-  midnight on 22 July" is 15h or 39h; only a start from 18:00 ("from 9pm on 21 May") fixes D
-  00:00. Earlier starts abstain.
+- **Midnight after a start the day before abstains unless it says "12am".** "from 9am on 21
+  July until midnight on 22 July" is 15h or 39h, and a second pass found a 6pm start no
+  better (6h or 30h), so no start-time cutoff: after a start the day before, only the
+  literal "12am on D" (233690, "from 9pm on 21 May until 12am on 22 May") reads D 00:00, and
+  the word "midnight" abstains.
 - **The Irish completion's English twin must be the same day's update.** The next block with
   text could be an older update, whose header was then read. The two blocks' dates must now
-  match; the Irish block's date is read from its opening text, so a time too garbled for the
-  header pattern (244845, "9:38 rn") still passes. The rejected "headers must agree" above
+  match; the Irish date is its parsed header's (so "10.15rn" works), else the date the block
+  opens with, so a time too garbled for the header pattern (244845, "9:38 rn") still passes. The rejected "headers must agree" above
   compared times as well; this compares dates only.
 
 Re-measured against the same 10,870 hash-stable gemma records: rules-v2 answers 10,082
 (92.8%, was 10,137), agrees on 10,065, and the 17 disagreements are the same 17. Against the
 rules-v1 records it disagrees on 2 (244089 and 245031, the midnight fix) and abstains on 2.
-The labelled rounds replay unchanged: 73/73, 110/111 (231853 as above) and 113/113.
+The labelled rounds replay unchanged: 73/73, 110/111 (231853 as above) and 113/113. Of the
+2,691 cases whose latest record is rules-v1, rules-v2 abstains on 4 (243084, whose
+`start_date` is NULL; 244538, 244584, 244720): CI's `--rules-only` run cannot replace those,
+so their v1 answer stands, in the stale warning, until the LLM residue is run by hand.
+`uisce-eval-rules-shadow` now compares against the model's own records only; before, the
+rules-v1 records on the other side compared the rules with themselves.
 
-On the build side the review changed two things. A model value that cannot be read is no
-longer a failure to retry, because at temperature 0 a retry returns the same reply; the
-safe near-misses are normalised ("9:30" is "09:30", "24:00" is 00:00 of the next day, a
-window closing "24:00" closes "00:00") and anything else is stored as `not_found` with the
-value in its notes. The newest-record reading is one function, `readable_latest`, shared by
+On the build side: the safe near-misses in a model reply are normalised ("9:30" is "09:30",
+"24:00" is 00:00 of the next day, a window closing "24:00" closes "00:00") and anything else
+still fails the case, loudly. Storing it as `not_found` was tried and withdrawn on a second
+pass: it would silently replace a good published record with none, where a failure keeps
+that record and shows in the run's count. The newest-record reading is one function, `readable_latest`, shared by
 `uisce-infer`, `uisce-build-inferred` and the shadow eval; a case whose newest record is
 unreadable is redone and warned about until it is, and the stale warning asks inference's
 own selection instead of re-implementing it. It no longer counts "open" by the feed's status.
