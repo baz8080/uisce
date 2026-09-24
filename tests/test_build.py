@@ -1,17 +1,20 @@
+import json
 import sqlite3
 
 import pytest
+from conftest import make_cases_table
 
+from uisce import build, inference
 from uisce.build import (
     check_cases_cover,
     compute_notice_to_end_seconds,
     count_never_inferred,
     date_forms,
     first_start_date_per_case,
-    latest_per_case,
     time_forms,
     unquotable_windows,
 )
+from uisce.inference import readable_latest
 
 
 class TestComputeDurationSeconds:
@@ -66,14 +69,16 @@ def _record(case_id, inferred_at, start_date="2026-06-01T00:00:00+00:00"):
     return {"case_id": case_id, "inferred_at": inferred_at, "start_date": start_date}
 
 
-def test_latest_per_case_keeps_newest_record():
+def test_readable_latest_keeps_newest_record():
     records = [
         _record(1, "2026-06-01T00:00:00+00:00"),
         _record(1, "2026-07-01T00:00:00+00:00"),
         _record(2, "2026-06-15T00:00:00+00:00"),
     ]
-    latest = {r["case_id"]: r["inferred_at"] for r in latest_per_case(records)}
-    assert latest == {1: "2026-07-01T00:00:00+00:00", 2: "2026-06-15T00:00:00+00:00"}
+    latest, unreadable = readable_latest(records)
+    assert {c: r["inferred_at"] for c, r in latest.items()} == {
+        1: "2026-07-01T00:00:00+00:00", 2: "2026-06-15T00:00:00+00:00"}
+    assert unreadable == []
 
 
 def test_first_start_date_per_case_pins_earliest_run():
@@ -205,3 +210,131 @@ class TestUnquotableWindows:
         conn = self._db(self.QUOTABLE, open_t="03:00")
         conn.execute("UPDATE inferred_cases SET end_recurrence = 'none'")
         assert unquotable_windows(conn) == ([], 0)
+
+
+START = "2026-09-22T13:18:00+00:00"
+# case 244925 before and after its completion update: the rules abstain on
+# neither now, so the stale tests use a description they cannot read
+BOILERPLATE = (" We recommend that you allow 3-4 hours after the estimated restoration "
+               "time for your supply to fully return. Please take note of the following "
+               "reference number: GAL00121134. LA01")
+SCHEDULED = ("Mains repair works may cause supply disruptions to Shanbally and surrounding "
+             "areas in Co. Galway. Works are scheduled to take place from 2pm until "
+             "6:15pm on 22 September." + BOILERPLATE)
+COMPLETED = ("**11:31rn 23/09/2026 - Tá críoch leis an obair se o anois, agus beidh an "
+             "soláthar uisce ar ais chomh luath agus is féidir.** Seans go mbeidh cur "
+             "isteach ar an soláthar uisce i Shanbally. **Update 11:31am 23/09/2026** "
+             "Works are now complete and supply should have returned to all affected "
+             "areas. " + SCHEDULED)
+INVESTIGATING = "We are investigating reports of supply disruptions to Shanbally."
+
+
+class TestRun:
+    def _wire(self, tmp_path, monkeypatch, description, records):
+        db, jsonl = tmp_path / "uisce.db", tmp_path / "inferred.jsonl"
+        conn = make_cases_table(sqlite3.connect(db))
+        conn.execute("INSERT INTO cases (id, description, start_date, status) "
+                     "VALUES (1, ?, ?, 'Open')", (description, START))
+        conn.commit()
+        conn.close()
+        jsonl.write_text("".join(json.dumps(r) + "\n" for r in records))
+        for module in (build, inference):
+            monkeypatch.setattr(module, "DB_PATH", db)
+            monkeypatch.setattr(module, "JSONL_PATH", jsonl)
+        return db, jsonl
+
+    def _record(self, description=SCHEDULED, inferred_at="2026-09-22T20:00:00+00:00",
+                **result):
+        return inference.build_record(
+            1, description, START,
+            {"end_source": "scheduled_end_with_time", "local_date": "2026-09-22",
+             "local_time": "18:15"} | result,
+            inferred_at=inferred_at)
+
+    def _published(self, db):
+        return sqlite3.connect(db).execute(
+            "SELECT end_inferred_at, end_source, end_local_time FROM inferred_cases"
+        ).fetchall()
+
+    def test_a_value_build_cannot_read_is_left_out_with_a_warning(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        db, _ = self._wire(tmp_path, monkeypatch, SCHEDULED,
+                           [self._record(local_time="24:00")])
+        build.run()
+        assert self._published(db) == []
+        out = capsys.readouterr().out
+        assert "::warning::1 case(s) have a newest record" in out and out.count(": 1\n")
+
+    def test_an_unreadable_record_superseded_by_a_readable_one_is_not_warned(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        self._wire(tmp_path, monkeypatch, SCHEDULED, [
+            self._record(local_time="24:00") | {"model": inference.MODEL_NAME},
+            self._record(inferred_at="2026-09-23T00:00:00+00:00")
+            | {"model": inference.MODEL_NAME},
+        ])
+        build.run()
+        assert "::warning::" not in capsys.readouterr().out
+
+    def test_an_unreadable_window_falls_back_to_the_previous_record(
+        self, tmp_path, monkeypatch
+    ):
+        db, _ = self._wire(tmp_path, monkeypatch, SCHEDULED, [
+            self._record(),
+            self._record(inferred_at="2026-09-23T00:00:00+00:00", recurrence="daily",
+                         window_open="7:00", window_close="22:00",
+                         window_first_date="2026-09-22"),
+        ])
+        build.run()
+        assert self._published(db) == [
+            ("2026-09-22T20:00:00+00:00", "scheduled_end_with_time", "18:15")]
+
+    def test_a_failure_part_way_leaves_the_previous_table_standing(
+        self, tmp_path, monkeypatch
+    ):
+        db, _ = self._wire(tmp_path, monkeypatch, SCHEDULED, [self._record()])
+        build.run()
+
+        def failing(conn):
+            raise RuntimeError("after the inserts")
+
+        monkeypatch.setattr(build, "unquotable_windows", failing)
+        with pytest.raises(RuntimeError):
+            build.run()
+        assert len(self._published(db)) == 1
+
+    def test_a_record_for_an_older_description_is_published_and_warned(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        db, _ = self._wire(tmp_path, monkeypatch, INVESTIGATING, [self._record()])
+        build.run()
+        assert self._published(db) == [
+            ("2026-09-22T20:00:00+00:00", "scheduled_end_with_time", "18:15")]
+        out = capsys.readouterr().out
+        assert "::warning::1 case(s) publish a record uisce-infer would redo" in out
+        assert out.rstrip().endswith(": 1")
+
+    def test_a_record_from_a_retired_extractor_is_warned_too(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        self._wire(tmp_path, monkeypatch, SCHEDULED,
+                   [self._record() | {"model": "rules-v1"}])
+        build.run()
+        assert "::warning::1 case(s)" in capsys.readouterr().out
+
+    def test_a_current_record_raises_no_warning(self, tmp_path, monkeypatch, capsys):
+        self._wire(tmp_path, monkeypatch, SCHEDULED,
+                   [self._record() | {"model": inference.MODEL_NAME}])
+        build.run()
+        assert "::warning::" not in capsys.readouterr().out
+
+    def test_a_bilingual_completion_reaches_the_table_from_a_rules_only_run(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        db, jsonl = self._wire(tmp_path, monkeypatch, COMPLETED,
+                               [self._record() | {"model": "rules-v1"}])
+        inference.run(["--rules-only"])
+        build.run()
+        assert self._published(db)[0][1:] == ("completion_update", "11:31")
+        assert "::warning::" not in capsys.readouterr().out

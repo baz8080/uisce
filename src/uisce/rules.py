@@ -29,11 +29,11 @@ it, so records stay comparable across runs.
 """
 
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from uisce.config import describes_recurrence
 
-RULES_VERSION = "rules-v1"
+RULES_VERSION = "rules-v2"
 
 MONTH_NUMBERS = {name: i + 1 for i, name in enumerate((
     "january", "february", "march", "april", "may", "june",
@@ -101,6 +101,19 @@ ESTIMATED_END = re.compile(
     rf"\bestimated\s+(?:completion|restoration)\s+time\s+of\s+{_TIME}\s+on\s+(?:the\s+)?{_DATE}",
     _FLAGS)
 
+# The start a midnight end is read against: "from 2pm until midnight on 11
+# September" ends as 12 September begins (cases 244089, 245031).
+FROM_BEFORE = re.compile(
+    rf"\bfrom\s+{_TIME}(?:\s+on\s+(?:the\s+)?{_DATE})?\s*$", _FLAGS)
+
+# "An alternative water supply will be available ... from 4:30pm until 11:59pm
+# on 22 July" gives the tanker's hours, not the works' end (case 239696).
+ALTERNATIVE_SUPPLY = re.compile(
+    r"\b(?:alternative\s+(?:drinking\s+)?water|tankers?|bowsers?|water\s+stations?"
+    r"|bottled\s+water|water\s+bottles|standpipes?)\b", re.IGNORECASE)
+LEADING_DATE = re.compile(rf"\W*.{{0,40}}?{_DATE}", _FLAGS)
+SENTENCE_END = re.compile(r"(?<!\bCo)(?<!\bSt)[.!?](?=\s)")
+
 _TAGS = re.compile(r"<[^>]+>")
 
 
@@ -119,6 +132,9 @@ def _match_time(m):
         return f"{hour:02d}:{minute:02d}"
     hour, minute = int(m.group("h")), int(m.group("min") or 0)
     meridiem = (m.group("mer") or m.group("gmer")).lower()
+    if 13 <= hour <= 23 and meridiem in ("pm", "ppm") and minute <= 59:
+        # "16:59pm" (case 245025): a 24-hour time with a redundant meridiem
+        return f"{hour:02d}:{minute:02d}"
     if not 1 <= hour <= 12 or minute > 59:
         return None
     hour %= 12
@@ -166,6 +182,47 @@ def _match_date(m, start_date):
     return resolved.isoformat() if resolved else None
 
 
+def _midnight_end_date(before, end_date, start_date, said_midnight):
+    """The date a 00:00 end falls on, or None when the text leaves it open.
+
+    "until midnight on D" alone is either end of D. A start earlier on D makes
+    it the end of D, so the instant is D+1 00:00. After a start the day before,
+    only "12am on D" is the start of D ("from 9pm on 21 May until 12am on 22
+    May"); the word "midnight" there still leaves it open."""
+    m = FROM_BEFORE.search(before)
+    from_time = m and _match_time(m)
+    if not from_time or from_time == "00:00":
+        return None
+    from_date = _match_date(m, start_date) if m.group("d1") or m.group("d2") else end_date
+    if from_date is None:
+        return None
+    end = date.fromisoformat(end_date)
+    if from_date == end_date:
+        return (end + timedelta(days=1)).isoformat()
+    if from_date == (end - timedelta(days=1)).isoformat() and not said_midnight:
+        return end_date
+    return None
+
+
+def _block_date(header, block, start_date):
+    """The date an update block is headed with: its parsed header's, else the date
+    it opens with, for a time too garbled for UPDATE_HEADER ("** 9:38 rn
+    22/09/2026", case 244845)."""
+    if header is not None:
+        return _match_date(header, start_date)
+    m = LEADING_DATE.match(block)
+    return _match_date(m, start_date) if m else None
+
+
+def _about_alternative_supply(before):
+    starts = [m.end() for m in SENTENCE_END.finditer(before)]
+    return bool(ALTERNATIVE_SUPPLY.search(before[starts[-1] if starts else 0:]))
+
+
+def _body(header, block):
+    return block[header.end():] if header else block
+
+
 def _segments(text):
     """The description as (header_match_or_None, block_text) pairs, newest
     first — update blocks are prepended by the feed. Text before the first
@@ -209,7 +266,7 @@ def extract(start_date, description):
     # Completion beats schedule, always (the prompt's step 1). The date and
     # time come from the header of the block stating the completion; a
     # completion phrase in a headerless or unparseable block abstains.
-    for header, block in segments:
+    for i, (header, block) in enumerate(segments):
         if COMPLETION.search(block):
             if header is None:
                 return None
@@ -222,9 +279,17 @@ def extract(start_date, description):
                 f"rules: completion phrase under update header "
                 f"{header.group(0).strip()!r}")
         if IRISH_COMPLETION.search(block):
-            # An Irish completion with no English phrase: the schedule in the
-            # English half below is stale, and the Irish forms need the model.
-            return None
+            # The English block of the same update follows the Irish one, and
+            # its header is the one to read: the Irish header's time is mistyped
+            # often (232673, 236544, 244190). It must be the same day's update,
+            # not an older one; otherwise the Irish needs the model.
+            following_header, following = next(
+                ((h, b) for h, b in segments[i + 1:] if _body(h, b).strip()), (None, ""))
+            irish_date = _block_date(header, block, start_date)
+            same_day = (following_header is not None and irish_date is not None
+                        and irish_date == _match_date(following_header, start_date))
+            if not (same_day and COMPLETION.search(following)):
+                return None
 
     # No completion anywhere: consider a scheduled end, unless the notice is
     # one of the shapes settled as model territory.
@@ -248,8 +313,17 @@ def extract(start_date, description):
 
     candidates = {}
     for m in scheduled_matches + list(ESTIMATED_END.finditer(newest)):
+        before = newest[:m.start()]
+        # The tanker's hours are never the works' end, and dropping them could
+        # leave one candidate where two would have abstained (a revising update
+        # over the original schedule), so the model reads these.
+        if _about_alternative_supply(before):
+            return None
         local_time = _match_time(m)
         local_date = _match_date(m, start_date)
+        if local_time == "00:00" and local_date:
+            local_date = _midnight_end_date(
+                before, local_date, start_date, (m.group("word") or "").lower() == "midnight")
         if not local_time or not local_date:
             return None
         candidates[(local_date, local_time)] = m.group(0).strip()

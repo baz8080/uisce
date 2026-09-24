@@ -1,5 +1,7 @@
 import json
+import re
 import sqlite3
+from contextlib import closing
 
 import pytest
 import requests
@@ -96,6 +98,57 @@ class TestMapCases:
         assert mapped[0]["work_type"] is None
         assert mapped[0]["status"] is None
 
+    def test_a_feature_with_no_geometry_maps_with_no_coordinates(self):
+        # ArcGIS omits `geometry` entirely for a null shape
+        feature = make_feature({"DESCRIPTION": "text"})
+        del feature["geometry"]
+        mapped, skipped = map_cases([feature])
+        assert skipped == []
+        assert [mapped[0][c] for c in pipeline.COORD_COLUMNS] == [None] * 4
+
+    def test_an_empty_point_written_as_nan_maps_with_no_coordinates(self):
+        feature = make_feature({"DESCRIPTION": "text"})
+        feature["geometry"] = {"x": "NaN", "y": "NaN"}
+        mapped, _ = map_cases([feature])
+        assert [mapped[0][c] for c in pipeline.COORD_COLUMNS] == [None] * 4
+
+
+class TestRestorePins:
+    def _db(self, tmp_path):
+        db_path = tmp_path / "u.db"
+        cases = [case_record(
+            id=1, full_lat=53.123456, full_lon=-6.5, rounded_lat=53.1235, rounded_lon=-6.5)]
+        skip_geocoding(cases, db_path)
+        pipeline.create_db(cases, db_path)
+        return db_path
+
+    def test_a_known_case_keeps_its_last_pin(self, tmp_path):
+        cases = [case_record(id=1, title="t")]
+        kept, unplaced = pipeline.restore_pins(cases, self._db(tmp_path))
+        assert unplaced == []
+        assert [kept[0][c] for c in pipeline.COORD_COLUMNS] == [53.123456, -6.5, 53.1235, -6.5]
+
+    def test_a_case_never_pinned_is_set_aside(self, tmp_path):
+        pinned = case_record(id=3, full_lat=1.0, full_lon=2.0, rounded_lat=1.0, rounded_lon=2.0)
+        kept, unplaced = pipeline.restore_pins(
+            [case_record(id=2), pinned], self._db(tmp_path))
+        assert unplaced == [2]
+        assert kept == [pinned]
+
+    def test_no_db_sets_aside_every_unpinned_case(self, tmp_path):
+        kept, unplaced = pipeline.restore_pins([case_record(id=2)], tmp_path / "none.db")
+        assert (kept, unplaced) == ([], [2])
+        assert not (tmp_path / "none.db").exists()
+
+    def test_a_db_with_no_cases_table_yet_sets_them_aside(self, tmp_path):
+        # geocode_all creates the file before create_db has run
+        db_path = tmp_path / "u.db"
+        with closing(sqlite3.connect(db_path)) as conn:
+            conn.execute("CREATE TABLE geocode_cache (x)")
+            conn.commit()
+        assert pipeline.restore_pins([case_record(id=2)], db_path) == ([], [2])
+        assert pipeline.unvanished_cases(db_path) == 0
+
 
 def test_epoch_ms_to_iso_none_passthrough():
     assert _epoch_ms_to_iso(None) is None
@@ -120,59 +173,151 @@ class FakeResponse:
 
 
 class FakeSession:
-    """Serves canned ArcGIS pages keyed by resultOffset."""
+    """Serves one canned ArcGIS response per request, in order."""
 
-    def __init__(self, pages):
-        self.pages = pages
-        self.offsets_requested = []
+    def __init__(self, *responses):
+        self.responses = list(responses)
         self.params = []
 
     def get(self, url, params=None, timeout=None):
-        offset = params.get("resultOffset")
-        self.offsets_requested.append(offset)
         self.params.append(params)
-        return FakeResponse(self.pages[offset])
+        return FakeResponse(self.responses.pop(0))
+
+
+class LiveFeed:
+    """An ArcGIS layer that honours `OBJECTID > n` paging. `after_first_page`
+    mutates it mid-download; `cap` is a server maxRecordCount below the page
+    size requested."""
+
+    def __init__(self, ids, after_first_page=None, cap=None, ordered=True):
+        self.ids = list(ids)
+        self.after_first_page = after_first_page
+        self.cap = cap
+        self.ordered = ordered
+        self.pages = 0
+
+    def get(self, url, params=None, timeout=None):
+        if params.get("returnCountOnly"):
+            return FakeResponse({"count": len(self.ids)})
+        after = int(re.fullmatch(r"OBJECTID > (-?\d+)", params["where"]).group(1))
+        n = min(params["resultRecordCount"], self.cap or params["resultRecordCount"])
+        # storage order unless asked, and a server that ignores the ask
+        by_key = params.get("orderByFields") == "OBJECTID" and self.ordered
+        rest = [i for i in (sorted(self.ids) if by_key else self.ids) if i > after]
+        self.pages += 1
+        if self.pages == 1 and self.after_first_page:
+            self.after_first_page(self)
+        return FakeResponse({
+            "features": [{"attributes": {"OBJECTID": i}} for i in rest[:n]],
+            "exceededTransferLimit": len(rest) > n,
+        })
 
 
 class TestDownloadCases:
-    def test_paginates_until_transfer_limit_clear(self, monkeypatch):
+    @pytest.fixture(autouse=True)
+    def _no_sleep(self, monkeypatch):
         monkeypatch.setattr(pipeline, "ARCGIS_PAGE_SLEEP", 0)
-        page_size = pipeline.ARCGIS_PAGE_SIZE
-        session = FakeSession(
-            {
-                0: {"features": [{"id": 1}, {"id": 2}], "exceededTransferLimit": True},
-                page_size: {"features": [{"id": 3}]},
-            }
-        )
 
-        features = download_cases(session)
+    def _ids(self, features):
+        return [f["attributes"]["OBJECTID"] for f in features]
 
-        assert session.offsets_requested == [0, page_size]
-        assert features == [{"id": 1}, {"id": 2}, {"id": 3}]
+    def test_pages_by_key_until_transfer_limit_clear(self, monkeypatch):
+        monkeypatch.setattr(pipeline, "ARCGIS_PAGE_SIZE", 2)
+        feed = LiveFeed([3, 7, 9])
+        assert self._ids(download_cases(feed)) == [3, 7, 9]
+        assert feed.pages == 2
 
     def test_stops_on_empty_page(self):
-        session = FakeSession({0: {"features": []}})
-        assert download_cases(session) == []
+        assert download_cases(FakeSession({"features": []})) == []
+
+    def _vanished_live(self, feed):
+        conn = make_cases_table(sqlite3.connect(":memory:"))
+        pipeline.load_cases(conn, [case_record(id=i, status="Open") for i in feed.ids],
+                            now="2026-09-01T00:00:00+00:00")
+        features = download_cases(feed)
+        pipeline.check_download_complete(features, len(feed.ids))
+        pipeline.load_cases(conn, [case_record(id=i, status="Open")
+                                   for i in self._ids(features)],
+                            now="2026-09-02T00:00:00+00:00")
+        return sorted(
+            i for (i,) in conn.execute("SELECT id FROM cases WHERE vanished_at IS NOT NULL")
+            if i in set(feed.ids)
+        )
+
+    def test_a_deletion_mid_download_loses_no_live_case(self):
+        # by offset, deleting case 5 during page one shifted case 1001 out of page two
+        feed = LiveFeed(range(1, 4301), after_first_page=lambda f: f.ids.remove(5))
+        assert self._vanished_live(feed) == []
+
+    def test_a_server_page_cap_below_the_page_size_loses_no_case(self):
+        # by offset, 5 rows a page fell between pages: 20 live cases, under the tolerance
+        assert self._vanished_live(LiveFeed(range(1, 4301), cap=995)) == []
 
     def test_a_short_download_is_refused_before_it_touches_the_db(self):
         pipeline.check_download_complete([{}] * 990, 1000)
         with pytest.raises(RuntimeError, match="truncated"):
             pipeline.check_download_complete([{}] * 989, 1000)
 
+    def test_an_empty_download_is_refused_while_the_db_holds_cases(self):
+        with pytest.raises(RuntimeError, match="download is empty"):
+            pipeline.check_download_complete([], 0, unvanished=498)
+        pipeline.check_download_complete([], 0, unvanished=0)
+
+    def test_a_full_download_builds_even_if_the_count_says_zero(self):
+        pipeline.check_download_complete([{}] * 1000, 0, unvanished=498)
+
+    def test_an_empty_download_against_a_nonzero_count_is_a_truncation(self):
+        with pytest.raises(RuntimeError, match="truncated"):
+            pipeline.check_download_complete([], 1000, unvanished=498)
+
+    def test_the_guard_counts_every_row_the_stamp_would_touch(self, tmp_path):
+        # closed rows are stamped vanished too, so they count
+        db_path = tmp_path / "u.db"
+        assert pipeline.unvanished_cases(db_path) == 0
+        assert not db_path.exists()
+        conn = make_cases_table(sqlite3.connect(db_path))
+        pipeline.load_cases(conn, [case_record(id=1, status="Open"),
+                                   case_record(id=2, status="Closed")])
+        pipeline.load_cases(conn, [case_record(id=2, status="Closed"),
+                                   case_record(id=3, status="Open")])
+        conn.commit()
+        assert pipeline.unvanished_cases(db_path) == 2
+
+    def test_the_download_asks_for_key_order(self, monkeypatch):
+        monkeypatch.setattr(pipeline, "ARCGIS_PAGE_SIZE", 2)
+        assert self._ids(download_cases(LiveFeed([9, 3, 7]))) == [3, 7, 9]
+
+    def test_a_server_that_ignores_the_key_filter_is_refused(self, monkeypatch):
+        # re-serves the first page whatever `OBJECTID > n` says
+        monkeypatch.setattr(pipeline, "ARCGIS_PAGE_SIZE", 2)
+        served = []
+
+        def first_page_again(url, params=None, timeout=None):
+            served.append(params["where"])
+            assert len(served) < 5, "kept paging over the same rows"
+            return FakeResponse({"features": [{"attributes": {"OBJECTID": i}} for i in (3, 7)],
+                                 "exceededTransferLimit": True})
+
+        feed = LiveFeed([3, 7, 9])
+        feed.get = first_page_again
+        with pytest.raises(RuntimeError, match="strictly ascending"):
+            download_cases(feed)
+
+    def test_a_page_out_of_order_is_refused(self, monkeypatch):
+        monkeypatch.setattr(pipeline, "ARCGIS_PAGE_SIZE", 2)
+        with pytest.raises(RuntimeError, match="ascending"):
+            download_cases(LiveFeed([9, 3, 7], ordered=False))
+
     def test_the_feed_count_is_read_from_the_count_endpoint(self):
-        session = FakeSession({None: {"count": 12097}})
+        session = FakeSession({"count": 12097})
         assert pipeline.feed_count(session) == 12097
         assert session.params[0]["returnCountOnly"] == "true"
 
     def test_raises_on_arcgis_error_payload(self):
         # ArcGIS reports errors in a 200 response body, not an HTTP status
-        session = FakeSession({0: {"error": {"code": 400, "message": "bad"}}})
-        try:
+        session = FakeSession({"error": {"code": 400, "message": "bad"}})
+        with pytest.raises(RuntimeError, match="ArcGIS error"):
             download_cases(session)
-        except RuntimeError as e:
-            assert "ArcGIS error" in str(e)
-        else:
-            raise AssertionError("expected RuntimeError")
 
 
 class GeocodeSession:
@@ -1014,4 +1159,10 @@ class TestBackfillReducedPressure:
         conn = self._conn("A burst water main may cause supply disruptions to Carlow town.")
         conn.execute("UPDATE cases SET reduced_pressure = 1")
         assert pipeline.backfill_reduced_pressure(conn) == 0
+        assert conn.execute("SELECT reduced_pressure FROM cases").fetchone()[0] == 1
+
+    def test_a_null_feed_flag_is_backfilled_like_a_zero(self):
+        conn = self._conn("Works may cause low pressure to Ballyduff and surrounding areas")
+        conn.execute("UPDATE cases SET reduced_pressure = NULL")
+        assert pipeline.backfill_reduced_pressure(conn) == 1
         assert conn.execute("SELECT reduced_pressure FROM cases").fetchone()[0] == 1

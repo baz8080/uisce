@@ -1,8 +1,10 @@
 import argparse
 import hashlib
 import json
+import re
 import sqlite3
-from datetime import datetime, timezone
+from contextlib import closing
+from datetime import date, datetime, timedelta, timezone
 
 from uisce.config import DB_PATH, JSONL_PATH, make_session
 from uisce.rules import RULES_VERSION
@@ -134,30 +136,71 @@ def hash_description(description):
     return hashlib.sha256(description.encode("utf-8")).hexdigest()
 
 
+_CLOCK = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
+_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def _is_iso_date(value):
+    try:
+        return bool(_ISO_DATE.fullmatch(value)) and bool(date.fromisoformat(value))
+    except ValueError:
+        return False
+
+
+def unreadable_fields(result):
+    """The fields build.py could not read, in a model reply or a JSONL record.
+
+    The prompt asks for "HH:MM" and "YYYY-MM-DD", and nothing made the model
+    comply: a "24:00", "5pm" or "28/04/2026" written to the JSONL raised in
+    build.py and failed every CI build after it."""
+    fields = [f for f in ("local_time", "window_open", "window_close")
+              if result.get(f) is not None
+              and not (isinstance(result[f], str) and _CLOCK.fullmatch(result[f]))]
+    fields += [f for f in ("local_date", "window_first_date")
+               if result.get(f) is not None
+               and not (isinstance(result[f], str) and _is_iso_date(result[f]))]
+    return fields
+
+
+def record_state(record):
+    return (record["description_hash"], record.get("prompt_version"), record.get("model"))
+
+
+def readable_latest(records):
+    """({case_id: its latest readable record}, [unreadable records newer than
+    that]). The one reading of the JSONL that inference, build.py and the shadow
+    eval share, so what is redone, what is published and what is compared agree."""
+    latest, bad = {}, {}
+    for record in records:
+        pick = bad if unreadable_fields(record) else latest
+        current = pick.get(record["case_id"])
+        if current is None or record["inferred_at"] > current["inferred_at"]:
+            pick[record["case_id"]] = record
+    newer = [r for case_id, r in bad.items()
+             if case_id not in latest or r["inferred_at"] > latest[case_id]["inferred_at"]]
+    return latest, newer
+
+
+def current_states(latest, newer_unreadable):
+    """The state each case is judged current by: its latest readable record's,
+    unless a newer unreadable record means it must be redone."""
+    redo = {r["case_id"] for r in newer_unreadable}
+    return {case_id: record_state(r) for case_id, r in latest.items() if case_id not in redo}
+
+
 def get_last_hash_by_case_id(jsonl_path):
     """Latest (description_hash, prompt_version, model) per case. A case is up
     to date only when the hash and version still match AND its record came from
     a current extractor, so bumping PROMPT_VERSION re-infers the whole corpus
-    while bumping RULES_VERSION re-runs only the rules-produced cases."""
+    while bumping RULES_VERSION re-runs only the rules-produced cases. A case
+    whose newest record build.py cannot read is left out, so it is redone."""
     if not jsonl_path.exists():
         return {}
-    latest = {}
     with open(jsonl_path) as f:
-        for line in f:
-            if not line.strip():
-                continue
-            record = json.loads(line)
-            current = latest.get(record["case_id"])
-            if current is None or record["inferred_at"] > current["inferred_at"]:
-                latest[record["case_id"]] = record
-    return {
-        case_id: (record["description_hash"], record.get("prompt_version"),
-                  record.get("model"))
-        for case_id, record in latest.items()
-    }
+        return current_states(*readable_latest(json.loads(line) for line in f if line.strip()))
 
 
-def _is_current(state, description):
+def is_current(state, description):
     if state is None:
         return False
     digest, version, model = state
@@ -166,19 +209,20 @@ def _is_current(state, description):
             and model in (MODEL_NAME, RULES_VERSION))
 
 
-def get_cases_needing_inference(db_path, last_state_by_case_id, force=False):
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+def cases_needing_inference(conn, last_state_by_case_id, force=False):
     cur = conn.execute(
         "SELECT id, start_date, description FROM cases WHERE description IS NOT NULL"
     )
-    cases = [
-        row
-        for row in cur
-        if force or not _is_current(last_state_by_case_id.get(row["id"]), row["description"])
+    return [
+        {"id": case_id, "start_date": start_date, "description": description}
+        for case_id, start_date, description in cur
+        if force or not is_current(last_state_by_case_id.get(case_id), description)
     ]
-    conn.close()
-    return cases
+
+
+def get_cases_needing_inference(db_path, last_state_by_case_id, force=False):
+    with closing(sqlite3.connect(db_path)) as conn:
+        return cases_needing_inference(conn, last_state_by_case_id, force)
 
 
 def call_llm(session, start_date, description):
@@ -215,10 +259,34 @@ def call_llm(session, start_date, description):
     return choice["message"]["content"]
 
 
+def _normalise(result):
+    """Rewrite the model's near-misses that have one meaning: "9:00" is
+    "09:00", and "24:00" is 00:00 at the end of the day it names."""
+    for field in ("local_time", "window_open", "window_close"):
+        value = result.get(field)
+        if isinstance(value, str) and re.fullmatch(r"\d:\d\d", value):
+            result[field] = "0" + value
+    if result.get("window_close") == "24:00":
+        result["window_close"] = "00:00"
+    local_date = result.get("local_date")
+    if result.get("local_time") == "24:00" and isinstance(local_date, str) \
+            and _is_iso_date(local_date):
+        result["local_date"] = (date.fromisoformat(result["local_date"])
+                                + timedelta(days=1)).isoformat()
+        result["local_time"] = "00:00"
+    return result
+
+
 def parse_response(response_text):
+    """The model's answer, near-misses normalised. Anything still unreadable fails
+    the case loudly, so it keeps its previous record; storing it as not_found
+    would silently replace a good published answer with none."""
     result = json.loads(response_text)
     if not isinstance(result, dict):
         raise ValueError(f"Expected a JSON object, got: {response_text[:80]!r}")
+    result = _normalise(result)
+    if unreadable := unreadable_fields(result):
+        raise ValueError("unreadable " + ", ".join(f"{f} {result[f]!r}" for f in unreadable))
     return result
 
 
