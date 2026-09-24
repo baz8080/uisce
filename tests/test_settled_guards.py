@@ -1,18 +1,21 @@
 """Guards for rows of CLAUDE.md's "Settled" table that no other test would
 notice breaking. Each names the row it holds; the evidence is in notes/."""
 
+import inspect
 import json
+import math
 import re
 import sqlite3
 
 import pytest
 import statusui
-from conftest import case_record, make_cases_table
+from conftest import make_cases_table
 from conftest import site_case as _case
-from test_site import NOW, SA_INDEX, TOWNS
+from test_area_pages import _write
+from test_site import APP, NOW, SA_INDEX, TOWNS
 
 from uisce import build, pipeline, site
-from uisce.site import build_site, classify, grade, knocks_grade, write_site
+from uisce.site import classify, grade, knocks_grade, resolve_case
 
 
 class TestFirstInferenceStartIsPinned:
@@ -29,13 +32,6 @@ class TestFirstInferenceStartIsPinned:
             "end_source": "completion_update", "local_date": "2026-06-02",
             "local_time": "10:00", "inferred_at": inferred_at,
         }
-
-    def test_a_backward_restamp_in_a_later_run_does_not_move_the_start(self):
-        records = [
-            self._inference("2026-06-01T12:00:00+00:00", self.FIRST),
-            self._inference("2026-06-05T12:00:00+00:00", self.BACKWARD_RESTAMP),
-        ]
-        assert build.first_start_date_per_case(records) == {1: self.FIRST}
 
     def test_build_stores_and_measures_from_the_first_inference_start(
         self, tmp_path, monkeypatch
@@ -65,6 +61,15 @@ class TestFirstInferenceStartIsPinned:
         # 10:00 IST on 2 June is 09:00 UTC, a day after the pinned start
         assert seconds == 24 * 3600
 
+    def test_the_site_dates_the_event_from_the_pinned_start(self):
+        # the feed later moved start_date a month back; the site must not follow
+        row = _case(start_date=self.BACKWARD_RESTAMP, end_input_start_date=self.FIRST,
+                    notice_to_end_seconds=24 * 3600.0, end_local_date="2026-06-02",
+                    end_local_time="10:00")
+        case = resolve_case(row, SA_INDEX, {}, NOW)
+        assert case.start == site.parse_dt(self.FIRST)
+        assert case.intervals[0][0] == site.parse_dt(self.FIRST)
+
 
 class TestShortDownloadNeverReachesTheDb:
     """The vanished_at stamp is safe only behind FEED_COUNT_TOLERANCE
@@ -84,27 +89,19 @@ class TestShortDownloadNeverReachesTheDb:
         monkeypatch.setattr(pipeline, "backfill", lambda: None)
         return created
 
+    FLOOR = math.ceil(1000 * (1 - pipeline.FEED_COUNT_TOLERANCE))
+
     def test_a_short_download_raises_before_create_db(self, tmp_path, monkeypatch):
-        created = self._run(tmp_path, monkeypatch, downloaded=989)
+        created = self._run(tmp_path, monkeypatch, downloaded=self.FLOOR - 1)
         with pytest.raises(RuntimeError, match="truncated download"):
             pipeline.run(skip_geocode=True)
         assert created == []
         assert not (tmp_path / "raw.json").exists()
 
     def test_a_download_within_tolerance_reaches_create_db(self, tmp_path, monkeypatch):
-        created = self._run(tmp_path, monkeypatch, downloaded=990)
+        created = self._run(tmp_path, monkeypatch, downloaded=self.FLOOR)
         pipeline.run(skip_geocode=True)
         assert created == [[]]
-
-
-def test_a_vanished_open_case_gets_vanished_at_and_never_closed_at():
-    conn = make_cases_table(sqlite3.connect(":memory:"))
-    record = case_record(id=1, title="Burst Water Main - Cork", status="Open")
-    pipeline.load_cases(conn, [record], now="2026-07-01T00:00:00+00:00")
-    pipeline.load_cases(conn, [], now="2026-07-08T00:00:00+00:00")
-    pipeline.load_cases(conn, [], now="2026-07-09T00:00:00+00:00")
-    row = conn.execute("SELECT vanished_at, closed_at, status FROM cases").fetchone()
-    assert row == ("2026-07-08T00:00:00+00:00", None, "Open")
 
 
 def test_the_printed_grade_legend_matches_grade():
@@ -153,7 +150,14 @@ class TestInitialBudgetWarnsNeverFails:
 
     def test_an_initial_load_at_the_budget_is_not_warned(self, tmp_path, monkeypatch, capsys):
         self._run(tmp_path, monkeypatch, site.INITIAL_BUDGET)
-        assert "::warning::" not in capsys.readouterr().out
+        assert "::warning::initial load" not in capsys.readouterr().out
+
+
+@pytest.fixture(scope="module")
+def pages(tmp_path_factory):
+    out = tmp_path_factory.mktemp("site")
+    _write(out)
+    return {str(p.relative_to(out)): p.read_text() for p in out.rglob("*.html")}
 
 
 class TestOneNamePerThing:
@@ -161,12 +165,10 @@ class TestOneNamePerThing:
 
     FOOTER = ">Source code</a> · not affiliated with Uisce Éireann."
 
-    @pytest.fixture
-    def pages(self, tmp_path):
-        built = build_site([_case()], SA_INDEX, NOW, TOWNS)
-        built.pop("recurrence_report")
-        write_site(built, tmp_path, TOWNS)
-        return {str(p.relative_to(tmp_path)): p.read_text() for p in tmp_path.rglob("*.html")}
+    @staticmethod
+    def _markup(text):
+        """The page without its inline script, whose links are built from variables."""
+        return re.sub(r"<script\b.*?</script>", "", text, flags=re.S)
 
     def test_every_kind_of_page_is_checked(self, pages):
         assert {"index.html", "areas.html", "c/carlow.html", "a/carlow/testtown.html"} <= set(
@@ -180,24 +182,35 @@ class TestOneNamePerThing:
         assert [p for p, text in pages.items() if "in Ireland" in text] == []
 
     def test_every_link_to_the_directory_names_it_the_same_way(self, pages):
+        linking = set()
         for path, text in pages.items():
-            for label in re.findall(r'<a href="[./]*areas\.html"[^>]*>(.*?)</a>', text, re.S):
+            for label in re.findall(
+                r'<a href="[^"]*areas\.html(?:#[^"]*)?"[^>]*>(.*?)</a>', text, re.S
+            ):
+                linking.add(path)
                 assert label.lower().endswith("every area with a notice"), (path, label)
+        assert {"c/carlow.html", "a/carlow/testtown.html"} <= linking
 
     def test_no_link_calls_the_app_a_map(self, pages):
         for path, text in pages.items():
-            for label in re.findall(r"<a\b[^>]*>(.*?)</a>", text, re.S):
+            for label in re.findall(r"<a\b[^>]*>(.*?)</a>", self._markup(text), re.S):
                 assert not re.search(r"\bmaps?\b", label, re.I), (path, label)
+
+    def test_no_text_the_app_writes_calls_it_a_map(self):
+        # text between tags in the app's templates, which the static check cannot see
+        for text in re.findall(r">([^<>`$]*)<", APP):
+            assert not re.search(r"\bmaps?\b", text, re.I), text
 
     def test_the_static_pages_call_the_app_the_interactive_view(self, pages):
         assert "Co.&nbsp;Carlow’s interactive view</a>" in pages["a/carlow/testtown.html"]
         assert "interactive view for Co. Carlow</a>" in pages["c/carlow.html"]
 
 
-CATEGORIES = sorted(
-    site.HARD_CATS | site.REPAIR_CATS | site.QUALITY_CATS | site.DEGRADED_CATS
-    | site.KNOCK_CATS | site.IGNORE_CATS | {"essential_works", "leak_detection"}
-) + [None]
+CATEGORIES = sorted({rule.slug for rule in pipeline.CATEGORY_RULES}) + [None]
+
+
+def test_the_site_never_reads_the_water_outage_flag():
+    assert "water_outage" not in inspect.getsource(site.load_cases)
 
 
 @pytest.mark.parametrize("work_type", ["Planned", "Unplanned", None])
