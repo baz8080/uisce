@@ -290,6 +290,16 @@ and refuses a download more than 1% short (`FEED_COUNT_TOLERANCE`). The 1% is fo
 changing under the paging; a real purge like the one around 2026-04-20 would still be stamped,
 which is right: that is what happened.
 
+*2026-09-24:* the tolerance passes an empty feed, 0 downloaded of 0 reported, and that build
+would have stamped every open case vanished (498 on the 2026-09-23 release). `run` now also
+refuses a download when the feed reports 0 cases or returns none while the DB holds `Open`
+cases not yet vanished. No real purge has emptied the feed; the 2026-08-10 one left 3,044
+cases, so a partial purge is still stamped as before. The same review moved `download_cases`
+from `resultOffset` to `OBJECTID > <last seen>` paging: by offset, one case deleted during the
+download pushed a live case out of the next page and stamped it vanished, and a server
+`maxRecordCount` below the 1,000 asked for dropped the difference at every page, both inside
+the 1%.
+
 The first v4 build will stamp all 9,053 (verified on a copy of the release: the stamp is
 idempotent across builds and clears when a case returns), and `create_db` prints the count
 stamped on every build from now on, so the next purge is in the build log the day it happens.
