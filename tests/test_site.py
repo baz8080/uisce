@@ -66,6 +66,11 @@ def _open(**overrides):
 
 
 # one Small Area of 1,000 people sitting right on the test pin
+def _scheduled(**overrides):
+    """Closed with a scheduled end only, so closed_at is its only close date."""
+    return _case(**({"end_source": "scheduled_end_with_time"} | overrides))
+
+
 SA_INDEX = SmallAreaIndex([(52.836, -6.926, "SA1", 1000)])
 NOW = datetime(2026, 5, 10, tzinfo=UTC)
 
@@ -840,7 +845,7 @@ class TestPayload:
         assert (county["open"][0]["area"], county["open"][0]["name"]) == ("T1", "Testtown")
 
     def test_a_month_with_nothing_resolved_omits_the_count(self):
-        month = build_site([_case()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        month = build_site([_scheduled()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
         assert "resolved_n" not in month["towns"]["T1"]["months"]["2026-05"]
 
 
@@ -897,14 +902,14 @@ class TestOpenReading:
         assert county["open"] == [] and county["open_total"] == 0
         event = site["history"]["Carlow"]["T1"]["events"][0]
         assert "open" not in event and event["confirmed"] == 1
-        assert "closed" not in event  # closed_at is the feed's observation, still unmade
+        assert event["closed"] == "2026-05-08"  # its own completion, not the feed's
         site.pop("recurrence_report")
         write_site(site, tmp_path, TOWNS)
         page = (tmp_path / "c" / "carlow.html").read_text()
         assert '<section id="open">' not in page
         assert "Works are now complete" not in page
         feed = (tmp_path / "feed" / "carlow.xml").read_text()
-        assert "still open" not in feed and "closed</summary>" in feed
+        assert "still open" not in feed and "closed 2026-05-08</summary>" in feed
 
     def test_the_reading_changes_what_is_said_and_nothing_that_is_charged(self):
         """The arithmetic trusted the extracted end already; this only brings
@@ -948,11 +953,38 @@ class TestOpenReading:
 
 
 class TestResolved:
-    """cases.closed_at is the only field with a month dimension for a case that
-    is no longer open — see PR #21 and notes/data-quality.md."""
+    """A case's close date is its own reported completion where it has one, else
+    cases.closed_at - see closed_on and notes/statuspage-methodology.md."""
+
+    def test_a_reported_completion_dates_the_close(self):
+        # the feed closed it four days after the notice said the works were done
+        rows = [_case(status="Closed", closed_at="2026-05-06T04:00:00+00:00")]
+        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert county["resolved"]["2026-05"]["cases"][0]["closed"] == "2026-05-02"
+
+    def test_a_completion_the_feed_has_not_closed_yet_is_listed(self):
+        rows = [_case(status="Open", closed_at=None)]
+        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert county["open_total"] == 0
+        assert county["resolved"]["2026-05"]["n"] == 1
+
+    def test_a_completion_the_feed_closed_next_month_is_filed_under_its_own(self):
+        rows = [_case(status="Closed", start_date="2026-04-30T09:00:00+00:00",
+                      end_local_date="2026-04-30", end_local_time="17:00",
+                      notice_to_end_seconds=7 * 3600.0, closed_at="2026-05-03T04:00:00+00:00")]
+        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert set(county["resolved"]) == {"2026-04"}
+
+    def test_a_completion_before_a_restamped_start_falls_back_to_closed_at(self):
+        """The history reads a close before the start as a withdrawal."""
+        rows = [_case(status="Closed", start_date="2026-05-04T09:00:00+00:00",
+                      notice_to_end_seconds=None, end_local_date="2026-05-02",
+                      closed_at="2026-05-06T04:00:00+00:00")]
+        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert county["resolved"]["2026-05"]["cases"][0]["closed"] == "2026-05-06"
 
     def test_a_closed_case_is_listed_under_the_month_it_was_observed_to_close(self):
-        rows = [_case(status="Closed", closed_at="2026-05-06T04:00:00+00:00")]
+        rows = [_scheduled(status="Closed", closed_at="2026-05-06T04:00:00+00:00")]
         county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
         assert county["resolved"]["2026-05"]["n"] == 1
         assert county["resolved"]["2026-05"]["cases"][0]["closed"] == "2026-05-06"
@@ -961,7 +993,7 @@ class TestResolved:
     def test_a_case_that_closed_before_the_column_existed_is_not_counted(self):
         """NULL closed_at is ambiguous, so it is reported as nothing rather than
         guessed at."""
-        rows = [_case(status="Closed", closed_at=None)]
+        rows = [_scheduled(status="Closed", closed_at=None)]
         assert build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]["resolved"] == {}
 
     def test_an_open_case_is_never_listed_as_resolved(self):
@@ -980,8 +1012,8 @@ class TestResolved:
 
     def test_the_listed_cases_are_capped_but_the_count_is_not(self):
         rows = [
-            _case(id=i, reference_num=f"CAR{i}", status="Closed",
-                  closed_at=f"2026-05-{i + 1:02d}T04:00:00+00:00")
+            _scheduled(id=i, reference_num=f"CAR{i}", status="Closed",
+                       closed_at=f"2026-05-{i + 1:02d}T04:00:00+00:00")
             for i in range(25)
         ]
         resolved = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]["resolved"]
@@ -1809,7 +1841,7 @@ class TestAreaHistory:
         assert events[0] == {
             "ref": "CAR00000001", "title": "Burst Water Main - Carlow", "sev": "outage",
             "start": "2026-05-01", "pins": 1, "hours": 24.0, "people": 1000,
-            "confirmed": 1, "loc": "Somewhere",
+            "confirmed": 1, "loc": "Somewhere", "closed": "2026-05-02",
         }
 
     def test_the_last_charged_day_is_carried_when_it_differs_from_the_first(self):
@@ -1905,7 +1937,7 @@ class TestAreaHistory:
         assert events[0]["hours"] == 48.0  # 1 May -> the lift on the 3rd
 
     def test_a_closed_event_carries_the_date_it_was_seen_to_close(self):
-        rows = [_case(status="Closed", closed_at="2026-05-06T04:00:00+00:00")]
+        rows = [_scheduled(status="Closed", closed_at="2026-05-06T04:00:00+00:00")]
         assert _history(rows)[0]["closed"] == "2026-05-06"
 
     def test_the_newest_event_is_first(self):
@@ -2496,8 +2528,9 @@ class TestPayloadShape:
         # "slug" is present exactly when the area has a page: the app cannot
         # derive it, because ui.js's slug() leaves a fada as a dash
         assert set(county["towns"]["T1"]) == {"name", "pop", "months", "slug"}
+        # resolved_n because the fixture's event closes by its own completion
         assert set(county["towns"]["T1"]["months"]["2026-05"]) == {
-            "events", "availability", "person_h"
+            "events", "availability", "person_h", "resolved_n"
         }
 
     def test_the_county_month_keys_are_unchanged(self):

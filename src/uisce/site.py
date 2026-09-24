@@ -183,6 +183,23 @@ def is_open(row, now):
     return True
 
 
+def closed_on(row, now):
+    """The day the site reads a case as closed: its own reported completion
+    where it has one, else the build that saw the feed close it.
+
+    The feed closes a case a median 72h after its completion (is_open), and
+    closed_at is NULL before schema v2, so it alone misfiled or dropped most
+    closes (notes/statuspage-methodology.md, 2026-09-24). A completion dated
+    before the (re-stamped) start falls back to closed_at: the history reads a
+    close before the start as a withdrawal.
+    """
+    if row["end_source"] in OBSERVED_END_SOURCES and row["end_local_date"]:
+        end = reported_end_utc(row["end_local_date"], row["end_local_time"])
+        if end is not None and end <= now and row["end_local_date"] >= row["start_date"][:10]:
+            return row["end_local_date"]
+    return row["closed_at"][:10] if row["closed_at"] else None
+
+
 def classify(row, recurring=False):
     """Severity class for a case row, or None if it isn't an event.
 
@@ -894,6 +911,8 @@ class Case(NamedTuple):
     # "still open", the county page's notice text and the Atom feed cannot
     # disagree about a case
     is_open: bool = False
+    # closed_on(row, now): the day every "closed" surface prints
+    closed: str | None = None
 
     @property
     def county(self):
@@ -1031,7 +1050,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
                 row=r, sev=sev, ref=case_ref(r), start=start,
                 intervals=windows, sas=sa_index.affected(r["full_lat"], r["full_lon"]),
                 has_end=has_end, observed_end=observed_end, rec=rec,
-                is_open=is_open(r, now),
+                is_open=is_open(r, now), closed=closed_on(r, now),
             )
 
     return Case(
@@ -1047,6 +1066,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         imputed=imputed,
         in_force=tuple(in_force),
         is_open=is_open(r, now),
+        closed=closed_on(r, now),
     )
 
 
@@ -1104,12 +1124,7 @@ class Region:
                     "since": r["start_date"][:10],
                 },
             )
-        elif r["closed_at"]:
-            # closed_at is the first build that saw the case stop being Open —
-            # observation time, resolution the build cadence, and NULL for every
-            # case that closed before the column existed (schema v2). It is the
-            # only field with a month dimension for a case that is no longer
-            # open, which is what lets a past month say anything at all.
+        elif case.closed:
             self.resolved.setdefault(
                 ref,
                 {
@@ -1117,7 +1132,7 @@ class Region:
                     "title": r["title"],
                     "loc": r["location"] or "",
                     "since": r["start_date"][:10],
-                    "closed": r["closed_at"][:10],
+                    "closed": case.closed,
                 },
             )
 
@@ -1203,12 +1218,12 @@ RESOLVED_SHOWN = 20
 
 
 def resolved_by_month(region, shown=None):
-    """{ym: {"n": count, "cases": [...]}} of events observed to close that month.
+    """{ym: {"n": count, "cases": [...]}} of events that closed that month.
 
-    Keyed on `closed_at`, so coverage is partial by construction: it is NULL for
-    every case that closed before schema v2, and a case opened and closed inside
-    one build gap is never seen open and so never stamped. The site says so
-    rather than presenting these as a complete record.
+    Keyed on `closed_on`, so coverage is partial by construction: a case with no
+    reported completion needs `closed_at`, which is NULL for every case that
+    closed before schema v2 and for one opened and closed inside one build gap.
+    The site says so rather than presenting these as a complete record.
 
     `shown` caps the listed cases (newest first) while `n` stays the true count —
     the full lists are a third of the page payload and a reader wants the recent
@@ -2106,11 +2121,11 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
         if case.is_open:
             meta["open"] = True
             notice_text[case.county].setdefault(case.ref, r["description"])
-        elif meta["closed"] is None and r["closed_at"]:
+        elif meta["closed"] is None and case.closed:
             # first pin with a close stamp wins, so the history and the county's
             # "observed to close" list — which reads Region.resolved, filled the
             # same way — cannot disagree about when an event ended
-            meta["closed"] = r["closed_at"][:10]
+            meta["closed"] = case.closed
         event_iv[(case.county, case.ref)].extend(case.intervals)
         if towns is not None:
             # the breakdown still homes each pin individually, with `within`
