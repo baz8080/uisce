@@ -276,6 +276,31 @@ class TestIntervals:
         assert secs == 6 * 3600
 
 
+class TestRestampedStart:
+    """build.py measures a span from the start it pinned at first inference; the
+    feed can re-stamp start_date after that."""
+
+    def test_the_span_runs_from_the_start_it_was_measured_from(self):
+        # completion at 12:00 Irish time on 5 May is 11:00 UTC, 98h after the pinned start
+        row = _case(start_date="2026-05-05T09:00:00+00:00",
+                    end_input_start_date="2026-05-01T09:00:00+00:00",
+                    notice_to_end_seconds=98 * 3600.0, end_local_date="2026-05-05",
+                    end_local_time="12:00")
+        case = resolve_case(row, SA_INDEX, {}, NOW)
+        assert case.intervals == [(_dt("2026-05-01T09:00:00+00:00"),
+                                   _dt("2026-05-05T11:00:00+00:00"))]
+        assert case.start == _dt("2026-05-05T09:00:00+00:00")
+
+    def test_the_charged_hours_stop_at_the_notice_own_end(self):
+        row = _case(start_date="2026-05-05T09:00:00+00:00",
+                    end_input_start_date="2026-05-01T09:00:00+00:00",
+                    notice_to_end_seconds=98 * 3600.0, end_local_date="2026-05-05",
+                    end_local_time="12:00")
+        month = build_site([row], SA_INDEX, AFTER_MAY)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["person_h"] == 98 * 1000
+        assert [d[0] for d in month["days"][5:9]] == [""] * 4
+
+
 class TestMonths:
     def test_month_list_spans_year_boundary(self):
         months = month_list(datetime(2026, 11, 20, tzinfo=UTC), datetime(2027, 1, 5, tzinfo=UTC))
@@ -1148,6 +1173,25 @@ class TestTopEvents:
         rows = [_case(id=1, full_lat=52.836), _case(id=2, full_lat=52.837)]
         top = build_site(rows, sa, AFTER_MAY, towns)["top"]["2026-05"]
         assert top[0]["area"] == "Bigtown"
+
+    def test_a_padded_reference_is_the_same_event(self):
+        rows = [_case(id=1, reference_num="CAR1"),
+                _case(id=2, reference_num="CAR1 ", full_lat=52.837),
+                _case(id=3, reference_num="CAR1\xa0", full_lat=52.838)]
+        site = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)
+        assert [(r["ref"], r["pins"]) for r in site["top"]["2026-05"]] == [("CAR1", 3)]
+        assert site["counties"]["Carlow"]["months"]["2026-05"]["events"]["outage"] == 1
+
+    def test_the_history_prints_the_same_people_as_the_top_ten(self):
+        # one reference, an outage pin and a low-pressure pin over different areas
+        sa = SmallAreaIndex([(52.836, -6.926, "SA1", 1000), (52.846, -6.926, "SA2", 900)])
+        towns = TownLookup([("SA1", "T1", "Testtown", "Carlow"),
+                            ("SA2", "T1", "Testtown", "Carlow")], sa.pop)
+        rows = [_case(id=1), _case(id=2, full_lat=52.846, reduced_pressure=1)]
+        site = build_site(rows, sa, AFTER_MAY, towns)
+        top = site["top"]["2026-05"][0]
+        history = _history(rows, now=AFTER_MAY, towns=towns, sa=sa)
+        assert top["people"] == history[0]["people"] == 1000
 
     def test_the_ranking_works_without_a_town_lookup(self):
         # every TestBuildSite case calls build_site this way
@@ -2676,8 +2720,9 @@ class TestReleaseDb:
                 list(row.values()),
             )
             conn.execute(
-                "CREATE TABLE inferred_cases (case_id, notice_to_end_seconds, end_source, "
-                "end_local_date, end_local_time, end_recurrence, end_window_open, "
+                "CREATE TABLE inferred_cases (case_id, notice_to_end_seconds, "
+                "end_input_start_date, end_source, end_local_date, end_local_time, "
+                "end_recurrence, end_window_open, "
                 "end_window_close, end_window_first_date)"
             )
 

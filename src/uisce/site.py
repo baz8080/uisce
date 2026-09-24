@@ -708,7 +708,8 @@ def _parse_date(value):
 
 def case_ref(row):
     """The key that groups a multi-pin publication into one event."""
-    return row["reference_num"] or f"id:{row['id']}"
+    # the feed pads some references with a space or \xa0; unstripped, 15 events split in two
+    return (row["reference_num"] or "").strip() or f"id:{row['id']}"
 
 
 def notice_url(ref):
@@ -1020,12 +1021,17 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
                 else:
                     iv_start, end = known_end - charge, known_end
     else:
-        end = start + min(timedelta(seconds=notice_to_end), cap)
+        # The span was measured from the start build.py pinned at first inference;
+        # start_date may have been re-stamped since, and adding the span to the
+        # new one charges hours past the notice's own end (21 cases, 2026-09-24).
+        if r["end_input_start_date"]:
+            iv_start = parse_dt(r["end_input_start_date"])
+        end = iv_start + min(timedelta(seconds=notice_to_end), cap)
         # Recurrence lives strictly under has_end, which keeps it away from the
         # branches above: a boil notice's end is a paired lift and never its own
         # text, and the no-signal branches own the 532 cases whose span build.py
         # nulled because the notice was published after its own works window.
-        windows, rec = recurring_intervals(r, start, end, shared_window)
+        windows, rec = recurring_intervals(r, iv_start, end, shared_window)
         if windows:
             return Case(
                 row=r, sev=sev, ref=case_ref(r), start=start,
@@ -1389,10 +1395,10 @@ def event_record(county, ref, meta, intervals, sas):
         end = (iv[-1][1] - timedelta(seconds=1)).strftime("%Y-%m-%d")
         if end != record["start"]:
             record["end"] = end
-    # the whole event's footprint, capped as Region.event_pop caps it — this
-    # describes an event, not an area's accrual, so it is the same number the
-    # national top ten prints for the same event
-    people = min(sum(sas.values()), COUNTY_POP[county])
+    # the footprint of the pins in the event's own class, capped as
+    # Region.event_pop caps it, which is the number the national top ten prints:
+    # summing every class counted a sibling pin of another class into it
+    people = min(sum(sas[meta["sev"]].values()), COUNTY_POP[county])
     if people:
         record["people"] = people
     for field in ("confirmed", "scheduled"):
@@ -2043,9 +2049,9 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
 
     counties = defaultdict(Region)
     county_towns = defaultdict(lambda: defaultdict(Region))
-    # (county, ref) -> the event's whole footprint and the areas its pins were
-    # homed to, so the event can be named once, after the loop, from all of it
-    event_sas = defaultdict(dict)
+    # (county, ref) -> the event's footprint by severity class and the areas its
+    # pins were homed to, so the event can be named once, after the loop, from all of it
+    event_sas = defaultdict(lambda: defaultdict(dict))
     event_codes = defaultdict(set)
     # (county, ref) -> every disruption interval the event's pins contributed,
     # unmerged. area_history merges them; nothing else reads this.
@@ -2117,7 +2123,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
             # clipping its footprint, so an area only accrues its own people
             code = towns.dominant(case.sas, case.county)
             county_towns[case.county][code].add(case, towns.within(case.sas, code))
-            event_sas[(case.county, case.ref)].update(case.sas)
+            event_sas[(case.county, case.ref)][case.sev].update(case.sas)
             event_codes[(case.county, case.ref)].add(code)
 
     # One name per event, decided on its whole footprint rather than on whichever
@@ -2126,7 +2132,10 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
     # same event could read "Allenwood" in the open list and "Prosperous" in the
     # national top ten. Restricted to codes the pins were homed to — see dominant.
     area_of = {
-        key: towns.dominant(sas, key[0], event_codes[key])
+        key: towns.dominant(
+            {sa: pop for by_sev in sas.values() for sa, pop in by_sev.items()},
+            key[0], event_codes[key],
+        )
         for key, sas in event_sas.items()
     }
 
@@ -2375,7 +2384,8 @@ def load_cases(conn):
                c.full_lat, c.full_lon,
                c.boil_water_notice, c.do_not_drink, c.water_restrictions,
                c.reduced_pressure,
-               i.notice_to_end_seconds, i.end_source, i.end_local_date, i.end_local_time,
+               i.notice_to_end_seconds, i.end_input_start_date, i.end_source,
+               i.end_local_date, i.end_local_time,
                i.end_recurrence, i.end_window_open, i.end_window_close, i.end_window_first_date
         FROM cases c
         LEFT JOIN inferred_cases i ON i.case_id = c.id
