@@ -3,7 +3,7 @@ import hashlib
 import json
 import re
 import sqlite3
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from uisce.config import DB_PATH, JSONL_PATH, make_session
 from uisce.rules import RULES_VERSION
@@ -165,26 +165,33 @@ def record_state(record):
     return (record["description_hash"], record.get("prompt_version"), record.get("model"))
 
 
+def readable_latest(records):
+    """({case_id: its latest readable record}, [unreadable records newer than
+    that]). The one reading of the JSONL that inference, build.py and the shadow
+    eval share, so what is redone, what is published and what is compared agree."""
+    latest, bad = {}, {}
+    for record in records:
+        pick = bad if unreadable_fields(record) else latest
+        current = pick.get(record["case_id"])
+        if current is None or record["inferred_at"] > current["inferred_at"]:
+            pick[record["case_id"]] = record
+    newer = [r for case_id, r in bad.items()
+             if case_id not in latest or r["inferred_at"] > latest[case_id]["inferred_at"]]
+    return latest, newer
+
+
 def get_last_hash_by_case_id(jsonl_path):
     """Latest (description_hash, prompt_version, model) per case. A case is up
     to date only when the hash and version still match AND its record came from
     a current extractor, so bumping PROMPT_VERSION re-infers the whole corpus
-    while bumping RULES_VERSION re-runs only the rules-produced cases. A record
-    build.py cannot read counts as absent, so its case is tried again."""
+    while bumping RULES_VERSION re-runs only the rules-produced cases. A case
+    whose newest record build.py cannot read is left out, so it is redone."""
     if not jsonl_path.exists():
         return {}
-    latest = {}
     with open(jsonl_path) as f:
-        for line in f:
-            if not line.strip():
-                continue
-            record = json.loads(line)
-            if unreadable_fields(record):
-                continue
-            current = latest.get(record["case_id"])
-            if current is None or record["inferred_at"] > current["inferred_at"]:
-                latest[record["case_id"]] = record
-    return {case_id: record_state(record) for case_id, record in latest.items()}
+        latest, newer = readable_latest(json.loads(line) for line in f if line.strip())
+    redo = {r["case_id"] for r in newer}
+    return {case_id: record_state(r) for case_id, r in latest.items() if case_id not in redo}
 
 
 def is_current(state, description):
@@ -245,12 +252,38 @@ def call_llm(session, start_date, description):
     return choice["message"]["content"]
 
 
+def _normalise(result):
+    """Rewrite the model's near-misses that have one meaning: "9:00" is
+    "09:00", and "24:00" is 00:00 at the end of the day it names."""
+    for field in ("local_time", "window_open", "window_close"):
+        value = result.get(field)
+        if isinstance(value, str) and re.fullmatch(r"\d:\d\d", value):
+            result[field] = "0" + value
+    if result.get("window_close") == "24:00":
+        result["window_close"] = "00:00"
+    if result.get("local_time") == "24:00" and _is_iso_date(result.get("local_date") or ""):
+        result["local_date"] = (date.fromisoformat(result["local_date"])
+                                + timedelta(days=1)).isoformat()
+        result["local_time"] = "00:00"
+    return result
+
+
 def parse_response(response_text):
+    """The model's answer, or a not_found record naming what could not be read.
+    Not a failure: at temperature 0 a retry returns the same reply, so a raise
+    would leave the case re-sent, and uninferred, on every run."""
     result = json.loads(response_text)
     if not isinstance(result, dict):
         raise ValueError(f"Expected a JSON object, got: {response_text[:80]!r}")
+    result = _normalise(result)
     if unreadable := unreadable_fields(result):
-        raise ValueError("unreadable " + ", ".join(f"{f} {result[f]!r}" for f in unreadable))
+        return {
+            "notes": "unreadable model reply: "
+                     + ", ".join(f"{f} {result[f]!r}" for f in unreadable),
+            "end_source": "not_found", "local_date": None, "local_time": None,
+            "recurrence": "none", "window_open": None, "window_close": None,
+            "window_first_date": None,
+        }
     return result
 
 

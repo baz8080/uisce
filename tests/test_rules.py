@@ -136,6 +136,12 @@ class TestBilingualCompletions:
                        "**11:31rn 23/09/2026 - " + IRISH_COMPLETION_BLOCK
                        + ENGLISH_ORIGINAL) is None
 
+    def test_an_irish_completion_does_not_read_an_older_english_update(self):
+        assert extract("2026-07-21T13:18:00+00:00",
+                       "**10in 23/07/2026** " + IRISH_COMPLETION_BLOCK
+                       + "**Update 9am 22/07/2026** Works are now complete. "
+                       + "**Update 8am 22/07/2026** Crews on site. " + ENGLISH_ORIGINAL) is None
+
     def test_an_irish_completion_over_an_english_update_without_one_abstains(self):
         assert extract("2026-09-22T13:18:00+00:00",
                        "**11:31rn 23/09/2026 - " + IRISH_COMPLETION_BLOCK
@@ -224,12 +230,28 @@ class TestScheduledEnds:
                          "12am on 22 May." + BOILERPLATE)
         assert (result["local_date"], result["local_time"]) == ("2026-05-22", "00:00")
 
-    def test_tanker_hours_beside_the_works_end_do_not_compete_with_it(self):
-        result = extract(START, "Works are scheduled to take place until 6pm on 22 July. "
-                                "An alternative water supply will be available at the "
-                                "school car park from 4:30pm until 11:59pm on 22 July."
-                                + BOILERPLATE)
-        assert (result["local_date"], result["local_time"]) == ("2026-07-22", "18:00")
+    def test_tanker_hours_beside_the_works_end_abstain(self):
+        # never the end themselves, and never simply dropped either: see below
+        assert extract(START, "Works are scheduled to take place until 6pm on 22 July. "
+                              "An alternative water supply will be available at the "
+                              "school car park from 4:30pm until 11:59pm on 22 July."
+                              + BOILERPLATE) is None
+
+    def test_tanker_hours_in_a_revising_update_do_not_leave_the_stale_schedule(self):
+        assert extract(START, "**Update 3:15pm 22/07/2026** Works are taking longer than "
+                              "expected. An alternative water supply is available at the "
+                              "GAA grounds until 9pm on 22 July. Works are scheduled to "
+                              "take place from 9am until 5pm on 22 July.") is None
+
+    def test_a_wastewater_station_is_not_an_alternative_supply(self):
+        result = extract(START, "Works at the wastewater station may cause disruption "
+                                "from 9am until 5pm on 22 July." + BOILERPLATE)
+        assert (result["local_date"], result["local_time"]) == ("2026-07-22", "17:00")
+
+    def test_midnight_after_a_daytime_start_the_day_before_abstains(self):
+        # 15h or 39h: the text does not say which
+        assert extract(START, "Works are scheduled to take place from 9am on 21 July "
+                              "until midnight on 22 July." + BOILERPLATE) is None
 
     def test_conflicting_schedules_in_one_block_abstain(self):
         # The original notice carries no header of its own, so a revising

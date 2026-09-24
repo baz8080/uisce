@@ -4,7 +4,7 @@ import sqlite3
 from datetime import date, datetime, time, timezone
 
 from uisce.config import DB_PATH, DUBLIN, JSONL_PATH, RECURRING
-from uisce.inference import is_current, record_state, unreadable_fields
+from uisce.inference import get_cases_needing_inference, readable_latest, record_state
 
 NO_END_SIGNAL_SOURCES = {"not_found", "lifted_immediate"}
 
@@ -163,15 +163,6 @@ UNQUOTABLE_SHOWN = 15
 STALE_SHOWN = 50
 
 
-def latest_per_case(records):
-    latest = {}
-    for record in records:
-        current = latest.get(record["case_id"])
-        if current is None or record["inferred_at"] > current["inferred_at"]:
-            latest[record["case_id"]] = record
-    return latest.values()
-
-
 def first_start_date_per_case(records):
     earliest = {}
     for record in records:
@@ -193,17 +184,14 @@ def count_never_inferred(conn):
     ).fetchone()
 
 
-def stale_cases(conn, latest):
-    """(case_id, status) for each published record `uisce-infer` would redo:
-    its description has changed since, or its extractor or prompt is retired.
-    It is still the best answer there is until the LLM residue run replaces it."""
-    by_case = {r["case_id"]: r for r in latest}
-    return [
-        (case_id, status)
-        for case_id, description, status in conn.execute(
-            "SELECT id, description, status FROM cases WHERE description IS NOT NULL")
-        if case_id in by_case and not is_current(record_state(by_case[case_id]), description)
-    ]
+def stale_cases(latest):
+    """Case ids whose published record `uisce-infer` would redo: its description
+    has changed since, or its extractor or prompt is retired. Asked of inference's
+    own selection, so the warning and the redo cannot disagree. The record is
+    still the best answer there is until a run replaces it."""
+    states = {case_id: record_state(r) for case_id, r in latest.items()}
+    return sorted(row["id"] for row in get_cases_needing_inference(DB_PATH, states)
+                  if row["id"] in latest)
 
 
 def check_cases_cover(conn, case_ids):
@@ -223,9 +211,8 @@ def run():
         records = [json.loads(line) for line in f if line.strip()]
 
     first_start_dates = first_start_date_per_case(records)
-    unreadable = [(r["case_id"], unreadable_fields(r)) for r in records]
-    unreadable = [(case_id, fields) for case_id, fields in unreadable if fields]
-    latest = list(latest_per_case(r for r in records if not unreadable_fields(r)))
+    latest_by_case, unreadable = readable_latest(records)
+    latest = list(latest_by_case.values())
 
     rows = [
         (
@@ -243,7 +230,7 @@ def run():
                 first_start_dates[r["case_id"]], r["end_source"], r["local_date"], r["local_time"]
             ),
             # .get(), not [], because a resumable v3 corpus run leaves this file
-            # holding a mix of v2 and v3 records for a long time and latest_per_case
+            # holding a mix of v2 and v3 records for a long time and readable_latest
             # returns either. A v2 record must project as NULLs, not a KeyError —
             # that is what keeps the site correct mid-migration.
             r.get("recurrence"),
@@ -273,14 +260,16 @@ def run():
             rows,
         )
         never_inferred, never_inferred_open = count_never_inferred(conn)
-        stale = stale_cases(conn, latest)
         unquotable, inferred_first_dates = unquotable_windows(conn)
+    stale = stale_cases(latest_by_case)
 
     print(f"Upserted {len(rows)} rows into inferred_cases")
     if unreadable:
-        print(f"::warning::{len(unreadable)} record(s) in {JSONL_PATH} carry a value build "
-              "cannot read and are left out, so uisce-infer tries their cases again: "
-              + ", ".join(f"{case_id} ({', '.join(fields)})" for case_id, fields in unreadable))
+        shown = ", ".join(str(r["case_id"]) for r in unreadable[:STALE_SHOWN])
+        more = f" and {len(unreadable) - STALE_SHOWN} more" if len(unreadable) > STALE_SHOWN else ""
+        print(f"::warning::{len(unreadable)} case(s) have a newest record in {JSONL_PATH} "
+              "that build cannot read; each publishes its previous record, if any, until "
+              f"uisce-infer redoes it: {shown}{more}")
     if unquotable:
         print(f"{len(unquotable)} recurring window(s) with a value not in the notice's own text:")
         for case_id, missing in unquotable[:UNQUOTABLE_SHOWN]:
@@ -296,10 +285,10 @@ def run():
             "open ones accrue to now on the site until uisce-infer runs"
         )
     if stale:
-        shown = ", ".join(str(case_id) for case_id, _ in stale[:STALE_SHOWN])
+        shown = ", ".join(str(case_id) for case_id in stale[:STALE_SHOWN])
         more = f" and {len(stale) - STALE_SHOWN} more" if len(stale) > STALE_SHOWN else ""
         print(
-            f"::warning::{len(stale)} case(s) ({sum(s == 'Open' for _, s in stale)} open) "
-            "publish a record uisce-infer would redo, its description or extractor having "
-            f"changed; each stands until a run replaces it: {shown}{more}"
+            f"::warning::{len(stale)} case(s) publish a record uisce-infer would redo, "
+            f"its description or extractor having changed; each stands until a run "
+            f"replaces it: {shown}{more}"
         )

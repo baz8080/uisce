@@ -290,3 +290,38 @@ cases above:
   build and failed every CI build after it, and a raise after `DROP TABLE` left
   `inferred_cases` empty because the DROP had autocommitted. The rebuild is now one
   transaction. The committed JSONL has 0 such records in 33,974.
+
+### Amended after code review, same day
+
+A code review of the PR found three places where rules-v2 answered what rules-v1 left to the
+model, against the abstain-on-ambiguity rule, and changed them before merge:
+
+- **Tanker hours abstain; they are never dropped.** Skipping an alternative-supply `until`
+  could leave one candidate where the skipped one had made two: a revising update ("an
+  alternative supply is available until 9pm") over the stale original ("from 9am until 5pm")
+  emitted the stale 17:00. An `until` in an alternative-supply sentence now makes the rules
+  abstain, as v1 effectively did, so the 29 newly answered above go back to the model; the
+  3 tanker emissions (239696-239698) still abstain. `ALTERNATIVE_SUPPLY` also gained word
+  boundaries, so "wastewater station" is not a water station.
+- **Midnight after a start the day before needs a late start.** "from 9am on 21 July until
+  midnight on 22 July" is 15h or 39h; only a start from 18:00 ("from 9pm on 21 May") fixes D
+  00:00. Earlier starts abstain.
+- **The Irish completion's English twin must be the same day's update.** The next block with
+  text could be an older update, whose header was then read. The two blocks' dates must now
+  match; the Irish block's date is read from its opening text, so a time too garbled for the
+  header pattern (244845, "9:38 rn") still passes. The rejected "headers must agree" above
+  compared times as well; this compares dates only.
+
+Re-measured against the same 10,870 hash-stable gemma records: rules-v2 answers 10,082
+(92.8%, was 10,137), agrees on 10,065, and the 17 disagreements are the same 17. Against the
+rules-v1 records it disagrees on 2 (244089 and 245031, the midnight fix) and abstains on 2.
+The labelled rounds replay unchanged: 73/73, 110/111 (231853 as above) and 113/113.
+
+On the build side the review changed two things. A model value that cannot be read is no
+longer a failure to retry, because at temperature 0 a retry returns the same reply; the
+safe near-misses are normalised ("9:30" is "09:30", "24:00" is 00:00 of the next day, a
+window closing "24:00" closes "00:00") and anything else is stored as `not_found` with the
+value in its notes. The newest-record reading is one function, `readable_latest`, shared by
+`uisce-infer`, `uisce-build-inferred` and the shadow eval; a case whose newest record is
+unreadable is redone and warned about until it is, and the stale warning asks inference's
+own selection instead of re-implementing it. It no longer counts "open" by the feed's status.

@@ -109,8 +109,12 @@ FROM_BEFORE = re.compile(
 # "An alternative water supply will be available ... from 4:30pm until 11:59pm
 # on 22 July" gives the tanker's hours, not the works' end (case 239696).
 ALTERNATIVE_SUPPLY = re.compile(
-    r"alternative\s+(?:drinking\s+)?water|tanker|bowser|water\s+station"
-    r"|bottled\s+water|water\s+bottles|standpipe", re.IGNORECASE)
+    r"\b(?:alternative\s+(?:drinking\s+)?water|tankers?|bowsers?|water\s+stations?"
+    r"|bottled\s+water|water\s+bottles|standpipes?)\b", re.IGNORECASE)
+LEADING_DATE = re.compile(rf"\W*[^.]{{0,20}}?{_DATE}", _FLAGS)
+# a start the day before only fixes "until midnight on D" as the start of D when
+# it is late: "from 9pm on 21 May"; "from 9am on 21 July" could be either
+LATE_START = "18:00"
 SENTENCE_END = re.compile(r"(?<!\bCo)(?<!\bSt)[.!?](?=\s)")
 
 _TAGS = re.compile(r"<[^>]+>")
@@ -185,10 +189,11 @@ def _midnight_end_date(before, end_date, start_date):
     """The date a 00:00 end falls on, or None when the text leaves it open.
 
     "until midnight on D" alone is either end of D. A start earlier on D makes
-    it the end of D, so the instant is D+1 00:00; a start the day before makes
-    it the start of D ("from 9pm on 21 May until 12am on 22 May")."""
+    it the end of D, so the instant is D+1 00:00; a late-evening start the day
+    before makes it the start of D ("from 9pm on 21 May until 12am on 22 May")."""
     m = FROM_BEFORE.search(before)
-    if not m or _match_time(m) in (None, "00:00"):
+    from_time = m and _match_time(m)
+    if not from_time or from_time == "00:00":
         return None
     from_date = _match_date(m, start_date) if m.group("d1") or m.group("d2") else end_date
     if from_date is None:
@@ -196,9 +201,16 @@ def _midnight_end_date(before, end_date, start_date):
     end = date.fromisoformat(end_date)
     if from_date == end_date:
         return (end + timedelta(days=1)).isoformat()
-    if from_date == (end - timedelta(days=1)).isoformat():
+    if from_date == (end - timedelta(days=1)).isoformat() and from_time >= LATE_START:
         return end_date
     return None
+
+
+def _leading_date(block, start_date):
+    """The date an update block opens with, read even when its time is too
+    garbled for UPDATE_HEADER ("** 9:38 rn 22/09/2026", case 244845)."""
+    m = LEADING_DATE.match(block)
+    return _match_date(m, start_date) if m else None
 
 
 def _about_alternative_supply(before):
@@ -267,11 +279,15 @@ def extract(start_date, description):
                 f"{header.group(0).strip()!r}")
         if IRISH_COMPLETION.search(block):
             # The English block of the same update follows the Irish one, and
-            # its header is the one to read: the Irish header is mistyped
-            # often (232673, 236544, 244190). With no English completion
-            # there, the schedule below is stale and the Irish needs the model.
-            following = next((b for h, b in segments[i + 1:] if _body(h, b).strip()), "")
-            if not COMPLETION.search(following):
+            # its header is the one to read: the Irish header's time is mistyped
+            # often (232673, 236544, 244190). It must be the same day's update,
+            # not an older one; otherwise the Irish needs the model.
+            following_header, following = next(
+                ((h, b) for h, b in segments[i + 1:] if _body(h, b).strip()), (None, ""))
+            irish_date = _leading_date(block, start_date)
+            same_day = (following_header is not None and irish_date is not None
+                        and irish_date == _match_date(following_header, start_date))
+            if not (same_day and COMPLETION.search(following)):
                 return None
 
     # No completion anywhere: consider a scheduled end, unless the notice is
@@ -297,8 +313,11 @@ def extract(start_date, description):
     candidates = {}
     for m in scheduled_matches + list(ESTIMATED_END.finditer(newest)):
         before = newest[:m.start()]
+        # The tanker's hours are never the works' end, and dropping them could
+        # leave one candidate where two would have abstained (a revising update
+        # over the original schedule), so the model reads these.
         if _about_alternative_supply(before):
-            continue
+            return None
         local_time = _match_time(m)
         local_date = _match_date(m, start_date)
         if local_time == "00:00" and local_date:

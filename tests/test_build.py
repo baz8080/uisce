@@ -11,10 +11,10 @@ from uisce.build import (
     count_never_inferred,
     date_forms,
     first_start_date_per_case,
-    latest_per_case,
     time_forms,
     unquotable_windows,
 )
+from uisce.inference import readable_latest
 
 
 class TestComputeDurationSeconds:
@@ -69,14 +69,16 @@ def _record(case_id, inferred_at, start_date="2026-06-01T00:00:00+00:00"):
     return {"case_id": case_id, "inferred_at": inferred_at, "start_date": start_date}
 
 
-def test_latest_per_case_keeps_newest_record():
+def test_readable_latest_keeps_newest_record():
     records = [
         _record(1, "2026-06-01T00:00:00+00:00"),
         _record(1, "2026-07-01T00:00:00+00:00"),
         _record(2, "2026-06-15T00:00:00+00:00"),
     ]
-    latest = {r["case_id"]: r["inferred_at"] for r in latest_per_case(records)}
-    assert latest == {1: "2026-07-01T00:00:00+00:00", 2: "2026-06-15T00:00:00+00:00"}
+    latest, unreadable = readable_latest(records)
+    assert {c: r["inferred_at"] for c, r in latest.items()} == {
+        1: "2026-07-01T00:00:00+00:00", 2: "2026-06-15T00:00:00+00:00"}
+    assert unreadable == []
 
 
 def test_first_start_date_per_case_pins_earliest_run():
@@ -261,7 +263,18 @@ class TestRun:
         build.run()
         assert self._published(db) == []
         out = capsys.readouterr().out
-        assert "::warning::1 record(s)" in out and "1 (local_time)" in out
+        assert "::warning::1 case(s) have a newest record" in out and out.count(": 1\n")
+
+    def test_an_unreadable_record_superseded_by_a_readable_one_is_not_warned(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        self._wire(tmp_path, monkeypatch, SCHEDULED, [
+            self._record(local_time="24:00") | {"model": inference.MODEL_NAME},
+            self._record(inferred_at="2026-09-23T00:00:00+00:00")
+            | {"model": inference.MODEL_NAME},
+        ])
+        build.run()
+        assert "::warning::" not in capsys.readouterr().out
 
     def test_an_unreadable_window_falls_back_to_the_previous_record(
         self, tmp_path, monkeypatch
@@ -298,7 +311,7 @@ class TestRun:
         assert self._published(db) == [
             ("2026-09-22T20:00:00+00:00", "scheduled_end_with_time", "18:15")]
         out = capsys.readouterr().out
-        assert "::warning::1 case(s) (1 open) publish a record uisce-infer would redo" in out
+        assert "::warning::1 case(s) publish a record uisce-infer would redo" in out
         assert out.rstrip().endswith(": 1")
 
     def test_a_record_from_a_retired_extractor_is_warned_too(
