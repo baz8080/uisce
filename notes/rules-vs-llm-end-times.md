@@ -171,3 +171,122 @@ Where the JSONL lives was the real question — esb and lifts keep collected dat
 
 - **A `uisce-data` repo.** The esb/lifts split exists because the Pi is the writer and the raw logs are the source of truth. Here the source of truth (the DB) is already off-repo as a release, and the JSONL is a derived cache of it. A data repo would add a checkout to every workflow and put the JSONL↔DB freshness guard (above) across two repos, for no gain in history or size — the JSONL costs ~4 MB of packed repo after 39 commits.
 - **The JSONL as a release asset beside `uisce.db`.** Two writers on one blob means last upload wins and the other's records are silently lost; git at least conflicts loudly, and `merge=union` resolves it.
+
+## rules-v2: midnight, tanker hours, bilingual completions (2026-09-24)
+
+A review of the 2026-09-23 release found three wrong readings in rules-v1, each emitting or
+withholding an answer the site then published. All three are fixed in `rules-v2`, with a
+fourth, smaller widening that fell out of checking the cases the review named.
+
+**1. "until midnight on D" after a start on D.** "from 2pm until midnight on 11 September"
+(244089) was read as 11 September 00:00, fourteen hours before the works began and before
+the notice was published, so build.py nulled the span and the site charged an imputed one.
+245031 ("from 8pm until midnight on 29 September") ended twenty hours before its own start.
+Now a 00:00 end (midnight, 12am) is read against the `from` directly before its `until`:
+
+- a start earlier the same day (no date of its own, or D): D+1 00:00;
+- a start the day before ("from 9pm on 21 May until 12am on 22 May", 233690): D 00:00, as
+  before;
+- no start, a start two or more days earlier, or `estimated completion time of midnight`:
+  abstain. "until midnight on 9 May" alone is either end of the day.
+
+Rejected: always D+1 (turns the 21-to-22 May shape into a 27-hour outage); always the date
+as written (the bug); reading the no-start form as the end of D. The last is probably right
+(232957 and 234332 were published the afternoon of the D they name, so D 00:00 is already in
+their past) but it is a reading, and reading is the model's job.
+
+**2. Tanker hours are not the works' end.** "An alternative water supply will be available
+at ... from 4:30pm until 11:59pm on 22 July" was emitted as the end of a pump failure with no
+stated end (239696, and pins 239697/239698); the case closed on 25 July. An `until` in
+a sentence about an alternative supply (alternative water, tanker, bowser, water station,
+bottled water, standpipe) is no longer a candidate end. Where it was the only one the rules
+abstain; where it had been competing with the works' own end, which made v1 abstain on two
+candidates, the works' end is now read. Rejected: abstaining on any notice that mentions an
+alternative supply, which would drop 62 scheduled answers that are right today.
+
+**3. An English completion below an Irish one.** The Irish-completion check ran per block, so
+a bilingual update, Irish block first ("11:31rn 23/09/2026 - Tá críoch leis an obair...") and
+the English "Update 11:31am 23/09/2026 Works are now complete" below it, abstained on the
+Irish block before reaching the English one (244925). The corpus has 129 of these. Now an
+Irish completion abstains only when the next block with any text in it carries no English
+completion; otherwise the English block's header is read. Rejected: requiring the two
+headers to agree. 121 of the 129 do, but the Irish header is the unreliable one (232673 says
+`8:17rn` against `8:17pm`, 236544 names March for a June notice, 244926 `4:24rn` against
+`4:24pm`) and 3 more do not parse at all (`9:38 rn` with a space), so agreement would throw
+away the good header to protect the bad one. 15 Irish-only completions still abstain.
+
+**4. A 24-hour time with a stray `pm`.** `**Update 16:59pm 23/09/2026**` (245025) was
+unparseable, so its completion abstained and the stale schedule stood. An hour 13-23
+followed by `pm` now reads as the 24-hour time; `14:13am` still abstains. 33 such tokens in
+the corpus, 31 with `pm`; the LLM read every one of those it answered as the 24-hour time.
+
+### Measured on the 2026-09-23 release
+
+`uv run uisce-eval-rules-shadow` against the release DB and the committed JSONL: rules-v2
+answers 12,822 of 13,556 compared cases (94.6%), agreeing on 12,803 (99.85%), 0 on
+LLM-recurring cases. That comparison now includes 2,686 rules-v1 records; against the LLM's
+own records alone (10,870 hash-stable gemma cases):
+
+| | rules-v1 | rules-v2 |
+|---|---|---|
+| answered | 9,970 (91.7%) | 10,137 (93.3%) |
+| agree | 9,969 | 10,120 |
+| disagree | 1 | 17 |
+
+What moved on those 10,870, by change:
+
+| change | effect | vs the LLM |
+|---|---|---|
+| midnight, same-day start | 15 ends move to D+1 00:00 | 15 disagree: the LLM is wrong (8 are the pins of one event, 231693-231700) |
+| midnight, no usable start | 5 abstain (232219, 232957, 233026, 234332, 239927) | were agreeing on D 00:00 |
+| tanker hours | 3 abstain (239696-239698); 29 newly answered | the 3 were agreeing on the tanker's 23:59; the 29 all agree |
+| bilingual | 125 newly answered completions | 124 agree; 244190 disagrees |
+| 24-hour `pm` | 18 completions, 3 schedules newly answered | all agree |
+
+The 17 disagreements, read in full: the 15 midnight rows; 237463, the LLM's digit
+transposition from the rules-v1 section above; and 244190, where the Irish header says
+`3:39 in` and the English one `3:49pm`. The rules read the English header, as they do
+everywhere; the text cannot say which is true.
+
+Labelled rounds (`uisce-eval-replay --extractor rules`): round 1 73/73 (64.0% coverage,
+unchanged); the 2026-08-21 round 113/113 (94.2%, was 110/110); round 2 111/112 (93.3%, was
+110/110). The one miss is 231853, "from 4pm until midnight on 30 April", labelled correct at
+30 April 00:00. That instant is 15h49m before the notice was published at 15:49 on 30 April;
+the label accepted the model's reading and is exactly what fix 1 corrects. The CSV is
+recorded data and stays as it is.
+
+`uisce-infer --rules-only` against a copy of the release DB and a copy of the JSONL: 2,716
+cases selected (the RULES_VERSION bump makes every rules-v1 record stale), 2,695 answered,
+21 left for the LLM. Latest record per case against the committed JSONL:
+
+- 2,683 rules-v1 records restamped `rules-v2` with the identical answer;
+- 2 changed: 244089 and 245031, a day later at 00:00;
+- 4 stale records replaced: 244845, 244925 and 245025 go from their original schedule to a
+  completion (22/09 09:38, 23/09 11:31, 23/09 16:59), 244538 from a superseded schedule to
+  the current one;
+- 6 never-inferred cases answered (4 scheduled, 2 completion);
+- rules-v2 emitted 1,773 `completion_update` and 922 `scheduled_end_with_time`, nothing else.
+
+The first CI build after this merges appends those 2,695 lines (the JSONL goes from 19.8 MB
+to 21.1 MB). No historical gemma record changes: the no-backfill rule stands, so the 15 LLM
+midnight rows and the 3 tanker rows are still published until the prompt is fixed (roadmap,
+"LLM prompt reads 'until midnight on D' as the start of D").
+
+### Build no longer hides a stale record or crashes on a bad one (same day)
+
+Two build.py changes shipped with rules-v2, because the review found both by following the
+cases above:
+
+- A case whose newest record `uisce-infer` would redo (description changed, or extractor or
+  prompt retired, decided by the same `is_current` the inference run uses) still publishes
+  that record, the best there is, but build now prints a `::warning::` listing them. Before
+  rules-v2, 244925's completion sat behind a record for its pre-completion text with nothing
+  said. On the rules-only run above, 6 remain (5 open): 243084 (its `start_date` is now NULL
+  in the DB, so no year resolves), 244237/244239/244243 (recurring), 244597 ("until midnight
+  23 September" with no "on") and 244720 (two notices concatenated).
+- A model value build cannot read ("24:00", "5pm", "28/04/2026", a window "7:00") is refused
+  by `parse_response`, so the case counts as failed and is retried; one already in the JSONL
+  is left out with a `::warning::` and its case inferred again. Before, any of them raised in
+  build and failed every CI build after it, and a raise after `DROP TABLE` left
+  `inferred_cases` empty because the DROP had autocommitted. The rebuild is now one
+  transaction. The committed JSONL has 0 such records in 33,974.
