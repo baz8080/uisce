@@ -9,14 +9,6 @@ on:
     - cron: '20 11 * * *'
     - cron: '23 17 * * *'
   workflow_dispatch:
-    inputs:
-      replay_closed_at:
-        description: >-
-          Backfill cases.closed_at by replaying every published release DB.
-          Off by default; needed once after the v2 schema lands, and again only
-          if the DB is ever restored from an older release.
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -63,22 +55,6 @@ jobs:
         env:
           LOCATIONIQ_API_KEY: ${{ secrets.LOCATIONIQ_API_KEY }}
         run: uv run uisce-pipeline
-
-      # Runs after the pipeline so the DB is already migrated to v2 and has this
-      # build's own transitions stamped — the replay never overwrites those, and
-      # they are the more precise value. The two together leave no gap: the
-      # replay covers snapshot-to-snapshot, the pipeline's upsert covers the
-      # last snapshot to now. Idempotent, so a repeat run is harmless.
-      - name: Backfill closed_at from published snapshots
-        if: ${{ inputs.replay_closed_at }}
-        run: |
-          mkdir -p snaps
-          for TAG in $(gh release list --limit 100 --json tagName --jq '.[].tagName'); do
-            gh release download "$TAG" --pattern uisce.db -O "snaps/$TAG.db" || true
-          done
-          uv run uisce-replay-closed-at --snapshots snaps --write
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # The rules answer the templated ~93% here; the abstentions wait for a
       # local run with the LLM. See notes/rules-vs-llm-end-times.md.
