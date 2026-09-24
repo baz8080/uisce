@@ -82,11 +82,12 @@ def test_readable_latest_keeps_newest_record():
 
 
 def test_first_start_date_per_case_pins_earliest_run():
+    # the later run saw an earlier start: a backward re-stamp, which must not win
     records = [
-        _record(1, "2026-07-01T00:00:00+00:00", start_date="2026-06-20T00:00:00+00:00"),
-        _record(1, "2026-06-01T00:00:00+00:00", start_date="2026-05-01T00:00:00+00:00"),
+        _record(1, "2026-07-01T00:00:00+00:00", start_date="2026-05-01T00:00:00+00:00"),
+        _record(1, "2026-06-01T00:00:00+00:00", start_date="2026-06-20T00:00:00+00:00"),
     ]
-    assert first_start_date_per_case(records) == {1: "2026-05-01T00:00:00+00:00"}
+    assert first_start_date_per_case(records) == {1: "2026-06-20T00:00:00+00:00"}
 
 
 def test_count_never_inferred_reports_backlog_and_open_share():
