@@ -249,6 +249,10 @@ The 12% figure above is stale, and the paragraph's implied remedy — shrink the
 
 If a closure *series* is ever published (month-over-month counts, or a time-to-close metric keyed on `closed_at`), this stops being a prose caveat and needs the cadence recorded alongside the data so the series can be corrected rather than annotated.
 
+### The replay has nothing left to recover (2026-09-24)
+
+A dry run of `uisce-replay-closed-at` over all 75 release snapshots (2026-06-30 to 2026-09-23) against a copy of the 2026-09-23 release finds 6,961 transitions, and every one of those cases already carries a `closed_at` on the same date as the replayed tag: **0 rows to stamp, and 0 that would change** even if the replay were allowed to overwrite. None of the 5,872 closed cases with a NULL `closed_at` appears in the replay at all; they closed before the first snapshot or were never seen `Open`. Since the v2 schema landed, the live upsert has stamped every transition a snapshot can see, so the `replay_closed_at` dispatch input only earns its place if the DB is restored from an older release. Whether to drop it is the owner's call. If it stays, its `gh release list --limit 100` stops reaching the earliest snapshots once the release count passes 100, around 2026-10-19.
+
 ### Twice-daily builds: why, and why not three (2026-07-31)
 
 The second daily build slot exists for publication latency, not to sharpen `closed_at` (see above — past a daily cadence, Uisce Éireann's own administrative lag dominates, not the build gap). Notices publish between 07:00 and 16:00 UTC (staffed office hours), so a second build only helps if it lands inside that window: measured over 8,135 cases, a single evening build leaves a mean **7.7h** from publication to the site, a midday build halves that to **3.9h**, and an overnight build would only have bought **0.9h**. A third build takes 3.9h to 3.5h — not worth the run.
