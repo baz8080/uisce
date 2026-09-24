@@ -203,13 +203,14 @@ class TestBoilNoticeFate:
         closed = self._notice(status="Closed")
         assert boil_notice_fate(closed, {}, NOW) == ("closed_no_signal", None)
 
-    def test_lift_before_the_pin_start_clamps_to_start(self):
-        """Multi-pin lifts publish untidily; a negative duration must not result."""
+    def test_lift_before_the_pin_start_clamps_to_the_token_second(self):
+        """Multi-pin lifts publish untidily; a negative duration must not result,
+        and nor may a zero-length one, which drops the notice from its month."""
         lifts = {("Carlow", "boil_notice_lifted"):
                  [("somewhere", _dt("2026-04-30T00:00:00+00:00"))]}
         outcome, (_, end) = boil_notice_fate(self._notice(), lifts, NOW)
         assert outcome == "paired"
-        assert end == _dt("2026-05-01T00:00:00+00:00")
+        assert end == _dt("2026-05-01T00:00:01+00:00")
 
     def test_a_late_lift_reports_the_real_end_uncapped(self):
         """`boil_notice_fate` answers when the notice ended, which is a different
@@ -997,6 +998,56 @@ class TestOpenReading:
         row = self._complete(work_category="boil_notice_lifted", end_source="lifted_immediate",
                              notice_to_end_seconds=None, end_local_date=None, end_local_time=None)
         assert not is_open(row, NOW)
+
+    def _standing(self, cat="consumption_notice_issued", **overrides):
+        base = dict(work_category=cat, status="Open", notice_to_end_seconds=None,
+                    end_source="not_found", end_local_date=None, end_local_time=None,
+                    location="Downings", reference_num="ISS1")
+        return _case(**(base | overrides))
+
+    def _lift(self, cat, start_date):
+        return _case(id=99, work_category=cat, status="Closed", notice_to_end_seconds=None,
+                     end_source="not_found", end_local_date=None, location="Downings",
+                     reference_num="LIFT1", start_date=start_date)
+
+    @pytest.mark.parametrize("issued, lifted", [
+        ("boil_notice_issued", "boil_notice_lifted"),
+        ("consumption_notice_issued", "consumption_notice_lifted"),
+    ])
+    def test_a_paired_lift_closes_the_notice(self, issued, lifted):
+        rows = [self._standing(issued), self._lift(lifted, "2026-05-03T00:00:00+00:00")]
+        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert county["open"] == [] and county["open_total"] == 0
+        assert county["months"]["2026-05"]["health_n"] == 1
+
+    def test_a_lift_stamped_before_its_issue_still_leaves_the_notice_counted(self):
+        # Downings, 232476: the lift is stamped a day before the issue it lifts
+        rows = [self._standing("boil_notice_issued", start_date="2026-05-02T11:18:49+00:00"),
+                self._lift("boil_notice_lifted", "2026-05-01T08:18:20+00:00")]
+        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        assert county["open"] == []
+        month = county["months"]["2026-05"]
+        assert month["events"]["quality"] == 1 and month["health_n"] == 1
+
+    def test_an_unlifted_do_not_consume_notice_closes_at_the_cap(self):
+        """Marker and open status stop together (owner decision, 2026-09-24)."""
+        young = self._standing(start_date="2026-05-01T00:00:00+00:00")
+        now = datetime(2026, 5, 10, tzinfo=UTC)
+        county = build_site([young], SA_INDEX, now, TOWNS)["counties"]["Carlow"]
+        assert county["open_total"] == 1 and county["months"]["2026-05"]["health_now"] == 1
+        now = datetime(2026, 5, 20, tzinfo=UTC)
+        county = build_site([young], SA_INDEX, now, TOWNS)["counties"]["Carlow"]
+        assert county["open_total"] == 0 and county["months"]["2026-05"]["health_now"] == 0
+        assert county["months"]["2026-05"]["events"]["quality"] == 1
+
+    def test_the_cap_closes_a_standing_notice_whatever_end_it_reported(self):
+        row = self._standing(end_source="scheduled_end_with_time",
+                             end_local_date="2026-05-03", end_local_time="12:00",
+                             notice_to_end_seconds=2.5 * 86400)
+        now = datetime(2026, 5, 20, tzinfo=UTC)
+        assert is_open(row, now)
+        county = build_site([row], SA_INDEX, now, TOWNS)["counties"]["Carlow"]
+        assert county["open_total"] == 0
 
     def test_the_feed_and_the_vanished_stamp_still_close_it_first(self):
         assert not is_open(_open(status="Closed"), NOW)
