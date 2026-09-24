@@ -22,11 +22,10 @@ import sqlite3
 import time
 from datetime import date
 
-from uisce.build import latest_per_case
 from uisce.config import DB_PATH, JSONL_PATH
 from uisce.eval_end_time import EVAL_DIR
 from uisce.eval_replay import normalise_time
-from uisce.inference import hash_description
+from uisce.inference import MODEL_NAME, hash_description, readable_latest
 from uisce.rules import RULES_VERSION, extract
 
 SHADOW_FIELDNAMES = [
@@ -61,12 +60,13 @@ def compare(llm_record, rules_result):
 
 
 def run(argv=None):
-    records = latest_per_case(
-        json.loads(line)
-        for line in open(JSONL_PATH)
-        if line.strip()
-    )
-    by_case = {record["case_id"]: record for record in records}
+    # the model's own records only: a rules-v1 record on the other side would
+    # compare the rules with themselves
+    with open(JSONL_PATH) as f:
+        by_case, _ = readable_latest(
+            r for r in (json.loads(line) for line in f if line.strip())
+            if r.get("model") == MODEL_NAME
+        )
 
     conn = sqlite3.connect(DB_PATH)
     rows = conn.execute(

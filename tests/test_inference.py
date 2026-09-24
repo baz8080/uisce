@@ -277,6 +277,25 @@ class TestHybridRun:
         assert "1 failed" in capsys.readouterr().out
         assert jsonl.read_text() == ""
 
+    def test_an_unreadable_llm_value_fails_the_case_and_writes_nothing(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        jsonl = self._wire(
+            tmp_path, monkeypatch, [(1, "2026-05-18T08:00:00+00:00", self.UNTEMPLATED)]
+        )
+        monkeypatch.setattr(inference, "make_session", lambda: object())
+        monkeypatch.setattr(
+            inference, "call_llm",
+            lambda session, start_date, description: json.dumps({
+                "end_source": "scheduled_end_with_time", "local_date": "2026-05-18",
+                "local_time": "5pm"}),
+        )
+
+        # failing, not a silent not_found: the case keeps its previous record
+        assert inference.run([]) == 1
+        assert "1 failed" in capsys.readouterr().out
+        assert jsonl.read_text() == ""
+
     def test_a_clean_run_exits_zero(self, tmp_path, monkeypatch):
         self._wire(tmp_path, monkeypatch, [(1, "2026-05-18T08:00:00+00:00", self.TEMPLATED)])
         assert inference.run([]) == 0
@@ -350,3 +369,57 @@ class TestParseResponse:
     def test_rejects_markdown_fences(self):
         with pytest.raises(json.JSONDecodeError):
             parse_response('```json\n{"end_source": "not_found"}\n```')
+
+    def test_accepts_well_formed_values_and_nulls(self):
+        reply = {"end_source": "scheduled_end_with_time", "local_date": "2026-05-18",
+                 "local_time": "23:59", "recurrence": "daily", "window_open": "22:00",
+                 "window_close": "07:00", "window_first_date": "2026-05-10"}
+        assert parse_response(json.dumps(reply)) == reply
+        assert parse_response(json.dumps({"end_source": "not_found", "local_date": None,
+                                          "local_time": None}))["local_date"] is None
+
+    @pytest.mark.parametrize("field, value, read_as", [
+        ("local_time", "9:30", {"local_time": "09:30"}),
+        ("local_time", "24:00", {"local_date": "2026-05-19", "local_time": "00:00"}),
+        ("window_open", "7:00", {"window_open": "07:00"}),
+        ("window_close", "24:00", {"window_close": "00:00"}),
+    ])
+    def test_a_near_miss_with_one_meaning_is_normalised(self, field, value, read_as):
+        result = parse_response(json.dumps({"end_source": "scheduled_end_with_time",
+                                            "local_date": "2026-05-18", "local_time": "17:00",
+                                            field: value}))
+        assert {k: result[k] for k in read_as} == read_as
+
+    @pytest.mark.parametrize("field, value", [
+        ("local_time", "5pm"),
+        ("local_date", "28/04/2026"),
+        ("local_date", "2026-02-30"),
+        ("local_date", "20260428"),
+        ("window_first_date", "9 July"),
+    ])
+    def test_rejects_a_value_build_cannot_read(self, field, value):
+        with pytest.raises(ValueError, match=field):
+            parse_response(json.dumps({"end_source": "scheduled_end_with_time",
+                                       "local_date": "2026-05-18", "local_time": "17:00",
+                                       field: value}))
+
+    def test_a_midnight_with_a_non_string_date_is_rejected_not_crashed(self):
+        with pytest.raises(ValueError, match="local_date"):
+            parse_response(json.dumps({"end_source": "scheduled_end_with_time",
+                                       "local_date": 20260518, "local_time": "24:00"}))
+
+
+def test_a_malformed_record_already_written_is_inferred_again(tmp_path):
+    good = build_record(1, "desc", "2026-06-01T00:00:00+00:00",
+                        {"end_source": "not_found"}, inferred_at="2026-06-01T00:00:00+00:00")
+    bad = build_record(1, "desc", "2026-06-01T00:00:00+00:00",
+                       {"end_source": "scheduled_end_with_time", "local_date": "2026-06-01",
+                        "local_time": "24:00"}, inferred_at="2026-06-02T00:00:00+00:00")
+    path = tmp_path / "inferred.jsonl"
+    write_jsonl(path, [bad])
+    assert get_last_hash_by_case_id(path) == {}
+    # an older readable record does not make the case current: its newest is unreadable
+    write_jsonl(path, [good, bad])
+    assert get_last_hash_by_case_id(path) == {}
+    write_jsonl(path, [bad, good | {"inferred_at": "2026-06-03T00:00:00+00:00"}])
+    assert get_last_hash_by_case_id(path)[1][0] == good["description_hash"]

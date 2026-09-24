@@ -44,6 +44,33 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
 
 ## Decisions waiting on the owner
 
+- **LLM prompt reads "until midnight on D" as the start of D.** Deferred by the owner on
+  2026-09-24 and tracked in issue #102; a prompt change needs its own care. The prompt line `- 12 noon (12:00pm) is 12:00. 12
+  midnight (12:00am) is 00:00.` (`inference.py`, PROMPT) makes gemma make the mistake
+  rules-v2 fixed on 2026-09-24 (rules-vs-llm-end-times.md, "rules-v2"). On the 2026-09-23
+  release, 16 published latest LLM records read a same-day "from X until midnight on D" as D
+  00:00, all closed cases: 231693-231700 (eight pins of one event), 231812, 231853, 232292,
+  232318, 238423, 240587, 240993, and 244597 (stale hash; "until midnight 23 September" with
+  no "on"). Five more have no start and were read as D 00:00, where the rules now abstain:
+  232219, 232957, 233026, 234332, 239927; 232957 and 234332 then end before their own
+  publication. Proposed replacement for the line:
+
+  > - 12 noon (12:00pm) is 12:00. Midnight (12am) is 00:00 on the day it begins, so "until
+  >   midnight on 11 September" ends at 00:00 on 12 September: report local_date 2026-09-12.
+  >   Only when the works start on the day before ("from 9pm on 21 May until 12am on 22 May")
+  >   is the end the date as written, 2026-05-22 at 00:00.
+
+  Order of work: (1) change the line and bump `PROMPT_VERSION` to 4 in one commit. (2) Run
+  `uv run uisce-infer` by hand with LM Studio. The bump makes every record stale, rules ones
+  included, so rules-v2 answers first everything it covers, replacing gemma records for the
+  10,137 cases measured on 2026-09-24 (17 of them with a different answer), and the LLM gets
+  the residue: 754 cases, 612 distinct descriptions on the 2026-09-23 release, about 40
+  minutes at the corpus run's ~3.6 s a case. (3) Run the end-time eval, `uv run
+  uisce-eval-replay --csv <round>` on all three labelled rounds, before committing the JSONL.
+  Round 2 labels 231853 correct at 30 April 00:00, so a pv4 that reads it right scores a miss
+  there; adjudicate that row in end-time-eval.md, never in the CSV. The same bump could say
+  that an alternative supply's hours are not the works' end (239696-239698 read the tanker's
+  23:59 as the end), measured on its own.
 - **`IGNORE_BOIL_NOTICES`.** Recommendation is to leave it off (boil-notices.md, re-measured
   2026-09-05): the two accruing notices and the one paired one are the live warnings the health
   marker exists for. The cost of leaving it off is 13 of 17 issue events excluded as stale
