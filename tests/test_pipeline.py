@@ -105,6 +105,12 @@ class TestMapCases:
         assert skipped == []
         assert [mapped[0][c] for c in pipeline.COORD_COLUMNS] == [None] * 4
 
+    def test_an_empty_point_written_as_nan_maps_with_no_coordinates(self):
+        feature = make_feature({"DESCRIPTION": "text"})
+        feature["geometry"] = {"x": "NaN", "y": "NaN"}
+        mapped, _ = map_cases([feature])
+        assert [mapped[0][c] for c in pipeline.COORD_COLUMNS] == [None] * 4
+
 
 class TestRestorePins:
     def _db(self, tmp_path):
@@ -132,6 +138,13 @@ class TestRestorePins:
         kept, unplaced = pipeline.restore_pins([case_record(id=2)], tmp_path / "none.db")
         assert (kept, unplaced) == ([], [2])
         assert not (tmp_path / "none.db").exists()
+
+    def test_a_db_with_no_cases_table_yet_sets_them_aside(self, tmp_path):
+        # geocode_all creates the file before create_db has run
+        db_path = tmp_path / "u.db"
+        sqlite3.connect(db_path).execute("CREATE TABLE geocode_cache (x)").connection.commit()
+        assert pipeline.restore_pins([case_record(id=2)], db_path) == ([], [2])
+        assert pipeline.unvanished_cases(db_path) == 0
 
 
 def test_epoch_ms_to_iso_none_passthrough():
@@ -173,10 +186,11 @@ class LiveFeed:
     mutates it mid-download; `cap` is a server maxRecordCount below the page
     size requested."""
 
-    def __init__(self, ids, after_first_page=None, cap=None):
+    def __init__(self, ids, after_first_page=None, cap=None, ordered=True):
         self.ids = list(ids)
         self.after_first_page = after_first_page
         self.cap = cap
+        self.ordered = ordered
         self.pages = 0
 
     def get(self, url, params=None, timeout=None):
@@ -184,7 +198,9 @@ class LiveFeed:
             return FakeResponse({"count": len(self.ids)})
         after = int(re.fullmatch(r"OBJECTID > (-?\d+)", params["where"]).group(1))
         n = min(params["resultRecordCount"], self.cap or params["resultRecordCount"])
-        rest = [i for i in sorted(self.ids) if i > after]
+        # storage order unless asked, and a server that ignores the ask
+        by_key = params.get("orderByFields") == "OBJECTID" and self.ordered
+        rest = [i for i in (sorted(self.ids) if by_key else self.ids) if i > after]
         self.pages += 1
         if self.pages == 1 and self.after_first_page:
             self.after_first_page(self)
@@ -239,14 +255,15 @@ class TestDownloadCases:
         with pytest.raises(RuntimeError, match="truncated"):
             pipeline.check_download_complete([{}] * 989, 1000)
 
-    def test_an_empty_feed_is_refused_while_the_db_holds_live_open_cases(self):
-        with pytest.raises(RuntimeError, match="empty"):
-            pipeline.check_download_complete([], 0, live_open=498)
-        pipeline.check_download_complete([], 0, live_open=0)
+    def test_a_feed_reporting_nothing_is_refused_while_the_db_holds_cases(self):
+        with pytest.raises(RuntimeError, match="reports 0 cases"):
+            pipeline.check_download_complete([], 0, unvanished=498)
+        pipeline.check_download_complete([], 0, unvanished=0)
 
-    def test_live_open_counts_open_cases_the_feed_still_serves(self, tmp_path):
+    def test_the_guard_counts_every_row_the_stamp_would_touch(self, tmp_path):
+        # closed rows are stamped vanished too, so they count
         db_path = tmp_path / "u.db"
-        assert pipeline.live_open_cases(db_path) == 0
+        assert pipeline.unvanished_cases(db_path) == 0
         assert not db_path.exists()
         conn = make_cases_table(sqlite3.connect(db_path))
         pipeline.load_cases(conn, [case_record(id=1, status="Open"),
@@ -254,7 +271,16 @@ class TestDownloadCases:
         pipeline.load_cases(conn, [case_record(id=2, status="Closed"),
                                    case_record(id=3, status="Open")])
         conn.commit()
-        assert pipeline.live_open_cases(db_path) == 1
+        assert pipeline.unvanished_cases(db_path) == 2
+
+    def test_the_download_asks_for_key_order(self, monkeypatch):
+        monkeypatch.setattr(pipeline, "ARCGIS_PAGE_SIZE", 2)
+        assert self._ids(download_cases(LiveFeed([9, 3, 7]))) == [3, 7, 9]
+
+    def test_a_page_out_of_order_is_refused(self, monkeypatch):
+        monkeypatch.setattr(pipeline, "ARCGIS_PAGE_SIZE", 2)
+        with pytest.raises(RuntimeError, match="ascending"):
+            download_cases(LiveFeed([9, 3, 7], ordered=False))
 
     def test_the_feed_count_is_read_from_the_count_endpoint(self):
         session = FakeSession({"count": 12097})

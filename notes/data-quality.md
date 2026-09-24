@@ -295,14 +295,27 @@ changing under the paging; a real purge like the one around 2026-04-20 would sti
 which is right: that is what happened.
 
 *2026-09-24:* the tolerance passes an empty feed, 0 downloaded of 0 reported, and that build
-would have stamped every open case vanished (498 on the 2026-09-23 release). `run` now also
-refuses a download when the feed reports 0 cases or returns none while the DB holds `Open`
-cases not yet vanished. No real purge has emptied the feed; the 2026-08-10 one left 3,044
-cases, so a partial purge is still stamped as before. The same review moved `download_cases`
-from `resultOffset` to `OBJECTID > <last seen>` paging: by offset, one case deleted during the
+would stamp vanished every row not yet vanished, closed ones included (4,306 on the 2026-09-23
+release, 498 of them open). `run` now also refuses a download when the feed reports 0 cases
+while the DB holds rows not yet vanished; the guard counts what the stamp touches, not the
+open ones only. No real purge has emptied the feed; the 2026-08-10 one left 3,044 cases, so a
+partial purge is still stamped as before. The same review moved `download_cases` from
+`resultOffset` to `OBJECTID > <last seen>` paging: by offset, one case deleted during the
 download pushed a live case out of the next page and stamped it vanished, and a server
 `maxRecordCount` below the 1,000 asked for dropped the difference at every page, both inside
-the 1%.
+the 1%. Key paging is only sound on pages returned in `OBJECTID` order, so a page that is not
+ascending fails the build rather than skip or repeat rows.
+
+### A feature with no pin (2026-09-24)
+
+ArcGIS omits `geometry` for a null shape, or writes an empty point as `"NaN"`, and one such
+feature crashed every build: the coordinates are `NOT NULL` in `cases` and key the geocode
+cache. Making them nullable was rejected, because that is not an additive migration.
+`restore_pins` instead gives a case the pin the DB last stored for it, and sets aside a case
+the DB has never seen pinned, with a `::warning::` on the Actions run naming its id: such a
+case is missing from the site, health notices included, until the feed pins it. It is not in
+the DB, so it cannot be stamped vanished. None of the 13,588 cases on the 2026-09-23 release
+lacked a pin.
 
 The first v4 build will stamp all 9,053 (verified on a copy of the release: the stamp is
 idempotent across builds and clears when a case returns), and `create_db` prints the count

@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 import os
 import re
 import sqlite3
@@ -182,28 +183,42 @@ def feed_count(session):
     return data["count"]
 
 
-def live_open_cases(db_path=DB_PATH):
+def _read_cases_table(db_path):
+    """A read-only connection to db_path, or None if it holds no cases table yet
+    (geocode_all can create the file before create_db has run)."""
     if not db_path.exists():
+        return None
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    if not conn.execute("PRAGMA table_info(cases)").fetchall():
+        conn.close()
+        return None
+    return conn
+
+
+def unvanished_cases(db_path=DB_PATH):
+    """Rows load_cases would stamp vanished if the download held none of them."""
+    conn = _read_cases_table(db_path)
+    if conn is None:
         return 0
-    with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+    with conn:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(cases)")}
-        if not columns:
-            return 0
-        live = " AND vanished_at IS NULL" if "vanished_at" in columns else ""
-        return conn.execute(f"SELECT COUNT(*) FROM cases WHERE status = 'Open'{live}").fetchone()[0]
+        live = " WHERE vanished_at IS NULL" if "vanished_at" in columns else ""
+        count = conn.execute(f"SELECT COUNT(*) FROM cases{live}").fetchone()[0]
+    conn.close()
+    return count
 
 
-def check_download_complete(features, expected, live_open=0):
+def check_download_complete(features, expected, unvanished=0):
     if len(features) < expected * (1 - FEED_COUNT_TOLERANCE):
         raise RuntimeError(
             f"downloaded {len(features)} cases but the feed reports {expected}; "
             "refusing to build from a truncated download"
         )
-    # the tolerance passes 0 of 0, which would stamp every open case vanished
-    if live_open and (expected == 0 or not features):
+    # the tolerance passes 0 of 0, which would stamp every stored case vanished
+    if unvanished and expected == 0:
         raise RuntimeError(
-            f"the feed is empty but the DB holds {live_open} open cases; "
-            "refusing to stamp them all vanished"
+            f"the feed reports 0 cases ({len(features)} downloaded) but the DB holds "
+            f"{unvanished} not yet vanished; refusing to stamp them all"
         )
 
 
@@ -233,13 +248,17 @@ def download_cases(session):
         if not features:
             break
 
+        ids = [f["attributes"]["OBJECTID"] for f in features]
+        # key paging is only sound on ids the server returned in order
+        if ids != sorted(set(ids)) or ids[0] <= last_id:
+            raise RuntimeError(f"ArcGIS page after OBJECTID {last_id} is not in ascending order")
         all_features.extend(features)
         print(f"Fetched {len(all_features)}")
 
         if not data.get("exceededTransferLimit", False):
             break
 
-        last_id = features[-1]["attributes"]["OBJECTID"]
+        last_id = ids[-1]
         time.sleep(ARCGIS_PAGE_SLEEP)
 
     print(f"Done: {len(all_features)} records")
@@ -283,12 +302,14 @@ def map_cases(cases_to_map):
         mapped_case["start_date"] = _epoch_ms_to_iso(mapped_case["start_date"])
         mapped_case["end_date"] = _epoch_ms_to_iso(mapped_case["end_date"])
 
-        # ArcGIS omits `geometry` for a null shape; restore_pins settles those
+        # ArcGIS omits `geometry` for a null shape, or writes an empty point as
+        # "NaN"; restore_pins settles both
         geometry = case.get("geometry") or {}
-        if geometry.get("x") is None or geometry.get("y") is None:
+        x, y = _coordinate(geometry.get("x")), _coordinate(geometry.get("y"))
+        if x is None or y is None:
             mapped_case.update(dict.fromkeys(COORD_COLUMNS))
         else:
-            lon, lat = transformer.transform(geometry["x"], geometry["y"])
+            lon, lat = transformer.transform(x, y)
             mapped_case["full_lat"] = lat
             mapped_case["full_lon"] = lon
             mapped_case["rounded_lat"] = round(lat, COORD_PRECISION)
@@ -307,25 +328,31 @@ def map_cases(cases_to_map):
     return all_cases, skipped
 
 
-def restore_pins(cases, db_path=DB_PATH):
-    """Give a case the feed served with no geometry the pin it last had.
+def _coordinate(value):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
 
-    The coordinates are NOT NULL and key the geocode cache, so a case never
-    pinned cannot be stored; it is set aside, and returned by id, until the feed
-    pins it. Returns (cases, unplaced_ids).
-    """
+
+def restore_pins(cases, db_path=DB_PATH):
+    """(cases, unplaced ids): a pinless case gets its stored pin or is set aside.
+    See notes/data-quality.md, "A feature with no pin" (2026-09-24)."""
     missing = [c["id"] for c in cases if c["full_lat"] is None]
     if not missing:
         return cases, []
     stored = {}
-    if db_path.exists():
-        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+    conn = _read_cases_table(db_path)
+    if conn is not None:
+        with conn:
             marks = ", ".join("?" * len(missing))
             rows = conn.execute(
                 f"SELECT id, {', '.join(COORD_COLUMNS)} FROM cases WHERE id IN ({marks})",
                 missing,
             )
             stored = {row[0]: dict(zip(COORD_COLUMNS, row[1:])) for row in rows}
+        conn.close()
     kept, unplaced = [], []
     for case in cases:
         if case["full_lat"] is not None:
@@ -994,7 +1021,7 @@ def run(skip_geocode=False):
     session = make_session()
     expected = feed_count(session)
     features = download_cases(session)
-    check_download_complete(features, expected, live_open_cases())
+    check_download_complete(features, expected, unvanished_cases())
     CASES_RAW_PATH.parent.mkdir(parents=True, exist_ok=True)
     CASES_RAW_PATH.write_text(json.dumps(features, indent=2))
 
@@ -1003,7 +1030,9 @@ def run(skip_geocode=False):
         print(f"Skipped {len(skipped)} cases with no usable data: {skipped}")
     mapped_cases, unplaced = restore_pins(mapped_cases)
     if unplaced:
-        print(f"Skipped {len(unplaced)} cases the feed has never pinned: {unplaced}")
+        # surfaced on the Actions run: these are live notices missing from the site
+        print(f"::warning::{len(unplaced)} cases the feed has never pinned are left out "
+              f"until it does: {unplaced}")
     CASES_MAPPED_PATH.parent.mkdir(parents=True, exist_ok=True)
     CASES_MAPPED_PATH.write_text(json.dumps(mapped_cases, indent=2))
 
