@@ -9,8 +9,8 @@ two inherent limits (pre-earliest-snapshot closures, single-gap open/closes).
 
 Download the snapshots first; they are ~10-20MB each:
 
-    for T in $(gh release list --limit 100 | cut -f1); do
-        gh release download "$T" --pattern uisce.db -O "snaps/$T.db"
+    for T in $(gh release list --limit 1000 --json tagName --jq '.[].tagName'); do
+        scripts/fetch-db.sh "$T" "snaps/$T.db"
     done
 """
 

@@ -13,30 +13,35 @@ on:
 permissions:
   contents: write
 
-# Guards against a manual dispatch landing on top of a scheduled run — two
-# overlapping runs would silently discard one's closed_at observations. Queue
-# rather than cancel: a cancelled run has already read the feed and would lose
-# the same way. See notes/data-quality.md ("closed_at is a floor").
-concurrency:
-  group: build-db
-  cancel-in-progress: false
-
 jobs:
-  build:
+  # A dispatch from a branch would publish that branch's DB as the latest
+  # release and push to main. Its own job, outside the build-db group, so a
+  # refused dispatch fails visibly without displacing a queued scheduled run.
+  refuse:
+    if: github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      # A dispatch from a branch would publish that branch's DB as the latest
-      # release and push to main. Failed rather than skipped, so it is seen.
-      - name: Refuse to run off main
-        if: github.ref != 'refs/heads/main'
-        run: |
+      - run: |
           echo "::error::Build DB publishes the latest release and pushes to main; dispatch it from main, not $GITHUB_REF"
           exit 1
 
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Guards against a manual dispatch landing on top of a scheduled run - two
+    # overlapping runs would silently discard one's closed_at observations. Queue
+    # rather than cancel: a cancelled run has already read the feed and would lose
+    # the same way. See notes/data-quality.md ("closed_at is a floor").
+    concurrency:
+      group: build-db
+      cancel-in-progress: false
+    steps:
       - uses: actions/checkout@v7
 
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
+          # the uv the lock was checked with; bump together with uv.lock
+          version: "0.8.17"
           enable-cache: true
           prune-cache: true
 
@@ -44,10 +49,7 @@ jobs:
         run: uv sync --locked
 
       - name: Download existing DB
-        run: |
-          mkdir -p out
-          gh release download --pattern "uisce.db" --dir out/ \
-            || gh release download --pattern "uisce.db.next" -O out/uisce.db --clobber
+        run: scripts/fetch-db.sh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -64,38 +66,9 @@ jobs:
       - name: Build inferred cases table
         run: uv run uisce-build-inferred
 
-      # A second build the same day replaces the asset. --clobber deletes the old
-      # one before uploading, so the upload goes to uisce.db.next and only a
-      # landed upload is swapped in. If a run dies between the delete and the
-      # rename, the downloads fall back to uisce.db.next and the next run here
-      # finishes the swap before it stages anything.
+      # The swap and its recovery are in the script; see its header.
       - name: Publish DB
-        run: |
-          TAG="$(date +%Y-%m-%d)"
-          if ! gh release view "$TAG" > /dev/null 2>&1; then
-            gh release create "$TAG" out/uisce.db --title "$TAG" --notes "Data refresh"
-            exit 0
-          fi
-          asset_id() {
-            gh api "repos/{owner}/{repo}/releases/tags/$TAG" \
-              --jq ".assets[] | select(.name == \"$1\") | .id"
-          }
-          rename() {
-            gh api -X PATCH "repos/{owner}/{repo}/releases/assets/$1" -f name=uisce.db > /dev/null
-          }
-          OLD="$(asset_id uisce.db)"
-          NEXT="$(asset_id uisce.db.next)"
-          if [ -z "$OLD" ] && [ -n "$NEXT" ]; then
-            rename "$NEXT"
-          fi
-          ln -f out/uisce.db out/uisce.db.next
-          gh release upload "$TAG" out/uisce.db.next --clobber
-          OLD="$(asset_id uisce.db)"
-          NEXT="$(asset_id uisce.db.next)"
-          if [ -n "$OLD" ]; then
-            gh api -X DELETE "repos/{owner}/{repo}/releases/assets/$OLD"
-          fi
-          rename "$NEXT"
+        run: scripts/publish-db.sh out/uisce.db
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
