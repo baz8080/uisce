@@ -874,7 +874,10 @@ class Case(NamedTuple):
     row: object
     sev: str
     ref: str
-    start: datetime  # publication, which is also where the intervals are anchored
+    # publication: the start the span was measured from where build.py pinned
+    # one, else start_date. The intervals open here, except an imputed
+    # negative-span case, which is anchored back from the end it knows.
+    start: datetime
     intervals: list
     sas: dict
     has_end: bool
@@ -948,7 +951,8 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
     imputed = False
     in_force = ()  # empty: the charged intervals are the in-force ones
     # where the disruption interval opens. Publication for everything with an
-    # end signal, but an imputed negative-span case is anchored to the end it
+    # end signal (re-pinned below where the span says so), but an imputed
+    # negative-span case is anchored to the end it
     # does know and runs backwards from there, so the two come apart. `start`
     # stays publication either way: first_pub reads it to decide which month an
     # event belongs to, and that is a fact about the notice, not the works.
@@ -1024,8 +1028,9 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         # The span was measured from the start build.py pinned at first inference;
         # start_date may have been re-stamped since, and adding the span to the
         # new one charges hours past the notice's own end (21 cases, 2026-09-24).
+        # The pinned start is the publication for everything that reads one.
         if r["end_input_start_date"]:
-            iv_start = parse_dt(r["end_input_start_date"])
+            start = iv_start = parse_dt(r["end_input_start_date"])
         end = iv_start + min(timedelta(seconds=notice_to_end), cap)
         # Recurrence lives strictly under has_end, which keeps it away from the
         # branches above: a boil notice's end is a paired lift and never its own
@@ -1107,7 +1112,7 @@ class Region:
                     "sev": sev,
                     "title": r["title"],
                     "loc": r["location"] or "",
-                    "since": r["start_date"][:10],
+                    "since": case.start.strftime("%Y-%m-%d"),
                 },
             )
         elif r["closed_at"]:
@@ -1122,7 +1127,7 @@ class Region:
                     "sev": sev,
                     "title": r["title"],
                     "loc": r["location"] or "",
-                    "since": r["start_date"][:10],
+                    "since": case.start.strftime("%Y-%m-%d"),
                     "closed": r["closed_at"][:10],
                 },
             )
@@ -1395,10 +1400,11 @@ def event_record(county, ref, meta, intervals, sas):
         end = (iv[-1][1] - timedelta(seconds=1)).strftime("%Y-%m-%d")
         if end != record["start"]:
             record["end"] = end
-    # the footprint of the pins in the event's own class, capped as
-    # Region.event_pop caps it, which is the number the national top ten prints:
-    # summing every class counted a sibling pin of another class into it
-    people = min(sum(sas[meta["sev"]].values()), COUNTY_POP[county])
+    # the whole event's footprint across every class of pin, capped as
+    # Region.event_pop caps it. This describes the event, as `hours` does; the
+    # national top ten prints the outage pins' footprint only, so the two
+    # differ for the few events whose pins disagree on class.
+    people = min(sum(sas.values()), COUNTY_POP[county])
     if people:
         record["people"] = people
     for field in ("confirmed", "scheduled"):
@@ -2049,9 +2055,9 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
 
     counties = defaultdict(Region)
     county_towns = defaultdict(lambda: defaultdict(Region))
-    # (county, ref) -> the event's footprint by severity class and the areas its
-    # pins were homed to, so the event can be named once, after the loop, from all of it
-    event_sas = defaultdict(lambda: defaultdict(dict))
+    # (county, ref) -> the event's whole footprint and the areas its pins were
+    # homed to, so the event can be named once, after the loop, from all of it
+    event_sas = defaultdict(dict)
     event_codes = defaultdict(set)
     # (county, ref) -> every disruption interval the event's pins contributed,
     # unmerged. area_history merges them; nothing else reads this.
@@ -2088,7 +2094,8 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
         meta = event_meta.setdefault(
             (case.county, case.ref),
             # first pin wins, matching how the event's open entry is recorded
-            {"title": r["title"], "start": r["start_date"][:10], "first_pub": case.start,
+            {"title": r["title"], "start": case.start.strftime("%Y-%m-%d"),
+             "first_pub": case.start,
              "pins": 0, "confirmed": 0, "scheduled": 0, "sev": case.sev,
              "loc": r["location"] or "", "open": False, "closed": None, "health": False,
              "seen": r["first_seen"] or r["start_date"]},
@@ -2123,7 +2130,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
             # clipping its footprint, so an area only accrues its own people
             code = towns.dominant(case.sas, case.county)
             county_towns[case.county][code].add(case, towns.within(case.sas, code))
-            event_sas[(case.county, case.ref)][case.sev].update(case.sas)
+            event_sas[(case.county, case.ref)].update(case.sas)
             event_codes[(case.county, case.ref)].add(code)
 
     # One name per event, decided on its whole footprint rather than on whichever
@@ -2132,10 +2139,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
     # same event could read "Allenwood" in the open list and "Prosperous" in the
     # national top ten. Restricted to codes the pins were homed to — see dominant.
     area_of = {
-        key: towns.dominant(
-            {sa: pop for by_sev in sas.values() for sa, pop in by_sev.items()},
-            key[0], event_codes[key],
-        )
+        key: towns.dominant(sas, key[0], event_codes[key])
         for key, sas in event_sas.items()
     }
 
