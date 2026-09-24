@@ -1348,25 +1348,32 @@ def county_town_data(regions, towns, county, months, now):
     return out
 
 
-def event_record(county, ref, meta, intervals, sas):
+def event_record(county, ref, meta, intervals, sas, now):
     """One published event as the per-area history renders it.
 
     Every field that is zero, absent or implied is left out, the same discipline
     town_months applies and for the same reason — this is the bulk of what the
     history ships, and most events are one disruption and six defaults.
 
-    Two of the omissions are not thrift but honesty:
+    Three of the omissions are not thrift but honesty:
 
     `hours` is dropped entirely for an event that is closed and never reported an
-    end. Those carry resolve_case's token one-second footprint, so publishing the
-    number would print "0.0h" for 801 events — a fabricated measurement, and the
-    exact failure ended_by_publication and boil_notice_fate exist to prevent. The
-    page says no end was ever reported instead.
+    end. Those carry an imputed span or resolve_case's token one-second
+    footprint, so publishing the number would print an estimate, or "0.0h" for
+    801 events, as a measurement. The page says no end was ever reported instead.
+
+    `hours` on an open event is what has accrued by `now`, not the scheduled or
+    imputed span it is charged, and it is dropped for one that has not started:
+    the pages read its absence on an open event as "not started yet".
 
     `span_h` appears only when a recurring window makes it differ from `hours`.
     Covered time is what the works took; elapsed time is what the notice spanned,
     and 18 nights of nine hours is not 16 days of outage. Publishing only the
     span would restate the bug notes/statuspage-methodology.md records.
+
+    `from` and `end` are the first and last charged days, present when they
+    differ from `start`, so a day in the county's bar finds every event that
+    coloured it, hours or none.
     """
     iv = merge(intervals)
     record = {
@@ -1378,14 +1385,19 @@ def event_record(county, ref, meta, intervals, sas):
         "start": meta["first_pub"].strftime("%Y-%m-%d"),
         "pins": meta["pins"],
     }
-    if iv and (meta["open"] or meta["confirmed"] or meta["scheduled"]):
-        hours = sum((e - s).total_seconds() for s, e in iv) / 3600
+    counted = [(s, min(e, now)) for s, e in iv if s < now] if meta["open"] else iv
+    if counted and (meta["open"] or meta["confirmed"] or meta["scheduled"]):
+        hours = sum((e - s).total_seconds() for s, e in counted) / 3600
         record["hours"] = round(hours, 1)
-        span = (iv[-1][1] - iv[0][0]).total_seconds() / 3600
+        span = (counted[-1][1] - counted[0][0]).total_seconds() / 3600
         if span - hours > 0.1:
             record["span_h"] = round(span, 1)
-        # the last charged day, which is what lets a day in the county's bar
-        # find its events; an event with no duration has only its start day
+    if iv:
+        # a negative-span case is charged backwards from its reported end, so
+        # its first charged day can precede its publication
+        first = iv[0][0].strftime("%Y-%m-%d")
+        if first != record["start"]:
+            record["from"] = first
         end = (iv[-1][1] - timedelta(seconds=1)).strftime("%Y-%m-%d")
         if end != record["start"]:
             record["end"] = end
@@ -1412,7 +1424,7 @@ def event_record(county, ref, meta, intervals, sas):
     return record
 
 
-def area_history(event_meta, event_iv, event_sas, event_codes, towns):
+def area_history(event_meta, event_iv, event_sas, event_codes, towns, now):
     """{county: {code: {"name": ..., "events": [...]}}}, newest event first.
 
     A regrouping of what build_site already holds rather than new geography.
@@ -1451,7 +1463,9 @@ def area_history(event_meta, event_iv, event_sas, event_codes, towns):
         # built once and shared by reference across the areas it is listed in:
         # event_record merges intervals and sums a footprint, and the record is
         # the same event whichever page it appears on
-        record = event_record(county, ref, event_meta[key], event_iv[key], event_sas[key])
+        record = event_record(
+            county, ref, event_meta[key], event_iv[key], event_sas[key], now
+        )
         if len(codes) > 1:
             record["areas"] = len(codes)
         for code in codes:
@@ -1658,7 +1672,7 @@ def _notice_text_html(description):
     )
 
 
-def _county_open_html(cdata, text=None):
+def _county_open_html(cdata, today, text=None):
     """Notices open right now — the one thing on the page a reader may have come
     for today rather than for the record. `text` is ref -> the notice's own
     words, carried here and nowhere in the app payload: the open notices are
@@ -1672,7 +1686,9 @@ def _county_open_html(cdata, text=None):
         f'{html.escape(SEV_LABEL[o["sev"]])}</span> '
         f'<strong>{html.escape(o["title"])}</strong>'
         + (f' - {html.escape(o["loc"])}' if o["loc"] else "")
-        + f'<span class="when">since {_fmt_day(o["since"])}'
+        # "from" for one still ahead of the build, as the app's openGroups says it
+        + f'<span class="when">{"from" if o["since"] > today else "since"} '
+        + _fmt_day(o["since"])
         + (
             f' · <a href="{url}">{url.rsplit("/", 1)[1]}</a>'
             if (url := notice_url(o["ref"]))
@@ -1826,7 +1842,8 @@ def _events_html(events, heading="Notice history", multi_area=False):
     rows = []
     for e in events:
         bits = []
-        if e.get("hours") is not None:
+        started = e.get("hours") is not None
+        if started:
             # "so far" on an open event: the figure is time accrued to this
             # build, not what the works took, and a bare "0h · still open" on
             # something published this morning reads as a completed nothing
@@ -1834,7 +1851,7 @@ def _events_html(events, heading="Notice history", multi_area=False):
         if e.get("people"):
             bits.append(f'{e["people"]:,} people')
         if e.get("open"):
-            bits.append("still open")
+            bits.append("still open" if started else "not started yet")
         elif e.get("closed"):
             bits.append(f'closed {_fmt_day(e["closed"])}')
         elif not e.get("confirmed") and not e.get("scheduled"):
@@ -1908,7 +1925,7 @@ def area_page_html(county, name, pop, events, area_months=None, months=()):
     )
 
 
-def county_page_html(county, cdata, areas, events, months, all_counties, text=None):
+def county_page_html(county, cdata, areas, events, months, all_counties, today, text=None):
     """The whole body of c/<slug>.html.
 
     Server-rendered in full and carrying no data.js: the point of these pages is
@@ -1930,7 +1947,7 @@ def county_page_html(county, cdata, areas, events, months, all_counties, text=No
         f'Co. {html.escape(county)}</a> - daily bars, month switching and the '
         f'area drill-down.</p></header>'
         f'<nav>{nav}</nav>'
-        f'{_county_open_html(cdata, text)}'
+        f'{_county_open_html(cdata, today, text)}'
         f'{_county_months_html(cdata, months)}'
         f'{_events_html(events)}'
         f'<section id="areas"><h2>Areas with a notice '
@@ -2276,7 +2293,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
     # Not part of the payload: write_site splits it into per-county shards the
     # page loads on demand. All of it together is twice the size of data.js.
     site["history"] = (
-        area_history(event_meta, event_iv, event_sas, event_codes, towns) if towns else {}
+        area_history(event_meta, event_iv, event_sas, event_codes, towns, now) if towns else {}
     )
     # popped by write_site into the county pages; never part of the payload
     site["notice_text"] = dict(notice_text)
@@ -2315,6 +2332,15 @@ def feed_entries(event_meta, area_of, towns):
     }
 
 
+# XML 1.0 forbids these in a document, escaped or not, so one anywhere makes a
+# reader reject the whole feed. The feed has sent \x02 in a description.
+_NOT_XML = re.compile("[^\t\n\r\x20-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
+
+
+def _xml_text(value):
+    return xml_escape(_NOT_XML.sub("", value))
+
+
 def _atom_entry(e):
     where = e.get("area") or e["loc"]
     state = "still open" if e["open"] else f"closed {e['closed']}" if e["closed"] else "closed"
@@ -2325,11 +2351,14 @@ def _atom_entry(e):
     link = e.get("path") or f"{COUNTY_DIR}/{county_slug(e['county'])}.html"
     return (
         # keyed by county as well as reference: 15 references span two counties
-        f"<entry><id>{BASE_URL}/n/{county_slug(e['county'])}/{xml_escape(e['ref'])}</id>"
-        f"<title>{xml_escape(e['title'] + (f': {where}' if where else ''))}</title>"
-        f"<updated>{xml_escape(e['seen'])}</updated>"
+        # stripped of the padding a few references carry and percent-encoded so
+        # it is an IRI; a clean reference keeps the id it always had
+        f"<entry><id>{BASE_URL}/n/{county_slug(e['county'])}/"
+        f"{_xml_text(quote(e['ref'].strip(), safe=':@'))}</id>"
+        f"<title>{_xml_text(e['title'] + (f': {where}' if where else ''))}</title>"
+        f"<updated>{_xml_text(e['seen'])}</updated>"
         f'<link href="{xml_escape(f"{BASE_URL}/{link}", {chr(34): "&quot;"})}"/>'
-        f"<summary>{xml_escape(summary)}</summary></entry>"
+        f"<summary>{_xml_text(summary)}</summary></entry>"
     )
 
 
@@ -2340,9 +2369,9 @@ def atom_feed(title, path, entries, updated):
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<feed xmlns="http://www.w3.org/2005/Atom">'
-        f"<title>{xml_escape(title)}</title>"
+        f"<title>{_xml_text(title)}</title>"
         f'<link href="{BASE_URL}/{path}" rel="self"/><link href="{BASE_URL}/"/>'
-        f"<id>{BASE_URL}/{path}</id><updated>{xml_escape(updated)}</updated>"
+        f"<id>{BASE_URL}/{path}</id><updated>{_xml_text(updated)}</updated>"
         f"{''.join(_atom_entry(e) for e in entries)}</feed>"
     )
 
@@ -2500,7 +2529,10 @@ def write_site(site, site_dir, towns=None):
             county = towns.county[code]
             if county not in site["counties"]:
                 continue
-            area = county_data[county]["towns"].get(code) or {}
+            # the history as well as the breakdown: an area whose every notice
+            # is still ahead has no month row, but its page is built all the same
+            area = (county_data[county]["towns"].get(code)
+                    or history.get(county, {}).get(code) or {})
             names[county].add((name, area["slug"]) if "slug" in area else name)
 
         def entry(e):
@@ -2544,7 +2576,8 @@ def write_site(site, site_dir, towns=None):
             events = county_events(history.get(county, {}))
             body = county_page_html(
                 county, site["counties"][county] | county_data[county], areas, events,
-                site["months"], all_counties, notice_text.get(county),
+                site["months"], all_counties, site["generated_iso"][:10],
+                notice_text.get(county),
             )
             page = page_html(
                 COUNTY_HTML,

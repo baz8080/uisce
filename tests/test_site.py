@@ -14,6 +14,7 @@ from uisce.site import (
     CAP_DAYS,
     COUNTY_POP,
     MIN_CATEGORY_N,
+    SITE_HTML,
     UNPLACED,
     UNPLACED_LABEL,
     SmallAreaIndex,
@@ -21,6 +22,7 @@ from uisce.site import (
     TownLookup,
     _area_index_html,
     _area_items,
+    _events_html,
     area_index,
     boil_notice_fate,
     build_site,
@@ -49,6 +51,7 @@ from uisce.site import (
 )
 
 UTC = timezone.utc
+APP = SITE_HTML.read_text()
 
 
 def _dt(iso):
@@ -1824,6 +1827,93 @@ class TestAreaHistory:
                                     end_source="not_found", end_local_date=None)])[0]
         assert open_case["end"] == "2026-05-09"  # accrues to NOW, midnight on the 10th
 
+    def test_an_imputed_event_carries_the_days_it_was_charged(self):
+        """46 coloured bar days on the 2026-09-23 release listed "0 notices"
+        when tapped: the bar is coloured by the imputed span, the record said
+        nothing past the publication day."""
+        rows = [
+            _case(id=1, reference_num="CAR1", notice_to_end_seconds=3 * 86400.0),
+            _case(id=2, reference_num="CAR2", status="Closed",
+                  start_date="2026-05-05T00:00:00+00:00", notice_to_end_seconds=None,
+                  end_source="not_found", end_local_date=None),
+        ]
+        event = next(e for e in _history(rows) if e["ref"] == "CAR2")
+        assert event["end"] == "2026-05-07"
+        assert "hours" not in event  # an estimate, not a duration to print
+
+    def test_a_span_charged_backwards_carries_the_day_it_starts(self):
+        rows = [
+            _case(id=1, reference_num="CAR1"),  # 24h observed: the evidence
+            _case(id=2, reference_num="CAR2", status="Closed",
+                  start_date="2026-05-10T00:00:00+00:00", notice_to_end_seconds=None,
+                  end_source="completion_update", end_local_date="2026-05-05",
+                  end_local_time="12:00"),
+        ]
+        event = next(e for e in _history(rows) if e["ref"] == "CAR2")
+        assert (event["start"], event["from"], event["end"]) == (
+            "2026-05-10", "2026-05-04", "2026-05-05"
+        )
+
+    def test_every_coloured_day_lists_an_event_of_its_colour(self):
+        """The predicate dayEventsHtml applies, over the shapes that colour a
+        day: observed, imputed forwards, imputed backwards, open."""
+        rows = [
+            _case(id=1, reference_num="CAR1", notice_to_end_seconds=3 * 86400.0),
+            _case(id=2, reference_num="CAR2", status="Closed",
+                  start_date="2026-05-05T00:00:00+00:00", notice_to_end_seconds=None,
+                  end_source="not_found", end_local_date=None),
+            _case(id=3, reference_num="CAR3", status="Closed",
+                  start_date="2026-05-20T00:00:00+00:00", notice_to_end_seconds=None,
+                  end_source="completion_update", end_local_date="2026-05-12",
+                  end_local_time="12:00"),
+            _open(id=4, reference_num="CAR4", work_category="investigation",
+                  start_date="2026-05-25T00:00:00+00:00"),
+        ]
+        site = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)
+        events = site["history"]["Carlow"]["T1"]["events"]
+        days = site["counties"]["Carlow"]["months"]["2026-05"]["days"]
+        coloured = [(f"2026-05-{i + 1:02d}", sev) for i, (sev, _) in enumerate(days) if sev]
+        assert len(coloured) > 10
+        for day, sev in coloured:
+            listed = [e for e in events
+                      if (e.get("from") or e["start"]) <= day <= (e.get("end") or e["start"])]
+            assert any(e["sev"] == sev for e in listed), day
+
+    def test_the_day_list_reads_the_first_charged_day(self):
+        body = APP[APP.index("function dayEventsHtml("):]
+        body = body[: body.index("\n}\n")]
+        assert "(e.from || e.start) > dayPick" in body
+
+    def test_an_open_event_counts_its_hours_to_the_build_not_its_scheduled_end(self):
+        """Louth LOU00120479 read 240.8h "so far" 198h after it went up."""
+        rows = [_open(start_date="2026-05-08T00:00:00+00:00",
+                      notice_to_end_seconds=5 * 86400.0, end_source="scheduled_end_with_time",
+                      end_local_date="2026-05-13", end_local_time="01:00")]
+        event = _history(rows)[0]
+        assert event["open"] == 1
+        assert event["hours"] == 48.0  # 8 May -> NOW, not the 120h scheduled
+        assert event["end"] == "2026-05-12"  # the bar still shows the days ahead
+
+    def test_an_open_event_that_has_not_started_has_no_hours_so_far(self):
+        """38 of 271 open events on the 2026-09-23 release: "Mon 5 Oct - 7.2h so
+        far - still open" on the build of 24 September."""
+        rows = [_open(start_date="2026-05-20T08:00:00+00:00",
+                      notice_to_end_seconds=8 * 3600.0, end_source="scheduled_end_with_time",
+                      end_local_date="2026-05-20", end_local_time="17:00")]
+        event = _history(rows)[0]
+        assert event["open"] == 1 and event["scheduled"] == 1
+        assert "hours" not in event and "span_h" not in event
+        row = _events_html([event])
+        assert "so far" not in row and "still open" not in row
+        assert "not started yet" in row
+
+    def test_the_app_says_an_open_event_has_not_started(self):
+        duration = APP[APP.index("function historyDuration("):]
+        duration = duration[: duration.index("\n}\n")]
+        assert 'if (e.hours == null) return e.open ? "not started yet" : "";' in duration
+        row = APP[APP.index("function historyRow("):]
+        assert "e.open && e.hours != null ? `open since" in row[: row.index("\n}\n")]
+
     def test_a_multi_pin_event_is_one_record_counting_its_pins(self):
         """The same rule the top ten uses: "was this confirmed complete?" is a
         count across the event's notices, never a boolean."""
@@ -2108,6 +2198,19 @@ class TestHistoryShards:
         assert index == {"Carlow": [["Carlow", "carlow"]]}
         assert (tmp_path / "a" / "carlow" / "carlow.html").exists()
 
+    def test_an_area_whose_only_notice_is_ahead_is_indexed_with_its_slug(self, tmp_path):
+        """No month has reached its notice, so the county breakdown has no row
+        for it; its page is built from the history all the same (Laragh, Co.
+        Wicklow on the 2026-09-23 release)."""
+        site = build_site([_open(start_date="2026-06-20T00:00:00+00:00")], SA_INDEX, NOW, TOWNS)
+        site.pop("recurrence_report")
+        assert "T1" not in site["counties"]["Carlow"]["towns"]
+        write_site(site, tmp_path, TOWNS)
+        body = (tmp_path / "search.js").read_text()
+        index = json.loads(body.split(" = ", 1)[1].rstrip(";"))
+        assert index == {"Carlow": [["Testtown", "testtown"]]}
+        assert (tmp_path / "a" / "carlow" / "testtown.html").exists()
+
 
 class TestNoticeText:
     """The notice's own wording, on the county page's open rows and nowhere in
@@ -2171,6 +2274,22 @@ class TestNoticeText:
         assert "wtr.ie" not in by_title["Hand entered"]
         assert "wtr.ie" not in by_title["No reference"]
         assert page.count("wtr.ie") == 1
+
+    def test_an_open_notice_not_yet_started_reads_from_not_since(self, tmp_path):
+        """The app's openGroups already says "from" past today; the county page
+        said "since" a date to come on 38 notices of the 2026-09-23 release."""
+        rows = [
+            _open(id=1, reference_num="CAR00000001", title="Running"),
+            _open(id=2, reference_num="CAR00000002", title="Ahead",
+                  start_date="2026-05-20T08:00:00+00:00"),
+        ]
+        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, TOWNS)
+        page = (tmp_path / "c" / "carlow.html").read_text()
+        block = re.search(r'<section id="open">.*?</section>', page, re.S).group(0)
+        when = dict(re.findall(r'<strong>(.*?)</strong>.*?<span class="when">(\w+)', block))
+        assert when == {"Running": "since", "Ahead": "from"}
 class TestFeeds:
     """One Atom file nationally and one per county, written from a block that
     write_site pops the way it pops the history: a subscriber gets the newest
@@ -2228,6 +2347,29 @@ class TestFeeds:
         self._write(tmp_path, [_case(title="Burst <b>Main</b> & more - Carlow")])
         entries, ns = self._entries(tmp_path / "feed.xml")
         assert entries[0].find("a:title", ns).text.startswith("Burst <b>Main</b> & more")
+
+    def test_a_control_character_cannot_break_the_document(self, tmp_path):
+        """The feed has emitted \\x02 in a description; one character XML 1.0
+        forbids anywhere in an entry makes every reader reject the whole file."""
+        self._write(tmp_path, [_case(title="Burst\x02 main\x0b\ufffe - Carlow")])
+        entries, ns = self._entries(tmp_path / "feed.xml")
+        assert entries[0].find("a:title", ns).text == "Burst main - Carlow: Testtown"
+
+    def test_an_id_is_the_stripped_reference_and_a_valid_iri(self, tmp_path):
+        rows = [
+            _case(id=1, reference_num="CAR00000001"),
+            _case(id=2, reference_num="CAR00000002 "),
+            _case(id=3, reference_num="\xa0CAR00000003"),
+            _case(id=4, reference_num="Low Pressure - Dublin"),
+            _case(id=5, reference_num=None),
+        ]
+        self._write(tmp_path, rows)
+        entries, ns = self._entries(tmp_path / "feed.xml")
+        ids = {e.find("a:id", ns).text.removeprefix(f"{BASE_URL}/n/carlow/") for e in entries}
+        # unchanged for every reference that was already clean, so no reader
+        # sees an old entry as new
+        assert ids == {"CAR00000001", "CAR00000002", "CAR00000003",
+                       "Low%20Pressure%20-%20Dublin", "id:5"}
 
     def test_the_pages_point_at_their_feed(self, tmp_path):
         self._write(tmp_path)
@@ -2692,3 +2834,21 @@ class TestReleaseDb:
         assert rows[0]["vanished_at"] is None
         with sqlite3.connect(path) as conn:
             assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+
+
+class TestDisplayCopy:
+    @staticmethod
+    def _fn(name):
+        body = APP[APP.index(f"function {name}("):]
+        return body[: body.index("\n}\n")]
+
+    def test_the_open_column_counts_what_the_open_list_does(self):
+        """The number under it is Case.is_open's, not the feed's status."""
+        title = re.search(r'<th title="([^"]*)">Open</th>', APP).group(1)
+        assert title.endswith("less any whose own text already reports the works complete")
+
+    def test_a_notice_with_no_end_is_not_said_to_add_no_time(self):
+        """An outage-class one is charged a typical span (2026-08-15)."""
+        badge = self._fn("endBadge")
+        assert "It is counted as an incident but adds no disruption time." not in badge
+        assert "typical" in badge
