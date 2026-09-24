@@ -154,8 +154,10 @@ SCHEME_NOISE = {"public", "water", "supply", "scheme", "regional", "pws", "the"}
 
 
 def is_open(row, now):
-    """Open as far as the site is concerned: the feed says so, still serves the
-    case, and nothing the notice itself has said has ended it yet.
+    """Open as far as the row alone can say: the feed says so, still serves the
+    case, and nothing the notice itself has said has ended it yet. A paired lift
+    or the cap on a standing notice can close it further; `Case.is_open` carries
+    that, and every surface reads it.
 
     The feed's `status` is the weakest of the three signals. A case that dropped
     out of the feed while Open never gets the transition closed_at records, so
@@ -178,9 +180,29 @@ def is_open(row, now):
     if row["end_source"] == "lifted_immediate":
         return False
     if row["end_source"] in OBSERVED_END_SOURCES:
-        end = reported_end_utc(row["end_local_date"], row["end_local_time"])
+        end = observed_end_utc(row)
         return end is None or end > now
     return True
+
+
+def observed_end_utc(row):
+    """When the notice's own text reported the works complete, or None."""
+    if row["end_source"] not in OBSERVED_END_SOURCES:
+        return None
+    return reported_end_utc(row["end_local_date"], row["end_local_time"])
+
+
+def closed_on(row, now, start, closed_by=None):
+    """The day a closed case closed: its own completion, else the lift or cap
+    that closed it (`closed_by`), else closed_at. A completion before `start`
+    is not used: the history reads a close before the start as a withdrawal.
+    See notes/statuspage-methodology.md, 2026-09-24."""
+    end = observed_end_utc(row)
+    if end is not None and start <= end <= now:
+        return row["end_local_date"]
+    if closed_by is not None:
+        return closed_by.strftime("%Y-%m-%d")
+    return row["closed_at"][:10] if row["closed_at"] else None
 
 
 def classify(row, recurring=False):
@@ -318,16 +340,10 @@ def lift_pairing(row, lifts, start):
 
 
 def paired_end(lift, start):
-    """When a paired lift says the notice actually stood until.
-
-    Clamped below to `start` only: multi-pin publishing is not chronologically
-    tidy, so a lift can be stamped before the issue it lifts, and a notice may
-    not end before it began. Deliberately *not* capped — this is a statement
-    about the world, and the lift is direct evidence for it. `charged_end` caps
-    what that span may charge; `Case.in_force` carries this one, so the health
-    marker can stand on the evidence while the arithmetic stays bounded.
-    """
-    return max(lift, start)
+    """When a paired lift says the notice actually stood until: never before the
+    token second after `start` (a lift can be stamped before its issue), and not
+    capped; `charged_end` caps what it charges. See statuspage-methodology.md."""
+    return max(lift, start + timedelta(seconds=1))
 
 
 def charged_end(end, start):
@@ -708,7 +724,8 @@ def _parse_date(value):
 
 def case_ref(row):
     """The key that groups a multi-pin publication into one event."""
-    return row["reference_num"] or f"id:{row['id']}"
+    # the feed pads some references with a space or \xa0; unstripped, 15 events split in two
+    return (row["reference_num"] or "").strip() or f"id:{row['id']}"
 
 
 def notice_url(ref):
@@ -873,7 +890,10 @@ class Case(NamedTuple):
     row: object
     sev: str
     ref: str
-    start: datetime  # publication, which is also where the intervals are anchored
+    # publication: the start the span was measured from where build.py pinned
+    # one, else start_date. The intervals open here, except an imputed
+    # negative-span case, which is anchored back from the end it knows.
+    start: datetime
     intervals: list
     sas: dict
     has_end: bool
@@ -890,10 +910,13 @@ class Case(NamedTuple):
     # False: that is what keeps these out of the published median without
     # touching the filter that reads it.
     imputed: bool = False
-    # is_open(row, now), decided once here so the open list, the history's
-    # "still open", the county page's notice text and the Atom feed cannot
-    # disagree about a case
+    # is_open(row, now), less what only resolve_case knows (a paired lift, the
+    # cap on a standing notice); decided once here so the open list, the
+    # history's "still open", the county page's notice text and the Atom feed
+    # cannot disagree about a case. Read this, not is_open().
     is_open: bool = False
+    # closed_on(...): the day every "closed" surface prints; None while open
+    closed: str | None = None
 
     @property
     def county(self):
@@ -947,11 +970,20 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
     imputed = False
     in_force = ()  # empty: the charged intervals are the in-force ones
     # where the disruption interval opens. Publication for everything with an
-    # end signal, but an imputed negative-span case is anchored to the end it
+    # end signal (re-pinned below where the span says so), but an imputed
+    # negative-span case is anchored to the end it
     # does know and runs backwards from there, so the two come apart. `start`
     # stays publication either way: first_pub reads it to decide which month an
     # event belongs to, and that is a fact about the notice, not the works.
     iv_start = start
+    open_now = is_open(r, now)
+    closed_by = None  # when a lift or the cap closed it, for closed_on
+    # a standing notice no lift has closed closes at the cap, where its marker
+    # stops, whichever branch below it takes (owner decision, 2026-09-24)
+    if r["work_category"] in LIFT_OF and now - start > cap:
+        if open_now:
+            closed_by = start + cap
+        open_now = False
 
     if r["work_category"] == "boil_notice_issued":
         # This class never ends itself; boil_notice_fate owns the whole decision.
@@ -961,11 +993,14 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         # a lift is a real, observed event, not a schedule
         has_end = outcome == "paired"
         observed_end = has_end
+        open_now = open_now and not has_end
         if fate is None:
             # closed with no lift: token footprint, as for any no-signal case
             end = start + timedelta(seconds=1)
         else:
             in_force, end = fate
+            if has_end:
+                closed_by = in_force[-1][1]
     elif not has_end:
         # A do-not-consume notice cannot state its own end either — the lift is a
         # separate case, exactly as for a boil notice — so pairing one is strictly
@@ -992,7 +1027,9 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
             # a lift is a real, observed end, not a schedule
             in_force, end = pairing
             has_end = observed_end = True
-        elif is_open(r, now) and start < now and not already_over:
+            open_now = False
+            closed_by = in_force[-1][1]
+        elif open_now and start < now and not already_over:
             # ongoing with no inferred end: runs from start until now, capped
             end = min(now, start + cap)
         else:
@@ -1020,18 +1057,24 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
                 else:
                     iv_start, end = known_end - charge, known_end
     else:
-        end = start + min(timedelta(seconds=notice_to_end), cap)
+        # The span was measured from the start build.py pinned at first inference;
+        # start_date may have been re-stamped since, and adding the span to the
+        # new one charges hours past the notice's own end (21 cases, 2026-09-24).
+        # The pinned start is the publication for everything that reads one.
+        if r["end_input_start_date"]:
+            start = iv_start = parse_dt(r["end_input_start_date"])
+        end = iv_start + min(timedelta(seconds=notice_to_end), cap)
         # Recurrence lives strictly under has_end, which keeps it away from the
         # branches above: a boil notice's end is a paired lift and never its own
         # text, and the no-signal branches own the 532 cases whose span build.py
         # nulled because the notice was published after its own works window.
-        windows, rec = recurring_intervals(r, start, end, shared_window)
+        windows, rec = recurring_intervals(r, iv_start, end, shared_window)
         if windows:
             return Case(
                 row=r, sev=sev, ref=case_ref(r), start=start,
                 intervals=windows, sas=sa_index.affected(r["full_lat"], r["full_lon"]),
                 has_end=has_end, observed_end=observed_end, rec=rec,
-                is_open=is_open(r, now),
+                is_open=open_now, closed=None if open_now else closed_on(r, now, start),
             )
 
     return Case(
@@ -1046,7 +1089,8 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         rec=rec,
         imputed=imputed,
         in_force=tuple(in_force),
-        is_open=is_open(r, now),
+        is_open=open_now,
+        closed=None if open_now else closed_on(r, now, start, closed_by),
     )
 
 
@@ -1101,25 +1145,20 @@ class Region:
                     "sev": sev,
                     "title": r["title"],
                     "loc": r["location"] or "",
-                    "since": r["start_date"][:10],
+                    "since": case.start.strftime("%Y-%m-%d"),
                 },
             )
-        elif r["closed_at"]:
-            # closed_at is the first build that saw the case stop being Open —
-            # observation time, resolution the build cadence, and NULL for every
-            # case that closed before the column existed (schema v2). It is the
-            # only field with a month dimension for a case that is no longer
-            # open, which is what lets a past month say anything at all.
-            self.resolved.setdefault(
-                ref,
-                {
+        elif case.closed:
+            held = self.resolved.get(ref)
+            # the earliest close across the event's pins, as event_meta takes it
+            if held is None or case.closed < held["closed"]:
+                self.resolved[ref] = {
                     "sev": sev,
                     "title": r["title"],
                     "loc": r["location"] or "",
-                    "since": r["start_date"][:10],
-                    "closed": r["closed_at"][:10],
-                },
-            )
+                    "since": case.start.strftime("%Y-%m-%d"),
+                    "closed": case.closed,
+                }
 
     def merged(self):
         return {sev: merge(self.sev_iv[sev]) for sev in SEV_ORDER}
@@ -1203,20 +1242,24 @@ RESOLVED_SHOWN = 20
 
 
 def resolved_by_month(region, shown=None):
-    """{ym: {"n": count, "cases": [...]}} of events observed to close that month.
+    """{ym: {"n": count, "cases": [...]}} of events that closed that month.
 
-    Keyed on `closed_at`, so coverage is partial by construction: it is NULL for
-    every case that closed before schema v2, and a case opened and closed inside
-    one build gap is never seen open and so never stamped. The site says so
-    rather than presenting these as a complete record.
+    Keyed on `closed_on`, so coverage is partial by construction: a case with no
+    reported completion needs `closed_at`, which is NULL for every case that
+    closed before schema v2 and for one opened and closed inside one build gap.
+    The site says so rather than presenting these as a complete record.
 
     `shown` caps the listed cases (newest first) while `n` stays the true count —
     the full lists are a third of the page payload and a reader wants the recent
     handful, not 200 titles.
     """
     by_month = defaultdict(list)
-    for event in region.resolved.values():
-        by_month[event["closed"][:7]].append(event)
+    for ref, event in region.resolved.items():
+        # an event with a pin still open is open, whatever its siblings say; a
+        # close before collection began (a standing notice capped years ago) is
+        # in no month the site shows
+        if ref not in region.open_now and event["closed"] >= f"{COLLECTION_START:%Y-%m-%d}":
+            by_month[event["closed"][:7]].append(event)
     out = {}
     for ym, events in by_month.items():
         events.sort(key=lambda e: e["closed"], reverse=True)
@@ -1401,9 +1444,10 @@ def event_record(county, ref, meta, intervals, sas, now):
         end = (iv[-1][1] - timedelta(seconds=1)).strftime("%Y-%m-%d")
         if end != record["start"]:
             record["end"] = end
-    # the whole event's footprint, capped as Region.event_pop caps it — this
-    # describes an event, not an area's accrual, so it is the same number the
-    # national top ten prints for the same event
+    # the whole event's footprint across every class of pin, capped as
+    # Region.event_pop caps it. This describes the event, as `hours` does; the
+    # national top ten prints the outage pins' footprint only, so the two
+    # differ for the few events whose pins disagree on class.
     people = min(sum(sas.values()), COUNTY_POP[county])
     if people:
         record["people"] = people
@@ -1412,7 +1456,7 @@ def event_record(county, ref, meta, intervals, sas, now):
             record[field] = meta[field]
     if meta["open"]:
         record["open"] = 1
-    if meta["closed"]:
+    if meta["closed"] and not meta["open"]:
         record["closed"] = meta["closed"]
     if meta["loc"]:
         # the vernacular name the settlement it was homed to does not carry:
@@ -2099,7 +2143,8 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
         meta = event_meta.setdefault(
             (case.county, case.ref),
             # first pin wins, matching how the event's open entry is recorded
-            {"title": r["title"], "start": r["start_date"][:10], "first_pub": case.start,
+            {"title": r["title"], "start": case.start.strftime("%Y-%m-%d"),
+             "first_pub": case.start,
              "pins": 0, "confirmed": 0, "scheduled": 0, "sev": case.sev,
              "loc": r["location"] or "", "open": False, "closed": None, "health": False,
              "seen": r["first_seen"] or r["start_date"]},
@@ -2123,11 +2168,10 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
         if case.is_open:
             meta["open"] = True
             notice_text[case.county].setdefault(case.ref, r["description"])
-        elif meta["closed"] is None and r["closed_at"]:
-            # first pin with a close stamp wins, so the history and the county's
-            # "observed to close" list — which reads Region.resolved, filled the
-            # same way — cannot disagree about when an event ended
-            meta["closed"] = r["closed_at"][:10]
+        elif case.closed and (meta["closed"] is None or case.closed < meta["closed"]):
+            # the earliest close across the pins, which is how Region.resolved
+            # takes it, so the history and the closed list agree on the day
+            meta["closed"] = case.closed
         event_iv[(case.county, case.ref)].extend(case.intervals)
         if towns is not None:
             # the breakdown still homes each pin individually, with `within`
@@ -2404,7 +2448,8 @@ def load_cases(conn):
                c.full_lat, c.full_lon,
                c.boil_water_notice, c.do_not_drink, c.water_restrictions,
                c.reduced_pressure,
-               i.notice_to_end_seconds, i.end_source, i.end_local_date, i.end_local_time,
+               i.notice_to_end_seconds, i.end_input_start_date, i.end_source,
+               i.end_local_date, i.end_local_time,
                i.end_recurrence, i.end_window_open, i.end_window_close, i.end_window_first_date
         FROM cases c
         LEFT JOIN inferred_cases i ON i.case_id = c.id

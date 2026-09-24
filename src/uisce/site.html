@@ -263,7 +263,7 @@
       <p>About one incident in twenty never reports an end at all - the count is shown beside the county's disruption count each month. Those stay out of the figure above: checked both ways, they run <em>shorter</em> than average, so leaving them out moves the typical duration <em>up</em>, not down. <span id="sensNote"></span> They still count in full in the availability percentages and person-hours, where leaving something out would mean calling it zero.</p>
 
       <h4>When a notice closed</h4>
-      <p>A notice counts as closed the first time a twice-daily check finds it gone, so close dates are approximate and the closed-in-month lists are minimums.</p>
+      <p>A notice counts as closed on the day its own update reports the works complete. One that never says so counts as closed the first time a twice-daily check finds it gone, so those dates run late and the closed-in-month lists are minimums.</p>
 
       <h4>What counts as a disruption</h4>
       <p>Only hard disruptions count against availability: bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages and unplanned repairs. Restrictions, low pressure, discolouration and routine works are shown but never count. A closed notice with no usable end is charged the typical length of a completed notice of the same kind of works, rather than nothing at all.</p>
@@ -424,7 +424,8 @@ function jsArg(s) { return esc(JSON.stringify(String(s))); }
 // each case's current status, not a history, so there is no such figure for a
 // past month and none can be reconstructed. Show them only on the month the
 // snapshot belongs to. `resolved` is the one thing that *does* carry a month,
-// via cases.closed_at, so a past month is not left with nothing to say.
+// via each case's close date (closed_on), so a past month is not left with
+// nothing to say.
 function isLatest() { return curMonth === LATEST; }
 
 function isPartial() { return curMonth === today.slice(0, 7); }
