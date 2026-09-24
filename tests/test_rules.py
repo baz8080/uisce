@@ -21,7 +21,7 @@ BOILERPLATE = (
 
 
 def test_rules_version_is_stamped():
-    assert RULES_VERSION == "rules-v1"
+    assert RULES_VERSION == "rules-v2"
 
 
 class TestCompletionUpdates:
@@ -74,6 +74,75 @@ class TestCompletionUpdates:
     def test_header_without_time_abstains(self):
         assert extract(START, "**Update am 15/07/2026** Works are now complete.") is None
 
+    def test_twenty_four_hour_header_with_a_stray_pm(self):
+        # case 245025
+        result = extract(START, "**Update 16:59pm 23/09/2026** Works are now complete.")
+        assert (result["local_date"], result["local_time"]) == ("2026-09-23", "16:59")
+
+    def test_a_stray_am_on_a_twenty_four_hour_time_abstains(self):
+        assert extract(START, "**Update 14:13am 06/06/2026** Works are now complete.") is None
+
+
+IRISH_COMPLETION_BLOCK = (
+    "Tá críoch leis an obair se o anois, agus beidh an soláthar uisce ar ais chomh "
+    "luath agus is féidir.** Seans go mbeidh cur isteach ar an soláthar uisce i "
+    "Shanbally. Beidh an obair seo ar siúl ó 2in go dtí 6:15in ar an 22ú Meán Fómhair. "
+)
+ENGLISH_ORIGINAL = (
+    "Mains repair works may cause supply disruptions to Shanbally and surrounding "
+    "areas in Co. Galway. Works are scheduled to take place from 2pm until 6:15pm on "
+    "22 September." + BOILERPLATE
+)
+
+
+class TestBilingualCompletions:
+    def test_english_completion_below_an_irish_one_is_read(self):
+        # case 244925
+        result = extract("2026-09-22T13:18:00+00:00",
+                         "**11:31rn 23/09/2026 - " + IRISH_COMPLETION_BLOCK
+                         + "**Update 11:31am 23/09/2026** Works are now complete and "
+                         "supply should have returned to all affected areas. "
+                         + ENGLISH_ORIGINAL)
+        assert result["end_source"] == "completion_update"
+        assert (result["local_date"], result["local_time"]) == ("2026-09-23", "11:31")
+
+    def test_the_english_header_wins_over_an_unparseable_irish_one(self):
+        # case 244845: "9:38 rn" with a space does not parse
+        result = extract("2026-09-21T12:23:25+00:00",
+                         "** 9:38 rn 22/09/2026 - " + IRISH_COMPLETION_BLOCK
+                         + "**Update 9:38am 22/09/2026** Works are now complete. "
+                         + ENGLISH_ORIGINAL)
+        assert (result["local_date"], result["local_time"]) == ("2026-09-22", "09:38")
+
+    def test_the_english_header_wins_over_a_mistyped_irish_one(self):
+        # case 232673: the Irish header says morning, the English one evening
+        result = extract("2026-05-06T11:12:29+00:00",
+                         "**8:17rn 07/05/2026** " + IRISH_COMPLETION_BLOCK
+                         + "**Update 8:17pm 07/05/2026** Works are now complete. "
+                         + ENGLISH_ORIGINAL)
+        assert (result["local_date"], result["local_time"]) == ("2026-05-07", "20:17")
+
+    def test_an_empty_duplicate_header_between_them_is_skipped(self):
+        # case 243212
+        result = extract("2026-09-01T14:52:15+00:00",
+                         "**10:44rn 2/09/2026 - " + IRISH_COMPLETION_BLOCK
+                         + "**Update 10:44am 2/09/2026** "
+                         + "**Update 10:44am 2/09/2026** Works are now complete. "
+                         + ENGLISH_ORIGINAL)
+        assert (result["local_date"], result["local_time"]) == ("2026-09-02", "10:44")
+
+    def test_an_irish_completion_over_a_stale_english_schedule_abstains(self):
+        assert extract("2026-09-22T13:18:00+00:00",
+                       "**11:31rn 23/09/2026 - " + IRISH_COMPLETION_BLOCK
+                       + ENGLISH_ORIGINAL) is None
+
+    def test_an_irish_completion_over_an_english_update_without_one_abstains(self):
+        assert extract("2026-09-22T13:18:00+00:00",
+                       "**11:31rn 23/09/2026 - " + IRISH_COMPLETION_BLOCK
+                       + "**Update 11:31am 23/09/2026** Crews remain on site. "
+                       + "**Update 9am 23/09/2026** Works are now complete. "
+                       + ENGLISH_ORIGINAL) is None
+
 
 class TestScheduledEnds:
     def test_until_time_on_date(self):
@@ -103,7 +172,7 @@ class TestScheduledEnds:
         assert result["local_time"] == "12:00"
         result = extract(START, "Works are scheduled to take place from 4pm until "
                                 "midnight on 30 April.")
-        assert (result["local_date"], result["local_time"]) == ("2026-04-30", "00:00")
+        assert (result["local_date"], result["local_time"]) == ("2026-05-01", "00:00")
 
     def test_24_hour_time(self):
         result = extract(START, "Works are scheduled to take place until 17:00 on 3 July.")
@@ -127,6 +196,40 @@ class TestScheduledEnds:
                                 "on 10 July. **Update 7am 09/07/2026** Works are "
                                 "scheduled to take place until 2pm on 09 July.")
         assert (result["local_date"], result["local_time"]) == ("2026-07-10", "21:00")
+
+    def test_same_day_midnight_is_the_end_of_that_day(self):
+        # case 244089: midnight read as the start of 11 September ended the
+        # works fourteen hours before they began
+        result = extract("2026-09-11T12:58:09+00:00",
+                         "Works are scheduled to take place from 2pm until midnight "
+                         "on 11 September." + BOILERPLATE)
+        assert (result["local_date"], result["local_time"]) == ("2026-09-12", "00:00")
+
+    def test_same_day_midnight_rolls_over_a_month_end(self):
+        # case 245031, spelled as 12am
+        result = extract("2026-09-28T13:41:25+00:00",
+                         "Works are scheduled to take place from 8pm until 12am on "
+                         "30 September." + BOILERPLATE)
+        assert (result["local_date"], result["local_time"]) == ("2026-10-01", "00:00")
+
+    def test_same_day_midnight_with_the_date_on_both_ends(self):
+        result = extract(START, "Works are scheduled to take place from 2pm on 11 July "
+                                "until midnight on 11 July." + BOILERPLATE)
+        assert (result["local_date"], result["local_time"]) == ("2026-07-12", "00:00")
+
+    def test_midnight_after_a_start_the_day_before_stays_on_its_day(self):
+        # case 233690
+        result = extract("2026-05-21T10:00:00+00:00",
+                         "Works are scheduled to take place from 9pm on 21 May until "
+                         "12am on 22 May." + BOILERPLATE)
+        assert (result["local_date"], result["local_time"]) == ("2026-05-22", "00:00")
+
+    def test_tanker_hours_beside_the_works_end_do_not_compete_with_it(self):
+        result = extract(START, "Works are scheduled to take place until 6pm on 22 July. "
+                                "An alternative water supply will be available at the "
+                                "school car park from 4:30pm until 11:59pm on 22 July."
+                                + BOILERPLATE)
+        assert (result["local_date"], result["local_time"]) == ("2026-07-22", "18:00")
 
     def test_conflicting_schedules_in_one_block_abstain(self):
         # The original notice carries no header of its own, so a revising
@@ -169,6 +272,22 @@ class TestAbstentions:
         # Irish-only completion: the English half below is stale
         "Meastar go mbeidh críoch leis an obair seo ag a 9in ar an 1ú Bealtaine. "
         "Works are scheduled to take place until 9pm on 1 May.",
+        # "until midnight on D" with no start: the start or the end of D
+        # (cases 232957, 232219)
+        "Works are scheduled to take place until midnight on 9 May." + BOILERPLATE,
+        "Works are scheduled to take place until Midnight on 30 April." + BOILERPLATE,
+        "Works are scheduled to take place from until midnight on 23 July.",
+        "Works now have an estimated completion time of midnight on 29 July.",
+        # a start two days earlier: midnight on the last day is still either end
+        "Works are scheduled to take place from 1:25pm on 17 July until midnight "
+        "on 19 July.",
+        # the hours an alternative supply is open, not the works' end (case 239696)
+        "A pump failure may cause supply disruptions to Dundalk. Crews are working to "
+        "restore supply as soon as possible. An alternative water supply will be "
+        "available at the school car park in Kilcurly from 4:30pm until 11:59pm on "
+        "22 July. Please boil the water before use." + BOILERPLATE,
+        "Water tankers are available at Sladagh until 1pm on 28 May.",
+        "Bottled water will be available at Woodview Housing Estate until 10pm on 18 July.",
         # two different schedules in one block
         "Works are scheduled to take place until 2pm on 28 April. Works are "
         "scheduled to take place until 5pm on 29 April.",
