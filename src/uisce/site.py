@@ -320,14 +320,17 @@ def lift_pairing(row, lifts, start):
 def paired_end(lift, start):
     """When a paired lift says the notice actually stood until.
 
-    Clamped below to `start` only: multi-pin publishing is not chronologically
-    tidy, so a lift can be stamped before the issue it lifts, and a notice may
-    not end before it began. Deliberately *not* capped — this is a statement
-    about the world, and the lift is direct evidence for it. `charged_end` caps
-    what that span may charge; `Case.in_force` carries this one, so the health
-    marker can stand on the evidence while the arithmetic stays bounded.
+    Clamped below to one second after `start` only: multi-pin publishing is not
+    chronologically tidy, so a lift can be stamped before the issue it lifts, and
+    a notice may not end before it began. The second is the token an unpaired
+    closed notice keeps; a zero-length interval dropped Downings (232476) from
+    its month's quality count and health_n altogether. Deliberately *not*
+    capped: this is a statement about the world, and the lift is direct
+    evidence for it. `charged_end` caps what that span may charge;
+    `Case.in_force` carries this one, so the health marker can stand on the
+    evidence while the arithmetic stays bounded.
     """
-    return max(lift, start)
+    return max(lift, start + timedelta(seconds=1))
 
 
 def charged_end(end, start):
@@ -952,6 +955,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
     # stays publication either way: first_pub reads it to decide which month an
     # event belongs to, and that is a fact about the notice, not the works.
     iv_start = start
+    open_now = is_open(r, now)
 
     if r["work_category"] == "boil_notice_issued":
         # This class never ends itself; boil_notice_fate owns the whole decision.
@@ -961,6 +965,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         # a lift is a real, observed event, not a schedule
         has_end = outcome == "paired"
         observed_end = has_end
+        open_now = open_now and not has_end
         if fate is None:
             # closed with no lift: token footprint, as for any no-signal case
             end = start + timedelta(seconds=1)
@@ -992,9 +997,13 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
             # a lift is a real, observed end, not a schedule
             in_force, end = pairing
             has_end = observed_end = True
-        elif is_open(r, now) and start < now and not already_over:
+            open_now = False
+        elif open_now and start < now and not already_over:
             # ongoing with no inferred end: runs from start until now, capped
             end = min(now, start + cap)
+            # an unlifted standing notice closes at the cap, where its marker
+            # stops, rather than staying open with no marker (owner, 2026-09-24)
+            open_now = r["work_category"] not in LIFT_OF or now - start <= cap
         else:
             # Closed with no usable end signal, or already over per the notice's
             # own text. These used to take a token 1-second footprint, which kept
@@ -1031,7 +1040,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
                 row=r, sev=sev, ref=case_ref(r), start=start,
                 intervals=windows, sas=sa_index.affected(r["full_lat"], r["full_lon"]),
                 has_end=has_end, observed_end=observed_end, rec=rec,
-                is_open=is_open(r, now),
+                is_open=open_now,
             )
 
     return Case(
@@ -1046,7 +1055,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         rec=rec,
         imputed=imputed,
         in_force=tuple(in_force),
-        is_open=is_open(r, now),
+        is_open=open_now,
     )
 
 
