@@ -277,6 +277,16 @@ The second daily build slot exists for publication latency, not to sharpen `clos
 
 The schedule (`.github/workflows/build.yml`) is two crons 6h apart; scheduled runs land ~1h20 after the cron fires, so these hit ~12:45 and ~18:45 UTC — spacing far wider than the 1–3 minute run time needs, which is what makes overlapping runs (guarded against via `concurrency`, queued rather than cancelled since a cancelled run has already read the feed) a manual-dispatch edge case rather than a routine one.
 
+**Amended 2026-09-27: the first cron moved from 11:20 to 07:17 UTC.** The ~1h20 delay no longer
+holds. Over the scheduled runs from 2026-08-28 to 2026-09-26, GitHub started the 11:20 cron a
+median 3.8h late (2.5h to 5.7h) and the 17:23 cron a median 2.6h late (1.75h to 4.5h), so the
+builds landed ~15:00 and ~20:00 UTC: 5h apart, then a 19h overnight gap, with the midday build
+at the tail of the 07:00-16:00 publication window instead of its middle. At 07:17 the same delay
+lands the first build ~11:00 (roughly 09:45 to 13:00). The evening cron is unchanged. Re-measure
+the delays from the run list if the site's age at the midday build drifts again; if the morning
+slot turns out to be delayed differently from the 11:20 one, move it again rather than adding a
+third build.
+
 ## The feed purged 9,052 cases on 2026-08-10, and cases that vanish while Open are stamped (2026-09-05)
 
 The "nothing has been deleted since collection began" finding of 2026-07-16 (above) no longer
