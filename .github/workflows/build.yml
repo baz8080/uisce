@@ -5,9 +5,9 @@ on:
     # Twice daily, for publication latency ONLY - not to sharpen cases.closed_at.
     # See notes/data-quality.md ("Twice-daily builds: why, and why not three")
     # for the measured tradeoff. GitHub starts these runs hours late (medians
-    # 3.8h and 2.6h, 2026-09), so they land ~11:00 and ~20:00 UTC.
+    # 3.8h and 2.6h, 2026-09), so they land ~11:00 and ~19:00 UTC.
     - cron: '17 7 * * *'
-    - cron: '23 17 * * *'
+    - cron: '23 16 * * *'
   workflow_dispatch:
 
 permissions:
