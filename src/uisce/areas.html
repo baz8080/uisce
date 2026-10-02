@@ -115,8 +115,6 @@
         if (hit) { shown++; n++; }
       }
       sec.hidden = !!s && !shown;
-      sec.style.setProperty("--n", shown);
-      sec.style.setProperty("--r", Math.ceil(shown / 2));
     }
     document.body.classList.toggle("searching", !!s);
     // half its links would scroll to a hidden section during a search

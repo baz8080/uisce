@@ -94,5 +94,17 @@ def test_data_js_is_loaded_after_the_first_render_and_a_view_that_needs_it_waits
     guard = "if (needsAll() && D === FIRST) return renderWaiting();"
     assert APP.index("function render() {") < APP.index(guard)
     needs = APP[APP.index("function needsAll()"):].split("}")[0]
-    for view in ('"county"', '"top"', '"open"', "curMonth !== LATEST"):
+    for view in ('"county"', '"top"', '"open"', '(view === "overview" && curMonth !== LATEST)'):
         assert view in needs
+    assert '"area"' not in needs
+
+
+def test_a_data_js_landing_after_the_timeout_is_still_adopted():
+    render = APP[APP.index("function render() {"):]
+    assert render.index("adopt(window.UISCE_DATA)") < render.index("return renderWaiting();")
+    assert 'if (DATA_STATE.all === "ok") D = ' not in APP
+
+
+def test_an_older_data_js_never_moves_the_page_back():
+    adopt = APP[APP.index("function adopt(full) {"):]
+    assert adopt.index("full.generated_iso < FIRST.generated_iso") < adopt.index("D = full;")

@@ -44,6 +44,6 @@ def test_the_section_carries_its_rows_and_its_two_column_rows():
     assert 'style="--n:7;--r:4"' in html
 
 
-def test_the_search_keeps_the_estimate_to_the_rows_still_shown():
-    assert 'sec.style.setProperty("--n", shown);' in AREAS
-    assert 'sec.style.setProperty("--r", Math.ceil(shown / 2));' in AREAS
+def test_a_search_draws_every_section_because_a_drawn_one_keeps_its_height():
+    assert ".searching section[data-county] { content-visibility: visible; }" in AREAS
+    assert 'document.body.classList.toggle("searching", !!s);' in AREAS

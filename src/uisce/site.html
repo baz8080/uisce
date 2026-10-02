@@ -1046,7 +1046,6 @@ function loadAll() {
   loadShard(DATA_STATE, "all", "data.js" + cacheBust(D),
     () => window.UISCE_DATA !== FIRST,
     () => {
-      // isLoaded, not the state: a data.js landing after the timeout is still the data
       const skew = window.UISCE_DATA !== FIRST && adopt(window.UISCE_DATA);
       if (skew || needsAll()) render();
     });
@@ -1055,6 +1054,8 @@ function loadAll() {
 // A cached index.html can meet a newer data.js (?v= busts the browser, not Pages),
 // and from then on every view reads the newer build, the latest month included.
 function adopt(full) {
+  // an edge cache can also hand a fresh page an older data.js; that is no data at all
+  if (full.generated_iso < FIRST.generated_iso) { DATA_STATE.all = "error"; return false; }
   const skew = full.generated !== FIRST.generated;
   D = full;
   if (skew) {
@@ -1075,7 +1076,7 @@ function renderWaiting() {
   const el = document.getElementById("waitview");
   const back = view === "overview"
     ? `<a class="back" href="#" onclick="setMonth(LATEST); return false;">← ${monthLabelLong(LATEST)}</a>`
-    : `<a class="back" href="#" onclick="go(''); return false;">← All counties</a>`;
+    : `<a class="back" href="#" onclick="curMonth = LATEST; go(''); return false;">← All counties</a>`;
   el.innerHTML = back + (failed
     ? `<div class="note">This view's figures did not load. Reloading the page usually fixes it.</div>`
     : `<div class="note">Loading…</div>`);
