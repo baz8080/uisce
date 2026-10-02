@@ -225,8 +225,8 @@ def get_cases_needing_inference(db_path, last_state_by_case_id, force=False):
         return cases_needing_inference(conn, last_state_by_case_id, force)
 
 
-def call_llm(session, start_date, description):
-    payload = {
+def build_payload(start_date, description):
+    return {
         "model": MODEL_API_ID,
         "messages": [
             {
@@ -239,6 +239,10 @@ def call_llm(session, start_date, description):
         # only thing that works, same as qwen (see model-and-runtime-benchmarks.md).
         "reasoning_effort": "none",
     }
+
+
+def call_llm(session, start_date, description):
+    payload = build_payload(start_date, description)
     resp = session.post(MODEL_URL, json=payload, timeout=LLM_TIMEOUT)
     resp.raise_for_status()
     body = resp.json()

@@ -9,6 +9,24 @@ All accuracy comparisons below re-ran the same 567 records from the 2026-07-15 i
 - Prefill of the full ~1,000-token prompt+description costs only ~0.6s (~1,700 tok/s). Resending the static prompt with every request is **not** the bottleneck — don't bother restructuring the prompt for caching.
 - Decode dominates: most of each ~1.9s request is generating the ~75-token JSON response at ~57 tok/s. The `notes`-first reasoning field is most of that output, and it's also what makes extraction reliable, so it isn't worth trimming.
 
+## System/user prompt split: no win (measured 2026-10-02)
+
+The question was whether putting `PROMPT` in a `system` message and only `start_date`/`description` in the `user` message runs faster than the single user message `call_llm` sends. It does not. `uv run uisce-eval-prompt-layout` runs the 55 labelled rows the rules abstain on through both layouts, 2 rounds each, one warm sequential block per layout, on one gemma-4-12b-qat instance at 8192 context and one slot. The prompt is now ~3,000 tokens, not the ~1,000 above.
+
+| | single user message | system + user |
+|---|---|---|
+| median / mean seconds | 1.62 / 1.97 | 1.69 / 2.07 |
+| prompt tokens | 3010 | 3014 |
+| completion tokens | 93.7 | 100.0 |
+| matches the human label | 42/55 | 41/55 |
+
+- Paired per case, split minus single is +0.10s with a 95% CI of [+0.05, +0.16]; split was faster in 15 of 55 cases.
+- The gap is decode, not prefill: 6.3 extra completion tokens at ~57 tok/s is ~0.11s. Prefill is the same in both layouts.
+- Seven cases answer differently, identically in both rounds. Six are `lifted_immediate` rows where split fills in a `local_date` and the single message leaves it blank (all misses either way); one flips `scheduled_end_with_time` to `completion_update` and loses a match.
+- A 4-row smoke test the same day showed split ~0.5s faster in 8 of 8 pairs. It was run while the server was busy with another model, and the full run reversed it.
+
+Kept the single user message, so no `PROMPT_VERSION` bump. What remains is decode length, mostly the `notes` field, which the section above already keeps.
+
 ## Concurrency: no win
 
 LM Studio serializes requests by default (4 parallel requests = same wall time as 4 sequential). `lms load --parallel 4` does enable server-side slots, but: (a) the slots split the context window, so the context length must be raised (e.g. `-c 16384`) or requests fail with "Context size has been exceeded"; and (b) it only bought ~1.1x on this machine — decode is memory-bandwidth-bound on Apple Silicon, so parallel slots mostly queue on the same weights.
