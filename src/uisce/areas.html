@@ -28,6 +28,17 @@
   section h2 { font-size: 16px; font-weight: 650; padding-bottom: 6px;
                border-bottom: 1px solid var(--grid); }
   section h2 span { color: var(--muted); font-weight: 400; font-size: 13px; }
+  /* A section off screen is skipped and sized from its row count: 38px of heading
+     and rule, then 26.6px a row. --r is half --n rounded up: the two-column rows.
+     A flat 1500px for every section moved an anchor jump 0.065. */
+  section[data-county] { content-visibility: auto;
+    contain-intrinsic-block-size: auto calc(var(--r) * 26.6px + 38px); }
+  @media (max-width: 640px) {
+    section[data-county] { contain-intrinsic-block-size: auto calc(var(--n) * 26.6px + 38px); }
+  }
+  @media (max-width: 400px) {
+    section[data-county] { contain-intrinsic-block-size: auto calc(var(--n) * 30px + 38px); }
+  }
 
   /* Search. 1,836 areas behind a jump nav is not findable by anyone who does
      not already know their county — and knowing the county is the thing a
@@ -96,13 +107,15 @@
     let n = 0;
     for (const { sec, county, items } of sections) {
       const wholeCounty = !!s && county.includes(s);
-      let any = false;
+      let shown = 0;
       for (const { li, text } of items) {
         const hit = !s || wholeCounty || text.includes(s);
         li.hidden = !hit;
-        if (hit) { any = true; n++; }
+        if (hit) { shown++; n++; }
       }
-      sec.hidden = !!s && !any;
+      sec.hidden = !!s && !shown;
+      sec.style.setProperty("--n", shown);
+      sec.style.setProperty("--r", Math.ceil(shown / 2));
     }
     // half its links would scroll to a hidden section during a search
     nav.hidden = !!s;

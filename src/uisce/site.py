@@ -1606,7 +1606,8 @@ def _area_index_html(index):
         # now also holds the count and the county-page link, and matching on all
         # of that would make "page" select every county in the country
         sections.append(
-            f'<section id="c-{county_slug(county)}" data-county="{html.escape(county)}">'
+            f'<section id="c-{county_slug(county)}" data-county="{html.escape(county)}" '
+            f'style="--n:{len(areas)};--r:{(len(areas) + 1) // 2}">'
             f'<h2>Co. {html.escape(county)} <span>· {len(areas)} areas · '
             f'<a href="c/{county_slug(county)}.html">county page</a></span></h2>'
             f'<ul class="areas">{_area_items(county, areas)}</ul></section>'

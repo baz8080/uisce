@@ -642,3 +642,55 @@ stalls past the loader's 10s timer (the callback's render, from a click as well 
 **Not fixed.** Tapping a day in the county bar loads the history shard for its list, and the
 list pushing the tiles down moved them 0.1492 at 412 (0.0328 at 1366) on 3g: those are
 existing nodes, so it counts. It is in roadmap.md.
+
+
+## Long static lists skip what is off screen - 2026-10-02
+
+The county pages list every notice (c/dublin.html: 1,733 rows, 436 KB) and areas.html lists
+2,123 areas in 26 sections. Chrome laid all of it out and painted what it could before the
+reader had moved: total long-task time on a cold load, 4x CPU, median of 7 (desktop / mobile
+412): c/dublin.html **485 / 518 ms**, c/cork.html 445 / 387, areas.html 834 / 738, an area page
+(103 rows) 63 / 67.
+
+**Decision.** `ul.notices > li { content-visibility: auto }` in `site.css`, and
+`section[data-county]` in areas.html's own block, each with `contain-intrinsic-size: auto <n>`
+so a row keeps its real height once it has been drawn. After, same method: c/dublin.html
+**55 / 51 ms**, c/cork.html 157 / 85, areas.html 86 / 68, an area page 56 / 0. LCP and load CLS
+are unchanged (0); areas.html grows 1.4 KB raw (380,811 to 382,168 bytes) for the section styles.
+
+- **The row estimate is the content box.** `base.css` sets `box-sizing: border-box` and
+  `contain-intrinsic-size` still sizes the content box, so the row's padding and rule come on
+  top: an estimate of 60px (80px up to 640px wide) made c/dublin.html 135,366 px tall against a
+  real 101,422 at 1366 (+33%) and 171,209 against 139,665 at 412 (+23%). The estimates are now
+  17px under a row's real height: **40px**, 60px up to 640px wide and 78px up to 400px wide
+  (medians 56.7, 76.3 and 94.4 px at 1366, 412 and 360). The page heights are 101,334 (-0.1%),
+  136,981 (-1.9%) and 168,149 (+4.5%).
+- **The directory section is sized from its rows**, 38px for the heading and rule plus 26.6px a
+  row, from `--n` (areas) and `--r` (two-column rows, `ceil(n/2)`, because a calc() cannot round
+  up in every browser) on the section, 30px a row up to 400px wide where long names wrap. The
+  page is 30,547 against a real 30,554 at 1366, 58,892 against 59,585 at 412 and 66,065 against
+  66,674 at 360. The search rewrites both properties to the rows still shown.
+- **A focus ring is clipped** by the paint containment `content-visibility` implies: with no
+  `overflow-clip-margin` the left edge of the ring on a "What the notice says" summary is cut
+  flat at the row's edge, with `6px` it is identical to the page without the rule (screenshots
+  at 3x). Checked in Chromium 141 only.
+
+**Checked, 360 / 412 / 1366 wide, 4x CPU.** Scrolling the whole page down and up: layout shift
+**0** on all four pages. Anchor jumps on a cold load (`areas.html#c-wicklow`, `#c-cork`,
+`c/dublin.html#open`, `#notices`, `#months`, `#areas`, an area page's `#notices`): shift 0 and
+the target in the same place after 300 ms and after 1.8 s; the jump nav on areas.html lands at
+its scroll margin (12px, 104px at desktop). Once every row has been drawn the layout equals the
+layout with the rule forced off: 0 of 3,259 elements differ by more than 0.2px at each width.
+Find-in-page (`window.find`) reaches the last of 1,733 rows and brings it into view. Printing
+c/cork.html gives the same 76 pages and 27,959 words as before, and the last row is in the PDF.
+Text is rasterised on a slightly different pixel grid inside a contained row (1px, not a layout
+change), so screenshots are not byte-identical.
+
+**Rejected, desktop, anchor jump to `areas.html#c-wicklow` unless stated.**
+- A flat `contain-intrinsic-size: auto 1500px` on every section: shift **0.0652**, the footer
+  moving when the real section replaced the estimate.
+- `--n` alone: **0.0009**, half a row of error on a section with an odd row count. `--r` took
+  it to 0.
+- `content-visibility` on `ul.areas li`: **0.162** at `#c-wicklow` (the target landed 39px from
+  the top instead of 104) and 0.038 at `#c-cork`. The list is `columns: 2`, so a row is not
+  independently sized, and `ul.areas li` is left alone.
