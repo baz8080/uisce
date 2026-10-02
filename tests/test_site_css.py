@@ -67,7 +67,8 @@ def _rules(css, prop="display", media=None):
     return out
 
 
-SIMPLE = r"\*|#[\w-]+|\.[\w-]+|\[[^\]]*\]|::?[\w-]+|[a-zA-Z][\w-]*"
+SPARES_UNTIL_FOUND = ':not([hidden="until-found"])'
+SIMPLE = r"\*|#[\w-]+|\.[\w-]+|\[[^\]]*\]|:not\([^)]*\)|::?[\w-]+|[a-zA-Z][\w-]*"
 
 
 def _matches(sel, el):
@@ -91,6 +92,8 @@ def _matches(sel, el):
             # the only attribute either page selects on
             if simple.strip("[]").split("=")[0].strip() != "hidden":
                 return False
+        elif simple == SPARES_UNTIL_FOUND:
+            continue   # these pages set plain `hidden`, never until-found
         elif simple.startswith(":"):
             return False   # :hover, :focus-visible — not a resting state
         elif simple != el.get("tag"):
@@ -100,7 +103,7 @@ def _matches(sel, el):
 
 def _specificity(sel):
     return (len(re.findall(r"#[\w-]+", sel)),
-            len(re.findall(r"\.[\w-]+|\[[^\]]*\]|:(?!:)[\w-]+", sel)),
+            len(re.findall(r"\.[\w-]+|\[[^\]]*\]|:(?!:|not\()[\w-]+", sel)),
             len(re.findall(r"(?:^|[\s>+~])([a-zA-Z][\w-]*)", sel)))
 
 
@@ -134,6 +137,13 @@ def _assert_hidden_stays_hidden(path, elements):
                 " — the UA rule for the hidden attribute needs an author rule to"
                 " beat this one, or the element stays on screen"
             )
+
+
+def test_a_hidden_rule_that_spares_until_found_still_hides_these_pages():
+    rules = _rules('[hidden]:not([hidden="until-found"]) { display: none !important; }'
+                   " #v { display: flex; }")
+    assert _winning(rules, {"tag": "div", "id": "v"}, None) == "none"
+    assert _specificity('[hidden]:not([hidden="until-found"])') == (0, 2, 0)
 
 
 class TestHiddenViews:
