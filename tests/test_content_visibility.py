@@ -47,3 +47,13 @@ def test_the_section_carries_its_rows_and_its_two_column_rows():
 def test_a_search_draws_every_section_because_a_drawn_one_keeps_its_height():
     assert ".searching section[data-county] { content-visibility: visible; }" in AREAS
     assert 'document.body.classList.toggle("searching", !!s);' in AREAS
+
+
+def test_nothing_skips_where_the_clip_margin_is_not_honoured():
+    gate = "@supports (overflow-clip-margin: 6px)"
+    for css in (CSS, AREAS):
+        for m in re.finditer("content-visibility: auto", css):
+            opened = css.rfind(gate, 0, m.start())
+            assert opened != -1
+            between = css[opened:m.start()]
+            assert between.count("{") - between.count("}") > 1
