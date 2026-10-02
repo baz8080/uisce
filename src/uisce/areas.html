@@ -31,15 +31,17 @@
   /* A section off screen is skipped and sized from its row count: 38px of heading
      and rule, then 26.6px a row; --r is the two-column rows. A search draws every
      section, because one already drawn keeps its unfiltered height while skipped. */
-  section[data-county] { content-visibility: auto; overflow-clip-margin: 6px;
-    contain-intrinsic-block-size: auto calc(var(--r) * 26.6px + 38px); }
+  @supports (overflow-clip-margin: 6px) {
+    section[data-county] { content-visibility: auto; overflow-clip-margin: 6px; }
+    .searching section[data-county] { content-visibility: visible; }
+  }
+  section[data-county] { contain-intrinsic-block-size: auto calc(var(--r) * 26.6px + 38px); }
   @media (max-width: 640px) {
     section[data-county] { contain-intrinsic-block-size: auto calc(var(--n) * 26.6px + 38px); }
   }
   @media (max-width: 400px) {
     section[data-county] { contain-intrinsic-block-size: auto calc(var(--n) * 30px + 38px); }
   }
-  .searching section[data-county] { content-visibility: visible; }
 
   /* Search. 1,836 areas behind a jump nav is not findable by anyone who does
      not already know their county — and knowing the county is the thing a
