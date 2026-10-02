@@ -2483,16 +2483,11 @@ FEED_DIR = "feed"
 
 
 def first_render_payload(site):
-    """The part of the payload the first overview render reads, for index.html to inline.
-
-    Derived from the same dict as data.js, so it can only be a subset of it: the
-    newest month of every county, and the month list. Older months, every
-    county's open list and the ten largest are what the month switcher and the
-    drill-downs read, and arrive with data.js after the first render. `top` ships
-    as its month list alone, which is all the overview's link to it reads.
-    """
+    """What the first overview render reads, for index.html to inline; data.js stays whole."""
     newest = set(site["months"][-1:])
-    first = {k: v for k, v in site.items() if k not in ("counties", "national", "top")}
+    # named, not "all but": a key added to the payload must not ride into the HTML
+    keys = ("generated", "generated_iso", "data_as_of_iso", "months")
+    first = {k: site[k] for k in keys if k in site}
     first["top_months"] = list(site["top"])
     first["national"] = {m: v for m, v in site["national"].items() if m in newest}
     first["counties"] = {
@@ -2776,6 +2771,7 @@ def run():
         extra=[("search.js", "loaded on demand"), ("areas.html", "the directory")],
     )
     print(report)
+    print(f"  {'first render':<16}{s['first_render'] / 1024:8.1f} KB   (inline in index.html)")
     print(
         f"  {2 * n_counties} shards {s['shards']:,} bytes over {s['n_areas']} areas "
         f"(one county's breakdown and one county's history, each loaded on demand)"

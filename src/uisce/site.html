@@ -311,14 +311,13 @@
 <!--UI-JS-->
 </script>
 <script>
-// Inline: one month of every county, all the first overview reads. data.js carries
-// the whole payload and replaces D when it arrives (see loadAll).
+// the first overview's data, inline; data.js replaces D when it lands (adopt)
 const FIRST = window.UISCE_DATA;
 let D = FIRST;
 const SEVLABEL = { outage: "Supply disruption", quality: "Water quality notice",
                    degraded: "Restrictions / low pressure", maintenance: "Works (planned / non-disruptive)",
                    "": "No announced disruption" };
-const LATEST = D.months[D.months.length - 1];
+let LATEST = D.months[D.months.length - 1];
 let curMonth = LATEST;
 let townSort = "impact";
 let county = null;  // the county being drilled into, when view === "county"
@@ -327,7 +326,7 @@ let dayPick = null;  // the day in the county bar whose notices are listed
 let view = "overview";
 const VIEW_EL = { overview: "overview", county: "countyview", area: "areaview", top: "topview", open: "openview", wait: "waitview" };
 // months with a finished top ten; the in-progress month has none (see top_events)
-const TOP_MONTHS = D.top_months;
+let TOP_MONTHS = D.top_months;
 const today = new Date().toISOString().slice(0, 10);
 
 // Four entries, one desktop line. Quality notices left the bars entirely —
@@ -472,6 +471,7 @@ function incident(o, when) {
 const RENDER = { overview: renderOverview, county: renderCounty, area: renderArea, top: renderTop, open: renderOpen };
 
 function render() {
+  if (D === FIRST && window.UISCE_DATA !== FIRST) adopt(window.UISCE_DATA);
   if (needsAll() && D === FIRST) return renderWaiting();
   for (const [name, id] of Object.entries(VIEW_EL)) {
     document.getElementById(id).hidden = name !== view;
@@ -1033,13 +1033,12 @@ document.getElementById("countyview").addEventListener("click", e => {
 
 // ---- the whole payload ----
 
-// Older months, every open list and the top tens are read by the month switcher and
-// the drill-downs alone, so they come in data.js after the first render. render() holds
-// those views behind a note until it lands, and shows a failure rather than waiting it out.
 const DATA_STATE = {};
 
+// the area view reads its shard alone, whatever month is selected
 function needsAll() {
-  return view === "county" || view === "top" || view === "open" || curMonth !== LATEST;
+  return view === "county" || view === "top" || view === "open"
+    || (view === "overview" && curMonth !== LATEST);
 }
 
 function loadAll() {
@@ -1047,9 +1046,24 @@ function loadAll() {
   loadShard(DATA_STATE, "all", "data.js" + cacheBust(D),
     () => window.UISCE_DATA !== FIRST,
     () => {
-      if (DATA_STATE.all === "ok") D = window.UISCE_DATA;
-      if (needsAll()) render();
+      // isLoaded, not the state: a data.js landing after the timeout is still the data
+      const skew = window.UISCE_DATA !== FIRST && adopt(window.UISCE_DATA);
+      if (skew || needsAll()) render();
     });
+}
+
+// A cached index.html can meet a newer data.js (?v= busts the browser, not Pages),
+// and from then on every view reads the newer build, the latest month included.
+function adopt(full) {
+  const skew = full.generated !== FIRST.generated;
+  D = full;
+  if (skew) {
+    const wasLatest = curMonth === LATEST;
+    LATEST = D.months[D.months.length - 1];
+    TOP_MONTHS = Object.keys(D.top || {});
+    if (wasLatest || !D.months.includes(curMonth)) curMonth = LATEST;
+  }
+  return skew;
 }
 
 function renderWaiting() {
@@ -1059,10 +1073,12 @@ function renderWaiting() {
   for (const id of Object.values(VIEW_EL)) document.getElementById(id).hidden = true;
   document.getElementById("pickHint").hidden = view !== "overview";
   const el = document.getElementById("waitview");
-  el.innerHTML = failed
-    ? `<a class="back" href="#" onclick="go(''); return false;">← All counties</a>
-       <div class="note">This view's figures did not load. Reloading the page usually fixes it.</div>`
-    : `<div class="note">Loading…</div>`;
+  const back = view === "overview"
+    ? `<a class="back" href="#" onclick="setMonth(LATEST); return false;">← ${monthLabelLong(LATEST)}</a>`
+    : `<a class="back" href="#" onclick="go(''); return false;">← All counties</a>`;
+  el.innerHTML = back + (failed
+    ? `<div class="note">This view's figures did not load. Reloading the page usually fixes it.</div>`
+    : `<div class="note">Loading…</div>`);
   el.hidden = false;
   pending(!failed);
 }

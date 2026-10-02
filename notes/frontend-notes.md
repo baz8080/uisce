@@ -698,6 +698,10 @@ change), so screenshots are not byte-identical.
   independently sized, and `ul.areas li` is left alone.
 
 
+### Amended after review, 2026-10-02
+
+A section drawn once keeps its last height while skipped: Chromium gives every `content-visibility: auto` element `contain-intrinsic-size: auto` whether the rule says so or not, so the search's rewrite of `--n`/`--r` reached only sections never painted. After scrolling the whole directory, a search for "bally" left a 14,987 px page over 4,210 px of rows at 1366 px (34,589 against 6,157 at 412). A search now adds `.searching` to the body, which draws every section (`content-visibility: visible`): the filtered list is short, and the page is exactly as tall as its rows. Clearing the search leaves each section its filtered height until it comes near the screen, so the scrollbar runs short for a while (17,864 against 30,554 px); anchor jumps after clearing still measured 0 CLS at both widths. The sections also took the 6 px `overflow-clip-margin` the notice rows already had, for the focus rings on edge links.
+
 ## The first render's data is inline - 2026-10-02
 
 With the footer held back (the entry above) the first paint still waited on `data.js`: 216 KB
@@ -762,3 +766,11 @@ page, as it does for any first render that throws).
 
 **Not done.** `data.js` is still requested by a visit that never leaves the overview. It
 arrives after the first render, so it costs no LCP, only 28.4 KB gz of transfer.
+
+### Amended after review, 2026-10-02
+
+- A `data.js` that lands after loadShard's 10 s timeout is the data all the same: `loadAll`'s callback and `render()` now adopt `window.UISCE_DATA` whenever it is no longer the inline object, instead of only on an `"ok"` state. Before, a slow first load left every county, top and open view on "did not load" for the rest of the session with the payload already in memory. Measured with data.js held 12 s: the failure note at 10 s, the county view on the next navigation.
+- Only the overview waits on data.js for an older month. The area view reads its shard alone, and was being held behind "Loading..." (or the failure note) whenever an older month had been picked.
+- A cached `index.html` can meet a newer `data.js`, because `?v=` busts the browser cache, not Pages'. `adopt()` re-reads the latest month and the top-ten months from the newer build when `generated` differs, and moves a reader who was on the latest month onto the new one; before, the open-now badges would sit on the wrong month after a rollover.
+- The waiting note carries a way back: to the latest month from the overview, to all counties from a drill-down.
+- `first_render_payload` names its top-level keys instead of copying all but three, so a key added to the payload later cannot ride into the HTML unnoticed; and the build log prints the inline payload's size.
