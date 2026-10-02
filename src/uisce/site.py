@@ -1606,7 +1606,8 @@ def _area_index_html(index):
         # now also holds the count and the county-page link, and matching on all
         # of that would make "page" select every county in the country
         sections.append(
-            f'<section id="c-{county_slug(county)}" data-county="{html.escape(county)}">'
+            f'<section id="c-{county_slug(county)}" data-county="{html.escape(county)}" '
+            f'style="--n:{len(areas)};--r:{(len(areas) + 1) // 2}">'
             f'<h2>Co. {html.escape(county)} <span>· {len(areas)} areas · '
             f'<a href="c/{county_slug(county)}.html">county page</a></span></h2>'
             f'<ul class="areas">{_area_items(county, areas)}</ul></section>'
@@ -2468,8 +2469,10 @@ def load_cases(conn):
     ).fetchall()
 
 
-# index.html + data.js, what a reader downloads before touching anything. The
-# split of 2026-09-05 left it under 300 KB; the warning is for the next growth.
+# index.html + data.js, what a reader downloads before touching anything. Only
+# index.html gates the first paint: it inlines the first render's data and
+# data.js loads after it. The split of 2026-09-05 left both under 300 KB; the
+# warning is for the next growth.
 INITIAL_BUDGET = 512 * 1024
 
 HISTORY_DIR = "h"
@@ -2477,6 +2480,30 @@ COUNTY_SHARD_DIR = "t"
 COUNTY_DIR = "c"
 AREA_DIR = "a"
 FEED_DIR = "feed"
+
+
+def first_render_payload(site):
+    """What the first overview render reads, for index.html to inline; data.js stays whole."""
+    newest = set(site["months"][-1:])
+    # named, not "all but": a key added to the payload must not ride into the HTML
+    keys = ("generated", "generated_iso", "data_as_of_iso", "months")
+    first = {k: site[k] for k in keys if k in site}
+    first["top_months"] = list(site["top"])
+    first["national"] = {m: v for m, v in site["national"].items() if m in newest}
+    first["counties"] = {
+        name: {
+            **{k: v for k, v in county.items() if k not in ("months", "open")},
+            "months": {m: v for m, v in county["months"].items() if m in newest},
+        }
+        for name, county in site["counties"].items()
+    }
+    return first
+
+
+def inline_json(payload):
+    """JSON for a <script> element: a `<` never reaches the page, so no string in
+    it can close the element or open a comment."""
+    return json.dumps(payload, separators=(",", ":")).replace("<", "\\u003c")
 
 
 def write_site(site, site_dir, towns=None):
@@ -2513,6 +2540,7 @@ def write_site(site, site_dir, towns=None):
     notice_text = site.pop("notice_text", {})
     feed = site.pop("feed", {})
     data = "window.UISCE_DATA = " + json.dumps(site) + ";"
+    first = inline_json(first_render_payload(site))
     site_dir.mkdir(parents=True, exist_ok=True)
     (site_dir / "data.js").write_text(data)
     # the noscript fallback: the county pages carry the same figures statically
@@ -2521,7 +2549,10 @@ def write_site(site, site_dir, towns=None):
         for c in sorted(site["counties"])
     )
     (site_dir / "index.html").write_text(
-        page_html(SITE_HTML, {"CANONICAL": f"{BASE_URL}/", "COUNTY-LINKS": county_links})
+        page_html(
+            SITE_HTML,
+            {"CANONICAL": f"{BASE_URL}/", "COUNTY-LINKS": county_links, "FIRST-RENDER": first},
+        )
     )
     sizes = {"feeds": 0}
     feed_dir = site_dir / FEED_DIR
@@ -2704,6 +2735,7 @@ def write_site(site, site_dir, towns=None):
     (site_dir / "robots.txt").write_text(statusui.robots(BASE_URL))
     return sizes | {
         "data.js": len(data.encode()),
+        "first_render": len(first.encode()),
         "shards": shard_bytes + county_shard_bytes,
         "n_areas": sum(len(a) for a in history.values()),
         "areas.html": index_bytes,
@@ -2739,6 +2771,7 @@ def run():
         extra=[("search.js", "loaded on demand"), ("areas.html", "the directory")],
     )
     print(report)
+    print(f"  {'first render':<16}{s['first_render'] / 1024:8.1f} KB   (inline in index.html)")
     print(
         f"  {2 * n_counties} shards {s['shards']:,} bytes over {s['n_areas']} areas "
         f"(one county's breakdown and one county's history, each loaded on demand)"

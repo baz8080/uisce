@@ -581,3 +581,199 @@ the word the app's `openGroups` already used.
 Re-measured on the same release: 0 days listing 0 notices, 0 "so far" on a future start,
 0 "since" on a future date including the build day, Atom well-formed, 763 of 763 area
 pages reachable from search (the slug is now read from the history alone).
+
+
+## The first paint waits for the data - 2026-10-02
+
+Cloudflare RUM put the index at CLS 0.453 on `html>body>div.wrap` (13% of loads poor), with
+LCP p50 2.2s and p75 2.5s. The scripts sit at the end of `<body>`, so Chrome paints the
+header, an empty skeleton (`#banner`, `#months`, `#legend`, `#list`) and the footer while
+`data.js` downloads (216 KB raw, 28.4 KB gz); the first `route()` then fills everything above
+the footer and it jumps.
+
+Lab, Chromium 141, slow 4G, 4x CPU, median of 3 (the runs agreed to four places). Load CLS:
+**0.4826** at 360px, **0.3236** at 412px, **0.182** at 1366px (0.184 with classic scrollbars).
+Opening an area from its county at 3g, when `h/<county>.js` lands more than 500ms after the
+click, the footer moved **0.3004 / 0.1945 / 0.1317** (360 / 412 / 1366); a deep link to
+`#area/Cork/...` or `#county/Cork` had **0.30 / 0.13** at load (360 / 1366).
+
+**Decision.** statusui's `<!--UI-WAIT-->` in `<head>` puts a `wait` class on `<html>`, and
+base.css keeps `[data-wait]` out of the paint until `pending(false)`. `#overview` and
+`<footer>` carry `data-wait`: the first render fills the one and pushes the other.
+- `render()` ends with `pending(shardPending())`, so the page is released by every render and
+  held only while the area view's history shard, or the county view's own shard, is `loading`.
+  The shard callback's `render()` releases it on success and on failure, and navigating away
+  does too, because the next render recomputes it. No second release path to forget.
+- It runs **before** `revealMonthTab()`. The first attempt put it last, and a month strip inside
+  a held-back `#overview` measures zero wide: the strip stayed at April with the current month
+  off the right edge. Caught by comparing the strip's `scrollLeft` (261 before and after the fix).
+- Only the footer is held for the county view. Its shard arriving moved the footer by 0.0009 to
+  0.0099 on tall windows (shard delayed 1.5s, 2560x1440: Donegal 0.0099, Louth 0.0045, Mayo
+  0.0043, Kildare 0.0015, Leitrim 0.0009; Carlow 0.001 at 1920x1080) and not at all on a phone,
+  where the footer is 1,300 px or more down. Now 0.
+- Every view's `innerHTML` is replaced, and a replaced node has no previous rect, so the
+  footer is the only layout-shift source the browser reports in either view. The area card still
+  drops 34px when the shard lands and the "Permanent link" line appears; it is not CLS and is
+  left alone.
+
+**After.** Load CLS **0** at 360, 412 and 1366 (also with classic scrollbars, where
+statusui's `scrollbar-gutter: stable` takes the rest). The area click at 3g, both deep links
+and the county click: **0** at 360, 412 and 1366. `index.html` is 31,041 to 19,997 bytes gz,
+nearly all of it statusui's comment stripping; `data.js` is unchanged.
+
+**LCP.** At 412 the lab LCP is unchanged (716 to 736 ms, the `#healthKey` line). At 360 and
+1366 it moves from 244 to 728 ms and 268 to 752 ms, because the baseline's LCP element there
+was the first footer paragraph, painted into an empty page at ~240 ms. That figure flattered
+the page: the footer is no longer painted before the content is. The real LCP is the first
+render, which waits on `data.js`; shortening it is a separate change.
+
+**Every failure path reveals the page**, each checked in a browser: no JavaScript (the class is
+never added and the `<noscript>` text shows), `file://` (index and `#county/Cork`), `data.js`
+404 or blocked (the `load` event), `data.js` stalling past 8s (released at 8s with the page
+still loading), a first render that throws (`load`), and an area or county shard that 404s or
+stalls past the loader's 10s timer (the callback's render, from a click as well as a deep link).
+
+**Rejected, 412px slow 4G, median of 3.**
+- `<script src="data.js">` moved into `<head>`: FCP 248 to 620 ms because nothing paints until
+  it lands, and CLS still 0.3236 in one run of three.
+- Preloading `data.js`: CLS unchanged at 0.3236 (LCP 696 ms).
+- Reserving the skeleton's height (`min-height` on `#banner`, `.controls`, `#legend`,
+  `#healthKey`, `#basis` and `#list` at five breakpoints): CLS 0.0007 at 412 and 0.0013 at
+  360, not 0, and 17 hard-coded heights that go stale when the copy wraps differently.
+
+**Not fixed.** Tapping a day in the county bar loads the history shard for its list, and the
+list pushing the tiles down moved them 0.1492 at 412 (0.0328 at 1366) on 3g: those are
+existing nodes, so it counts. It is in roadmap.md.
+
+
+## Long static lists skip what is off screen - 2026-10-02
+
+The county pages list every notice (c/dublin.html: 1,733 rows, 436 KB) and areas.html lists
+2,123 areas in 26 sections. Chrome laid all of it out and painted what it could before the
+reader had moved: total long-task time on a cold load, 4x CPU, median of 7 (desktop / mobile
+412): c/dublin.html **485 / 518 ms**, c/cork.html 445 / 387, areas.html 834 / 738, an area page
+(103 rows) 63 / 67.
+
+**Decision.** `ul.notices > li { content-visibility: auto }` in `site.css`, and
+`section[data-county]` in areas.html's own block, each with `contain-intrinsic-size: auto <n>`
+so a row keeps its real height once it has been drawn. After, same method: c/dublin.html
+**55 / 51 ms**, c/cork.html 157 / 85, areas.html 86 / 68, an area page 56 / 0. LCP and load CLS
+are unchanged (0); areas.html grows 1.4 KB raw (380,811 to 382,168 bytes) for the section styles.
+
+- **The row estimate is the content box.** `base.css` sets `box-sizing: border-box` and
+  `contain-intrinsic-size` still sizes the content box, so the row's padding and rule come on
+  top: an estimate of 60px (80px up to 640px wide) made c/dublin.html 135,366 px tall against a
+  real 101,422 at 1366 (+33%) and 171,209 against 139,665 at 412 (+23%). The estimates are now
+  17px under a row's real height: **40px**, 60px up to 640px wide and 78px up to 400px wide
+  (medians 56.7, 76.3 and 94.4 px at 1366, 412 and 360). The page heights are 101,334 (-0.1%),
+  136,981 (-1.9%) and 168,149 (+4.5%).
+- **The directory section is sized from its rows**, 38px for the heading and rule plus 26.6px a
+  row, from `--n` (areas) and `--r` (two-column rows, `ceil(n/2)`, because a calc() cannot round
+  up in every browser) on the section, 30px a row up to 400px wide where long names wrap. The
+  page is 30,547 against a real 30,554 at 1366, 58,892 against 59,585 at 412 and 66,065 against
+  66,674 at 360. The search rewrites both properties to the rows still shown.
+- **A focus ring is clipped** by the paint containment `content-visibility` implies: with no
+  `overflow-clip-margin` the left edge of the ring on a "What the notice says" summary is cut
+  flat at the row's edge, with `6px` it is identical to the page without the rule (screenshots
+  at 3x). Checked in Chromium 141 only.
+
+**Checked, 360 / 412 / 1366 wide, 4x CPU.** Scrolling the whole page down and up: layout shift
+**0** on all four pages. Anchor jumps on a cold load (`areas.html#c-wicklow`, `#c-cork`,
+`c/dublin.html#open`, `#notices`, `#months`, `#areas`, an area page's `#notices`): shift 0 and
+the target in the same place after 300 ms and after 1.8 s; the jump nav on areas.html lands at
+its scroll margin (12px, 104px at desktop). Once every row has been drawn the layout equals the
+layout with the rule forced off: 0 of 3,259 elements differ by more than 0.2px at each width.
+Find-in-page (`window.find`) reaches the last of 1,733 rows and brings it into view. Printing
+c/cork.html gives the same 76 pages and 27,959 words as before, and the last row is in the PDF.
+Text is rasterised on a slightly different pixel grid inside a contained row (1px, not a layout
+change), so screenshots are not byte-identical.
+
+**Rejected, desktop, anchor jump to `areas.html#c-wicklow` unless stated.**
+- A flat `contain-intrinsic-size: auto 1500px` on every section: shift **0.0652**, the footer
+  moving when the real section replaced the estimate.
+- `--n` alone: **0.0009**, half a row of error on a section with an odd row count. `--r` took
+  it to 0.
+- `content-visibility` on `ul.areas li`: **0.162** at `#c-wicklow` (the target landed 39px from
+  the top instead of 104) and 0.038 at `#c-cork`. The list is `columns: 2`, so a row is not
+  independently sized, and `ul.areas li` is left alone.
+
+
+### Amended after review, 2026-10-02
+
+A section drawn once keeps its last height while skipped: Chromium gives every `content-visibility: auto` element `contain-intrinsic-size: auto` whether the rule says so or not, so the search's rewrite of `--n`/`--r` reached only sections never painted. After scrolling the whole directory, a search for "bally" left a 14,987 px page over 4,210 px of rows at 1366 px (34,589 against 6,157 at 412). A search now adds `.searching` to the body, which draws every section (`content-visibility: visible`): the filtered list is short, and the page is exactly as tall as its rows. Clearing the search leaves each section its filtered height until it comes near the screen, so the scrollbar runs short for a while (17,864 against 30,554 px); anchor jumps after clearing still measured 0 CLS at both widths. The sections also took the 6 px `overflow-clip-margin` the notice rows already had, for the focus rings on edge links.
+
+## The first render's data is inline - 2026-10-02
+
+With the footer held back (the entry above) the first paint still waited on `data.js`: 216 KB
+raw, 28.4 KB gz, a blocking `<script>` at the end of the body. The first overview reads one
+month of every county, so most of it is not needed to draw. Lab, 4x CPU, median of 3, on the
+gated page: LCP **692 ms at 412px and 1,216 ms at 3g** (slow 4G otherwise: 692 at 360px, 728 at
+1366px).
+
+**Decision.** `write_site` derives the first render's data from the same dict as `data.js`
+(`first_render_payload`) and inlines it in `index.html`: the month list, the newest month of
+every county (grade, day bars, counts), its `pop` and `open_total`, the newest month nationally
+and `top_months`, the list of months that have a ten largest. **18.4 KB raw, 1.8 KB gz**, 44%
+of it the day arrays; `index.html` goes from 20.0 to 22.5 KB gz. `data.js` is **unchanged**, a
+complete payload (211.6 KB raw, 28.4 KB gz), and is loaded by `loadShard` after the first
+render; when it lands the app rebinds `D` to it (`window.UISCE_DATA`), so there is no merge.
+`INITIAL_BUDGET` still means index.html plus data.js (299.9 KB of 512), and the settled rows
+about `towns`, `resolved` and the budget stand: this adds an inline subset and removes nothing.
+
+- **What waits.** The month switcher, the county, top-ten and open views read older months, the
+  open lists and the top tens, so `render()` shows a "Loading..." note in a `#waitview`, with
+  the footer held, until `data.js` is there, then renders. The area view needs only its own
+  shard and no longer waits for anything (a deep link to `#area/...` or `#county/...` had to
+  fetch `data.js` before it could start its shard; now the shard starts at once). A failure
+  shows "This view's figures did not load" with a way back, a month tab that cannot load is put
+  back, and the next navigation retries, as it does for a shard.
+- **A field added to a county goes inline by default.** The county's `months` and `open` are the
+  two things taken out; a new key rides in the first render until someone decides otherwise,
+  because the other failure, a first render missing a field, is silent in `site.html`.
+  `tests/test_first_render_data.py` holds the key sets, so adding one is a decision.
+- A `<` in the inline JSON is written `\u003c`, so no string can close the script element.
+
+**After.** LCP at slow 4G **416 ms at 360px, 452 at 412px, 452 at 1366px** (from 692, 692 and
+728), and at 3g **732 ms at 412px and 728 at 360px** (from 1,216 and 1,216). Load CLS 0 at
+360, 412 and 1366; the area click, both deep links and the county click are still 0. Clicks
+made before `data.js` arrived (a county, a month tab, the open tile and the top-ten link, 3g,
+412 / 1366 / 1920 px): CLS 0, a waiting note, and then the same DOM as the previous template.
+
+**Checked.** The new page against the previous template, over the same data, 1366 and 412px:
+the same body markup, scroll position and class after each of 17 steps (month tabs, county,
+month inside the county, a day, sort, an area, back twice, top ten and its month, open, home,
+search and pick) and 7 deep links (counties, an area by number and by ED code, `#top`, `#open`,
+an unknown county): 0 of 48 differ. Failure paths, each in a browser: no JavaScript, `file://`
+(a county click and `#top`), `data.js` 404 or blocked (overview draws; a county shows the note
+and the way back; a month tab is put back), `data.js` stalling past the loader's 10s, a failure
+followed by a retry that works, and a corrupted inline payload (the `load` event reveals the
+page, as it does for any first render that throws).
+
+**Rejected.**
+- *A `data.js` of the rest alone* (older months, open lists, top tens: 175 KB raw, 25.6 KB gz
+  against 28.4): 2.8 KB gz less per visit, and a merge step, five tests rewritten, and a page
+  cached across a deploy (`max-age=600`) breaking for up to ten minutes, because its `data.js`
+  would no longer be the payload it expects. With the file whole an old page and a new
+  `data.js` still agree. The saving is after the first render and does not move LCP.
+- *`<link rel="preload" href="data.js">`* beside the inline data: LCP 436 at slow 4G and 748 at
+  3g (412px) against 452 and 732 without it. The first render no longer needs the file.
+- *Rendering the first overview into the HTML at build time.* The audit's prototype (a captured
+  DOM plus a preload) reached LCP 248 at slow 4G and 424 at 3g (412px), and CLS 0. It needs a
+  second implementation of `renderOverview` in Python that must stay byte-identical to the
+  JavaScript one, which is the cost this change does not take.
+- *A silent hold in `render()`* (leave the old view up until `data.js` arrives): no feedback on
+  a slow link and no failure path; the page would look dead after a blocked request.
+
+**Not done.** `data.js` is still requested by a visit that never leaves the overview. It
+arrives after the first render, so it costs no LCP, only 28.4 KB gz of transfer.
+
+### Amended after review, 2026-10-02
+
+- A `data.js` that lands after loadShard's 10 s timeout is the data all the same: `loadAll`'s callback and `render()` now adopt `window.UISCE_DATA` whenever it is no longer the inline object, instead of only on an `"ok"` state. Before, a slow first load left every county, top and open view on "did not load" for the rest of the session with the payload already in memory. Measured with data.js held 12 s: the failure note at 10 s, the county view on the next navigation.
+- Only the overview waits on data.js for an older month. The area view reads its shard alone, and was being held behind "Loading..." (or the failure note) whenever an older month had been picked.
+- A cached `index.html` can meet a newer `data.js`, because `?v=` busts the browser cache, not Pages'. `adopt()` re-reads the latest month and the top-ten months from the newer build when `generated` differs, and moves a reader who was on the latest month onto the new one; before, the open-now badges would sit on the wrong month after a rollover.
+- The waiting note carries a way back: to the latest month from the overview, to all counties (on the latest month, so the link lands on something drawn) from a drill-down.
+- An older `data.js` than the page, which an edge cache can serve after a deploy, is not adopted: `generated_iso` is compared and an older payload counts as a failed load, rather than moving the page back a month.
+- Not fixed here: nothing redraws the moment a late `data.js` lands, because loadShard ignores an onload after its timeout, so the reader sees the failure note until the next navigation. The county and history shards share the defect and never recover, since their state stays `"error"`. The fix belongs in statusui's loadShard.
+- Clearing a search leaves each section its filtered height until it is near the screen. Keeping `.searching` one more frame would record the full heights, at the price of laying out the whole directory on the keystroke that clears it, which is the 700 ms long task the skipping exists to avoid; left as it is. One measurement in four of a programmatic jump to `#c-wicklow` straight after clearing a search shifted 1.09 at 1366 px (0 in the rest, and 0 at 412 px), as sections settled from their filtered heights around the target; a reader's own click on the nav is input and is not counted, and a cold load never searched has no filtered heights to settle.
+- `first_render_payload` names its top-level keys instead of copying all but three, so a key added to the payload later cannot ride into the HTML unnoticed; and the build log prints the inline payload's size.

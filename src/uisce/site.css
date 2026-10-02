@@ -33,6 +33,14 @@ section h2 span { color: var(--muted); font-weight: 400; font-size: 13px; }
 ul.notices { list-style: none; margin-top: 10px; padding: 0; }
 ul.notices li { padding: 8px 0; border-bottom: 1px solid var(--grid);
                 font-size: 13.5px; }
+/* The estimate is the content box, so 17px short of a row's real height (padding
+   and rule): one 60px estimate stretched c/dublin.html's scroll height by a third.
+   The clip margin is for the paint containment this implies, which would cut a
+   focus ring at the row's edge. `auto` keeps a row's real height once drawn. */
+ul.notices > li { content-visibility: auto; contain-intrinsic-size: auto 40px;
+                  overflow-clip-margin: 6px; }
+@media (max-width: 640px) { ul.notices > li { contain-intrinsic-size: auto 60px; } }
+@media (max-width: 400px) { ul.notices > li { contain-intrinsic-size: auto 78px; } }
 ul.notices .when { display: block; color: var(--muted); font-size: 12.5px;
                    margin-top: 2px; }
 .sev { display: inline-block; padding: 1px 7px; border-radius: 999px;

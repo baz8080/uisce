@@ -2266,6 +2266,8 @@ def _bare_site(county="Kildare"):
     return {
         "generated_iso": "2026-08-06T00:00:00Z",
         "months": [],
+        "national": {},
+        "top": {},
         "counties": {
             county: {
                 "pop": COUNTY_POP[county],
