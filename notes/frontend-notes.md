@@ -64,6 +64,8 @@ That was not hypothetical. `#overview { display: flex }`, added for the narrow-s
 
 **Fix:** `[hidden] { display: none !important; }` in `site.html`, so `hidden` wins regardless of whatever `display` a future layout rule sets. `tests/test_site_css.py` guards the invariant generally: for every element either page hides, it works out which `display` actually wins once `hidden` is set, in every `@media` context the stylesheet defines, so the same class of bug on a different element or a different breakpoint fails a test instead of shipping. The parser is deliberately small — it reads only the `display` property out of the two files it's pointed at, not CSS in general.
 
+**Amended 2026-10-02:** the shared rule, in statusui's `base.css` since 2026-08-20, became `[hidden]:not([hidden="until-found"])` so that find-in-page can still reveal an until-found element ([baz8080/statusui#19](https://github.com/baz8080/statusui/pull/19), for rail-delays' paged list). The parser read that `:not(` as a pseudo-class that never matches and failed three of these guards on a page the browser renders correctly, so it now takes exactly that exclusion as matching: these pages only ever set plain `hidden`. Any other pseudo-class still reads as no match.
+
 ## Contrast pass 2026-08-18: the grade chips could not carry white text
 
 From a cold external usability review. Every ratio below was recomputed independently against the WCAG 2.1 relative-luminance formula before anything changed; all of the review's figures reproduced exactly, including the `color-mix` for grade B, which lands on `#69930f`.
