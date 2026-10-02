@@ -34,6 +34,11 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
    same as the 295 closed ones. Wants a record field that says "completion reported, span
    unusable" and copy for it; a payload-shape guard in `tests/test_site.py` will fail when
    the key is added, which is the guard working.
+5. **A day's notice list pushes the county tiles down.** Tapping a day in the county bar
+   loads the history shard, and its list lands above the tiles: 0.1492 at 412 and 0.0328 at
+   1366, on 3g, when it arrives more than 500ms after the tap (measured 2026-10-02, after the
+   first-paint gate took the footer and area-view shifts to 0). The tiles are not replaced, so
+   the browser counts them. Reserving the list's room is a layout decision, not a flag.
 
 ## Waiting on a check by hand
 

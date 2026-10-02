@@ -579,3 +579,66 @@ the word the app's `openGroups` already used.
 Re-measured on the same release: 0 days listing 0 notices, 0 "so far" on a future start,
 0 "since" on a future date including the build day, Atom well-formed, 763 of 763 area
 pages reachable from search (the slug is now read from the history alone).
+
+
+## The first paint waits for the data - 2026-10-02
+
+Cloudflare RUM put the index at CLS 0.453 on `html>body>div.wrap` (13% of loads poor), with
+LCP p50 2.2s and p75 2.5s. The scripts sit at the end of `<body>`, so Chrome paints the
+header, an empty skeleton (`#banner`, `#months`, `#legend`, `#list`) and the footer while
+`data.js` downloads (216 KB raw, 28.4 KB gz); the first `route()` then fills everything above
+the footer and it jumps.
+
+Lab, Chromium 141, slow 4G, 4x CPU, median of 3 (the runs agreed to four places). Load CLS:
+**0.4826** at 360px, **0.3236** at 412px, **0.182** at 1366px (0.184 with classic scrollbars).
+Opening an area from its county at 3g, when `h/<county>.js` lands more than 500ms after the
+click, the footer moved **0.3004 / 0.1945 / 0.1317** (360 / 412 / 1366); a deep link to
+`#area/Cork/...` or `#county/Cork` had **0.30 / 0.13** at load (360 / 1366).
+
+**Decision.** statusui's `<!--UI-WAIT-->` in `<head>` puts a `wait` class on `<html>`, and
+base.css keeps `[data-wait]` out of the paint until `pending(false)`. `#overview` and
+`<footer>` carry `data-wait`: the first render fills the one and pushes the other.
+- `render()` ends with `pending(shardPending())`, so the page is released by every render and
+  held only while the area view's history shard, or the county view's own shard, is `loading`.
+  The shard callback's `render()` releases it on success and on failure, and navigating away
+  does too, because the next render recomputes it. No second release path to forget.
+- It runs **before** `revealMonthTab()`. The first attempt put it last, and a month strip inside
+  a held-back `#overview` measures zero wide: the strip stayed at April with the current month
+  off the right edge. Caught by comparing the strip's `scrollLeft` (261 before and after the fix).
+- Only the footer is held for the county view. Its shard arriving moved the footer by 0.0009 to
+  0.0099 on tall windows (shard delayed 1.5s, 2560x1440: Donegal 0.0099, Louth 0.0045, Mayo
+  0.0043, Kildare 0.0015, Leitrim 0.0009; Carlow 0.001 at 1920x1080) and not at all on a phone,
+  where the footer is 1,300 px or more down. Now 0.
+- Every view's `innerHTML` is replaced, and a replaced node has no previous rect, so the
+  footer is the only layout-shift source the browser reports in either view. The area card still
+  drops 34px when the shard lands and the "Permanent link" line appears; it is not CLS and is
+  left alone.
+
+**After.** Load CLS **0** at 360, 412 and 1366 (also with classic scrollbars, where
+statusui's `scrollbar-gutter: stable` takes the rest). The area click at 3g, both deep links
+and the county click: **0** at 360, 412 and 1366. `index.html` is 31,041 to 19,997 bytes gz,
+nearly all of it statusui's comment stripping; `data.js` is unchanged.
+
+**LCP.** At 412 the lab LCP is unchanged (716 to 736 ms, the `#healthKey` line). At 360 and
+1366 it moves from 244 to 728 ms and 268 to 752 ms, because the baseline's LCP element there
+was the first footer paragraph, painted into an empty page at ~240 ms. That figure flattered
+the page: the footer is no longer painted before the content is. The real LCP is the first
+render, which waits on `data.js`; shortening it is a separate change.
+
+**Every failure path reveals the page**, each checked in a browser: no JavaScript (the class is
+never added and the `<noscript>` text shows), `file://` (index and `#county/Cork`), `data.js`
+404 or blocked (the `load` event), `data.js` stalling past 8s (released at 8s with the page
+still loading), a first render that throws (`load`), and an area or county shard that 404s or
+stalls past the loader's 10s timer (the callback's render, from a click as well as a deep link).
+
+**Rejected, 412px slow 4G, median of 3.**
+- `<script src="data.js">` moved into `<head>`: FCP 248 to 620 ms because nothing paints until
+  it lands, and CLS still 0.3236 in one run of three.
+- Preloading `data.js`: CLS unchanged at 0.3236 (LCP 696 ms).
+- Reserving the skeleton's height (`min-height` on `#banner`, `.controls`, `#legend`,
+  `#healthKey`, `#basis` and `#list` at five breakpoints): CLS 0.0007 at 412 and 0.0013 at
+  360, not 0, and 17 hard-coded heights that go stale when the copy wraps differently.
+
+**Not fixed.** Tapping a day in the county bar loads the history shard for its list, and the
+list pushing the tiles down moved them 0.1492 at 412 (0.0328 at 1366) on 3g: those are
+existing nodes, so it counts. It is in roadmap.md.

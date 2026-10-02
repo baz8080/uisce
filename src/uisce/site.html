@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!--UI-WAIT-->
 <title>Irish Water Supply Disruptions - unofficial</title>
 <meta name="description" content="Where Uisce Éireann has announced water outages, restrictions and works across Ireland, county by county, town by town. Independent, updated twice daily.">
 <meta property="og:title" content="Irish Water Supply Disruptions">
@@ -215,7 +216,7 @@
     <div class="sub2">Independent. Not affiliated with Uisce Éireann.</div>
   </header>
 
-  <div id="overview">
+  <div id="overview" data-wait>
     <noscript><p class="basis">This page draws its bars with JavaScript. The same figures, month by month, are on the county pages: <!--COUNTY-LINKS--> · or browse <a href="areas.html">every area with a notice</a>.</p></noscript>
     <div class="banner" id="banner"></div>
 
@@ -246,7 +247,7 @@
   <div id="topview" hidden></div>
   <div id="openview" hidden></div>
 
-  <footer>
+  <footer data-wait>
     <p><a href="areas.html" style="color:inherit">Every area with a notice</a> - a full directory of the 1,800-odd Census areas on this site, each linking to its incident history.</p>
     <p>New notices as an <a href="feed.xml" style="color:inherit">Atom feed</a>, nationally; each county page carries its own.</p>
     <details class="method">
@@ -472,7 +473,16 @@ function render() {
   }
   document.getElementById("pickHint").hidden = view !== "overview";
   RENDER[view]();
+  // before the reveal: a strip inside a held-back #overview measures zero wide
+  pending(shardPending());
   revealMonthTab(document.getElementById(VIEW_EL[view]).querySelector(".months"));
+}
+
+// The footer is held back while the view's own shard is in flight: its arrival
+// replaces a one-line note with the whole list and pushed the footer 0.30 at 3g.
+function shardPending() {
+  return view === "area" ? HISTORY_STATE[areaCounty] === "loading"
+    : view === "county" && COUNTY_STATE[county] === "loading";
 }
 
 function renderOverview() {
