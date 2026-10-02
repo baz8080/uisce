@@ -694,3 +694,69 @@ change), so screenshots are not byte-identical.
 - `content-visibility` on `ul.areas li`: **0.162** at `#c-wicklow` (the target landed 39px from
   the top instead of 104) and 0.038 at `#c-cork`. The list is `columns: 2`, so a row is not
   independently sized, and `ul.areas li` is left alone.
+
+
+## The first render's data is inline - 2026-10-02
+
+With the footer held back (the entry above) the first paint still waited on `data.js`: 216 KB
+raw, 28.4 KB gz, a blocking `<script>` at the end of the body. The first overview reads one
+month of every county, so most of it is not needed to draw. Lab, 4x CPU, median of 3, on the
+gated page: LCP **692 ms at 412px and 1,216 ms at 3g** (slow 4G otherwise: 692 at 360px, 728 at
+1366px).
+
+**Decision.** `write_site` derives the first render's data from the same dict as `data.js`
+(`first_render_payload`) and inlines it in `index.html`: the month list, the newest month of
+every county (grade, day bars, counts), its `pop` and `open_total`, the newest month nationally
+and `top_months`, the list of months that have a ten largest. **18.4 KB raw, 1.8 KB gz**, 44%
+of it the day arrays; `index.html` goes from 20.0 to 22.5 KB gz. `data.js` is **unchanged**, a
+complete payload (211.6 KB raw, 28.4 KB gz), and is loaded by `loadShard` after the first
+render; when it lands the app rebinds `D` to it (`window.UISCE_DATA`), so there is no merge.
+`INITIAL_BUDGET` still means index.html plus data.js (299.9 KB of 512), and the settled rows
+about `towns`, `resolved` and the budget stand: this adds an inline subset and removes nothing.
+
+- **What waits.** The month switcher, the county, top-ten and open views read older months, the
+  open lists and the top tens, so `render()` shows a "Loading..." note in a `#waitview`, with
+  the footer held, until `data.js` is there, then renders. The area view needs only its own
+  shard and no longer waits for anything (a deep link to `#area/...` or `#county/...` had to
+  fetch `data.js` before it could start its shard; now the shard starts at once). A failure
+  shows "This view's figures did not load" with a way back, a month tab that cannot load is put
+  back, and the next navigation retries, as it does for a shard.
+- **A field added to a county goes inline by default.** The county's `months` and `open` are the
+  two things taken out; a new key rides in the first render until someone decides otherwise,
+  because the other failure, a first render missing a field, is silent in `site.html`.
+  `tests/test_first_render_data.py` holds the key sets, so adding one is a decision.
+- A `<` in the inline JSON is written `\u003c`, so no string can close the script element.
+
+**After.** LCP at slow 4G **416 ms at 360px, 452 at 412px, 452 at 1366px** (from 692, 692 and
+728), and at 3g **732 ms at 412px and 728 at 360px** (from 1,216 and 1,216). Load CLS 0 at
+360, 412 and 1366; the area click, both deep links and the county click are still 0. Clicks
+made before `data.js` arrived (a county, a month tab, the open tile and the top-ten link, 3g,
+412 / 1366 / 1920 px): CLS 0, a waiting note, and then the same DOM as the previous template.
+
+**Checked.** The new page against the previous template, over the same data, 1366 and 412px:
+the same body markup, scroll position and class after each of 17 steps (month tabs, county,
+month inside the county, a day, sort, an area, back twice, top ten and its month, open, home,
+search and pick) and 7 deep links (counties, an area by number and by ED code, `#top`, `#open`,
+an unknown county): 0 of 48 differ. Failure paths, each in a browser: no JavaScript, `file://`
+(a county click and `#top`), `data.js` 404 or blocked (overview draws; a county shows the note
+and the way back; a month tab is put back), `data.js` stalling past the loader's 10s, a failure
+followed by a retry that works, and a corrupted inline payload (the `load` event reveals the
+page, as it does for any first render that throws).
+
+**Rejected.**
+- *A `data.js` of the rest alone* (older months, open lists, top tens: 175 KB raw, 25.6 KB gz
+  against 28.4): 2.8 KB gz less per visit, and a merge step, five tests rewritten, and a page
+  cached across a deploy (`max-age=600`) breaking for up to ten minutes, because its `data.js`
+  would no longer be the payload it expects. With the file whole an old page and a new
+  `data.js` still agree. The saving is after the first render and does not move LCP.
+- *`<link rel="preload" href="data.js">`* beside the inline data: LCP 436 at slow 4G and 748 at
+  3g (412px) against 452 and 732 without it. The first render no longer needs the file.
+- *Rendering the first overview into the HTML at build time.* The audit's prototype (a captured
+  DOM plus a preload) reached LCP 248 at slow 4G and 424 at 3g (412px), and CLS 0. It needs a
+  second implementation of `renderOverview` in Python that must stay byte-identical to the
+  JavaScript one, which is the cost this change does not take.
+- *A silent hold in `render()`* (leave the old view up until `data.js` arrives): no feedback on
+  a slow link and no failure path; the page would look dead after a blocked request.
+
+**Not done.** `data.js` is still requested by a visit that never leaves the overview. It
+arrives after the first render, so it costs no LCP, only 28.4 KB gz of transfer.

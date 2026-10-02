@@ -246,6 +246,7 @@
   <div id="areaview" hidden></div>
   <div id="topview" hidden></div>
   <div id="openview" hidden></div>
+  <div id="waitview" hidden></div>
 
   <footer data-wait>
     <p><a href="areas.html" style="color:inherit">Every area with a notice</a> - a full directory of the 1,800-odd Census areas on this site, each linking to its incident history.</p>
@@ -305,12 +306,15 @@
   </footer>
 </div>
 
-<script src="data.js"></script>
+<script>window.UISCE_DATA = <!--FIRST-RENDER-->;</script>
 <script>
 <!--UI-JS-->
 </script>
 <script>
-const D = window.UISCE_DATA;
+// Inline: one month of every county, all the first overview reads. data.js carries
+// the whole payload and replaces D when it arrives (see loadAll).
+const FIRST = window.UISCE_DATA;
+let D = FIRST;
 const SEVLABEL = { outage: "Supply disruption", quality: "Water quality notice",
                    degraded: "Restrictions / low pressure", maintenance: "Works (planned / non-disruptive)",
                    "": "No announced disruption" };
@@ -321,9 +325,9 @@ let county = null;  // the county being drilled into, when view === "county"
 let areaCounty = null, areaCode = null;  // the area whose history is on screen
 let dayPick = null;  // the day in the county bar whose notices are listed
 let view = "overview";
-const VIEW_EL = { overview: "overview", county: "countyview", area: "areaview", top: "topview", open: "openview" };
+const VIEW_EL = { overview: "overview", county: "countyview", area: "areaview", top: "topview", open: "openview", wait: "waitview" };
 // months with a finished top ten; the in-progress month has none (see top_events)
-const TOP_MONTHS = Object.keys(D.top || {});
+const TOP_MONTHS = D.top_months;
 const today = new Date().toISOString().slice(0, 10);
 
 // Four entries, one desktop line. Quality notices left the bars entirely —
@@ -468,6 +472,7 @@ function incident(o, when) {
 const RENDER = { overview: renderOverview, county: renderCounty, area: renderArea, top: renderTop, open: renderOpen };
 
 function render() {
+  if (needsAll() && D === FIRST) return renderWaiting();
   for (const [name, id] of Object.entries(VIEW_EL)) {
     document.getElementById(id).hidden = name !== view;
   }
@@ -812,7 +817,7 @@ function topMonth() {
   // curMonth is shared with the other views and defaults to the in-progress
   // month, which by construction has no top ten — fall back to the newest
   // month that has one rather than rendering nothing
-  return D.top[curMonth] ? curMonth : TOP_MONTHS[TOP_MONTHS.length - 1];
+  return TOP_MONTHS.includes(curMonth) ? curMonth : TOP_MONTHS[TOP_MONTHS.length - 1];
 }
 
 function renderTop() {
@@ -1026,6 +1031,42 @@ document.getElementById("countyview").addEventListener("click", e => {
   document.getElementById("dayEvents").innerHTML = dayEventsHtml();
 });
 
+// ---- the whole payload ----
+
+// Older months, every open list and the top tens are read by the month switcher and
+// the drill-downs alone, so they come in data.js after the first render. render() holds
+// those views behind a note until it lands, and shows a failure rather than waiting it out.
+const DATA_STATE = {};
+
+function needsAll() {
+  return view === "county" || view === "top" || view === "open" || curMonth !== LATEST;
+}
+
+function loadAll() {
+  if (D !== FIRST || DATA_STATE.all === "loading") return;
+  loadShard(DATA_STATE, "all", "data.js" + cacheBust(D),
+    () => window.UISCE_DATA !== FIRST,
+    () => {
+      if (DATA_STATE.all === "ok") D = window.UISCE_DATA;
+      if (needsAll()) render();
+    });
+}
+
+function renderWaiting() {
+  const failed = DATA_STATE.all === "error";
+  // a month tab pressed before the rest arrived: put the month back and carry on
+  if (failed && view === "overview") { curMonth = LATEST; return render(); }
+  for (const id of Object.values(VIEW_EL)) document.getElementById(id).hidden = true;
+  document.getElementById("pickHint").hidden = view !== "overview";
+  const el = document.getElementById("waitview");
+  el.innerHTML = failed
+    ? `<a class="back" href="#" onclick="go(''); return false;">← All counties</a>
+       <div class="note">This view's figures did not load. Reloading the page usually fixes it.</div>`
+    : `<div class="note">Loading…</div>`;
+  el.hidden = false;
+  pending(!failed);
+}
+
 // ---- routing ----
 
 function go(hash) {
@@ -1056,7 +1097,7 @@ function newTab(e) {
 function goArea(name, code) {
   go("#area/" + encodeURIComponent(name) + "/" + encodeURIComponent(code));
 }
-function setMonth(m) { curMonth = m; dayPick = null; render(); }
+function setMonth(m) { curMonth = m; dayPick = null; if (needsAll()) loadAll(); render(); }
 function setTownSort(k) { townSort = k; render(); }
 function route() {
   // matched before the county pattern, which would otherwise never see it
@@ -1077,6 +1118,7 @@ function route() {
     : location.hash === "#open" ? "open" : "overview";
   if (areaCounty) loadHistory(areaCounty);
   if (county) loadCounty(county);
+  if (needsAll()) loadAll();
   render();
 }
 // The footer's methodology is collapsed by default; anything that points a
@@ -1111,6 +1153,7 @@ window.addEventListener("popstate", route);
 bindDayCaption();
 bindMonthReveal();
 route();
+loadAll();
 </script>
 </body>
 </html>

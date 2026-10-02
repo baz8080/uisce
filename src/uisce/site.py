@@ -2469,8 +2469,10 @@ def load_cases(conn):
     ).fetchall()
 
 
-# index.html + data.js, what a reader downloads before touching anything. The
-# split of 2026-09-05 left it under 300 KB; the warning is for the next growth.
+# index.html + data.js, what a reader downloads before touching anything. Only
+# index.html gates the first paint: it inlines the first render's data and
+# data.js loads after it. The split of 2026-09-05 left both under 300 KB; the
+# warning is for the next growth.
 INITIAL_BUDGET = 512 * 1024
 
 HISTORY_DIR = "h"
@@ -2478,6 +2480,35 @@ COUNTY_SHARD_DIR = "t"
 COUNTY_DIR = "c"
 AREA_DIR = "a"
 FEED_DIR = "feed"
+
+
+def first_render_payload(site):
+    """The part of the payload the first overview render reads, for index.html to inline.
+
+    Derived from the same dict as data.js, so it can only be a subset of it: the
+    newest month of every county, and the month list. Older months, every
+    county's open list and the ten largest are what the month switcher and the
+    drill-downs read, and arrive with data.js after the first render. `top` ships
+    as its month list alone, which is all the overview's link to it reads.
+    """
+    newest = set(site["months"][-1:])
+    first = {k: v for k, v in site.items() if k not in ("counties", "national", "top")}
+    first["top_months"] = list(site["top"])
+    first["national"] = {m: v for m, v in site["national"].items() if m in newest}
+    first["counties"] = {
+        name: {
+            **{k: v for k, v in county.items() if k not in ("months", "open")},
+            "months": {m: v for m, v in county["months"].items() if m in newest},
+        }
+        for name, county in site["counties"].items()
+    }
+    return first
+
+
+def inline_json(payload):
+    """JSON for a <script> element: a `<` never reaches the page, so no string in
+    it can close the element or open a comment."""
+    return json.dumps(payload, separators=(",", ":")).replace("<", "\\u003c")
 
 
 def write_site(site, site_dir, towns=None):
@@ -2514,6 +2545,7 @@ def write_site(site, site_dir, towns=None):
     notice_text = site.pop("notice_text", {})
     feed = site.pop("feed", {})
     data = "window.UISCE_DATA = " + json.dumps(site) + ";"
+    first = inline_json(first_render_payload(site))
     site_dir.mkdir(parents=True, exist_ok=True)
     (site_dir / "data.js").write_text(data)
     # the noscript fallback: the county pages carry the same figures statically
@@ -2522,7 +2554,10 @@ def write_site(site, site_dir, towns=None):
         for c in sorted(site["counties"])
     )
     (site_dir / "index.html").write_text(
-        page_html(SITE_HTML, {"CANONICAL": f"{BASE_URL}/", "COUNTY-LINKS": county_links})
+        page_html(
+            SITE_HTML,
+            {"CANONICAL": f"{BASE_URL}/", "COUNTY-LINKS": county_links, "FIRST-RENDER": first},
+        )
     )
     sizes = {"feeds": 0}
     feed_dir = site_dir / FEED_DIR
@@ -2705,6 +2740,7 @@ def write_site(site, site_dir, towns=None):
     (site_dir / "robots.txt").write_text(statusui.robots(BASE_URL))
     return sizes | {
         "data.js": len(data.encode()),
+        "first_render": len(first.encode()),
         "shards": shard_bytes + county_shard_bytes,
         "n_areas": sum(len(a) for a in history.values()),
         "areas.html": index_bytes,

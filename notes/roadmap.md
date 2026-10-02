@@ -104,7 +104,9 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
   the staleness question if a notice's own text says lifted while `status` stays Open.
 - **The index budget.** `data.js` is 212 KB after #82 against the 512 KB `INITIAL_BUDGET`
   for index.html plus data.js, and the months block grows with months × counties. When the
-  build's `::warning::` fires, measure what grew before choosing the next cut.
+  build's `::warning::` fires, measure what grew before choosing the next cut. The inline
+  first-render payload is one month of every county and does not grow with months, but its
+  day arrays are 44% of it (frontend-notes.md, "The first render's data is inline").
 - **A closure series**, if one is ever published from `closed_at`: record the build cadence
   beside the data so the series can be corrected rather than annotated (data-quality.md,
   "`closed_at` is a floor").
