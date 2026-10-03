@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 300" width="620" height="300" font-family="system-ui, sans-serif" font-size="13">
+  <!-- left: the settlement boundary polygon with three Small Area centroids, only one inside -> 214. right: the CSO attribute says all three belong to Doneraile -> 857 -->
+  <text x="150" y="28" text-anchor="middle" font-weight="600" fill="#7a3e00">Method 1: point-in-polygon (retracted)</text>
+  <text x="460" y="28" text-anchor="middle" font-weight="600" fill="#1f3a5a">Method 2: the CSO's own attribute (kept)</text>
+  <!-- left panel -->
+  <path d="M95 90 L200 80 L215 150 L170 205 L100 195 L80 140 Z" fill="#f5d9c8" fill-opacity="0.6" stroke="#c0623a" stroke-width="2"/>
+  <text x="150" y="150" text-anchor="middle" fill="#7a3e00" font-size="12">Doneraile boundary</text>
+  <text x="150" y="164" text-anchor="middle" fill="#7a3e00" font-size="11">(generalised, from a 37 MB download)</text>
+  <!-- three SA centroids: one inside, two just outside the drawn boundary -->
+  <circle cx="140" cy="115" r="6" fill="#7a3e00"/><text x="150" y="112" font-size="11">SA 1 · 214 ✓</text>
+  <circle cx="72" cy="120" r="6" fill="#c0c0c0" stroke="#7a3e00"/><text x="12" y="112" font-size="11">SA 2 · 385 ✗</text>
+  <circle cx="225" cy="185" r="6" fill="#c0c0c0" stroke="#7a3e00"/><text x="205" y="210" font-size="11">SA 3 · 258 ✗</text>
+  <text x="150" y="245" text-anchor="middle" fill="#7a3e00" font-weight="600">Doneraile = 214 people</text>
+  <text x="150" y="262" text-anchor="middle" fill="#7a3e00" font-size="12">availability divides by 214 → a burst reads ~4× worse</text>
+  <!-- right panel: a table -->
+  <g font-size="12" fill="#1f3a5a">
+    <rect x="345" y="70" width="240" height="26" fill="#cfe3f5"/>
+    <text x="352" y="88" font-weight="600">SA_GUID_2022</text><text x="470" y="88" font-weight="600">SA_URBAN_AREA_NAME</text>
+    <text x="352" y="114">4c07…a1</text><text x="470" y="114">Doneraile</text><text x="555" y="114">214</text>
+    <text x="352" y="138">4c07…b7</text><text x="470" y="138">Doneraile</text><text x="555" y="138">385</text>
+    <text x="352" y="162">4c07…c2</text><text x="470" y="162">Doneraile</text><text x="555" y="162">258</text>
+    <line x1="345" y1="172" x2="585" y2="172" stroke="#3b6ea5"/>
+    <text x="470" y="192" font-weight="600">sum</text><text x="555" y="192" font-weight="600">857</text>
+  </g>
+  <text x="460" y="245" text-anchor="middle" fill="#1f3a5a" font-weight="600">Doneraile = 857 people — the published figure, exactly</text>
+  <text x="460" y="262" text-anchor="middle" fill="#1f3a5a" font-size="12">no polygons, no geometry: the CSO already assigned each Small Area</text>
+  <text x="310" y="290" text-anchor="middle" fill="#666" font-size="11">Doneraile's three Small Areas hold 385, 214 and 258 people (measured 18 Aug 2026); the polygon method caught only the 214 one (PR #23, 25 Jul 2026). Positions are schematic.</text>
+</svg>
