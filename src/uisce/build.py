@@ -3,7 +3,14 @@ import re
 import sqlite3
 from datetime import date, datetime, time, timezone
 
-from uisce.config import DB_PATH, DUBLIN, JSONL_PATH, RECURRING
+from uisce.config import (
+    DB_PATH,
+    DUBLIN,
+    EARLIEST_START_YEAR,
+    JSONL_PATH,
+    RECURRING,
+    plausible_start,
+)
 from uisce.inference import cases_needing_inference, current_states, readable_latest
 
 NO_END_SIGNAL_SOURCES = {"not_found", "lifted_immediate"}
@@ -69,6 +76,8 @@ def compute_notice_to_end_seconds(start_date, end_source, local_date, local_time
     sources the end is a stated plan rather than an observed completion.
     See notes/data-quality.md."""
     if end_source in NO_END_SIGNAL_SOURCES or not local_date or not start_date:
+        return None
+    if not plausible_start(start_date):
         return None
 
     end_utc = reported_end_utc(local_date, local_time)
@@ -172,6 +181,12 @@ def first_start_date_per_case(records):
     return {case_id: record["start_date"] for case_id, record in earliest.items()}
 
 
+def implausible_starts(conn):
+    return [case_id for (case_id,) in conn.execute(
+        "SELECT id FROM cases WHERE start_date < ? ORDER BY id", (str(EARLIEST_START_YEAR),)
+    )]
+
+
 def count_never_inferred(conn):
     """Cases with a description but no inferred_cases row — downloaded since the
     last uisce-infer run. Almost all are open (they are the newest cases), and
@@ -265,6 +280,7 @@ def run():
         never_inferred, never_inferred_open = count_never_inferred(conn)
         unquotable, inferred_first_dates = unquotable_windows(conn)
         stale = stale_cases(conn, latest_by_case, unreadable)
+        implausible = implausible_starts(conn)
 
     print(f"Upserted {len(rows)} rows into inferred_cases")
     if unreadable:
@@ -273,6 +289,10 @@ def run():
         print(f"::warning::{len(unreadable)} case(s) have a newest record in {JSONL_PATH} "
               "that build cannot read; each publishes its previous record, if any, until "
               f"uisce-infer redoes it: {shown}{more}")
+    if implausible:
+        print(f"::warning::{len(implausible)} case(s) carry a start_date before "
+              f"{EARLIEST_START_YEAR}; no span is measured from one and the site dates the "
+              f"notice from first_seen: {', '.join(str(case_id) for case_id in implausible)}")
     if unquotable:
         print(f"{len(unquotable)} recurring window(s) with a value not in the notice's own text:")
         for case_id, missing in unquotable[:UNQUOTABLE_SHOWN]:

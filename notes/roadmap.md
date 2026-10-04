@@ -76,6 +76,18 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
   there; adjudicate that row in end-time-eval.md, never in the CSV. The same bump could say
   that an alternative supply's hours are not the works' end (239696-239698 read the tanker's
   23:59 as the end), measured on its own.
+- **An imputed pin beside measured siblings sets its event's span.** The completion median
+  sums the event's whole union, imputed intervals included, so 16 outage events on the
+  2026-10-04 release (11 filed as observed, 5 as scheduled) publish an estimate in a tier
+  that is meant to hold none: `KER00113057` reads 14.6h where its measured pins say 1.2h,
+  `WEX00118070` 14.6h against 1.9h. The history record already reads `meta["measured"]`.
+  Reading it in the median too moves Donegal October 12.0h to 3.6h, national July 12.7h to
+  12.5h, national October 6.1h to 6.0h, Kerry June 4.3h to 4.2h, Wexford August 3.7h to
+  3.6h, and four county scheduled medians by 0.1h to 1.0h. The availability side is the same
+  question: in the 10 of those events whose other pins are all observed, the 13 imputed
+  pins add 218,456 person-hours beyond the measured union. Measured 2026-10-04 while
+  guarding the year-0206 start (data-quality.md, "A start typed into the wrong
+  millennium"); not changed there because it is a different decision.
 - **`IGNORE_BOIL_NOTICES`.** Recommendation is to leave it off (boil-notices.md, re-measured
   2026-09-05): the two accruing notices and the one paired one are the live warnings the health
   marker exists for. The cost of leaving it off is 13 of 17 issue events excluded as stale

@@ -27,6 +27,7 @@ from uisce.site import (
     boil_notice_fate,
     build_site,
     classify,
+    collect_lifts,
     county_events,
     county_slug,
     daily_windows,
@@ -340,6 +341,49 @@ class TestRestampedStart:
         assert case.rec == "expanded"
         assert case.intervals[0][0] >= case.start == _dt("2026-05-01T09:00:00+00:00")
         assert len(case.intervals) == 4
+
+
+class TestImplausibleStart:
+    """Case 241224: the feed carried a start in year 0206, with a completion
+    its sibling pins and its own first sighting put on 10 August 2026."""
+
+    @staticmethod
+    def _typo(**overrides):
+        # build.py measures no span from such a start; the completion is 11:00 UTC
+        base = dict(id=2, start_date="0206-05-05T09:00:00+00:00",
+                    first_seen="2026-05-05T12:00:00+00:00", notice_to_end_seconds=None,
+                    end_local_date="2026-05-05", end_local_time="12:00")
+        return _case(**(base | overrides))
+
+    def test_the_notice_is_dated_from_its_first_sighting(self):
+        case = resolve_case(self._typo(), SA_INDEX, {}, NOW)
+        assert case.start == _dt("2026-05-05T12:00:00+00:00")
+
+    def test_it_is_charged_a_typical_span_back_from_its_own_end(self):
+        rows = [_case(id=1, reference_num="CAR1"), self._typo(reference_num="CAR2")]
+        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        month = site["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["person_h"] == 2 * 24 * 1000
+        assert month["imputed_n"] == 1 and month["completed_n"] == 1
+        event = next(e for e in site["history"]["Carlow"]["T1"]["events"] if e["ref"] == "CAR2")
+        assert event["start"] == "2026-05-05" and event["from"] == "2026-05-04"
+        assert "hours" not in event
+
+    def test_a_sibling_pin_with_a_real_start_keeps_the_event_measured(self):
+        sibling = _case(id=1, start_date="2026-05-05T09:00:00+00:00",
+                        notice_to_end_seconds=2 * 3600.0, end_local_date="2026-05-05",
+                        end_local_time="12:00")
+        event = _history([self._typo(), sibling])[0]
+        assert event["start"] == "2026-05-05" and event["hours"] == 2.0
+
+    def test_with_no_sighting_either_it_is_not_an_event(self):
+        assert resolve_case(self._typo(first_seen=None), SA_INDEX, {}, NOW) is None
+
+    def test_a_lift_is_dated_the_same_way(self):
+        lift = self._typo(work_category="boil_notice_lifted", location="Ardfinnan PWS")
+        assert collect_lifts([lift]) == {
+            ("Carlow", "boil_notice_lifted"): [("ardfinnan", _dt("2026-05-05T12:00:00+00:00"))]}
+        assert collect_lifts([lift | {"first_seen": None}]) == {}
 
 
 class TestMonths:

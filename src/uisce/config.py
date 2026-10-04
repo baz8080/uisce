@@ -2,6 +2,7 @@
 matching how the scripts have always been run (from the repo root)."""
 
 import re
+from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -41,6 +42,14 @@ def describes_recurrence(description):
 # site.py importing it from build.py would invert the pipeline's direction.
 # See notes/statuspage-methodology.md.
 OBSERVED_END_SOURCES = {"completion_update"}
+
+# The feed's start is hand-editable and one arrived as year 0206 (case 241224).
+# Every reader of a start refuses one before this; notes/data-quality.md.
+EARLIEST_START_YEAR = 2000
+
+
+def plausible_start(start_date):
+    return datetime.fromisoformat(start_date).year >= EARLIEST_START_YEAR
 
 DB_PATH = Path("out/uisce.db")
 CASES_RAW_PATH = Path("out/cases.json")

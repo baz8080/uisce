@@ -52,6 +52,7 @@ from uisce.config import (
     SA_TOWNS_PATH,
     SITE_DIR,
     describes_recurrence,
+    plausible_start,
 )
 from uisce.pipeline import check_schema_version
 
@@ -296,7 +297,7 @@ def boil_notice_fate(row, lifts, now):
 
     See notes/boil-notices.md for the measurements behind this.
     """
-    start = parse_dt(row["start_date"])
+    start = publication(row)
     # No ended_by_publication guard, unlike the do-not-consume pairing in
     # resolve_case, and the asymmetry is deliberate rather than missed: it can
     # only fire on a case carrying an extracted end, and this class never has
@@ -376,10 +377,9 @@ def collect_lifts(rows):
     """
     lifts = defaultdict(list)
     for r in rows:
-        if r["work_category"] in IGNORE_CATS:
-            lifts[(r["county"], r["work_category"])].append(
-                (norm_scheme(r["location"]), parse_dt(r["start_date"]))
-            )
+        when = publication(r)
+        if r["work_category"] in IGNORE_CATS and when is not None:
+            lifts[(r["county"], r["work_category"])].append((norm_scheme(r["location"]), when))
     return lifts
 
 
@@ -403,6 +403,14 @@ def paired_lift(lifts, key, location, start):
 
 def parse_dt(value):
     return datetime.fromisoformat(value).astimezone(timezone.utc)
+
+
+def publication(row):
+    """When the notice went up: start_date, or the first sighting where the feed
+    typed a start that is not a date (case 241224, year 0206). None if neither."""
+    if plausible_start(row["start_date"]):
+        return parse_dt(row["start_date"])
+    return parse_dt(row["first_seen"]) if row["first_seen"] else None
 
 
 def month_bounds(ym):
@@ -959,9 +967,9 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         recurring = (shared_window is not None or r["end_recurrence"] == RECURRING
                      or describes_recurrence(r["description"]))
     sev = classify(r, recurring)
-    if sev is None or r["county"] not in COUNTY_POP:
+    start = publication(r)
+    if sev is None or start is None or r["county"] not in COUNTY_POP:
         return None
-    start = parse_dt(r["start_date"])
     cap = timedelta(days=CAP_DAYS)
 
     notice_to_end = r["notice_to_end_seconds"]

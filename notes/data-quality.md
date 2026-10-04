@@ -128,6 +128,47 @@ A crude regex probe (`until <time> on <date>`, no LLM spend at all) parsed 4,342
 
 **Amended 2026-09-24: the span and its anchor came from different starts.** `build.py` measures `notice_to_end_seconds` from the start it pinned at first inference (`end_input_start_date`), but `site.py` added that span to the *current* `start_date`. When the feed re-stamped the start between the two, the charged interval matched neither reading and ran past the notice's own end. On the 2026-09-23 release that was **21 cases with a usable span**, so the "confined to the nulled family" reading above no longer holds for the site: 243451 (Clare) was charged 4 days past its own completion, and 235225 (Meath, start moved +40 days) was charged the whole 14-day cap after its scheduled end. The interval now starts at `end_input_start_date`, the start the span was measured from, and so does the event's publication date everywhere it is read (the month the completion median files it under, the history, the top ten, the open and closed lists): a code review of the first cut found that leaving `start_date` as the publication produced history records ending before they started and a July median counting a completion July's own event count did not. The span lengths are unchanged, so this moves hours onto the right days rather than adding or removing them: the only month totals that move are where the interval now falls in a different month (Meath 114,576 person-hours from July back to June) or overlaps a sibling pin differently (8 more county-months, the largest Donegal August +7,722). No grade changed.
 
+### A start typed into the wrong millennium (2026-10-04)
+
+Case 241224 (`WEX00118070`, "Burst Water Main - Wexford") carries `start_date` and `first_start_date` of `0206-08-10T10:15:00+00:00`: a hand-typed start (round `10:15:00`, where the feed's own stamps carry seconds) with the year's digits transposed. Its sibling pins 241225 and 241230 start 2026-08-10 08:51 and 09:12, all three were first seen 2026-08-10 12:01 and all three carry a completion update at 11:45 that day. Nothing checked the year, so on the 2026-10-04 release:
+
+- `build.py` measured `notice_to_end_seconds` at 57,433,710,600 (about 1,820 years).
+- `site.py` capped that at 14 days from year 206, an interval wholly before `COLLECTION_START`. The event's history record read `"start": "0206-08-10", "hours": 337.9, "span_h": 15953808.5`, and the county page printed "Sun 10 Aug 0206 · 337.9h".
+- The event's earliest publication fell in no month, so it was missing from August's completion median (Wexford counted 59, not 60), and the capped 14 days sat in `SpanTable` as a burst-main observation.
+
+**Measured before choosing a guard.** 14,467 cases, 14,460 with a start:
+
+| check | cases |
+|---|---|
+| start year before 2000 | **1** (241224) |
+| start year 2022 to 2025 | 14, all standing boil or do-not-consume notices and their lifts, the oldest 2022-08-18 |
+| `first_seen` NULL (first downloaded before 2026-07-20) | 7,893 |
+| start more than 30 / 14 / 7 / 1 days before `first_seen`, of the 6,572 with both | 4 / 5 / 6 / 136 |
+| start after `first_seen`, same 6,572 | 2,056, by up to 35.7 days |
+
+The four more than 30 days before are one event, `WME00115938` (38.1 days), whose 10 July start carries the feed's own machine stamp: the feed served it late. So a bound relative to `first_seen` either misfires on real starts (anything under 38 days) or catches the same single case as a year check, and it cannot see the 7,893 rows with no `first_seen` at all. It was rejected as the detector. Neither check can catch a typo that lands on a plausible year (2016, 2025): the floor is a backstop against dates the feed cannot mean, not a typo detector.
+
+**The guard is one predicate, applied where a start is read.** `plausible_start` in `config.py` refuses a start before `EARLIEST_START_YEAR` (2000; nothing sits between 0206 and 2022, so any cut in that gap reads the corpus the same way). Three readers use it:
+
+- `build.py`: no span is measured from such a start. `notice_to_end_seconds` is NULL, as for a negative span, and `uisce-build-inferred` prints a `::warning::` naming the cases.
+- `site.py`: `publication(row)` dates the notice from `first_seen` instead, and a row with neither is not an event (0 cases). With the span NULL and the end known, the pin takes the route the negative-span family already takes: a typical observed span for its category, charged backwards from its own completion.
+- `rules.py`: `_resolve_year` lends no year from such a start, so the rules abstain on a date written without one. 4,481 of the rules' 13,560 emissions take their year from the start; 241224's did not (its update header writes `10/08/2026`), but the next one could, and an end in year 206 beside a start in year 206 would be a plausible-looking span of a few hours filed under no month.
+
+**What moved** (same DB, same clock, before and after). The event reads `"start": "2026-08-10", "hours": 1.9, "from": "2026-08-09"`, closed 10 August, 2 of 3 pins confirmed. Wexford August: 411,894 to 421,164 person-hours (+9,270), availability 99.662 to 99.655, still C, clear days 3 to 2 (9 August now colours), completions 59 to 60 with the median unchanged at 3.7h. National August completions 879 to 880, median unchanged at 16.7h. `SpanTable` lost the capped observation, which moved 24 other county-months by 1 or 2 person-hours. No grade changed.
+
+The +9,270 is the imputed 14.6h burst-main span standing in the event's union where its two sibling pins measured 1.9h. That is how every imputed pin beside measured siblings behaves today, and this is one of 16 such events; see the roadmap entry on the completion median.
+
+**Rejected:**
+
+1. *Guard at ingest (`pipeline.py`).* The typo is already stored, `first_start_date` is COALESCEd and never rewritten, and the JSONL pins the start seen at first inference, so `build.py` and a UI deploy reading an older release would still need the read-side check. Rewriting the stored value is also not an additive migration, and the DB would stop recording what the feed said.
+2. *`first_seen` as the start the span is measured from.* For 241224 it changes nothing (first seen 12:01 UTC, completed 10:45 UTC: negative, NULL). In general `first_seen` trails publication by up to a build interval, so a span from it is a hybrid basis that understates, and it would enter the published median as an observed completion. Same reason the stated works window was refused on 2026-07-20.
+3. *Repairing the digits (0206 to 2026).* Gives 10:15 to 10:45 UTC, a 0.5h span, where the siblings say the notice was up by 08:51. A guess on one case, and no rule generalises it.
+4. *The earliest sibling pin's start.* The right answer here (Wexford August stays 411,894, median 3.6h), but it is a new rule that would apply equally to the whole negative-span family and belongs with the roadmap entry, not in a guard for one case.
+5. *Dropping the pin.* Wexford August 411,681; the event loses 113 of its 730 people, and a single-pin event would vanish, which is the zero the 2026-08-15 decision refused.
+6. *An upper bound on the start.* 118 cases start after the last build, by at most 10.5 days, all within the advance-publication range already described above. Nothing to catch, and a threshold would have to be picked without a case to fit it to.
+
+Not touched: the 7 cases with no `start_date` at all stay excluded by `load_cases`. Six are closed with no `first_seen`; the seventh, 243084, is an `Open` Cork burst main first seen 2026-08-31.
+
 ## Multi-pin events inflate per-case statistics
 
 One real-world event is often published as several map pins sharing a `reference_num` (e.g. `LOU00112686`: 13 pins across Drogheda created within 22 minutes, identical title/description). 675 reference numbers cover 1,930 rows, so the 6,758 "cases" are ~5,485 distinct events. Any per-county counts or duration aggregates computed per-row weight events by pin count. Note the pins are *not* guaranteed byte-identical in description across a group (902 distinct descriptions across the 1,930 duplicate-ref rows), so deduplication by `reference_num` alone would discard real per-area updates — the inference-level dedupe keys on the description hash instead.
