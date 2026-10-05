@@ -335,6 +335,12 @@ class TestAbstentions:
         result = extract(None, "Works are scheduled to take place until 2pm on 28/04/2026.")
         assert result["local_date"] == "2026-04-28"
 
+    def test_an_implausible_start_date_lends_no_year(self):
+        typo = "0206-04-27T08:00:00+00:00"
+        assert extract(typo, "Works are scheduled to take place until 2pm on 28 April.") is None
+        result = extract(typo, "Works are scheduled to take place until 2pm on 28/04/2026.")
+        assert result["local_date"] == "2026-04-28"
+
 
 # Shapes drawn from every template family above plus the known-hostile ones.
 # Whatever these rules come to match in future versions, the only classes

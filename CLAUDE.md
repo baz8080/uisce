@@ -29,6 +29,7 @@ with the evidence that closed them.
 | Decision | Where |
 |---|---|
 | `start_date` is re-stamped in place by the feed. Two rescue routes measured and closed; **taking the minimum recorded start is explicitly rejected** (backward re-stamps would inflate durations). Negative spans stay NULL. | data-quality.md — "Measured 2026-07-20: ends preceding publication are 532 cases" |
+| A `start_date` before 2000 is a feed typo, refused by `plausible_start` wherever a start is read: no span is measured from it, the site dates the notice from `first_seen`, the rules lend no year from it. A bound relative to `first_seen` and a guard at ingest were measured and rejected. | data-quality.md - "A start typed into the wrong millennium" (2026-10-04) |
 | There is no better start basis in the feed than the publication timestamp. **Do not build the toggle.** | data-quality.md — "Resolved 2026-07-20" |
 | The published median is notice → *observed* completion. Scheduled ends accrue disruption time but are excluded from the headline; pooling them dragged 17.0h to 9.3h. | statuspage-methodology.md — "The published time metric" (settled 2026-07-20) |
 | Events with no usable end are charged a typical observed span in availability, but stay out of the median. A total has no exclude option; a median does. | statuspage-methodology.md — "An event with no usable end is charged a typical span" (2026-08-15) |

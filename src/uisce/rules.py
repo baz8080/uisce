@@ -31,7 +31,7 @@ it, so records stay comparable across runs.
 import re
 from datetime import date, datetime, timedelta
 
-from uisce.config import describes_recurrence
+from uisce.config import describes_recurrence, plausible_start
 
 RULES_VERSION = "rules-v2"
 
@@ -150,6 +150,8 @@ def _resolve_year(day, month, start_date):
     try:
         published = datetime.fromisoformat(start_date).date()
     except (TypeError, ValueError):
+        return None
+    if not plausible_start(start_date):
         return None
     candidates = []
     for year in (published.year - 1, published.year, published.year + 1):

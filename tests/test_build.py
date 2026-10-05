@@ -11,6 +11,7 @@ from uisce.build import (
     count_never_inferred,
     date_forms,
     first_start_date_per_case,
+    reported_end_utc,
     time_forms,
     unquotable_windows,
 )
@@ -49,6 +50,20 @@ class TestComputeDurationSeconds:
     def test_negative_duration_is_nulled(self):
         duration = compute_notice_to_end_seconds(
             "2026-06-02T10:00:00+00:00", "completion_update", "2026-06-01", "12:00"
+        )
+        assert duration is None
+
+    def test_a_start_typed_into_the_wrong_millennium_measures_nothing(self):
+        # case 241224: 0206 for 2026, which read as an 1,820-year span
+        duration = compute_notice_to_end_seconds(
+            "0206-08-10T10:15:00+00:00", "completion_update", "2026-08-10", "11:45"
+        )
+        assert duration is None
+
+    def test_an_end_resolved_against_such_a_start_is_no_end(self):
+        assert reported_end_utc("0206-08-10", "11:45") is None
+        duration = compute_notice_to_end_seconds(
+            "2026-08-10T08:00:00+00:00", "completion_update", "0206-08-10", "11:45"
         )
         assert duration is None
 
@@ -322,6 +337,15 @@ class TestRun:
                    [self._record() | {"model": "rules-v1"}])
         build.run()
         assert "::warning::1 case(s)" in capsys.readouterr().out
+
+    def test_an_implausible_start_is_named_in_a_warning(self, tmp_path, monkeypatch, capsys):
+        db, _ = self._wire(tmp_path, monkeypatch, SCHEDULED,
+                           [self._record() | {"model": inference.MODEL_NAME}])
+        with sqlite3.connect(db) as conn:
+            conn.execute("INSERT INTO cases (id, start_date) VALUES (7, ?)",
+                         ("0206-08-10T10:15:00+00:00",))
+        build.run()
+        assert "::warning::1 case(s) carry a start_date before 2000" in capsys.readouterr().out
 
     def test_a_current_record_raises_no_warning(self, tmp_path, monkeypatch, capsys):
         self._wire(tmp_path, monkeypatch, SCHEDULED,
