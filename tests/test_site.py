@@ -376,6 +376,23 @@ class TestImplausibleStart:
         event = _history([self._typo(), sibling])[0]
         assert event["start"] == "2026-05-05" and event["hours"] == 2.0
 
+    def test_a_span_measured_from_it_by_an_older_build_is_not_read(self):
+        # a UI deploy builds from the current release, inferred_cases included
+        stale = self._typo(reference_num="CAR2", notice_to_end_seconds=57433710600.0,
+                           end_input_start_date="0206-05-05T09:00:00+00:00")
+        rows = [_case(id=1, reference_num="CAR1"), stale]
+        assert SpanTable(rows).overall == 86400.0
+        event = next(e for e in _history(rows) if e["ref"] == "CAR2")
+        assert event["start"] == "2026-05-05" and event["from"] == "2026-05-04"
+        assert "hours" not in event
+
+    def test_an_end_in_the_same_wrong_year_is_charged_from_the_sighting(self):
+        rows = [_case(id=1, reference_num="CAR1"),
+                self._typo(reference_num="CAR2", end_local_date="0206-05-05")]
+        event = next(e for e in _history(rows) if e["ref"] == "CAR2")
+        assert event["start"] == "2026-05-05" and event["end"] == "2026-05-06"
+        assert "from" not in event
+
     def test_with_no_sighting_either_it_is_not_an_event(self):
         assert resolve_case(self._typo(first_seen=None), SA_INDEX, {}, NOW) is None
 

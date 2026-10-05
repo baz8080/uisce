@@ -59,6 +59,9 @@ def reported_end_utc(local_date, local_time):
         return None
 
     year, month, day = (int(p) for p in local_date.split("-"))
+    # an extractor handed a typo'd start can resolve a year-less date against it
+    if year < EARLIEST_START_YEAR:
+        return None
     if local_time:
         hour, minute = (int(p) for p in local_time.split(":"))
         second = 0
@@ -81,6 +84,8 @@ def compute_notice_to_end_seconds(start_date, end_source, local_date, local_time
         return None
 
     end_utc = reported_end_utc(local_date, local_time)
+    if end_utc is None:
+        return None
     start_utc = datetime.fromisoformat(start_date)
 
     elapsed = (end_utc - start_utc).total_seconds()

@@ -413,6 +413,15 @@ def publication(row):
     return parse_dt(row["first_seen"]) if row["first_seen"] else None
 
 
+def measured_span(row):
+    """notice_to_end_seconds, or None where it was measured from a start that is
+    not a date: a release built before build.py refused those still carries it."""
+    pinned = row["end_input_start_date"]
+    if pinned and not plausible_start(pinned):
+        return None
+    return row["notice_to_end_seconds"]
+
+
 def month_bounds(ym):
     year, month = (int(p) for p in ym.split("-"))
     start = datetime(year, month, 1, tzinfo=timezone.utc)
@@ -635,7 +644,7 @@ class SpanTable:
     def __init__(self, rows):
         by_cat = defaultdict(list)
         for r in rows:
-            span = r["notice_to_end_seconds"]
+            span = measured_span(r)
             if span is None or r["end_source"] not in OBSERVED_END_SOURCES:
                 continue
             by_cat[r["work_category"]].append(min(span, CAP_DAYS * 86400))
@@ -972,7 +981,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         return None
     cap = timedelta(days=CAP_DAYS)
 
-    notice_to_end = r["notice_to_end_seconds"]
+    notice_to_end = measured_span(r)
     has_end = notice_to_end is not None
     # a paired boil-notice lift is an observed end too; set below
     observed_end = has_end and r["end_source"] in OBSERVED_END_SOURCES
