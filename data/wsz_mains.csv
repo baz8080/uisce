@@ -1,0 +1,689 @@
+code,name,local_authority,county,mains_m
+SZPUB0001,Carlow Town,Carlow,Carlow,172460
+SZPUB0002,Leighlinbridge,Carlow,Carlow,17729
+SZPUB0003,Old Leighlin,Carlow,Carlow,564
+SZPUB0004,Bilboa,Carlow,Carlow,290
+SZPUB0006,Hacketstown,Carlow,Carlow,13212
+SZPUB0007,Tullow,Carlow,Carlow,38869
+SZPUB0008,Carlow Central Regional,Carlow,Carlow,115364
+SZPUB0009,Carlow North Regional,Carlow,Carlow,171145
+SZPUB0010,Bagenalstown,Carlow,Carlow,29350
+SZPUB0011,Borris,Carlow,Carlow,6913
+SZPUB0013,Ballinkillen,Carlow,Carlow,1851
+SZPUB0014,Cavan RWSS,Cavan,Cavan,205805
+SZPUB0015,Arvagh P.W.S.,Cavan,Cavan,7248
+SZPUB0016,Bailieboro RWSS,Cavan,Cavan,149532
+SZPUB0017,Ballyconnell P.W.S.S.,Cavan,Cavan,32430
+SZPUB0018,Ballyjamesduff R.W.S.S.,Cavan,Cavan,77189
+SZPUB0019,Bawnboy P.W.S.,Cavan,Cavan,7456
+SZPUB0020,Belturbet P.W.S.,Cavan,Cavan,54519
+SZPUB0021,Blacklion P.W.S.,Cavan,Cavan,4927
+SZPUB0022,Cootehill P.W.S.,Cavan,Cavan,27506
+SZPUB0023,Gowna (CN),Cavan,Cavan,23674
+SZPUB0024,Killeshandra P.W.S.,Cavan,Cavan,7021
+SZPUB0025,Kingscourt P.W.S.,Cavan,Cavan,27707
+SZPUB0026,Shercock P.W.S.,Cavan,Cavan,11139
+SZPUB0027,Swanlinbar P.W.S.,Cavan,Cavan,9549
+SZPUB0028,Ballyhaise P.W.S.,Cavan,Cavan,7071
+SZPUB0029,Killaloe PWS,Clare,Clare,21973
+SZPUB0030,Ennistymon RWS,Clare,Clare,405817
+SZPUB0032,Scarriff PWS,Clare,Clare,18345
+SZPUB0033,Kiladysart PWS,Clare,Clare,18202
+SZPUB0034,Ennis PWS,Clare,Clare,277121
+SZPUB0035,Corrofin PWS,Clare,Clare,25444
+SZPUB0036,Mountshannon PWS,Clare,Clare,26283
+SZPUB0037,Feakle PWS,Clare,Clare,9275
+SZPUB0038,W .Clare RWS (Old WTP),Clare,Clare,150583
+SZPUB0039,Broadford PWS,Clare,Clare,39780
+SZPUB0040,Carran PWS,Clare,Clare,6793
+SZPUB0041,Flagmount PWS,Clare,Clare,2972
+SZPUB0042,Shannon/Sixmilebridge RWSS,Clare,Clare,361697
+SZPUB0043,West Clare RWS (New WTP),Clare,Clare,393157
+SZPUB0045,Cork City Water Supply,Cork City,Cork,451901
+SZPUB0047,Allow Regional,Cork,Cork,117519
+SZPUB0049,Charleville,Cork,Cork,132222
+SZPUB0050,Doneraile,Cork,Cork,99104
+SZPUB0051,Monabricka,Cork,Cork,1085
+SZPUB0052,Skahanagh,Cork,Cork,4724
+SZPUB0053,Ballynoe,Cork,Cork,4402
+SZPUB0055,Castletownroche,Cork,Cork,48392
+SZPUB0056,Conna Regional,Cork,Cork,46395
+SZPUB0058,Downing Bridge,Cork,Cork,36684
+SZPUB0059,Fermoy,Cork,Cork,61531
+SZPUB0060,Kilally (Kilworth),Cork,Cork,5266
+SZPUB0062,Kilmagnier,Cork,Cork,14102
+SZPUB0063,Knockdrumaclough,Cork,Cork,1876
+SZPUB0067,Kilmurry (Mitchelstown),Cork,Cork,4154
+SZPUB0068,Gortnaskehy,Cork,Cork,0
+SZPUB0069,Macroney,Cork,Cork,4247
+SZPUB0070,Coolagown,Cork,Cork,2012
+SZPUB0073,Ballyvadonna,Cork,Cork,0
+SZPUB0075,Bottlehill,Cork,Cork,0
+SZPUB0077,Bweeng,Cork,Cork,5068
+SZPUB0078,Ballinamona,Cork,Cork,0
+SZPUB0079,Ballyhooly,Cork,Cork,40201
+SZPUB0080,Cregane/Glantane,Cork,Cork,8847
+SZPUB0081,Dromahane,Cork,Cork,9015
+SZPUB0084,Lombardstown_Glantane,Cork,Cork,13641
+SZPUB0085,Mallow,Cork,Cork,56972
+SZPUB0086,Monaparson,Cork,Cork,0
+SZPUB0087,Monee,Cork,Cork,7554
+SZPUB0088,Ballyclough and Mount North,Cork,Cork,52691
+SZPUB0090,Carrigcleena,Cork,Cork,0
+SZPUB0093,Banteer,Cork,Cork,55481
+SZPUB0094,Caherbarnagh,Cork,Cork,19272
+SZPUB0095,Cockhill,Cork,Cork,0
+SZPUB0096,Glenleigh,Cork,Cork,0
+SZPUB0097,Kilcorney,Cork,Cork,3248
+SZPUB0098,Lyre,Cork,Cork,6655
+SZPUB0099,Millstreet,Cork,Cork,78681
+SZPUB0101,Ballykenley_Johnstown,Cork,Cork,66007
+SZPUB0102,Glenduff,Cork,Cork,0
+SZPUB0103,Kildorrery,Cork,Cork,18875
+SZPUB0104,Knockanevin,Cork,Cork,0
+SZPUB0106,Mitchelstown North,Cork,Cork,56902
+SZPUB0107,Mitchelstown South,Cork,Cork,37860
+SZPUB0108,Mountain Barracks,Cork,Cork,0
+SZPUB0109,Glanworth,Cork,Cork,26263
+SZPUB0110,Newmarket,Cork,Cork,258262
+SZPUB0113,Rockchapel,Cork,Cork,1331
+SZPUB0114,Knockeragh,Cork,Cork,0
+SZPUB0115,Stagmount,Cork,Cork,0
+SZPUB0116,Kilbrin Garran an Darra,Cork,Cork,2713
+SZPUB0117,Bandon Regional,Cork,Cork,81878
+SZPUB0118,Clashanamid,Cork,Cork,1
+SZPUB0119,Kilmurray_Clonmacow,Cork,Cork,3851
+SZPUB0120,Newcestown,Cork,Cork,3879
+SZPUB0122,Glanmire,Cork,Cork,53101
+SZPUB0123,Ratharoon,Cork,Cork,0
+SZPUB0124,Bayview,Cork,Cork,0
+SZPUB0125,Ard Na Killy Ridge,Cork,Cork,0
+SZPUB0127,Nohoval,Cork,Cork,3038
+SZPUB0129,Minane Bridge,Cork,Cork,9237
+SZPUB0130,Ballinagree,Cork,Cork,4572
+SZPUB0131,Ballingeary,Cork,Cork,4914
+SZPUB0132,Ballymakeera,Cork,Cork,7945
+SZPUB0133,Clondrohid,Cork,Cork,1769
+SZPUB0134,Inchigeelagh,Cork,Cork,1690
+SZPUB0135,Kilnamartyra,Cork,Cork,1126
+SZPUB0136,Macroom,Cork,Cork,62993
+SZPUB0137,Coolyhane,Cork,Cork,123
+SZPUB0138,Kilnagurteen (Macroom),Cork,Cork,0
+SZPUB0139,Ballyverane,Cork,Cork,0
+SZPUB0140,Carrignadoura,Cork,Cork,8320
+SZPUB0141,Bilberry,Cork,Cork,153
+SZPUB0142,Clash_Leamleara,Cork,Cork,1756
+SZPUB0143,Cloyne,Cork,Cork,43559
+SZPUB0144,Midleton,Cork,Cork,52946
+SZPUB0145,Whitegate Regional,Cork,Cork,115356
+SZPUB0146,Tibbotstown,Cork,Cork,88827
+SZPUB0147,Corbally,Cork,Cork,5928
+SZPUB0148,Ballymacoda,Cork,Cork,5483
+SZPUB0149,Dungourney,Cork,Cork,1707
+SZPUB0150,Inch,Cork,Cork,212
+SZPUB0151,Killeagh,Cork,Cork,7365
+SZPUB0152,Kilcraheen,Cork,Cork,309
+SZPUB0153,Knockadoon,Cork,Cork,2271
+SZPUB0154,Mogeely,Cork,Cork,22626
+SZPUB0155,Walshtown,Cork,Cork,277
+SZPUB0156,Youghal Regional,Cork,Cork,54790
+SZPUB0157,Ballykilty,Cork,Cork,5122
+SZPUB0160,Templemartin,Cork,Cork,2021
+SZPUB0163,Knockanleigh,Cork,Cork,0
+SZPUB0166,Donoughmore,Cork,Cork,19714
+SZPUB0167,Grenagh,Cork,Cork,11005
+SZPUB0168,Rylane,Cork,Cork,8223
+SZPUB0169,Stoneview Blarney,Cork,Cork,34
+SZPUB0171,Ballyshoneen,Cork,Cork,22
+SZPUB0173,Carrignavar,Cork,Cork,2234
+SZPUB0175,Glashaboy,Cork,Cork,207582
+SZPUB0176,Glenville,Cork,Cork,3186
+SZPUB0178,Whitechurch,Cork,Cork,5543
+SZPUB0180,Cork Harbour and City,Cork,Cork,964453
+SZPUB0181,Innishannon,Cork,Cork,194531
+SZPUB0182,Bantry Derryginagh,Cork,Cork,31778
+SZPUB0184,Durrus,Cork,Cork,3975
+SZPUB0185,Kealkill,Cork,Cork,18379
+SZPUB0186,Kilcrohane,Cork,Cork,5491
+SZPUB0187,Whiddy Island,Cork,Cork,5047
+SZPUB0188,Dromore Bantry,Cork,Cork,2666
+SZPUB0189,Crosterra,Cork,Cork,1443
+SZPUB0190,Bantry Cahernacrin,Cork,Cork,38548
+SZPUB0191,Adrigole,Cork,Cork,16649
+SZPUB0192,Allihies,Cork,Cork,3183
+SZPUB0193,Cahermore,Cork,Cork,1018
+SZPUB0194,Castletownbere,Cork,Cork,82034
+SZPUB0195,Dursey Island,Cork,Cork,0
+SZPUB0196,Glengarriff,Cork,Cork,15858
+SZPUB0197,Clonakilty,Cork,Cork,399580
+SZPUB0198,Dunmanway,Cork,Cork,28148
+SZPUB0199,Crookhaven,Cork,Cork,10876
+SZPUB0200,Goleen,Cork,Cork,7216
+SZPUB0202,Toormore,Cork,Cork,1159
+SZPUB0203,Skibbereen Lake Cross,Cork,Cork,114765
+SZPUB0204,Cape Clear,Cork,Cork,10686
+SZPUB0205,Drinagh,Cork,Cork,8778
+SZPUB0207,Skibbereen Ballyhilty,Cork,Cork,263780
+SZPUB0208,Caheragh,Cork,Cork,6082
+SZPUB0210,INISHOWEN WEST,Donegal,Donegal,100340
+SZPUB0211,Carndonagh (Mixed Supply),Donegal,Donegal,211167
+SZPUB0213,Buncrana,Donegal,Donegal,36931
+SZPUB0214,Pollan Dam ,Donegal,Donegal,643361
+SZPUB0215,Inishowen East,Donegal,Donegal,69025
+SZPUB0216,FANAD WEST (TULLYCONNELL),Donegal,Donegal,80148
+SZPUB0217,FANAD EAST (SHANNAGH),Donegal,Donegal,26657
+SZPUB0218,CARRIGART-DOWNINGS,Donegal,Donegal,39211
+SZPUB0219,Milford Pub,Donegal,Donegal,117117
+SZPUB0220,Rathmullan Pub,Donegal,Donegal,44449
+SZPUB0221,GORTAHORK-FALCARRAGH,Donegal,Donegal,113130
+SZPUB0222,Rosses Regional Pub,Donegal,Donegal,275949
+SZPUB0223,Arranmore Island,Donegal,Donegal,25802
+SZPUB0226,Lettermacaward,Donegal,Donegal,124559
+SZPUB0227,GLENTIES-ARDARA,Donegal,Donegal,125175
+SZPUB0228,Creeslough Dunfanaghy,Donegal,Donegal,171676
+SZPUB0229,Lough Mourne,Donegal,Donegal,471819
+SZPUB0230,Killybegs,Donegal,Donegal,210095
+SZPUB0231,FROSSES-INVER,Donegal,Donegal,160111
+SZPUB0232,Donegal (River Eske),Donegal,Donegal,168977
+SZPUB0233,Pettigo Pub,Donegal,Donegal,8127
+SZPUB0234,Ballyshannon,Donegal,Donegal,79234
+SZPUB0236,Bundoran Urban,Donegal,Donegal,97735
+SZPUB0237,Letterkenny,Donegal,Donegal,355801
+SZPUB0238,Culdaff,Donegal,Donegal,58229
+SZPUB0239,Owenteskiny,Donegal,Donegal,159010
+SZPUB0240,DCC ZONE 1 BALLYMORE,Dublin City,Dublin,590961
+SZPUB0241,DCC ZONE 2 BALLYBODEN,Dublin City,Dublin,127900
+SZPUB0242,DCC ZONE 3 LEIXLIP,Dublin City,Dublin,353310
+SZPUB0243,DCC ZONE 4 LEIXLIP BALLYMORE,Dublin City,Dublin,423825
+SZPUB0245,DCC ZONE 6 BALLYMORE STILLORGAN,Dublin City,Dublin,382261
+SZPUB0246,SD_ZONE2,South Dublin,Dublin,1065585
+SZPUB0247,SD_ZONE1,South Dublin,Dublin,36214
+SZPUB0248,SD_ZONE4,South Dublin,Dublin,323174
+SZPUB0249,SD_ZONE3,South Dublin,Dublin,7346
+SZPUB0250,Fingal Zone 1,Fingal,Dublin,1543462
+SZPUB0251,Fingal Zone 3,Fingal,Dublin,229576
+SZPUB0252,DLR_ZONE1,Dun Laoghaire-Rathdown,Dublin,226818
+SZPUB0253,DLR_ZONE2,Dun Laoghaire-Rathdown,Dublin,165380
+SZPUB0257,DLR_ZONE6,Dun Laoghaire-Rathdown,Dublin,249435
+SZPUB0258,DLR_ZONE7,Dun Laoghaire-Rathdown,Dublin,210986
+SZPUB0259,DLR_ZONE8,Dun Laoghaire-Rathdown,Dublin,233632
+SZPUB0260,Galway City Council Public Water S.S.,Galway City,Galway,510473
+SZPUB0261,Ahascragh P.S.,Galway,Galway,31828
+SZPUB0262,Ballinasloe Public Supply,Galway,Galway,120850
+SZPUB0263,Ballyconneely P.S.,Galway,Galway,7160
+SZPUB0264,Ballygar P.S.,Galway,Galway,30326
+SZPUB0265,Ballymoe P.S.,Galway,Galway,47204
+SZPUB0266,Carna_KilKieran RWSS,Galway,Galway,112552
+SZPUB0267,Carraroe PWS,Galway,Galway,108626
+SZPUB0268,Cleggan_Claddaghduff,Galway,Galway,16015
+SZPUB0269,Clifden,Galway,Galway,15160
+SZPUB0270,Clonbur PS,Galway,Galway,122143
+SZPUB0271,Dunmore_Glenamaddy P.S.,Galway,Galway,75294
+SZPUB0273,Glenamaddy,Galway,Galway,30738
+SZPUB0274,Gort,Galway,Galway,22606
+SZPUB0275,Inisboffin P.S.,Galway,Galway,11588
+SZPUB0276,Inishere,Galway,Galway,6303
+SZPUB0277,Inishmore - Oghill,Galway,Galway,15050
+SZPUB0278,IN_Inishmean,Galway,Galway,9219
+SZPUB0279,Kilconnell PWS,Galway,Galway,9131
+SZPUB0280,Kilkerrin_Moylough,Galway,Galway,86410
+SZPUB0281,Kinvara P.S.,Galway,Galway,49619
+SZPUB0282,Leenane P.S.,Galway,Galway,2492
+SZPUB0283,Letterfrack PWS(Dawros),Galway,Galway,2739
+SZPUB0285,Mid-Galway,Galway,Galway,309103
+SZPUB0286,Mountbellew P.S.,Galway,Galway,117054
+SZPUB0287,Oughterard,Galway,Galway,127106
+SZPUB0288,Portumna PS,Galway,Galway,33098
+SZPUB0289,Rosmuc P.S.,Galway,Galway,28724
+SZPUB0290,Spiddal Public Water Supply,Galway,Galway,127428
+SZPUB0291,Teeranea_Lettermore P.S.,Galway,Galway,29133
+SZPUB0292,Tuam RWSS,Galway,Galway,710546
+SZPUB0293,Tully-Tullycross,Galway,Galway,10071
+SZPUB0295,Woodford PS,Galway,Galway,8134
+SZPUB0296,Ballyragget WS 1001,Kilkenny,Kilkenny,19646
+SZPUB0297,Bennettsbridge Regional WS,Kilkenny,Kilkenny,140648
+SZPUB0298,Callan WS 1001,Kilkenny,Kilkenny,49004
+SZPUB0299,Clogh-Castlecomer WS ,Kilkenny,Kilkenny,57983
+SZPUB0300,Glenmore WS ,Kilkenny,Kilkenny,2818
+SZPUB0301,Gowran-Goresbridge-Paulstown WS ,Kilkenny,Kilkenny,60449
+SZPUB0302,Graiguenamanagh WS,Carlow,Carlow,17340
+SZPUB0305,Kilkenny City (Troyswood) WS 1011,Kilkenny,Kilkenny,272249
+SZPUB0306,Mooncoin Regional WS,Kilkenny,Kilkenny,131175
+SZPUB0307,Piltown-Fiddown PWS,Kilkenny,Kilkenny,70937
+SZPUB0308,Thomastown WS,Kilkenny,Kilkenny,116691
+SZPUB0309,Urlingford-Johnstown WS,Kilkenny,Kilkenny,23274
+SZPUB0310,Meelick PWS,Laois,Laois,21191
+SZPUB0311,Coolanagh PWS,Laois,Laois,270
+SZPUB0312,The Strand PWS,Laois,Laois,85
+SZPUB0314,Camross PWS,Laois,Laois,205
+SZPUB0315,Durrow 1 PWS,Laois,Laois,11810
+SZPUB0316,Portlaoise PWS,Laois,Laois,276149
+SZPUB0317,Lough PWS,Laois,Laois,44154
+SZPUB0318,South East Regional PWS,Laois,Laois,185411
+SZPUB0319,Borris in Ossory PWS,Laois,Laois,29532
+SZPUB0320,Swan PWS,Laois,Laois,66908
+SZPUB0321,Galmoy-Rathdowney PWS,Kilkenny,Kilkenny,49988
+SZPUB0322,Mountrath PWS,Laois,Laois,26615
+SZPUB0323,Mountrath 2 PWS,Laois,Laois,14861
+SZPUB0324,Abbeyleix 1 PWS,Laois,Laois,36880
+SZPUB0325,Mountrath 3 PWS,Laois,Laois,38294
+SZPUB0326,Graiguecullen PWS,Laois,Laois,38240
+SZPUB0327,Ballyroan PWS,Laois,Laois,40415
+SZPUB0329,Rosenallis PWS,Laois,Laois,3638
+SZPUB0330,Ballinakill 1 PWS,Laois,Laois,6093
+SZPUB0331,Mountmellick 1 PWS,Laois,Laois,48389
+SZPUB0332,Portarlington 1 PWS,Laois,Laois,59746
+SZPUB0333,Ballinakill 2 PWS,Laois,Laois,25410
+SZPUB0334,Abbeyleix 2 PWS,Laois,Laois,25494
+SZPUB0335,Durrow 2 PWS,Laois,Laois,10616
+SZPUB0336,Arles 2 PWS,Laois,Laois,659
+SZPUB0339,North Leitrim Regional Water Supply,Leitrim,Leitrim,473157
+SZPUB0340,Kinlough Tullaghan,Leitrim,Leitrim,82132
+SZPUB0341,South Leitrim Regional,Leitrim,Leitrim,730003
+SZPUB0343,Rockhill Water Supply,Limerick,Limerick,14633
+SZPUB0344,Abbeyfeale PWS,Limerick,Limerick,221036
+SZPUB0345,Adare PWS,Limerick,Limerick,48342
+SZPUB0346,Anglesboro Water Supply,Limerick,Limerick,212
+SZPUB0347,Athlacca Water Supply,Limerick,Limerick,1638
+SZPUB0348,Ballingarry Water Supply,Limerick,Limerick,22341
+SZPUB0349,Ballylanders Water Supply,Limerick,Limerick,21913
+SZPUB0350,Bruff Water Supply,Limerick,Limerick,26734
+SZPUB0351,Bruree Water Supply,Limerick,Limerick,10952
+SZPUB0352,Caherconlish Water Supply,Limerick,Limerick,26957
+SZPUB0353,Carrigmore Water Supply,Limerick,Limerick,22425
+SZPUB0354,Carrigkerry Water Supply,Limerick,Limerick,9016
+SZPUB0355,CastletownBallyagran Water Supply,Limerick,Limerick,55238
+SZPUB0357,Doon Water Supply,Limerick,Limerick,19438
+SZPUB0358,Fedamore Water Supply,Limerick,Limerick,7625
+SZPUB0359,Foynes/Shannon Estuary PWS,Limerick,Limerick,178724
+SZPUB0360,Galbally Water Supply,Limerick,Limerick,9221
+SZPUB0361,Glenosheen Water Supply,Limerick,Limerick,6754
+SZPUB0362,Glin Water Supply,Limerick,Limerick,11294
+SZPUB0363,Herbertstown Water Supply,Limerick,Limerick,24843
+SZPUB0364,Limerick City Environs PWS,Limerick,Limerick,964522
+SZPUB0365,Jamestown/Effin PWS,Limerick,Limerick,45427
+SZPUB0367,Kilmallock Water Supply,Limerick,Limerick,49302
+SZPUB0368,Kilteely Water Supply,Limerick,Limerick,16927
+SZPUB0369,Knocklong Water Supply,Limerick,Limerick,34680
+SZPUB0371,Murroe PWS,Limerick,Limerick,43989
+SZPUB0372,Newcastle West Water Supply,Limerick,Limerick,151175
+SZPUB0373,Oola Water Supply,Limerick,Limerick,21278
+SZPUB0374,Pallasgreen Water Supply,Limerick,Limerick,21883
+SZPUB0375,Rathkeale Water Supply,Limerick,Limerick,76169
+SZPUB0376,South West Regional Water Supply,Limerick,Limerick,191422
+SZPUB0377,Hospital Water Supply,Limerick,Limerick,20258
+SZPUB0378,Martinstown Water Supply,Limerick,Limerick,38017
+SZPUB0380,Obriens Bridge PWS,Clare,Clare,23076
+SZPUB0383,CappamoreFoileen Water Supply,Limerick,Limerick,73467
+SZPUB0384,KilfinnaneArdpatrick Water Supply,Limerick,Limerick,38938
+SZPUB0388,Ballymahon,Longford,Longford,294466
+SZPUB0389,Granard,Longford,Longford,111261
+SZPUB0390,Lanesboro,Longford,Longford,157838
+SZPUB0391,Longford Central,Longford,Longford,387599
+SZPUB0392,Gowna (LD),Longford,Longford,229626
+SZPUB0393,Newtowncashel,Longford,Longford,31746
+SZPUB0394,Ardee,Louth,Louth,135798
+SZPUB0395,Greenmount,Louth,Louth,66173
+SZPUB0396,Cooley,Louth,Louth,138921
+SZPUB0398,Collon,Louth,Louth,63547
+SZPUB0401,Carlingford,Louth,Louth,18456
+SZPUB0402,Cavanhill,Louth,Louth,492297
+SZPUB0403,South Louth & East Meath,Louth,Louth,693085
+SZPUB0404,Drybridge,Louth,Louth,15222
+SZPUB0405,Carrickarnon,Louth,Louth,1072
+SZPUB0406,ACHILL RWSS,Mayo,Mayo,85780
+SZPUB0408,CEIDE FIELDS WSS,Mayo,Mayo,315
+SZPUB0409,Erris RWSS,Mayo,Mayo,254540
+SZPUB0410,Ballina Town Mixed Supply,Mayo,Mayo,110819
+SZPUB0411,CLARE ISLAND WSS,Mayo,Mayo,13945
+SZPUB0412,Charlestown PWS,Mayo,Mayo,24363
+SZPUB0414,CROSSMOLINA WSS,Mayo,Mayo,24367
+SZPUB0415,FOXFORD WSS,Mayo,Mayo,27808
+SZPUB0416,KILKELLY WSS,Mayo,Mayo,72961
+SZPUB0417,Kiltimagh PWS,Mayo,Mayo,59232
+SZPUB0418,LOUISBURGH WSS,Mayo,Mayo,26663
+SZPUB0419,MULRANNY WSS,Mayo,Mayo,22460
+SZPUB0420,NEWPORT WSS,Mayo,Mayo,10834
+SZPUB0422,SWINFORD WSS,Mayo,Mayo,41058
+SZPUB0423,WESTPORT PWS,Mayo,Mayo,50616
+SZPUB0424,KNOCK_AIRPORT,Mayo,Mayo,7368
+SZPUB0425,INISHTURK  pGWS,Mayo,Mayo,6095
+SZPUB0426,Lough Mask RWSS,Mayo,Mayo,1390551
+SZPUB0427,Athboy WS,Meath,Meath,81423
+SZPUB0428,Castletown,Meath,Meath,801
+SZPUB0430,Drumcondrath,Meath,Meath,41089
+SZPUB0431,Dunboyne,Meath,Meath,78171
+SZPUB0432,Dunshaughlin,Meath,Meath,81682
+SZPUB0434,Trim,Meath,Meath,117126
+SZPUB0435,Enfield,Meath,Meath,18879
+SZPUB0436,Kells-Oldcastle,Meath,Meath,164507
+SZPUB0437,Kilmainhamwood,Meath,Meath,16090
+SZPUB0438,Kilmessan,Meath,Meath,17986
+SZPUB0439,Longwood,Meath,Meath,16072
+SZPUB0440,Moynalty,Meath,Meath,4985
+SZPUB0441,Navan-Mid Meath Liscarton PWS,Meath,Meath,333697
+SZPUB0442,Nobber,Meath,Meath,8235
+SZPUB0443,Slane,Meath,Meath,97264
+SZPUB0450,LERWSS,Monaghan,Monaghan,349727
+SZPUB0451,Clones,Monaghan,Monaghan,66704
+SZPUB0452,Newbliss,Monaghan,Monaghan,9406
+SZPUB0453,Glaslough,Monaghan,Monaghan,6819
+SZPUB0454,Carrickmacross,Monaghan,Monaghan,61943
+SZPUB0455,Drum,Monaghan,Monaghan,1334
+SZPUB0456,Emyvale,Monaghan,Monaghan,10593
+SZPUB0457,Inniskeen,Monaghan,Monaghan,9393
+SZPUB0458,Smithboro,Monaghan,Monaghan,9128
+SZPUB0459,Monaghan,Monaghan,Monaghan,80389
+SZPUB0460,Banagher PWS,Offaly,Offaly,82646
+SZPUB0461,Birr PWS,Offaly,Offaly,62524
+SZPUB0462,Clara/Ferbane PWS,Offaly,Offaly,179984
+SZPUB0463,Clonbullogue P.W.S.,Offaly,Offaly,18809
+SZPUB0464,Coolderry P.W.S.,Offaly,Offaly,1055
+SZPUB0465,Daingean P.W.S.,Offaly,Offaly,26768
+SZPUB0466,Dunkerrin P.W.S.,Offaly,Offaly,94853
+SZPUB0467,Edenderry P.W.S.,Offaly,Offaly,55692
+SZPUB0468,Geashill P.W.S.,Offaly,Offaly,19974
+SZPUB0469,Kilcormac P.W.S.,Offaly,Offaly,21523
+SZPUB0470,Kinnitty P.W.S.,Offaly,Offaly,16063
+SZPUB0471,Moneygall P.W.S.,Offaly,Offaly,4513
+SZPUB0472,Mountbolus PWS,Offaly,Offaly,2872
+SZPUB0473,Rahan - Agall/Hollimshill P.W.S.,Offaly,Offaly,79129
+SZPUB0474,Rahan - Tully P.W.S.,Offaly,Offaly,28961
+SZPUB0475,Rhode RWSS P.W.S.,Offaly,Offaly,100059
+SZPUB0476,Shinrone/Brosna P.W.S.,Offaly,Offaly,67122
+SZPUB0477,Tullamore South And Clonaslee,Offaly,Offaly,68599
+SZPUB0478,Walsh Island P.W.S.,Offaly,Offaly,33776
+SZPUB0481,Portarlington 2 PWS,Laois,Laois,56756
+SZPUB0482,Mount Talbot/Four Roads,Roscommon,Roscommon,179394
+SZPUB0483,Roscommon Central WSS,Roscommon,Roscommon,156182
+SZPUB0484,Knockcroghery,Roscommon,Roscommon,34723
+SZPUB0485,Srrwss - Killeglan,Roscommon,Roscommon,265924
+SZPUB0486,Arigna Regional PWS,Roscommon,Roscommon,78190
+SZPUB0488,North Roscommon WSS,Roscommon,Roscommon,380645
+SZPUB0491,Castlerea Regional WSS,Roscommon,Roscommon,176827
+SZPUB0492,Lecarrow,Roscommon,Roscommon,57604
+SZPUB0493,North East Regional PWS,Roscommon,Roscommon,380972
+SZPUB0494,SRRWSS - Lisbrock,Roscommon,Roscommon,89004
+SZPUB0495,Boyle Regional,Roscommon,Roscommon,302685
+SZPUB0496,Foxes Den Public Water Supply,Sligo,Sligo,332340
+SZPUB0497,Lough Talt Regional Water Supply,Sligo,Sligo,625418
+SZPUB0498,Lough Easkey Regional Water Supply,Sligo,Sligo,412494
+SZPUB0499,North Sligo Regional Water Supply,Sligo,Sligo,144930
+SZPUB0500,Kilsellagh Public Water Supply,Sligo,Sligo,154977
+SZPUB0501,Riverstown Public Water Supply,Sligo,Sligo,24523
+SZPUB0505,Borrisokane,Tipperary,Tipperary,79963
+SZPUB0506,Newport RWSS,Tipperary,Tipperary,170761
+SZPUB0507,Cloughjordan,Tipperary,Tipperary,49868
+SZPUB0508,Terryglass,Tipperary,Tipperary,6726
+SZPUB0509,Nenagh RWSS,Tipperary,Tipperary,273542
+SZPUB0510,Roscrea RWSS,Tipperary,Tipperary,107161
+SZPUB0511,Templemore RWSS (Zone 1),Tipperary,Tipperary,76532
+SZPUB0513,Thurles Regional PWS,Tipperary,Tipperary,213209
+SZPUB0514,Templetuohy,Tipperary,Tipperary,33174
+SZPUB0516,Kilcommon_Rearcross,Tipperary,Tipperary,87246
+SZPUB0519,Templederry,Tipperary,Tipperary,16436
+SZPUB0520,Two Mile Borris,Tipperary,Tipperary,11594
+SZPUB0521,Upperchurch,Tipperary,Tipperary,4450
+SZPUB0522,Lorrha/Rathcabbin (Zone 3 - Mix),Tipperary,Tipperary,58727
+SZPUB0523,Carrick-on-Suir(Lingaun River),Tipperary,Tipperary,26527
+SZPUB0524,Dualla Borehole,Tipperary,Tipperary,15505
+SZPUB0525,Ahenny,Tipperary,Tipperary,1806
+SZPUB0526,Ardfinnan Regional,Tipperary,Tipperary,334848
+SZPUB0527,Ballinvir,Tipperary,Tipperary,1051
+SZPUB0528,Burncourt Regional,Tipperary,Tipperary,89917
+SZPUB0529,Carrick-on-Suir (Crottys Lake),Tipperary,Tipperary,21517
+SZPUB0530,Clonmel Poulavanogue,Tipperary,Tipperary,20525
+SZPUB0532,Coalbrook,Tipperary,Tipperary,66195
+SZPUB0533,Commons.,Tipperary,Tipperary,10305
+SZPUB0534,Dundrum Regional,Tipperary,Tipperary,199207
+SZPUB0535,Tullohea,Tipperary,Tipperary,16921
+SZPUB0536,Galtee Regional,Tipperary,Tipperary,550062
+SZPUB0537,Glenary,Tipperary,Tipperary,102516
+SZPUB0539,Hollyford,Tipperary,Tipperary,16339
+SZPUB0540,IRONMILLS,Tipperary,Tipperary,200008
+SZPUB0541,Kilcash,Tipperary,Tipperary,3300
+SZPUB0542,Mullenbawn,Tipperary,Tipperary,19921
+SZPUB0543,Moanroe Borehole,Tipperary,Tipperary,45409
+SZPUB0544,Templetney Borehole,Tipperary,Tipperary,166397
+SZPUB0547,Ardmore,Waterford,Waterford,8375
+SZPUB0548,Deelish Ballinacourty,Waterford,Waterford,17953
+SZPUB0549,Ballydasoon,Waterford,Waterford,888
+SZPUB0550,Ballyduff_Kilmeaden,Waterford,Waterford,3351
+SZPUB0551,Ballyogarty,Waterford,Waterford,3337
+SZPUB0552,Dungarvan,Waterford,Waterford,152680
+SZPUB0553,Kilmacthomas,Waterford,Waterford,2523
+SZPUB0554,LCB Cappoquin,Waterford,Waterford,44481
+SZPUB0555,Portlaw,Waterford,Waterford,6795
+SZPUB0557,Stradbally,Waterford,Waterford,15878
+SZPUB0558,Tallow,Waterford,Waterford,12750
+SZPUB0560,LCB Ballyduff,Waterford,Waterford,15030
+SZPUB0561,East Waterford Water Supply Scheme,Waterford,Waterford,526252
+SZPUB0564,Athlone PWS,Westmeath,Westmeath,208891
+SZPUB0567,Ballany,Westmeath,Westmeath,267933
+SZPUB0568,Mullingar Regional,Westmeath,Westmeath,924951
+SZPUB0572,Carrigbyrne WS,Wexford,Wexford,33085
+SZPUB0573,Ballindaggin,Wexford,Wexford,2601
+SZPUB0574,Ballyhogue,Wexford,Wexford,7641
+SZPUB0575,Boolavogue Housing,Wexford,Wexford,407
+SZPUB0576,Bree,Wexford,Wexford,8092
+SZPUB0577,Bunclody WS,Wexford,Wexford,25864
+SZPUB0578,Castledockrell,Wexford,Wexford,358
+SZPUB0580,Clonroche,Wexford,Wexford,7478
+SZPUB0581,Coolgreaney WS,Wexford,Wexford,18219
+SZPUB0582,Davidstown,Wexford,Wexford,974
+SZPUB0583,Enniscorthy Town and Environs WSS,Wexford,Wexford,106981
+SZPUB0584,Fardystown RWSS,Wexford,Wexford,371020
+SZPUB0585,Ferns WS,Wexford,Wexford,19003
+SZPUB0586,Glynn WS,Wexford,Wexford,3456
+SZPUB0587,Gorey Rural WSS,Wexford,Wexford,219382
+SZPUB0588,Kilmuckridge,Wexford,Wexford,25667
+SZPUB0590,Kiltealy,Wexford,Wexford,8611
+SZPUB0591,Marshalstown,Wexford,Wexford,627
+SZPUB0592,New Ross Town and Environs WSS,Wexford,Wexford,74341
+SZPUB0593,South Regional WSS,Wexford,Wexford,343180
+SZPUB0594,Sow Regional RWSS,Wexford,Wexford,247714
+SZPUB0595,Wexford Town and Environs WSS,Wexford,Wexford,197674
+SZPUB0596,Woodview Drive Adamstown,Wexford,Wexford,1869
+SZPUB0597,Monageer,Wexford,Wexford,1420
+SZPUB0598,Camolin WSS,Wexford,Wexford,4455
+SZPUB0599,Askamore Dunishal,Wexford,Wexford,14696
+SZPUB0600,BRAY DIRECT PUBLIC SUPPLY,Wicklow,Wicklow,129513
+SZPUB0601,GREYSTONES PUBLIC SUPPLY,Wicklow,Wicklow,100722
+SZPUB0602,ARKLOW PUBLIC SUPPLY,Wicklow,Wicklow,117419
+SZPUB0603,Wicklow Regional Supply,Wicklow,Wicklow,126620
+SZPUB0604,NEWTOWN NEWCASTLE PUBLIC SUPPLY,Wicklow,Wicklow,91044
+SZPUB0605,TINAHELY REGIONAL SUPPLY,Wicklow,Wicklow,73278
+SZPUB0606,RATHDRUM PUBLIC SUPPLY,Wicklow,Wicklow,30644
+SZPUB0607,BALTINGLASS PUBLIC SUPPLY,Wicklow,Wicklow,30647
+SZPUB0608,BLESSINGTON PUBLIC SUPPLY,Wicklow,Wicklow,77341
+SZPUB0609,DUNLAVIN PUBLIC SUPPLY,Wicklow,Wicklow,17235
+SZPUB0610,HOLLYWOOD DONARD PUBLIC SUPPLY,Wicklow,Wicklow,33658
+SZPUB0612,AVOCA BALLINACLASH PUBLIC SUPPLY,Wicklow,Wicklow,22752
+SZPUB0613,LARAGH ANNAMOE PUBLIC SUPPLY,Wicklow,Wicklow,19904
+SZPUB0614,Valleymount _ Ballyknockan Public Supply,Wicklow,Wicklow,6971
+SZPUB0615,ROUNDWOOD PUBLIC SUPPLY,Wicklow,Wicklow,6866
+SZPUB0616,STRATFORD PUBLIC SUPPLY,Wicklow,Wicklow,12701
+SZPUB0617,COOLBOY COOLAFANCY PUBLIC SUPPLY,Wicklow,Wicklow,7867
+SZPUB0618,KILTEGAN PUBLIC SUPPLY,Wicklow,Wicklow,7403
+SZPUB0619,REDCROSS CONARY PUBLIC SUPPLY,Wicklow,Wicklow,23629
+SZPUB0620,RATHDANGAN PUBLIC SUPPLY,Wicklow,Wicklow,4127
+SZPUB0621,KNOCKANANNA PUBLIC SUPPLY,Wicklow,Wicklow,4386
+SZPUB0624,BALLYCOOG PUBLIC SUPPLY,Wicklow,Wicklow,1429
+SZPUB0625,GRANGECON PUBLIC SUPPLY,Wicklow,Wicklow,149
+SZPUB0626,THOMASTOWN PUBLIC SUPPLY,Wicklow,Wicklow,3345
+SZPUB0627,KNOCKANARRIGAN DAVIDSTOWN PUBLIC SUPPLY,Wicklow,Wicklow,15914
+SZPUB0629,Kilkeedy PWS,Clare,Clare,4406
+SZPUB0630,Turlough PWS,Clare,Clare,26287
+SZPUB0631,Cullen,Cork,Cork,54
+SZPUB0636,Lyre Clonakilty,Cork,Cork,0
+SZPUB0637,Inch PWS 044D,Kerry,Kerry,45430
+SZPUB0638,Ceann Trá PWS 074D,Kerry,Kerry,26209
+SZPUB0639,Annascaul PWS 002D,Kerry,Kerry,7901
+SZPUB0640,An Mhín Aird No. 1 PWS (060D),Kerry,Kerry,26267
+SZPUB0641,An Mhín Aird No. 3 PWSS (090D),Kerry,Kerry,30907
+SZPUB0642,An Baile Mór PWS 012D,Kerry,Kerry,35355
+SZPUB0643,An Daingean PWS 030D,Kerry,Kerry,25395
+SZPUB0644,Baile An Fheirtearaigh PWS 011D,Kerry,Kerry,21405
+SZPUB0646,Cill Maoilchéadair PWS 047D,Kerry,Kerry,7769
+SZPUB0649,Dún Chaoin PWS 034D,Kerry,Kerry,5198
+SZPUB0650,Cé Bhréannain PWS 015D,Kerry,Kerry,9812
+SZPUB0652,An Fheothanach PWS,Kerry,Kerry,7159
+SZPUB0653,An Mhuiríoch/ Baile Breach PWS 063D,Kerry,Kerry,23180
+SZPUB0655,An Clochán PWS 028D,Kerry,Kerry,7122
+SZPUB0656,Lios Cearnaigh PWS 052D,Kerry,Kerry,3816
+SZPUB0657,Aughacasla PWS 005D,Kerry,Kerry,11388
+SZPUB0658,Camp PWS 020D,Kerry,Kerry,21489
+SZPUB0659,Castlegregory PWS 024D,Kerry,Kerry,39770
+SZPUB0660,Ardfert North PWS 003E,Kerry,Kerry,54818
+SZPUB0663,Glenderry PWS 076E,Kerry,Kerry,3949
+SZPUB0665,Lyreacrompane RWSS 057E,Kerry,Kerry,78548
+SZPUB0670,Listowel Regional Public Water Supply,Kerry,Kerry,342537
+SZPUB0672,Brosna/Knocknagoshel PWS 016F,Kerry,Kerry,33858
+SZPUB0673,Central Regional: Lough Guitane (H)  400F,Kerry,Kerry,1166886
+SZPUB0683,Rathmore PWS 065A,Kerry,Kerry,21603
+SZPUB0685,Caragh Lake PWS 022A,Kerry,Kerry,33311
+SZPUB0686,Mid Kerry : Gearha (H) 300A,Kerry,Kerry,218747
+SZPUB0687,Breanlee PWS 088A,Kerry,Kerry,26691
+SZPUB0689,Mid Kerry: Knocknavota 302A*,Kerry,Kerry,27384
+SZPUB0690,Mountain Stage PWS 062A,Kerry,Kerry,31976
+SZPUB0692,Cahersiveen PWS 017H,Kerry,Kerry,34051
+SZPUB0693,Emlaghpeasta PWS 035H,Kerry,Kerry,11790
+SZPUB0694,Portmagee PWS 064H,Kerry,Kerry,18634
+SZPUB0695,Waterville PWS 075H,Kerry,Kerry,77069
+SZPUB0697,Maulin PWS 066H,Kerry,Kerry,35527
+SZPUB0698,Caherdaniel PWS 019H,Kerry,Kerry,14780
+SZPUB0699,Castlecove PWS 023H,Kerry,Kerry,18554
+SZPUB0700,Sneem PWS 068A,Kerry,Kerry,14511
+SZPUB0701,Kenmare PWS 045A,Kerry,Kerry,51936
+SZPUB0702,Kilgarvan PWS 046A,Kerry,Kerry,21558
+SZPUB0705,Lauragh PWS 051A,Kerry,Kerry,4584
+SZPUB0707,Leixlip Regional,Kildare,Kildare,317825
+SZPUB0708,Poulaphouca Regional,Kildare,Kildare,714848
+SZPUB0709,Monasterevin,Kildare,Kildare,71718
+SZPUB0710,Rathangan,Kildare,Kildare,89011
+SZPUB0711,Ardcarraig Clogherinkoe ,Kildare,Kildare,2563
+SZPUB0713,Clonuff,Kildare,Kildare,58
+SZPUB0716,Killineer,Louth,Louth,1
+SZPUB0724,KILMACANOGUE PUBLIC SUPPLY,Wicklow,Wicklow,10385
+SZPUB0725,ENNISKERRY PUBLIC SUPPLY,Wicklow,Wicklow,30604
+SZPUB0726,GLENEALY PUBLIC SUPPLY,Wicklow,Wicklow,6316
+SZPUB0727,Old Fassaroe Public Supply,Wicklow,Wicklow,885
+SZPUB0728,Berryfield lane Public Supply,Wicklow,Wicklow,344
+SZPUB0729,RAHEENGRANEY PUBLC SUPPLY,Wicklow,Wicklow,241
+SZPUB0730,Kirikee Public Supply,Wicklow,Wicklow,1982
+SZPUB0732,BALLINTESKIN PUBLIC SUPPLY,Wicklow,Wicklow,374
+SZPUB0734,Ballinapark Public Supply,Wicklow,Wicklow,0
+SZPUB0736,Kilavaney Public Supply (Arklow),Wicklow,Wicklow,0
+SZPUB0737,Ballyclough Public Supply,Wicklow,Wicklow,0
+SZPUB0738,Kilavaney Public Supply (Tinahely),Wicklow,Wicklow,0
+SZPUB0741,Kilballyowen (Aughrim) Public Supply,Wicklow,Wicklow,0
+SZPUB0742,Ballyvortha Public Supply,Wicklow,Wicklow,0
+SZPUB0743,Modelligo,Waterford,Waterford,6997
+SZPUB0744,Lacken,Waterford,Waterford,3907
+SZPUB0746,Lyranearla,Waterford,Waterford,0
+SZPUB0747,Aglish Cul Rua,Waterford,Waterford,10172
+SZPUB0748,Ballymoate Upper,Waterford,Waterford,4936
+SZPUB0749,Liskealty,Waterford,Waterford,58
+SZPUB0751,Grallagh,Waterford,Waterford,4321
+SZPUB0752,Clashmore Coolboa,Waterford,Waterford,6989
+SZPUB0753,Tinnabinna,Waterford,Waterford,2182
+SZPUB0754,Strancally,Waterford,Waterford,0
+SZPUB0757,Carrignagower,Waterford,Waterford,3019
+SZPUB0760,Villierstown,Waterford,Waterford,3828
+SZPUB0761,Camphire,Waterford,Waterford,704
+SZPUB0762,Kilmore-Kilbeg,Waterford,Waterford,0
+SZPUB0766,LCB Lismore Deerpark,Waterford,Waterford,21264
+SZPUB0767,White Well Laurentum,Waterford,Waterford,10522
+SZPUB0769,Ballysaggart,Waterford,Waterford,0
+SZPUB0771,Touraneena,Waterford,Waterford,12811
+SZPUB0774,Kilbrien,Waterford,Waterford,2173
+SZPUB0775,Carrowgarriff,Waterford,Waterford,4110
+SZPUB0779,Ballyshunnock,Waterford,Waterford,0
+SZPUB0780,Smoorbeg,Waterford,Waterford,1718
+SZPUB0783,Scrahan,Waterford,Waterford,0
+SZPUB0786,Faha,Waterford,Waterford,5353
+SZPUB0789,Fews,Waterford,Waterford,10821
+SZPUB0795,Ballyguiry,Waterford,Waterford,2155
+SZPUB0796,Ballyheaphy,Waterford,Waterford,340
+SZPUB0797,Inchinleamy,Waterford,Waterford,68
+SZPUB0799,Ballymacarbry,Waterford,Waterford,24081
+SZPUB0802,Glenagad,Waterford,Waterford,3759
+SZPUB0806,Garravoone,Waterford,Waterford,0
+SZPUB0810,Rathgormack,Waterford,Waterford,12800
+SZPUB0811,Carrigeen,Waterford,Waterford,0
+SZPUB0812,Ballyknock,Waterford,Waterford,0
+SZPUB0813,Melleray,Waterford,Waterford,5340
+SZPUB0815,Kilrossanty,Waterford,Waterford,11705
+SZPUB0819,Kilmanahan,Waterford,Waterford,1663
+SZPUB0821,Poulnagunoge,Waterford,Waterford,0
+SZPUB0822,Russelstown,Waterford,Waterford,0
+SZPUB0824,Cloneycavan,Meath,Meath,0
+SZPUB0825,Dunsany,Meath,Meath,332
+SZPUB0827,Carrickleck,Meath,Meath,0
+SZPUB0828,Lobinstown,Meath,Meath,0
+SZPUB0829,Carnaross,Meath,Meath,295
+SZPUB0832,Ballivor,Meath,Meath,26470
+SZPUB0833,Knocknagiky,Wicklow,Wicklow,0
+SZPUB0836,Barrow Supply,Kildare,Kildare,59841
+SZPUB0837,Barrow _ Poulaphouca,Kildare,Kildare,630070
+SZPUB0839,Tarelton,Cork,Cork,0
+SZPUB0840,Ballintermon 003D,Kerry,Kerry,14211
+SZPUB0841,Lyranes 303A,Kerry,Kerry,5717
+SZPUB0843,South Kilkenny Environs,Kilkenny,Kilkenny,61288
+SZPUB0844,Ballina Lisglennon,Mayo,Mayo,327761
+SZPUB0846,Crookstown,Cork,Cork,22734
+SZPUB0847,Ballincurrig_Lisgoold,Cork,Cork,6304
+SZPUB0848,Coppeen,Cork,Cork,0
+SZPUB0849,Johnstown,Cork,Cork,366
+SZPUB0850,Knoppogue,Cork,Cork,1324
+SZPUB0851,Strawhall,Cork,Cork,635
+SZPUB0852,Gortnagreige,Cork,Cork,2226
+SZPUB0853,Cois Tobair,Cork,Cork,438
+SZPUB0854,Abbeyfields Housing Estate Clonard,Meath,Meath,2297
+SZPUB0856,Moyclare RWSS,Offaly,Offaly,43571
+SZPUB0857,Templemore RWSS (Zone 2),Tipperary,Tipperary,13013
+SZPUB0865,Ballingate Public Supply,Wicklow,Wicklow,0
+SZPUB0866,Ballina - Wherrew,Mayo,Mayo,134337
+SZPUB1866,Alt Raws and Meenreagh,Donegal,Donegal,26341
+SZPUB1868,Ballymagroarty,Donegal,Donegal,86465
+SZPUB1883,Bola Beg,Wexford,Wexford,346
+SZPUB1886,Tellarought WS,Wexford,Wexford,110
+SZPUB1918,Raheen (Adamstown),Wexford,Wexford,244
+SZPUB1960,Loughrea - Knockanima PWS ,Galway,Galway,7272
+SZPUB1961,Moores Well,Waterford,Waterford,2846
+SZPUB1962,Inishmore - Kilcarna,Galway,Galway,9575
+SZPUB1963,Inishmore - Cregacareen,Galway,Galway,2092
+SZPUB1964,Moynalvey Manor,Meath,Meath,550
+SZPUB1965,Parc an Aonaig Kilmacthomas,Waterford,Waterford,281
+SZPUB1966,Ardmore Grange,Waterford,Waterford,7566
+SZPUB1968,Monamon,Waterford,Waterford,18537
+SZPUB1969,Lorrha/Rathcabbin  (Zone 2 - Lorrha),Tipperary,Tipperary,5720
+SZPUB1971,Kilmaganny,Kilkenny,Kilkenny,22773
+SZPUB1972,Gorey Urban (Town),Wexford,Wexford,60836
+SZPUB1973,Tipperary Town PWS,Tipperary,Tipperary,34207
+SZPUB1976,Castlecomer (Old) WS,Kilkenny,Kilkenny,6123
+SZPUB1977,Gorteen WS,Kilkenny,Kilkenny,11517
+SZPUB1978,Cranford,Donegal,Donegal,42228
+SZPUB1979,Letterkenny Mixed,Donegal,Donegal,119931
+SZPUB1980,Lissava PWS,Tipperary,Tipperary,16238
+SZPUB1981,Fethard Regional ,Tipperary,Tipperary,259528
+SZPUB1983,Lough Mask Westport Town Mixed Supply,Mayo,Mayo,91704
+SZPUB1987,Box Cross,Cork,Cork,87905
+SZPUB1989,Milford Letterkenny Mixed,Donegal,Donegal,51599
+SZPUB1998,Tullamore North PWS,Offaly,Offaly,136363
+SZPUB1999,Ashbourne,Meath,Meath,63399
+SZPUB2000,Kiltrough/Bettystown,Meath,Meath,149432
+SZPUB2003,Chestnut Grove,Wexford,Wexford,168
+SZPUB2010,Callow Hill t1,Wicklow,Wicklow,25218
+SZPUB2081,Golden to Cashel Town,Tipperary,Tipperary,39881
+SZPUB2082,Burncourt Ballylooby,Tipperary,Tipperary,52895
+SZPUB2089,Hollywood_Scotstown_Bellanode,Monaghan,Monaghan,29511
+SZPUB2090,Three Mile House and Togan,Monaghan,Monaghan,14770
+SZPUB2091,Reenmeen West,Cork,Cork,870
+SZPUB2113,Navan-Mid Meath Kilcarn PWS,Meath,Meath,106959
+SZPUB2114,Lough Mourne and Pollan Dam Mixed Supply,Donegal,Donegal,18188
+SZPUB2141,Letterkenny Pollan Dam Mixed Supply,Donegal,Donegal,62230
+SZPUB2145,Dawros Pub 029A,Kerry,Kerry,4610
+SZPUB2146,Cranford Carrigart Downings Mixed Supply,Donegal,Donegal,37546
+SZPUB2147,Ballydonegan,Cork,Cork,7137
+SZPUB2148,Courtbrack,Cork,Cork,0
