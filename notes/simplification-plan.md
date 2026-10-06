@@ -34,9 +34,9 @@ LA-to-county merge for Dublin, Cork and Galway, a note on zones crossing county 
 Sonnet, medium: a specified fetch and aggregate. Depends on: A. Done when: counties sum to
 53,756 km within 1% and a test pins the merge.
 
-**Checkpoint B:** letters cut on fixed thresholds of notices per 100 km per month (readable,
-re-fitted yearly) or on archive quantiles (always fills A to F, moves every build)?
-Recommended: fixed.
+**Checkpoint B (answered 2026-10-06):** letters cut on fixed thresholds of notices per 100 km
+per month (readable, re-fitted yearly) or on archive quantiles (always fills A to F, moves
+every build)? Owner: fixed.
 
 **2. The count metric.** Goal: `site.py` computes notices per 100 km per county-month and the
 letter on it; the median is unchanged. PR "Count notices per 100 km of main": new payload

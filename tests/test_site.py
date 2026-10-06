@@ -28,6 +28,7 @@ from uisce.site import (
     build_site,
     classify,
     collect_lifts,
+    count_grade,
     county_events,
     county_slug,
     daily_windows,
@@ -50,6 +51,7 @@ from uisce.site import (
     union_seconds,
     write_site,
 )
+from uisce.wsz import county_mains_km, read_zones
 
 UTC = timezone.utc
 APP = SITE_HTML.read_text()
@@ -281,6 +283,18 @@ class TestGrade:
         it crossed — about a hundred times out of scale with everything else on
         the page. It is published beside the grade now; see TestHealthNotices."""
         assert grade(99.95) == grade(99.91) == "A"
+
+
+class TestCountGrade:
+    def test_the_bands_meet_where_they_say_they_do(self):
+        for cut, above, below in ((1, "A", "B"), (2, "B", "C"), (3, "C", "D"), (4, "D", "E"),
+                                  (5, "E", "F")):
+            assert count_grade(cut - 0.001) == above
+            assert count_grade(cut) == below
+
+    def test_more_notices_is_a_worse_letter(self):
+        assert count_grade(0) == "A"
+        assert count_grade(7.2) == "F"
 
 
 class TestIntervals:
@@ -1241,6 +1255,112 @@ class TestResolved:
 # May is in progress under NOW, and the top ten is a finished-month list, so
 # these need a clock that has left May behind
 AFTER_MAY = datetime(2026, 6, 15, tzinfo=UTC)
+
+
+# the committed mains table, which the count divides by
+MAINS_KM = county_mains_km(read_zones())
+OCTOBER = datetime(2026, 10, 6, tzinfo=UTC)
+
+
+def _notices(county, prefix, per_month, **overrides):
+    """One closed burst main per notice, `per_month` of them in May to September."""
+    rows = []
+    for month, n in zip(range(5, 10), per_month):
+        for i in range(n):
+            ref = f"{prefix}{len(rows) + 1:08d}"
+            rows.append(_case(
+                id=len(rows) + 1, county=county, reference_num=ref,
+                start_date=f"2026-{month:02d}-{1 + i % 28:02d}T09:00:00+00:00",
+                end_local_date=f"2026-{month:02d}-{1 + i % 28:02d}", end_local_time="15:00",
+                notice_to_end_seconds=6 * 3600, **overrides,
+            ))
+    return rows
+
+
+def _per_100km(site, county):
+    return [site["counties"][county]["months"][f"2026-{m:02d}"]["per_100km"] for m in range(5, 10)]
+
+
+class TestNoticesPer100km:
+    """The count the methodology note measured on the 2026-10-04 release: 648
+    Kerry and 26 Carlow outage notices over May to September, 23.8 and 4.4 per
+    100 km of main. The rows here are that many notices, one event each."""
+
+    KERRY = (99, 100, 196, 130, 123)
+    CARLOW = (1, 4, 3, 7, 11)
+
+    def _site(self, extra=()):
+        rows = _notices("Kerry", "KER", self.KERRY) + _notices("Carlow", "CAR", self.CARLOW)
+        rows += [dict(r, id=len(rows) + i + 1) for i, r in enumerate(extra)]
+        return build_site(rows, SA_INDEX, OCTOBER, TOWNS)
+
+    def test_kerry_and_carlow_reproduce_the_note(self):
+        site = self._site()
+        assert round(sum(_per_100km(site, "Kerry")), 1) == 23.8
+        assert round(sum(_per_100km(site, "Carlow")), 1) == 4.4
+        assert site["counties"]["Kerry"]["mains_km"] == 2723
+        assert site["national"]["2026-07"]["outage_notices"] == 196 + 3
+
+    def test_a_month_counts_what_was_published_in_it(self):
+        kerry = self._site()["counties"]["Kerry"]["months"]["2026-07"]
+        assert kerry["outage_notices"] == 196
+        assert kerry["per_100km"] == round(100 * 196 / MAINS_KM["Kerry"], 2)
+        assert kerry["count_grade"] == count_grade(kerry["per_100km"]) == "F"
+
+    def test_an_event_counts_once_and_in_the_month_of_its_earliest_pin(self):
+        twin = _case(county="Kerry", reference_num="KER00000001",
+                     start_date="2026-06-01T09:00:00+00:00", end_local_date="2026-06-01")
+        site = self._site([twin])
+        assert site["counties"]["Kerry"]["months"]["2026-05"]["outage_notices"] == 99
+        assert site["counties"]["Kerry"]["months"]["2026-06"]["outage_notices"] == 100
+
+    def test_only_outage_events_count(self):
+        not_outages = [
+            _case(county="Carlow", reference_num="CAR00000101",
+                  work_category="mains_repair", work_type="Planned"),
+            _case(county="Carlow", reference_num="CAR00000102", work_category="discolouration"),
+            _case(county="Carlow", reference_num="CAR00000103",
+                  work_category="water_conservation"),
+            _case(county="Carlow", reference_num="CAR00000104",
+                  work_category="boil_notice_lifted", end_source="lifted_immediate"),
+            _case(county="Carlow", reference_num="CAR00000105",
+                  work_category="reservoir_interruption",
+                  description="Supply will be shut off nightly from 10pm until 7am."),
+        ]
+        site = self._site(not_outages)
+        assert site["counties"]["Carlow"]["months"]["2026-05"]["outage_notices"] == 1
+
+    def test_a_notice_dated_ahead_of_the_build_waits_for_its_day(self):
+        ahead = _open(county="Carlow", reference_num="CAR00000106",
+                      start_date="2026-10-20T09:00:00+00:00")
+        site = self._site([ahead])
+        assert site["counties"]["Carlow"]["months"]["2026-10"]["outage_notices"] == 0
+
+    def test_a_notice_from_before_collection_began_is_not_counted(self):
+        early = _case(county="Carlow", reference_num="CAR00000107",
+                      start_date="2026-04-10T09:00:00+00:00", end_local_date="2026-04-10")
+        site = self._site([early])
+        assert site["counties"]["Carlow"]["months"]["2026-04"]["outage_notices"] == 0
+
+    def test_a_part_month_reads_its_pace(self):
+        """Six days into October one Kerry notice is 0.04 per 100 km, which
+        would open every month at A; the letter reads the rate over the days
+        seen, scaled to the month, as availability already does."""
+        fresh = _case(county="Kerry", reference_num="KER00000900",
+                      start_date="2026-10-02T09:00:00+00:00", end_local_date="2026-10-02")
+        month = self._site([fresh])["counties"]["Kerry"]["months"]["2026-10"]
+        assert month["outage_notices"] == 1
+        assert month["per_100km"] == round(100 / MAINS_KM["Kerry"] * 31 / 6, 2)
+        assert month["count_grade"] == "A"
+
+    def test_a_quiet_month_is_an_a(self):
+        month = self._site()["counties"]["Carlow"]["months"]["2026-04"]
+        assert (month["outage_notices"], month["per_100km"], month["count_grade"]) == (0, 0.0, "A")
+
+    def test_the_national_rate_is_over_every_county_main(self):
+        national = self._site()["national"]["2026-05"]
+        assert national["outage_notices"] == 100
+        assert national["per_100km"] == round(100 * 100 / sum(MAINS_KM.values()), 2)
 
 
 class TestClearDays:
@@ -2398,7 +2518,9 @@ class TestHistoryShards:
         and were 78% of the payload the overview loaded."""
         site, _ = self._write(tmp_path)
         data = (tmp_path / "data.js").read_text()
-        assert set(site["counties"]["Carlow"]) == {"pop", "months", "open", "open_total"}
+        assert set(site["counties"]["Carlow"]) == {
+            "pop", "mains_km", "months", "open", "open_total",
+        }
         assert "Testtown" not in data and "towns" not in data and "resolved" not in data
         shard = (tmp_path / "t" / "carlow.js").read_text()
         assert shard.startswith("window.UISCE_COUNTY = window.UISCE_COUNTY || {};")
@@ -2923,7 +3045,9 @@ class TestPayloadShape:
 
     def test_the_county_keys_are_unchanged(self):
         county = self._site()["counties"]["Carlow"]
-        assert set(county) == {"pop", "open_total", "months", "open", "towns", "resolved"}
+        assert set(county) == {
+            "pop", "mains_km", "open_total", "months", "open", "towns", "resolved",
+        }
         # "slug" is present exactly when the area has a page: the app cannot
         # derive it, because ui.js's slug() leaves a fada as a dash
         assert set(county["towns"]["T1"]) == {"name", "pop", "months", "slug"}
@@ -2939,6 +3063,13 @@ class TestPayloadShape:
             "period_h", "availability",
             "health_n", "median_completion_h", "completed_n", "median_scheduled_h",
             "scheduled_n", "median_pooled_h", "imputed_n", "health_now",
+            "outage_notices", "per_100km", "count_grade",
+        }
+
+    def test_the_national_month_keys_are_unchanged(self):
+        assert set(self._site()["national"]["2026-05"]) == {
+            "median_completion_h", "completed_n", "median_scheduled_h", "scheduled_n",
+            "median_pooled_h", "imputed_n", "outage_notices", "per_100km",
         }
 
     def test_the_top_row_keys_are_unchanged(self):

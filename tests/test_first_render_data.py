@@ -43,7 +43,7 @@ def test_the_first_render_keeps_the_newest_month_and_the_month_lists():
     assert first["months"] == site["months"] == ["2026-04", "2026-05", "2026-06"]
     assert first["top_months"] == ["2026-04", "2026-05"]
     assert set(first["national"]) == {"2026-06"}
-    assert set(first["counties"]["Carlow"]) == {"pop", "open_total", "months"}
+    assert set(first["counties"]["Carlow"]) == {"pop", "mains_km", "open_total", "months"}
     assert set(first["counties"]["Carlow"]["months"]) == {"2026-06"}
 
 

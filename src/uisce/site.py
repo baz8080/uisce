@@ -13,6 +13,8 @@ Per county and calendar month the generator computes:
 - an A-F grade from availability alone; an active boil-water / do-not-drink /
   do-not-consume notice is published beside the grade (health_n) rather than
   folded into it — see grade() for why the knock was removed
+- outage notices per 100 km of water main, and a second letter cut on that
+  count (count_grade), published beside the availability figures
 
 Each county then breaks down into the named Census settlements its cases fall
 in, plus one bucket for everything outside a settlement. A town gets the same
@@ -55,6 +57,7 @@ from uisce.config import (
     plausible_start,
 )
 from uisce.pipeline import check_schema_version
+from uisce.wsz import county_mains_km, read_zones
 
 SITE_HTML = Path(__file__).parent / "site.html"
 AREAS_HTML = Path(__file__).parent / "areas.html"
@@ -487,6 +490,19 @@ def grade(availability):
         return "D"
     if availability >= 98.7:
         return "E"
+    return "F"
+
+
+# Outage notices per 100 km of main in a month: A below the first cut, F at the
+# last. Fitted 2026-10-06 on May-Sep 2026, re-fit yearly; the alternatives are in
+# notes/statuspage-methodology.md ("Outage notices per 100 km of main").
+COUNT_CUTS = (1.0, 2.0, 3.0, 4.0, 5.0)
+
+
+def count_grade(per_100km):
+    for letter, cut in zip("ABCDE", COUNT_CUTS):
+        if per_100km < cut:
+            return letter
     return "F"
 
 
@@ -1199,6 +1215,23 @@ class Region:
             sev: {ref: min(sum(s.values()), cap_pop) for ref, s in self.sas[sev].items()}
             for sev in SEV_ORDER
         }
+
+
+def count_notices(first_pubs, lo, hi, now):
+    """How many events were first published in the part of a month the site has
+    seen: not before collection began, and not a notice dated ahead of the build."""
+    eff_lo, eff_hi = max(lo, COLLECTION_START), min(hi, now)
+    return sum(1 for pub in first_pubs if eff_lo <= pub < eff_hi)
+
+
+def notices_per_100km(notices, km, ndays, days_elapsed):
+    """Notices per 100 km of main for the month. A month the site has not seen
+    whole is scaled to its full length, so the letter reads the month's pace
+    rather than starting every month at A."""
+    rate = 100.0 * notices / km
+    if 0 < days_elapsed < ndays:
+        rate *= ndays / days_elapsed
+    return rate
 
 
 def region_month(region, pop, ym, now):
@@ -2120,10 +2153,11 @@ def recurrence_report(cases, pin_tags=None):
     return lines
 
 
-def build_site(rows, sa_index, now, towns=None, data_as_of=None):
+def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
     # data_as_of is when the feed was last read; the site can be rebuilt without
     # a data build, so the freshness banner must not follow the build clock
     data_as_of = data_as_of or now
+    mains_km = mains_km or county_mains_km(read_zones())
     months = month_list(COLLECTION_START, now)
 
     lifts = collect_lifts(rows)
@@ -2237,6 +2271,17 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
     national_scheduled = defaultdict(list)
     national_imputed = defaultdict(list)
 
+    # county -> when each of its outage events was first published: the count
+    # is of events, so a second pin never counts twice, and an event is an
+    # outage if its worst pin was
+    outage_pubs = defaultdict(list)
+    for (county, _ref), meta in event_meta.items():
+        if meta["sev"] == "outage":
+            outage_pubs[county].append(meta["first_pub"])
+    national_km = sum(mains_km.values())
+    national_notices = Counter()
+    month_days = {}  # ym -> (days in the month, days the site has seen of it)
+
     for county in sorted(counties):
         region = counties[county]
         merged, events = region.merged(), region.events()
@@ -2244,6 +2289,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
         epop = region.event_pop(cpop)
         cdata = {
             "pop": cpop,
+            "mains_km": round(mains_km[county]),
             "months": {},
             "open": sorted(
                 (
@@ -2305,6 +2351,11 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
             stats = region_month(region, cpop, ym, now)
             county_grade = grade(stats.pop("avail_raw"))
 
+            notices = count_notices(outage_pubs[county], lo, hi, now)
+            national_notices[ym] += notices
+            month_days[ym] = (ndays, days_elapsed)
+            per_100km = notices_per_100km(notices, mains_km[county], ndays, days_elapsed)
+
             # Notice-to-end span of disruption events that started this month.
             # Three tiers, never pooled into the headline: an observed completion
             # says how long works took; a scheduled end only says what was
@@ -2346,13 +2397,20 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None):
                 "grade": county_grade,
                 **stats,
                 **span_stats(observed_h, scheduled_h, imputed_h),
+                "outage_notices": notices,
+                "per_100km": round(per_100km, 2),
+                "count_grade": count_grade(per_100km),
             }
         site["counties"][county] = cdata
 
     for ym in months:
-        site["national"][ym] = span_stats(
-            national_observed[ym], national_scheduled[ym], national_imputed[ym]
-        )
+        notices = national_notices[ym]
+        per_100km = notices_per_100km(notices, national_km, *month_days[ym])
+        site["national"][ym] = {
+            **span_stats(national_observed[ym], national_scheduled[ym], national_imputed[ym]),
+            "outage_notices": notices,
+            "per_100km": round(per_100km, 2),
+        }
 
     # Complete months only. The in-progress month reshuffles between builds as
     # open events accrue toward the 14-day cap and then resolve, so a "largest
