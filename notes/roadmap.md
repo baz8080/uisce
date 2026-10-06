@@ -147,8 +147,9 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
   because the shard carries hours and span, not the windows. Both accepted; shipping the
   windows reopens the second (frontend-notes.md, "A day in the county bar lists its notices").
 - water-sla-benchmarks.md, "Related metrics worth adopting later": a CAIDI-style time to
-  restore (the published median completion is already the analogue) and AWWA breaks per 100
-  miles of main once enough located events accumulate.
+  restore (the published median completion is already the analogue). The AWWA breaks per 100
+  miles of main it also named is now the count metric (statuspage-methodology.md, "Outage
+  notices per 100 km of main"), in notices rather than breaks.
 
 ## Considered in the 2026-09-05 survey and not planned
 
