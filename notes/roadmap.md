@@ -40,7 +40,7 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
    first-paint gate took the footer and area-view shifts to 0). The tiles are not replaced, so
    the browser counts them. Reserving the list's room is a layout decision, not a flag.
 
-3. **Credit Uisce Éireann for the mains figure.** Session 3 of the simplification plan puts
+6. **Credit Uisce Éireann for the mains figure.** Session 3 of the simplification plan puts
    km of main on the page; it should say the length is from Uisce Éireann's Water Supply
    Zones layer. Terms were requested 2026-10-06 and no licence is stated on the item. The
    footer has no attribution slot for a data source today.
