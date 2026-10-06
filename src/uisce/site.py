@@ -1215,14 +1215,22 @@ class Region:
         }
 
 
+def seen_span(lo, hi, seen):
+    """The part of [lo, hi) the site has seen: not before collection began, and
+    not after the feed was last read."""
+    return max(lo, COLLECTION_START), min(hi, seen)
+
+
+def seen_whole(lo, hi, seen):
+    return seen_span(lo, hi, seen) == (lo, hi)
+
+
 def count_notices(first_pubs, lo, hi, seen):
-    """How many events were first published in the part of [lo, hi) the site has
-    seen: not before collection began, and not after the feed was last read."""
-    eff_lo, eff_hi = max(lo, COLLECTION_START), min(hi, seen)
+    eff_lo, eff_hi = seen_span(lo, hi, seen)
     return sum(1 for pub in first_pubs if eff_lo <= pub < eff_hi)
 
 
-def count_figures(notices, km, graded=True, whole=True):
+def count_figures(notices, km, *, whole, graded=True):
     """The count, its rate per 100 km of main and the letter on the published
     figure; a span the site saw only in part carries its count so far alone."""
     per_100km = round(100.0 * notices / km, 2) if whole else None
@@ -1230,10 +1238,6 @@ def count_figures(notices, km, graded=True, whole=True):
     if graded:
         figures["count_grade"] = count_grade(per_100km) if whole else None
     return figures
-
-
-def seen_whole(lo, hi, seen):
-    return lo >= COLLECTION_START and hi <= seen
 
 
 def region_month(region, pop, ym, now):
