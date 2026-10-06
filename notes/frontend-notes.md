@@ -811,6 +811,9 @@ statuspage-methodology.md, "Outage notices per 100 km of main".
   shared `g-none` chip with a hyphen; the banner drops its "graded F" clause and the basis
   line says why there are no letters, rather than "0 counties graded F" of a month nobody
   was graded on.
+  Inside collection's first 30 days `last_30` carries its count alone (#115 gated the
+  window as a month is gated); the app shows the hyphen chip and the county page says
+  "too soon for a rate".
 - **The outage count beside a rate is the one the rate divides**: `outage_notices` (events
   by first publication), not `events.outage` (events active in the month), and on the
   newest month the overview row's count is `last_30`'s, labelled "30 days". The county
