@@ -88,6 +88,11 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
   pins add 218,456 person-hours beyond the measured union. Measured 2026-10-04 while
   guarding the year-0206 start (data-quality.md, "A start typed into the wrong
   millennium"); not changed there because it is a different decision.
+- **Simplification, agreed 2026-10-06.** The county letters rested on the 500 m footprint
+  (statuspage-methodology.md, "Density sensitivity": rank correlation 0.60 against a fixed
+  headcount, 91 of 156 letters move). The owner chose to count outage notices per 100 km of
+  water main instead, then add supply-zone pages. The sessions, checkpoints and models are in
+  [simplification-plan.md](simplification-plan.md); delete this entry when that plan closes.
 - **`IGNORE_BOIL_NOTICES`.** Recommendation is to leave it off (boil-notices.md, re-measured
   2026-09-05): the two accruing notices and the one paired one are the live warnings the health
   marker exists for. The cost of leaving it off is 13 of 17 issue events excluded as stale

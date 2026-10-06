@@ -262,6 +262,46 @@ What did move was how much work the quality knock was doing: 7 of 78 county-mont
 
 Rebuilding May and June 2026 at 300 m / 500 m / 1 km affect-radii: county **rankings** by availability are robust (Spearman rank correlation vs the 500 m baseline: 0.93/0.91 at 300 m, 0.90/0.86 at 1 km), but absolute **grades** are not — 48 of 52 county-months change letter somewhere across the range, because affected population scales roughly with radius², shifting everyone against the fixed thresholds together. Read the letters as calibrated to the 500 m assumption; read the ordering of counties as real. (A percentile-based grading would be radius-invariant, at the cost of losing fixed meaning across months.)
 
+## Density sensitivity (checked 2026-10-04)
+
+The radius check above scales every county together, so it cannot see what a fixed *area* does between counties: it catches people in proportion to density. On the 2026-10-04 release, May to September:
+
+| county | outage notices per 10k people | median people charged per event | mean monthly availability |
+|---|---|---|---|
+| Dublin | 3.7 | 2,989 | 99.44% |
+| Mayo | 22.3 | 306 | 99.64% |
+| Donegal | 26.6 | 300 | 99.42% |
+| Kerry | 41.4 | 267 | 99.27% |
+
+Notices are counted once per `reference_num`, by start date: summing the payload's monthly counts instead double-counts the 100 of 5,968 that run across a month end. Of the outage notices, 3 carry the `HM` investigation reference that cannot pair with its resolving sibling (data-quality.md, "'We are investigating' notices"), so cross-reference duplication does not move the rate.
+
+Dublin publishes a tenth of the notices per head and is charged ten times the people for each, so it grades below counties with six times its notice rate. Whether a Dublin street burst really reaches 3,000 people the feed cannot say: a pattern search finds 1 notice of 14,467 stating a customer count (238842, a boil notice lift).
+
+`uisce-eval-footprint` (on branch `archive/eval-footprint`, not on `main`: the simplification plan removes what it measures) rebuilds the county figures under the opposite assumption, a fixed *headcount*: each pin affects its nearest Small Areas until they hold N residents. The variant is rescaled to the published national person-hours, so only the distribution between counties differs and the fixed cuts still apply. Over the six finished months (156 county-months):
+
+| nearest N people | rank correlation with the published ordering | county-months changing letter |
+|---|---|---|
+| 300 | 0.61 | 94 |
+| 1,000 | 0.60 | 91 |
+| 3,000 | 0.60 | 92 |
+
+N does not matter, which is the rescaling doing its job. The movers at N = 1,000, by pooled rank of 26: Dublin 18th to 1st, Kildare 22nd to 7th, Louth 15th to 6th, Cork 25th to 18th; Leitrim 5th to 19th, Roscommon 10th to 21st, Kilkenny 6th to 13th, Longford 17th to 24th, Mayo 9th to 16th. What holds under both: Tipperary is last, Kerry, Sligo, Donegal and Waterford sit in the bottom eight, and Carlow, Wicklow, Cavan and Galway in the top five.
+
+Neither footprint is the truth. A city burst is isolated by valves to far fewer than everyone within 500 m, and a rural trunk main cuts off more than the 267 people near its pin, so the fixed area probably overstates dense counties; the fixed headcount is the far bracket, not a correction. The reading that survives is narrower than the one under "Radius sensitivity": the two ends of the table are real, and the middle of the ordering, with most of the letters, is the footprint assumption. Nothing published changed with this check except the page copy, which now says so; what to do about the letters is in [roadmap.md](roadmap.md).
+
+## Supply zones as a limit on the circle (measured 2026-10-05)
+
+Uisce Éireann publishes its Water Supply Zones as polygons on the feed's own ArcGIS org (`services2.arcgis.com/OqejhVam51LdtxGa/arcgis/rest/services/watersupplyzonesDWQ_DeptView/FeatureServer/0`, layer `IWGIS_WSZ_Boundary`): 688 zones, each with `CENSUSPOPULATION`, connection counts (`WPRN_*`) and distribution mains length in metres (`DISMAINSLENGTH`, 53,756 km in all); last edited 2026-09-29, 81 boundaries `UnderReview`, no licence stated on the item (the matching water.ie spreadsheet is CC BY 4.0). District Metered Area boundaries are not published. The feed carries no zone field, so a notice reaches its zone by point-in-polygon on its pin. Measured on the 2026-10-04 release, May to September, with shapely in a scratch probe (nothing committed):
+
+- 95.4% of 14,356 distinct pin coordinates fall in a zone, 19 in two. 78.9% of the Small Area population has its centroid in a zone; the rest is on group or private schemes the feed does not cover, and the circle charges it today.
+- **Clipping** the circle to Small Areas whose centroid lies in the pin's zone cuts national person-hours by 6.3% (Cavan 14%, Dublin 11%, Roscommon 0%). Rank correlation of county availability with the published ordering 0.99; 4 of 156 county-months change letter, all up one (Laois May C to B, Longford May D to C, Offaly June C to B, Cork August D to C). Dublin moves 18th to 15th.
+- The clip cannot act on 2,227 coordinates (16%): the pin is in a zone but no Small Area it charges is. 1,945 of them charge only areas outside every zone, because 4,802 coordinates (33%) have no centroid within 500 m and fall back to the nearest Small Area up to 8 km away. A centroid is too coarse a test for a rural zone.
+- **Capping** each notice at its zone's population instead changes almost nothing (-0.4% person-hours, 1 letter): circles are nearly always smaller than zones (median zone 861 people, mean 6,315; Fingal Zone 1 is 293,411).
+
+So the zone is a correction to the circle, not an answer to the density question above: Dublin's zones run to six figures, and no limit drawn from them touches its 3,000 people per notice.
+
+Normalised by mains length, outage notices per 100 km run from Carlow 4.4, Louth 4.7 and Leitrim 4.8 to Wexford 16.9, Waterford 20.7 and Kerry 23.8, with Dublin 8.7 (13th). That ordering correlates 0.60 with notices per 10,000 people, and agrees with the ends that held under both footprints. Zones are keyed to a local authority, not a county (Dublin's four and the two cities merged by hand); Louth's zones hold 110% of its census population, so some cross the county line.
+
 ## The national top ten (added 2026-08-01)
 
 `#top` ranks the ten largest **individual** disruptions nationally in a month, by person-hours. Nothing else on the site does: person-hours are computed per county and per area, so a reader who wants to know what actually happened in July gets 26 county rows rather than the burst that caused them. The distribution justifies the page — in July 2026 the ten largest events were **21.9%** of every person-hour lost nationally, and one Donegal reservoir interruption was 9% on its own.
