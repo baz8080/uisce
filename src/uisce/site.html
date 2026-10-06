@@ -254,6 +254,7 @@
     <details class="method">
       <summary>What this measures</summary>
       <p>This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. Durations count from when a notice was published, not when the service was lost. The published &ldquo;works complete&rdquo; time is a <b>minimum</b>: it counts only the notices that reported one. The availability percentages are a <b>best estimate</b>, because a total has to put a number on every disruption, including the ones that never reported an end.</p>
+      <p>A notice is counted for everyone living within 500&nbsp;m of its pin, for as long as it stands, whether or not their supply was lost. So the hours and percentages measure how much announced disruption people were in range of, not water lost at the tap: they run far above the minutes without supply a regulator measures, and cannot be compared with them.</p>
     </details>
 
     <details class="method" id="method">
@@ -286,6 +287,7 @@
         <li><span class="gradechip g-E">E</span> 98.7% or better</li>
         <li><span class="gradechip g-F">F</span> below 98.7%</li>
       </ul>
+      <p>The cut-offs are fitted to this site's own record of county-months, not taken from a regulator, and a letter leans on the 500&nbsp;m assumption above: counting the same number of people for every notice instead moves more than half of the letters, Dublin's most of all. Read one as a rough placing, not a pass or a fail.</p>
 
       <h4>Why the <span class="healthmark sm">!</span> sits beside the grade, not inside it</h4>
       <p>Whether the water is safe to drink is a different question from how much of it there was, and a letter cannot answer both - so an active boil-water / do-not-drink / do-not-consume notice is a marker beside the grade, never folded into it.</p>
@@ -512,7 +514,7 @@ function renderOverview() {
   // no disruption-count or typical-time tile: the banner already carries both
   document.getElementById("tiles").innerHTML = `
     <div class="tile"><div class="v">${availText(natAvail, personH)}</div><div class="k">of people's time with no outage announced</div></div>
-    <div class="tile"><div class="v">${fmtPersonH(personH)}</div><div class="k">hours without water, added up across everyone affected</div></div>
+    <div class="tile"><div class="v">${fmtPersonH(personH)}</div><div class="k">hours of announced outage, added up across everyone in range</div></div>
     <div class="tile"><div class="v">${quality}</div><div class="k">water-quality notices</div></div>
     ${isLatest() ? `<a class="tile" href="#open" onclick="go('#open'); return false;"><div class="v">${openNow}</div><div class="k">notices open right now →</div></a>` : ""}`;
 
@@ -535,7 +537,7 @@ function renderOverview() {
 
   const nF = worst.filter(w => w[1].grade === "F").length;
   document.getElementById("banner").innerHTML =
-    `<strong>${monthLabelLong(curMonth)}${isPartial() ? " so far" : ""}:</strong> ${ev} announced outages · typical outage ${natFix} · ${nF} ${nF === 1 ? "county" : "counties"} graded F
+    `<strong>${monthLabelLong(curMonth)}${isPartial() ? " so far" : ""}:</strong> ${ev} announced outages · typical time to &ldquo;works complete&rdquo; ${natFix} · ${nF} ${nF === 1 ? "county" : "counties"} graded F
      <span class="meta">${freshness(D.data_as_of_iso, STALE_AFTER_H)}</span>`;
 
   // county rows, always alphabetical: 26 rows scroll, and the search box is

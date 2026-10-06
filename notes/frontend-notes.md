@@ -777,3 +777,23 @@ arrives after the first render, so it costs no LCP, only 28.4 KB gz of transfer.
 - Not fixed here: nothing redraws the moment a late `data.js` lands, because loadShard ignores an onload after its timeout, so the reader sees the failure note until the next navigation. The county and history shards share the defect and never recover, since their state stays `"error"`. The fix belongs in statusui's loadShard. Fixed there in statusui#22 (pinned 2026-10-02): a late onload now sets the state to `"ok"` and calls back again, so the county view, the area view and the views waiting on `data.js` redraw by themselves; held 12 s in a browser, the county appeared at 13.3 s with no navigation.
 - Clearing a search leaves each section its filtered height until it is near the screen. Keeping `.searching` one more frame would record the full heights, at the price of laying out the whole directory on the keystroke that clears it, which is the 700 ms long task the skipping exists to avoid; left as it is. One measurement in four of a programmatic jump to `#c-wicklow` straight after clearing a search shifted 1.09 at 1366 px (0 in the rest, and 0 at 412 px), as sections settled from their filtered heights around the target; a reader's own click on the nav is input and is not counted, and a cold load never searched has no filtered heights to settle.
 - `first_render_payload` names its top-level keys instead of copying all but three, so a key added to the payload later cannot ride into the HTML unnoticed; and the build log prints the inline payload's size.
+
+## The page said more than the method - 2026-10-04
+
+water-sla-benchmarks.md has always called the availability figure an exposure index, two to
+three orders of magnitude above a regulator's measured minutes by construction. The index
+page did not: the national tile read "hours without water, added up across everyone
+affected" and the banner "typical outage 6.1h". Annualised from May to September the
+person-hours come to 48 hours per person per year, against about a quarter of an hour for
+Ofwat's sector figure, so "without water" was a claim the method cannot make.
+
+- The tile reads "hours of announced outage, added up across everyone in range", the pair of
+  its neighbour "of people's time with no outage announced".
+- The banner uses the county tile's name for the same figure: typical time to "works complete".
+- "What this measures" says a notice counts for everyone within 500 m for as long as it
+  stands, and that the figures cannot be compared with a regulator's.
+- "What the letters mean" says the cuts are fitted to this site's own record and that the
+  letters lean on the 500 m assumption (statuspage-methodology.md, "Density sensitivity").
+
+"Availability" keeps its name: it is the grade's basis on every surface, and the caveat now
+sits where the word is defined.
