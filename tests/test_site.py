@@ -1353,6 +1353,13 @@ class TestNoticesPer100km:
         assert month["per_100km"] == round(100 / MAINS_KM["Kerry"] * 31 / 6, 2)
         assert month["count_grade"] == "A"
 
+    def test_a_rate_rounding_onto_a_cut_takes_the_letter_it_shows(self):
+        rows = _notices("Carlow", "CAR", self.CARLOW)
+        mains = dict(MAINS_KM, Carlow=100 / 4.996)
+        may = build_site(rows, SA_INDEX, OCTOBER, TOWNS, mains_km=mains)["counties"]["Carlow"]
+        assert (may["months"]["2026-05"]["per_100km"], may["months"]["2026-05"]["count_grade"]) == (
+            5.0, "F")
+
     def test_a_quiet_month_is_an_a(self):
         month = self._site()["counties"]["Carlow"]["months"]["2026-04"]
         assert (month["outage_notices"], month["per_100km"], month["count_grade"]) == (0, 0.0, "A")

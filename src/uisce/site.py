@@ -493,9 +493,7 @@ def grade(availability):
     return "F"
 
 
-# Outage notices per 100 km of main in a month: A below the first cut, F at the
-# last. Fitted 2026-10-06 on May-Sep 2026, re-fit yearly; the alternatives are in
-# notes/statuspage-methodology.md ("Outage notices per 100 km of main").
+# Fitted on May-Sep 2026 and re-fitted yearly; see "Outage notices per 100 km of main".
 COUNT_CUTS = (1.0, 2.0, 3.0, 4.0, 5.0)
 
 
@@ -2271,9 +2269,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
     national_scheduled = defaultdict(list)
     national_imputed = defaultdict(list)
 
-    # county -> when each of its outage events was first published: the count
-    # is of events, so a second pin never counts twice, and an event is an
-    # outage if its worst pin was
+    # county -> first publication of each event whose worst pin is an outage
     outage_pubs = defaultdict(list)
     for (county, _ref), meta in event_meta.items():
         if meta["sev"] == "outage":
@@ -2354,7 +2350,8 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
             notices = count_notices(outage_pubs[county], lo, hi, now)
             national_notices[ym] += notices
             month_days[ym] = (ndays, days_elapsed)
-            per_100km = notices_per_100km(notices, mains_km[county], ndays, days_elapsed)
+            # graded on the published figure, so the letter never contradicts it
+            per_100km = round(notices_per_100km(notices, mains_km[county], ndays, days_elapsed), 2)
 
             # Notice-to-end span of disruption events that started this month.
             # Three tiers, never pooled into the headline: an observed completion
@@ -2398,7 +2395,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
                 **stats,
                 **span_stats(observed_h, scheduled_h, imputed_h),
                 "outage_notices": notices,
-                "per_100km": round(per_100km, 2),
+                "per_100km": per_100km,
                 "count_grade": count_grade(per_100km),
             }
         site["counties"][county] = cdata
