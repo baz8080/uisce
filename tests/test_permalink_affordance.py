@@ -36,7 +36,7 @@ def test_the_county_label_claims_the_months_and_not_every_notice():
     notices and only ever one month. What the page has that the view lacks is
     every month — the same claim esb's makes, because the two stand in the same
     relation to their views."""
-    label = _sub_line(_view("function renderCounty()", "function renderTop()"))
+    label = _sub_line(_view("function renderCounty()", "function loadCounty("))
     assert "Every month for" in label
     assert "on one page" in label
     assert "Permanent link" not in label

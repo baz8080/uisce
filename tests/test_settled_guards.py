@@ -15,7 +15,7 @@ from test_area_pages import _write
 from test_site import APP, NOW, SA_INDEX, TOWNS
 
 from uisce import build, pipeline, site
-from uisce.site import classify, grade, knocks_grade, resolve_case
+from uisce.site import COUNT_CUTS, classify, count_grade, knocks_grade, resolve_case
 
 
 class TestFirstInferenceStartIsPinned:
@@ -104,25 +104,21 @@ class TestShortDownloadNeverReachesTheDb:
         assert created == [[]]
 
 
-def test_the_printed_grade_legend_matches_grade():
+def test_the_printed_grade_legend_matches_count_grade():
     legend = re.search(r'<ul class="grades">(.*?)</ul>', site.SITE_HTML.read_text(), re.S)
     items = re.findall(
-        r'<span class="gradechip g-([A-F])">\1</span>\s*(below|)\s*([\d.]+)% ?(or better|)',
+        r'<span class="gradechip g-([A-F])">\1</span>\s*(fewer than|)\s*([\d.]+)( or more|)',
         legend.group(1),
     )
     assert [letter for letter, *_ in items] == list("ABCDEF")
-
-    floors = {}
-    for letter, below, cut, better in items[:-1]:
-        assert (below, better) == ("", "or better")
-        floors[letter] = float(cut)
-        assert grade(floors[letter]) == letter
-        assert grade(floors[letter] - 0.001) != letter
-
-    letter, below, cut, better = items[-1]
-    assert (letter, below, better) == ("F", "below", "")
-    assert float(cut) == floors["E"]
-    assert grade(float(cut) - 0.001) == "F"
+    for (letter, fewer, cut, more), bound in zip(items, COUNT_CUTS):
+        assert (fewer, more) == ("fewer than", "")
+        assert float(cut) == bound
+        assert count_grade(bound - 0.01) == letter
+        assert count_grade(bound) != letter
+    letter, fewer, cut, more = items[-1]
+    assert (letter, fewer, more) == ("F", "", " or more")
+    assert float(cut) == COUNT_CUTS[-1] and count_grade(float(cut)) == "F"
 
 
 class TestInitialBudgetWarnsNeverFails:

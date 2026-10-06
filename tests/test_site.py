@@ -23,8 +23,10 @@ from uisce.site import (
     TownLookup,
     _area_index_html,
     _area_items,
+    _back_text,
     _events_html,
     area_index,
+    back_key,
     boil_notice_fate,
     build_site,
     classify,
@@ -2520,6 +2522,8 @@ def _bare_site(county="Kildare"):
         "counties": {
             county: {
                 "pop": COUNTY_POP[county],
+                "mains_km": round(MAINS_KM[county]),
+                "last_30": count_figures(0, MAINS_KM[county], whole=True),
                 "months": {},
                 "open": [],
                 "open_total": 0,
@@ -2933,18 +2937,24 @@ class TestIndexablePages:
         ]
         assert [p for p in pages if beacon not in (tmp_path / p).read_text()] == []
 
-    def test_a_month_that_lost_person_time_never_prints_a_clean_hundred(self, tmp_path):
-        """The app's availText clamps this and the static page has to match: a
-        county that lost person-time must not round up to "100.000%", which reads
-        as a claim the page is not making. A one-hour, 1,000-person burst against
-        Dublin's population rounds there at three decimals."""
+    def test_the_county_page_states_the_count_and_no_estimate(self, tmp_path):
         self._write(tmp_path, [_case(
             county="Dublin", reference_num="DUB00000001",
             notice_to_end_seconds=3600.0, end_local_time="01:00",
         )])
         page = (tmp_path / "c" / "dublin.html").read_text()
-        assert "99.999% supply availability" in page
-        assert "100.000% supply availability" not in page
+        assert "Over the last 30 days: 1 outage notice, too soon for a rate." in page
+        assert "None" not in page
+        assert "km of water main, from Uisce Éireann's supply zones" in page
+        assert "availability" not in page.lower() and "person-hours" not in page.lower()
+
+    def test_after_the_first_30_days_the_county_page_states_the_letter(self, tmp_path):
+        site = build_site([_case(county="Dublin", reference_num="DUB00000001",
+                                 start_date="2026-06-01T00:00:00+00:00")],
+                          SA_INDEX, AFTER_MAY, TOWNS)
+        write_site(site, tmp_path, TOWNS)
+        page = (tmp_path / "c" / "dublin.html").read_text()
+        assert "Over the last 30 days: grade <strong>A</strong>, 1 outage notice, 0.02 per" in page
 
     def test_an_empty_county_page_still_renders_and_says_so(self, tmp_path):
         """A county with no notice is a page a search result can still land on,
@@ -3108,7 +3118,7 @@ class TestPayloadShape:
     def test_the_top_level_keys_are_unchanged(self):
         assert set(self._site()) == {
             "generated", "generated_iso", "data_as_of_iso", "months", "counties",
-            "national", "last_30", "top",
+            "national", "last_30", "mains_km", "top",
         }
 
     def test_the_county_keys_are_unchanged(self):
@@ -3339,8 +3349,99 @@ class TestDisplayCopy:
         badge = _app_fn("endBadge")
         assert badge.index("if (r.health)") < badge.index("withdrawn without")
 
-    def test_a_notice_with_no_end_is_not_said_to_add_no_time(self):
-        """An outage-class one is charged a typical span (2026-08-15)."""
+    def test_a_notice_with_no_end_is_still_counted(self):
         badge = _app_fn("endBadge")
         assert "It is counted as an incident but adds no disruption time." not in badge
-        assert "typical" in badge
+        assert "It is still counted as a notice." in badge
+
+
+class TestExpectedBack:
+    """An open notice that states an end carries it, and every open list prints it."""
+
+    def _back(self, rows, now=NOW):
+        county = build_site(rows, SA_INDEX, now, TOWNS)["counties"]["Carlow"]
+        return [o.get("back") for o in county["open"]]
+
+    def test_a_stated_end_rides_on_the_open_entry_in_irish_time(self):
+        row = _open(end_source="scheduled_end_with_time", notice_to_end_seconds=1011600.0,
+                    end_local_date="2026-05-12", end_local_time="18:00")
+        assert self._back([row]) == ["2026-05-12T18:00"]
+
+    def test_a_date_alone_is_carried_as_a_date(self):
+        row = _open(end_source="scheduled_end_date_only", notice_to_end_seconds=1033200.0,
+                    end_local_date="2026-05-12")
+        assert self._back([row]) == ["2026-05-12"]
+
+    def test_a_notice_with_no_end_carries_none(self):
+        assert self._back([_open()]) == [None]
+
+    def test_a_repeating_window_carries_none(self):
+        assert self._back([_recurring(status="Open")], datetime(2026, 5, 5, tzinfo=UTC)) == [None]
+
+    def test_the_latest_end_any_open_pin_states_wins(self):
+        """A date alone is the end of that day, so it outlasts a time on it."""
+        rows = [
+            _open(id=1, end_source="scheduled_end_with_time", notice_to_end_seconds=1011600.0,
+                  end_local_date="2026-05-12", end_local_time="18:00"),
+            _open(id=2, end_source="scheduled_end_date_only", notice_to_end_seconds=1033200.0,
+                  end_local_date="2026-05-12"),
+        ]
+        assert self._back(rows) == ["2026-05-12"]
+
+    def test_an_open_pin_stating_no_end_withholds_the_event_s(self):
+        rows = [
+            _open(id=1, end_source="scheduled_end_with_time", notice_to_end_seconds=1011600.0,
+                  end_local_date="2026-05-12", end_local_time="18:00"),
+            _open(id=2),
+        ]
+        assert self._back(rows) == [None]
+        assert self._back(rows[::-1]) == [None]
+
+    def test_the_back_key_reads_a_date_as_the_end_of_it(self):
+        assert back_key("2026-05-12") > back_key("2026-05-12T23:59") > back_key("")
+
+    def test_the_county_page_says_when_supply_is_expected_back(self, tmp_path):
+        rows = [_open(end_source="scheduled_end_with_time", notice_to_end_seconds=1011600.0,
+                      end_local_date="2026-05-12", end_local_time="18:00")]
+        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        write_site(site, tmp_path, TOWNS)
+        assert "expected back by " in (tmp_path / "c" / "carlow.html").read_text()
+
+    def test_a_static_page_built_after_the_end_says_it_was_expected(self):
+        assert _back_text("2026-05-12T09:00", "2026-05-12T17:23").startswith("was expected")
+        assert _back_text("2026-05-12T18:00", "2026-05-12T17:23").startswith("expected back")
+        assert _back_text("2026-05-12", "2026-05-12T23:59").startswith("expected back by")
+
+    def test_the_app_prints_it_on_every_open_list(self):
+        assert "o.back ? ` · ${backText(o.back, now)}`" in _app_fn("openGroups")
+        assert 'timeZone: "Europe/Dublin"' in _app_fn("irishNow")
+
+
+class TestThePagesSayTheCount:
+    """Session 3 of the simplification plan: no page carries the retired estimate."""
+
+    def test_no_built_page_mentions_availability_or_the_radius(self, tmp_path):
+        rows = [_case(), _open(id=2, reference_num="CAR2", end_source="scheduled_end_with_time",
+                               notice_to_end_seconds=1011600.0,
+                               end_local_date="2026-05-12", end_local_time="18:00")]
+        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        site.pop("recurrence_report")
+        write_site(site, tmp_path, TOWNS)
+        pages = list(tmp_path.glob("*.html")) + list(tmp_path.glob("[ca]/**/*.html"))
+        assert len(pages) > 3
+        for page in pages:
+            # the inlined payload still carries the estimate's keys until session 4
+            text = re.sub(r"<script>window\.UISCE_DATA = .*?</script>", "",
+                          page.read_text(), flags=re.S).lower()
+            for word in ("availability", "person-hours", "500 m", "500&nbsp;m"):
+                assert word not in text, (page.name, word)
+
+    def test_the_newest_month_reads_the_last_30_days_and_no_other_does(self):
+        assert "m.per_100km == null && isLatest()" in _app_fn("onLast30")
+        assert "onLast30(m) ? c.last_30 : m" in _app_fn("figures")
+        for view in ("renderOverview", "renderCounty"):
+            assert "figures(c, " in _app_fn(view)
+            assert "m.count_grade" not in _app_fn(view)
+
+    def test_the_top_ten_view_is_gone_from_the_app(self):
+        assert "renderTop" not in APP and 'location.hash === "#top"' not in APP

@@ -797,3 +797,62 @@ Ofwat's sector figure, so "without water" was a claim the method cannot make.
 
 "Availability" keeps its name: it is the grade's basis on every surface, and the caveat now
 sits where the word is defined.
+
+## The page counts notices - 2026-10-06
+
+**Simply put:** every page now shows the count of outage notices per 100 km of water main,
+its letter and the typical time to "works complete", and nothing from the population
+estimate. Session 3 of [simplification-plan.md](simplification-plan.md); the arithmetic is
+statuspage-methodology.md, "Outage notices per 100 km of main".
+
+- **Letters and rates.** A finished month shows its own `count_grade` and `per_100km`. The
+  newest month, which has no rate until the site has seen it whole, shows the county's
+  `last_30` and says "last 30 days" wherever it does. April 2026 has neither and gets the
+  shared `g-none` chip with a hyphen; the banner drops its "graded F" clause and the basis
+  line says why there are no letters, rather than "0 counties graded F" of a month nobody
+  was graded on.
+  Inside collection's first 30 days `last_30` carries its count alone (#115 gated the
+  window as a month is gated); the app shows the hyphen chip and the county page says
+  "too soon for a rate".
+- **The outage count beside a rate is the one the rate divides**: `outage_notices` (events
+  by first publication), not `events.outage` (events active in the month), and on the
+  newest month the overview row's count is `last_30`'s, labelled "30 days". The county
+  view's tiles keep the month's count beside the 30-day rate, each labelled. The bars, the
+  area breakdown and the quality and works tiles keep the active-in-month counts.
+- **Mains length is credited** wherever it is shown: "from Uisce Éireann's supply zones".
+  The national figure is the unrounded total (`site["mains_km"]`, 53,756 km); summing the
+  rounded county figures gave 53,759.
+- **"Expected back by"** on an open notice prints the end its own text states
+  (`Case.back`, Irish wall clock, `YYYY-MM-DDTHH:MM` or a date alone). The latest any open
+  pin states wins, a date alone meaning the end of that day, and an event with any open pin
+  stating no end says nothing: a return time its other notice never gave is not one to
+  print. A repeating window carries none: the end of its last night is not when supply
+  comes back. A passed end says "was expected back by", because a scheduled end does not
+  close a notice; the app reads "now" in Europe/Dublin, the static county page against its
+  build time in the same clock. On the 2026-10-06 release, 176 of 227 open events state an
+  end on some pin and 175 on every open pin (the other, DCC00121998, has a pin not yet
+  extracted).
+- **The top ten is withdrawn** (owner, 2026-10-06): it ranked by person-hours, which is the
+  estimate. The `#top` route falls back to the overview and `top_months` left the inline
+  payload. The owner liked the page, so session 4 brings it back on a ranking the feed can
+  support. Considered for this session and not taken: re-ranking now by the longest
+  notice-to-"works complete" span (a new ranking, which wants its own measured entry), and
+  leaving it on person-hours until session 4 (the page would go on printing the estimate).
+- **The day bars take one shade** for a supply disruption (owner, 2026-10-06). The
+  minor/moderate/major steps were the share of the county's population within 500 m; the
+  share still rides in each cell until session 4 drops or re-bases it. Considered and not
+  taken: a ramp on outage notices standing per 100 km that day (new server arithmetic and
+  thresholds to fit), and keeping the population ramp (the one estimate left on screen).
+- **Removed:** availability and its meter, person-hours, "~N people" on history rows, the
+  area table's two population columns and their sorts (the default sort is now
+  disruptions), and the 500 m prose. The method's per-month "including them would put the
+  figure at" sentence stays: it discloses the published median, and goes with the imputed
+  spans in session 4. "Simply put"
+  lines stand ahead of each method disclosure, visible while it is closed.
+- **Kept:** settlement and county populations from the Census, which are counts, not
+  estimates; and the payload keys behind the old figures, which session 4 deletes with the
+  code. `TestThePagesSayTheCount` fails if a built page says "availability",
+  "person-hours" or "500 m" again; it skips the inline payload for that reason.
+
+This supersedes "The page said more than the method" above: that section's copy is gone
+with the figures it qualified.
