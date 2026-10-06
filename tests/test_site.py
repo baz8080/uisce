@@ -12,6 +12,7 @@ from uisce.config import BASE_URL
 from uisce.pipeline import SCHEMA_VERSION
 from uisce.site import (
     CAP_DAYS,
+    COLLECTION_START,
     COUNTY_POP,
     MIN_CATEGORY_N,
     SITE_HTML,
@@ -1283,7 +1284,7 @@ def _per_100km(site, county):
 
 
 class TestNoticesPer100km:
-    """The count the methodology note measured on the 2026-10-04 release: 648
+    """The count the methodology note measured on the 2026-10-06 release: 648
     Kerry and 26 Carlow outage notices over May to September, 23.8 and 4.4 per
     100 km of main. The rows here are that many notices, one event each."""
 
@@ -1382,6 +1383,14 @@ class TestNoticesPer100km:
         carlow = build_site(rows, SA_INDEX, first, TOWNS)["counties"]["Carlow"]
         assert carlow["months"]["2026-11"]["count_grade"] is None
         assert carlow["last_30"]["count_grade"] == "A"
+
+    def test_a_window_seen_only_in_part_gets_no_letter(self):
+        rows = _notices("Carlow", "CAR", self.CARLOW)
+        for now, lettered in ((COLLECTION_START + timedelta(days=29), False),
+                              (COLLECTION_START + timedelta(days=30), True)):
+            site = build_site(rows, SA_INDEX, now, TOWNS)
+            assert (site["counties"]["Carlow"]["last_30"]["count_grade"] is not None) is lettered
+            assert (site["last_30"]["per_100km"] is not None) is lettered
 
     def test_a_month_is_lettered_from_the_instant_it_ends(self):
         rows = _notices("Carlow", "CAR", self.CARLOW)
