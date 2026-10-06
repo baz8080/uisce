@@ -14,12 +14,9 @@ from uisce.site import (
     CAP_DAYS,
     COLLECTION_START,
     COUNTY_POP,
-    MIN_CATEGORY_N,
     SITE_HTML,
     UNPLACED,
     UNPLACED_LABEL,
-    SmallAreaIndex,
-    SpanTable,
     TownLookup,
     _area_index_html,
     _area_items,
@@ -38,8 +35,8 @@ from uisce.site import (
     daily_windows,
     data_horizon,
     describes_recurrence,
+    event_area,
     event_windows,
-    grade,
     is_open,
     load_cases,
     merge,
@@ -47,12 +44,12 @@ from uisce.site import (
     month_list,
     norm_scheme,
     notice_paragraphs,
+    overlaps,
     paired_lift,
     read_cases,
     recurrence_report,
     recurring_events,
     resolve_case,
-    union_seconds,
     write_site,
 )
 from uisce.wsz import county_mains_km, read_zones
@@ -86,13 +83,11 @@ def _scheduled(**overrides):
     return _case(**({"end_source": "scheduled_end_with_time"} | overrides))
 
 
-# one Small Area of 1,000 people sitting right on the test pin
-SA_INDEX = SmallAreaIndex([(52.836, -6.926, "SA1", 1000)])
 NOW = datetime(2026, 5, 10, tzinfo=UTC)
 
-# that Small Area is inside a Co. Carlow settlement; the pin therefore lands
-# in the town rather than the unplaced bucket
-TOWNS = TownLookup([("SA1", "T1", "Testtown", "Carlow")], SA_INDEX.pop)
+# one Small Area of 1,000 people sitting right on the test pin, inside a Co.
+# Carlow settlement; the pin therefore lands in the town, not the unplaced bucket
+TOWNS = TownLookup([("SA1", "T1", "Testtown", "Carlow", 52.836, -6.926, 1000)])
 
 
 class TestClassify:
@@ -262,33 +257,6 @@ class TestBoilNoticeFate:
         assert end == _dt("2026-05-20T00:00:00+00:00")
 
 
-class TestGrade:
-    def test_thresholds(self):
-        assert grade(99.95) == "A"
-        assert grade(99.8) == "B"
-        assert grade(99.5) == "C"
-        assert grade(99.2) == "D"
-        assert grade(98.8) == "E"
-        assert grade(98.0) == "F"
-
-    def test_the_bands_meet_where_they_say_they_do(self):
-        """Mid-band values alone would pass an off-by-one on any cut, and the
-        legend prints these five numbers to the reader."""
-        for cut, above, below in ((99.9, "A", "B"), (99.75, "B", "C"), (99.45, "C", "D"),
-                                  (99.0, "D", "E"), (98.7, "E", "F")):
-            assert grade(cut) == above
-            assert grade(cut - 0.001) == below
-
-    def test_the_grade_depends_on_availability_alone(self):
-        """A health notice used to knock the letter one step. It was measured
-        before it was removed: across 78 settled county-months it set the
-        published letter for 8, and the median knocking notice would have cost
-        0.003 points of availability had it accrued, against the 0.45 of the band
-        it crossed — about a hundred times out of scale with everything else on
-        the page. It is published beside the grade now; see TestHealthNotices."""
-        assert grade(99.95) == grade(99.91) == "A"
-
-
 class TestCountGrade:
     def test_the_bands_meet_where_they_say_they_do(self):
         for cut, above, below in ((1, "A", "B"), (2, "B", "C"), (3, "C", "D"), (4, "D", "E"),
@@ -302,12 +270,16 @@ class TestCountGrade:
 
 
 class TestIntervals:
-    def test_merge_joins_overlaps_and_union_clips(self):
+    def test_merge_joins_overlaps(self):
         iv = merge([(_dt("2026-05-01T00:00"), _dt("2026-05-01T12:00")),
                     (_dt("2026-05-01T06:00"), _dt("2026-05-02T00:00"))])
-        assert len(iv) == 1
-        secs = union_seconds(iv, _dt("2026-05-01T18:00"), _dt("2026-05-03T00:00"))
-        assert secs == 6 * 3600
+        assert iv == [[_dt("2026-05-01T00:00"), _dt("2026-05-02T00:00")]]
+
+    def test_overlaps_is_half_open(self):
+        iv = [(_dt("2026-05-01T00:00"), _dt("2026-05-02T00:00"))]
+        assert overlaps(iv, _dt("2026-05-01T18:00"), _dt("2026-05-03T00:00"))
+        assert not overlaps(iv, _dt("2026-05-02T00:00"), _dt("2026-05-03T00:00"))
+        assert not overlaps(iv, _dt("2026-04-30T00:00"), _dt("2026-05-01T00:00"))
 
 
 class TestRestampedStart:
@@ -324,22 +296,22 @@ class TestRestampedStart:
         return _case(**(base | overrides))
 
     def test_the_span_runs_from_the_start_it_was_measured_from(self):
-        case = resolve_case(self._restamped(), SA_INDEX, {}, NOW)
+        case = resolve_case(self._restamped(), {}, NOW)
         assert case.intervals == [(_dt("2026-05-01T09:00:00+00:00"),
                                    _dt("2026-05-05T11:00:00+00:00"))]
         assert case.start == _dt("2026-05-01T09:00:00+00:00")
 
     def test_the_charged_hours_stop_at_the_notice_own_end(self):
-        month = build_site([self._restamped()], SA_INDEX, AFTER_MAY)["counties"]["Carlow"]
+        month = build_site([self._restamped()], AFTER_MAY)["counties"]["Carlow"]
         month = month["months"]["2026-05"]
-        assert month["person_h"] == 98 * 1000
+        assert [d[0] for d in month["days"][:5]] == ["outage"] * 5
         assert [d[0] for d in month["days"][5:9]] == [""] * 4
 
     def test_every_surface_dates_the_event_from_the_same_start(self):
         # re-stamped forward a month: the hours, the history, the top ten and
         # the completion median all belong to the pinned month
         row = self._restamped(start_date="2026-06-05T09:00:00+00:00")
-        site = build_site([row], SA_INDEX, datetime(2026, 7, 5, tzinfo=UTC), TOWNS)
+        site = build_site([row], datetime(2026, 7, 5, tzinfo=UTC), TOWNS)
         record = site["history"]["Carlow"]["T1"]["events"][0]
         assert record["start"] == "2026-05-01" and record["end"] == "2026-05-05"
         assert site["top"]["2026-05"][0]["start"] == "2026-05-01"
@@ -355,7 +327,7 @@ class TestRestampedStart:
             notice_to_end_seconds=(3 * 24 + 21) * 3600.0, end_recurrence="daily",
             end_window_open="22:00", end_window_close="07:00",
             end_window_first_date="2026-05-01")
-        case = resolve_case(row, SA_INDEX, {}, NOW, recurring=True)
+        case = resolve_case(row, {}, NOW, recurring=True)
         assert case.rec == "expanded"
         assert case.intervals[0][0] >= case.start == _dt("2026-05-01T09:00:00+00:00")
         assert len(case.intervals) == 4
@@ -374,18 +346,17 @@ class TestImplausibleStart:
         return _case(**(base | overrides))
 
     def test_the_notice_is_dated_from_its_first_sighting(self):
-        case = resolve_case(self._typo(), SA_INDEX, {}, NOW)
+        case = resolve_case(self._typo(), {}, NOW)
         assert case.start == _dt("2026-05-05T12:00:00+00:00")
 
-    def test_it_is_charged_a_typical_span_back_from_its_own_end(self):
+    def test_it_counts_as_a_notice_that_reported_no_end(self):
         rows = [_case(id=1, reference_num="CAR1"), self._typo(reference_num="CAR2")]
-        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        site = build_site(rows, NOW, TOWNS)
         month = site["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["person_h"] == 2 * 24 * 1000
-        assert month["imputed_n"] == 1 and month["completed_n"] == 1
+        assert month["no_end_n"] == 1 and month["completed_n"] == 1
         event = next(e for e in site["history"]["Carlow"]["T1"]["events"] if e["ref"] == "CAR2")
-        assert event["start"] == "2026-05-05" and event["from"] == "2026-05-04"
-        assert "hours" not in event
+        assert event["start"] == "2026-05-05"
+        assert not {"from", "end", "hours"} & set(event)
 
     def test_a_sibling_pin_with_a_real_start_keeps_the_event_measured(self):
         sibling = _case(id=1, start_date="2026-05-05T09:00:00+00:00",
@@ -399,20 +370,19 @@ class TestImplausibleStart:
         stale = self._typo(reference_num="CAR2", notice_to_end_seconds=57433710600.0,
                            end_input_start_date="0206-05-05T09:00:00+00:00")
         rows = [_case(id=1, reference_num="CAR1"), stale]
-        assert SpanTable(rows).overall == 86400.0
         event = next(e for e in _history(rows) if e["ref"] == "CAR2")
-        assert event["start"] == "2026-05-05" and event["from"] == "2026-05-04"
-        assert "hours" not in event
+        assert event["start"] == "2026-05-05"
+        assert not {"from", "end", "hours"} & set(event)
 
-    def test_an_end_in_the_same_wrong_year_is_charged_from_the_sighting(self):
+    def test_an_end_in_the_same_wrong_year_is_dated_from_the_sighting(self):
         rows = [_case(id=1, reference_num="CAR1"),
                 self._typo(reference_num="CAR2", end_local_date="0206-05-05")]
         event = next(e for e in _history(rows) if e["ref"] == "CAR2")
-        assert event["start"] == "2026-05-05" and event["end"] == "2026-05-06"
-        assert "from" not in event
+        assert event["start"] == "2026-05-05"
+        assert not {"from", "end"} & set(event)
 
     def test_with_no_sighting_either_it_is_not_an_event(self):
-        assert resolve_case(self._typo(first_seen=None), SA_INDEX, {}, NOW) is None
+        assert resolve_case(self._typo(first_seen=None), {}, NOW) is None
 
     def test_a_lift_is_dated_the_same_way(self):
         lift = self._typo(work_category="boil_notice_lifted", location="Ardfinnan PWS")
@@ -451,34 +421,54 @@ class TestSchemePairing:
         assert paired_lift(other, key, "Ardfinnan PWS", start) is None
 
 
-class TestSmallAreaIndex:
-    def test_pin_on_top_of_sa_finds_it(self):
-        assert SA_INDEX.affected(52.836, -6.926) == {"SA1": 1000}
+class TestTownPlacement:
+    TOWNS = TownLookup([
+        ("SA1", "T1", "Small", "Carlow", 52.836, -6.926, 100),
+        ("SA2", "T2", "Big", "Carlow", 52.846, -6.926, 900),
+        ("SA3", "T1", "Small", "Carlow", 52.830, -6.926, 50),
+    ])
 
-    def test_distant_pin_falls_back_to_nearest_within_8km(self):
-        assert SA_INDEX.affected(52.86, -6.926) == {"SA1": 1000}
+    def test_a_pin_lands_in_the_area_of_its_nearest_small_area(self):
+        assert self.TOWNS.place(52.837, -6.926, "Carlow") == "T1"
+        # nearer the smaller area's centroid than the bigger one's: size is not read
+        assert self.TOWNS.place(52.842, -6.926, "Carlow") == "T2"
 
-    def test_very_remote_pin_affects_nothing(self):
-        assert SA_INDEX.affected(54.5, -8.5) == {}
+    def test_a_distant_pin_is_placed_within_8km(self):
+        assert self.TOWNS.place(52.900, -6.926, "Carlow") == "T2"
+
+    def test_a_very_remote_pin_is_unplaced(self):
+        assert self.TOWNS.place(54.5, -8.5, "Carlow") == UNPLACED
+
+    def test_a_pin_nearest_another_county_is_unplaced_not_rehomed(self):
+        """The feed's county and its own pin disagree; naming the nearest area that
+        *is* in the county would hide that."""
+        towns = TownLookup([
+            ("SA1", "T1", "Blessington", "Wicklow", 53.170, -6.533, 1000),
+            ("SA2", "T2", "Kilcullen", "Kildare", 53.130, -6.745, 100),
+        ])
+        assert towns.place(53.171, -6.535, "Kildare") == UNPLACED
+        assert towns.place(53.171, -6.535, "Wicklow") == "T1"
+
+    def test_an_area_s_population_is_the_sum_of_its_small_areas(self):
+        assert self.TOWNS.pop["T1"] == 150 and self.TOWNS.pop["T2"] == 900
 
 
 class TestBuildSite:
-    def test_outage_accrues_population_weighted_downtime(self):
-        site = build_site([_case()], SA_INDEX, NOW)
+    def test_an_outage_is_counted_and_timed_and_nothing_is_estimated(self):
+        site = build_site([_case()], NOW)
         month = site["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["outage"] == 1
-        assert month["person_h"] == 24 * 1000
-        assert month["availability"] < 100.0
+        assert not {"person_h", "period_h", "availability", "grade"} & set(month)
         assert month["median_completion_h"] == 24.0
         assert month["completed_n"] == 1
         assert site["national"]["2026-05"]["median_completion_h"] == 24.0
 
-    def test_scheduled_end_accrues_downtime_but_stays_out_of_the_headline(self):
+    def test_scheduled_end_colours_its_day_but_stays_out_of_the_headline(self):
         # a scheduled finish is a published plan, not evidence the works ended
         # then, so it must not be pooled into the completion median
         rows = [_case(end_source="scheduled_end_with_time")]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["person_h"] == 24 * 1000  # still accrues
+        month = build_site(rows, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["days"][0] == ["outage"]
         assert month["median_completion_h"] is None
         assert month["completed_n"] == 0
         assert month["median_scheduled_h"] == 24.0
@@ -491,116 +481,58 @@ class TestBuildSite:
             _case(id=2, reference_num="CAR2", full_lat=52.900,
                   end_source="scheduled_end_with_time", notice_to_end_seconds=24 * 3600),
         ]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        month = build_site(rows, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["median_completion_h"] == 2.0
         assert month["completed_n"] == 1
         assert month["scheduled_n"] == 1
 
     def test_multi_pin_event_counts_once(self):
         rows = [_case(id=1), _case(id=2, full_lat=52.837)]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        month = build_site(rows, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["outage"] == 1
 
-    def test_closed_case_without_end_signal_is_charged_a_typical_span(self):
-        """It used to take a token 1-second footprint and accrue nothing.
-
-        Availability divides by a denominator fixed by population and calendar,
-        so an event contributing no duration contributes a zero — and zero is
-        the one value a real outage certainly did not last. It is charged the
-        typical observed span instead, while staying out of the median.
-        """
+    def test_a_closed_case_without_an_end_is_counted_with_no_length(self):
+        """A one-second token on its publication: its day is coloured and it is
+        counted in no_end_n, and no length is guessed for it. The typical span it
+        was charged from 2026-08-15 to 2026-10-06 was for the person-hours."""
         rows = [
-            _case(id=1, reference_num="CAR1"),  # observed, 24h: the evidence
+            _case(id=1, reference_num="CAR1"),  # observed, 24h
             _case(id=2, reference_num="CAR2", full_lat=52.900, status="Closed",
-                  notice_to_end_seconds=None, end_source="not_found", end_local_date=None),
+                  start_date="2026-05-03T00:00:00+00:00", notice_to_end_seconds=None,
+                  end_source="not_found", end_local_date=None),
         ]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        month = build_site(rows, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["outage"] == 2
-        assert month["person_h"] == 2 * 24 * 1000  # both accrue, not just the observed one
-        assert month["days"][0][0] == "outage"  # May 1st is not a false green
-        assert month["median_completion_h"] == 24.0  # the estimate does not enter it
-        assert month["completed_n"] == 1
-        assert month["imputed_n"] == 1
+        assert [d[0] for d in month["days"][2:4]] == ["outage", ""]
+        assert month["median_completion_h"] == 24.0
+        assert (month["completed_n"], month["no_end_n"]) == (1, 1)
 
-    def test_imputation_needs_evidence_to_draw_on(self):
-        """With no observed completion anywhere in the corpus there is no typical
-        span to charge, and the token footprint stands. A guess with nothing
-        behind it is worse than the zero it replaces."""
-        rows = [_case(notice_to_end_seconds=None, status="Closed",
-                      end_source="not_found", end_local_date=None)]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["events"]["outage"] == 1
-        assert month["person_h"] == 0
-        assert month["days"][0][0] == "outage"
-        assert month["median_completion_h"] is None
-        # nothing was estimated, so there is no estimate to disclose — the event
-        # still counts and still colours its day, as it always did
-        assert month["imputed_n"] == 0
-
-    def test_negative_span_case_is_charged_backwards_from_its_reported_end(self):
-        """The negative-span family knows when it ended and only lost its start
-        (start_date is re-stamped in place upstream). Charging forwards from
-        publication would put the hours on the day the notice went up, days
-        after the works finished."""
+    def test_a_case_ended_before_publication_is_dated_by_its_publication(self):
+        """The negative-span family: build.py nulls the span when the reported end
+        precedes publication. A stale 'Open' must not turn that into days of
+        fabricated downtime, and with no length to charge, its one day is the
+        day the notice went up."""
         rows = [
-            _case(id=1, reference_num="CAR1"),  # observed, 24h: the evidence
+            _case(id=1, reference_num="CAR1"),
             _case(id=2, reference_num="CAR2", full_lat=52.900, status="Open",
-                  start_date="2026-05-10T00:00:00+00:00", notice_to_end_seconds=None,
+                  start_date="2026-05-09T00:00:00+00:00", notice_to_end_seconds=None,
                   end_source="completion_update", end_local_date="2026-05-05",
                   end_local_time="00:00"),
         ]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["imputed_n"] == 1
-        # 24h charged backwards from 5 May 00:00 lands on 4 May, not on the 10th
-        assert month["days"][3][0] == "outage"
-        assert month["days"][9][0] == ""
-
-    def test_open_case_whose_text_says_it_ended_does_not_accrue_to_now(self):
-        # the negative-span family: build.py nulls the span when the reported
-        # end precedes publication, but the works are over — a stale 'Open'
-        # must not turn that into 9 days of fabricated downtime. It is now
-        # charged a typical span rather than a token second, but the point of
-        # this test is the ceiling: nowhere near the 14-day cap.
-        rows = [
-            _case(id=1, reference_num="CAR1"),  # observed, 24h: the evidence
-            _case(id=2, reference_num="CAR2", full_lat=52.900, status="Open",
-                  start_date="2026-05-10T00:00:00+00:00", notice_to_end_seconds=None,
-                  end_source="completion_update", end_local_date="2026-05-08",
-                  end_local_time="12:00"),
-        ]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        month = build_site(rows, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["outage"] == 2
-        assert month["person_h"] == 2 * 24 * 1000  # a typical span each, not 9 days
-        assert month["median_completion_h"] == 24.0  # no usable span of its own
-        assert month["imputed_n"] == 1
+        assert month["no_end_n"] == 1
+        assert month["median_completion_h"] == 24.0
+        assert [d[0] for d in month["days"][3:9]] == ["", "", "", "", "", "outage"]
 
-    def test_open_case_with_no_signal_at_all_still_accrues(self):
+    def test_open_case_with_no_signal_at_all_runs_to_now(self):
         # end_source None = downloaded since the last uisce-infer run
         for source in ("not_found", None):
-            rows = [_case(status="Open", notice_to_end_seconds=None,
-                          end_source=source, end_local_date=None)]
-            month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-            assert month["person_h"] == 9 * 24 * 1000  # May 1 -> NOW, uncapped
-
-    def test_pooled_median_is_the_sensitivity_figure(self):
-        """What the headline would be if the estimated events were let into it.
-
-        Published beside the headline so the exclusion is arithmetic a reader
-        can check rather than a silence. The headline itself must not move.
-        """
-        rows = [
-            _case(id=1, reference_num="CAR1", notice_to_end_seconds=20 * 3600),
-            _case(id=2, reference_num="CAR2", full_lat=52.900,
-                  notice_to_end_seconds=20 * 3600),
-            _case(id=3, reference_num="CAR3", full_lat=52.910, status="Closed",
-                  notice_to_end_seconds=None, end_source="not_found", end_local_date=None),
-        ]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["median_completion_h"] == 20.0
-        assert month["completed_n"] == 2
-        assert month["imputed_n"] == 1
-        # the estimate is the observed median by construction, so pooling holds it
-        assert month["median_pooled_h"] == 20.0
+            row = _case(status="Open", notice_to_end_seconds=None,
+                        end_source=source, end_local_date=None)
+            assert resolve_case(row, {}, NOW).intervals == [(_dt(row["start_date"]), NOW)]
+            month = build_site([row], NOW)["counties"]["Carlow"]["months"]["2026-05"]
+            assert [d[0] for d in month["days"][:9]] == ["outage"] * 9
 
     def test_open_boil_notice_is_closed_by_its_paired_lift(self):
         issue = _case(
@@ -620,15 +552,13 @@ class TestBuildSite:
             reference_num="TIP2",
             start_date="2026-05-03T00:00:00+00:00",
         )
-        month = build_site([issue, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        month = build_site([issue, lift], NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["quality"] == 1
         # interval closed at the lift, not running to "now": an unpaired open
         # notice would still be in force on the 10th and read health_now == 1
         assert month["health_now"] == 0
         # quality never colours a bar — the healthmark carries it
         assert month["days"][1][0] == ""
-        # the notice is reported beside the grade, not inside it
-        assert month["grade"] == "A"
         assert month["health_n"] == 1
 
     def test_open_consumption_notice_is_closed_by_its_paired_lift(self):
@@ -659,7 +589,7 @@ class TestBuildSite:
             reference_num="COR2",
             start_date="2026-05-03T00:00:00+00:00",
         )
-        month = build_site([issue, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        month = build_site([issue, lift], NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["quality"] == 1
         # closed at the lift: an unpaired open notice would still be in force
         assert month["health_now"] == 0
@@ -691,7 +621,7 @@ class TestBuildSite:
             reference_num="COR2",
             start_date="2026-05-09T00:00:00+00:00",
         )
-        months = build_site([issue, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]
+        months = build_site([issue, lift], NOW)["counties"]["Carlow"]["months"]
         # the cap itself (21 April + 14 days, not the 9 May lift) is asserted at
         # the boil_notice_fate level; here the event stays confined to the
         # months the charge touches, and colours no bar in either
@@ -727,7 +657,7 @@ class TestBuildSite:
             start_date="2026-07-05T00:00:00+00:00",
         )
         july = datetime(2026, 7, 15, tzinfo=UTC)
-        months = build_site([issue, lift], SA_INDEX, july)["counties"]["Carlow"]["months"]
+        months = build_site([issue, lift], july)["counties"]["Carlow"]["months"]
         # in force 1 May - 5 July per the lift, so every one of those months
         # carries the marker
         assert [months[ym]["health_n"] for ym in ("2026-05", "2026-06", "2026-07")] == [1, 1, 1]
@@ -763,7 +693,7 @@ class TestBuildSite:
         )
         lifts = {("Carlow", "consumption_notice_lifted"):
                  [(norm_scheme(lift["location"]), _dt(lift["start_date"]))]}
-        case = resolve_case(issue, SA_INDEX, lifts, NOW)
+        case = resolve_case(issue, lifts, NOW)
         # the token footprint survives the available lift: pairing was refused
         assert case.intervals[0][1] - case.intervals[0][0] == timedelta(seconds=1)
 
@@ -777,7 +707,7 @@ class TestBuildSite:
                     notice_to_end_seconds=None, end_source="not_found",
                     end_local_date=None, reference_num="COR1")
         standing = _case(**base, start_date="2026-05-05T00:00:00+00:00")
-        month = build_site([standing], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        month = build_site([standing], NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert (month["health_n"], month["health_now"]) == (1, 1)
 
         # same notice, lifted on the 3rd: still a fact about May, not about now
@@ -786,7 +716,7 @@ class TestBuildSite:
                      notice_to_end_seconds=None, end_source="not_found",
                      end_local_date=None, reference_num="COR2",
                      start_date="2026-05-03T00:00:00+00:00")
-        month = build_site([lifted, lift], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        month = build_site([lifted, lift], NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert (month["health_n"], month["health_now"]) == (1, 0)
 
     def test_an_unpaired_consumption_notice_is_not_excluded_as_stale(self):
@@ -806,7 +736,7 @@ class TestBuildSite:
             start_date="2026-05-01T00:00:00+00:00",
             reference_num="COR1",
         )
-        month = build_site([stale], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        month = build_site([stale], NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["quality"] == 1
         assert month["health_n"] == 1
         # still accruing, which is the half of the boil policy that was not
@@ -814,106 +744,32 @@ class TestBuildSite:
         assert month["health_now"] == 1
 
     def test_days_before_collection_start_are_no_data(self):
-        site = build_site([_case()], SA_INDEX, NOW)
+        site = build_site([_case()], NOW)
         april = site["counties"]["Carlow"]["months"]["2026-04"]
-        assert april["days"][0] == ["nd", 0]  # Apr 1
+        assert april["days"][0] == ["nd"]  # Apr 1
         assert april["days"][19][0] != "nd"  # Apr 20
 
-    def test_future_scheduled_end_does_not_accrue_beyond_now(self):
+    def test_future_scheduled_end_colours_no_day_beyond_now(self):
         rows = [_case(start_date="2026-05-09T00:00:00+00:00",
                       notice_to_end_seconds=10 * 86400.0, status="Open")]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["person_h"] == 24 * 1000  # May 9 -> NOW (May 10) only
+        month = build_site(rows, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert [d[0] for d in month["days"][8:11]] == ["outage", "outage", "outage"]
+        # the future part of the month is drawn as such client-side, not cleared
+        assert month["days_elapsed"] == 10 and month["clear_days"] == 8
 
     def test_towns_are_absent_without_a_lookup(self):
-        assert build_site([_case()], SA_INDEX, NOW)["counties"]["Carlow"]["towns"] == {}
-
-
-class TestSpanTable:
-    """What a case with no usable end signal gets charged, and on what evidence."""
-
-    def test_only_observed_completions_are_evidence(self):
-        """A scheduled end is a published plan. It accrues its own announced
-        interval, but it cannot say what a *different* notice's works took —
-        that is the same line the headline median already draws."""
-        rows = [_case(end_source="scheduled_end_with_time", notice_to_end_seconds=99 * 3600)]
-        assert SpanTable(rows).overall is None
-
-    def test_a_category_with_enough_cases_uses_its_own_median(self):
-        rows = [_case(id=i, work_category="mains_repair", notice_to_end_seconds=6 * 3600)
-                for i in range(MIN_CATEGORY_N)]
-        rows += [_case(id=100 + i, notice_to_end_seconds=30 * 3600) for i in range(4)]
-        table = SpanTable(rows)
-        assert table.for_category("mains_repair") == 6 * 3600
-        # burst_main is under the threshold, so it falls back to the global median
-        assert table.for_category("burst_main") == table.overall
-
-    def test_a_thin_category_falls_back_rather_than_setting_its_own_number(self):
-        rows = [_case(id=i, work_category="mains_repair", notice_to_end_seconds=6 * 3600)
-                for i in range(MIN_CATEGORY_N - 1)]
-        rows += [_case(id=100 + i, notice_to_end_seconds=30 * 3600) for i in range(20)]
-        assert SpanTable(rows).for_category("mains_repair") == 30 * 3600
-
-    def test_the_cap_applies_to_the_evidence_too(self):
-        """A 40-day observed span is already capped everywhere it accrues; it
-        must not enter the table uncapped and charge a longer estimate than the
-        case it was measured from could ever have contributed."""
-        rows = [_case(notice_to_end_seconds=40 * 24 * 3600)]
-        assert SpanTable(rows).overall == CAP_DAYS * 86400
-
-    def test_without_a_table_resolve_case_keeps_the_token_footprint(self):
-        """The single-row callers throughout this suite ask about severity and
-        recurrence, not accrual, and must not be made to stand up a corpus."""
-        row = _case(status="Closed", notice_to_end_seconds=None,
-                    end_source="not_found", end_local_date=None)
-        case = resolve_case(row, SA_INDEX, {}, NOW)
-        assert case.imputed is False
-        assert case.intervals[0][1] - case.intervals[0][0] == timedelta(seconds=1)
-
-
-class TestTownLookup:
-    def test_pin_lands_in_the_settlement_holding_most_of_its_population(self):
-        towns = TownLookup(
-            [("SA1", "T1", "Small", "Carlow"), ("SA2", "T2", "Big", "Carlow")],
-            {"SA1": 100, "SA2": 900},
-        )
-        assert towns.dominant({"SA1": 100, "SA2": 900}, "Carlow") == "T2"
-
-    def test_a_pin_with_no_in_county_footprint_is_unplaced(self):
-        towns = TownLookup([("SA1", "T1", "Small", "Carlow")], {"SA1": 100})
-        assert towns.dominant({"SA9": 900}, "Carlow") == UNPLACED
-        assert towns.dominant({}, "Carlow") == UNPLACED
-
-    def test_the_best_area_in_the_case_s_own_county_wins_over_a_bigger_one_outside(self):
-        """Border pins are real — a Kildare-labelled notice reaching Blessington,
-        Co. Wicklow — but the case belongs to the page its county says it does, so
-        it takes the best Kildare area rather than the larger Wicklow one."""
-        towns = TownLookup(
-            [("SA1", "T1", "Blessington", "Wicklow"), ("SA2", "T2", "Kilcullen", "Kildare")],
-            {"SA1": 1000, "SA2": 100},
-        )
-        assert towns.dominant({"SA1": 1000, "SA2": 100}, "Kildare") == "T2"
-
-    def test_within_keeps_only_the_part_of_a_footprint_inside_the_area(self):
-        towns = TownLookup([("SA1", "T1", "Town", "Carlow")], {"SA1": 100})
-        assert towns.within({"SA1": 100, "SA9": 900}, "T1") == {"SA1": 100}
+        assert build_site([_case()], NOW)["counties"]["Carlow"]["towns"] == {}
 
 
 class TestTownBreakdown:
     def _town(self, rows, code="T1", ym="2026-05", towns=TOWNS):
-        county = build_site(rows, SA_INDEX, NOW, towns)["counties"]["Carlow"]
+        county = build_site(rows, NOW, towns)["counties"]["Carlow"]
         return county["towns"][code]["months"][ym], county["towns"][code]
 
-    def test_town_availability_is_measured_against_the_town_population(self):
-        """The same 24h event that barely dents a county of 62,000 takes a ninth
-        of the person-time of the 1,000-person town it actually happened in.
-        That divergence is the point of the drill-down, not an error."""
+    def test_an_area_carries_its_census_population_and_its_counts(self):
         month, town = self._town([_case()])
-        county = build_site([_case()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
         assert town["pop"] == 1000
-        assert month["person_h"] == county["months"]["2026-05"]["person_h"] == 24 * 1000
-        assert month["availability"] == 88.89
-        assert county["months"]["2026-05"]["availability"] == 99.821
+        assert month == {"events": {"outage": 1}, "resolved_n": 1}
 
     def test_towns_carry_no_letter_grade(self):
         month, _ = self._town([_case()])
@@ -923,32 +779,30 @@ class TestTownBreakdown:
         _, town = self._town([_case()])
         assert list(town["months"]) == ["2026-05"]
 
-    def test_person_hours_outside_the_town_are_not_attributed_to_it(self):
-        """A pin whose footprint reaches beyond the settlement accrues the whole
-        of it at county level and only the inside part at town level — otherwise
-        a village could log person-hours for people who do not live in it."""
-        sa_index = SmallAreaIndex([(52.836, -6.926, "SA1", 1000), (52.838, -6.926, "SA2", 400)])
-        towns = TownLookup([("SA1", "T1", "Testtown", "Carlow")], sa_index.pop)
-        county = build_site([_case()], sa_index, NOW, towns)["counties"]["Carlow"]
-        assert county["months"]["2026-05"]["person_h"] == 24 * 1400
-        assert county["towns"]["T1"]["months"]["2026-05"]["person_h"] == 24 * 1000
+    def test_each_pin_is_counted_in_the_area_it_was_placed_in(self):
+        towns = TownLookup([
+            ("SA1", "T1", "Testtown", "Carlow", 52.836, -6.926, 1000),
+            ("SA2", "T2", "Otherton", "Carlow", 52.900, -6.926, 400),
+        ])
+        rows = [_case(id=1), _case(id=2, reference_num="CAR2", full_lat=52.899)]
+        county = build_site(rows, NOW, towns)["counties"]["Carlow"]
+        assert county["towns"]["T1"]["months"]["2026-05"]["events"] == {"outage": 1}
+        assert county["towns"]["T2"]["months"]["2026-05"]["events"] == {"outage": 1}
 
-    def test_a_pin_whose_footprint_is_in_another_county_reports_no_denominator(self):
+    def test_a_pin_nearest_another_county_is_unplaced_with_no_population(self):
         """The feed's county and its own coordinates disagree for ~1.5% of
-        case-months. There is no population to divide by, so the row carries its
-        counts and nothing derived from one — rather than a flattering 100%."""
-        towns = TownLookup([("SA1", "T1", "Over the border", "Wicklow")], {"SA1": 1000})
-        county = build_site([_case()], SA_INDEX, NOW, towns)["counties"]["Carlow"]
+        case-months. The row carries its counts and no area's population."""
+        towns = TownLookup([("SA1", "T1", "Over the border", "Wicklow", 52.836, -6.926, 1000)])
+        county = build_site([_case()], NOW, towns)["counties"]["Carlow"]
         area = county["towns"][UNPLACED]
         assert area["name"] == UNPLACED_LABEL
         assert area["unplaced"] is True and "pop" not in area
         month = area["months"]["2026-05"]
-        assert month["events"]["outage"] == 1
-        assert "availability" not in month and "person_h" not in month
+        assert month["events"] == {"outage": 1} and "pop" not in month
 
     def test_an_open_case_names_its_area_instead_of_being_listed_twice(self):
         """The county's list is the only copy; the front end groups it by area."""
-        county = build_site([_open()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site([_open()], NOW, TOWNS)["counties"]["Carlow"]
         assert [(o["title"], o["area"]) for o in county["open"]] == [
             ("Burst Water Main - Carlow", "T1")
         ]
@@ -960,32 +814,24 @@ class TestPayload:
     implied is left out and the reader fills it in."""
 
     def test_zero_severities_are_dropped_from_an_area_month(self):
-        month = build_site([_case()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        month = build_site([_case()], NOW, TOWNS)["counties"]["Carlow"]
         assert month["towns"]["T1"]["months"]["2026-05"]["events"] == {"outage": 1}
         # the county keeps every severity: its row always renders all four
         assert set(month["months"]["2026-05"]["events"]) == {
             "outage", "quality", "degraded", "maintenance"
         }
 
-    def test_a_month_with_no_person_hours_omits_the_field(self):
-        rows = [_case(notice_to_end_seconds=None, status="Closed",
-                      end_source="not_found", end_local_date=None)]
-        month = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
-        area_month = month["towns"]["T1"]["months"]["2026-05"]
-        assert "person_h" not in area_month
-        assert "availability" not in area_month  # a clear month's 100.0 is implied
-
-    def test_a_month_that_lost_time_carries_its_availability(self):
-        month = build_site([_case()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
-        assert month["towns"]["T1"]["months"]["2026-05"]["availability"] < 100
+    def test_an_area_month_carries_no_estimate(self):
+        month = build_site([_case()], NOW, TOWNS)["counties"]["Carlow"]
+        assert not {"person_h", "availability"} & set(month["towns"]["T1"]["months"]["2026-05"])
 
     def test_an_open_entry_names_its_area(self):
-        county = build_site([_open()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site([_open()], NOW, TOWNS)["counties"]["Carlow"]
         assert set(county["open"][0]) == {"sev", "title", "loc", "since", "area", "name", "ref"}
         assert (county["open"][0]["area"], county["open"][0]["name"]) == ("T1", "Testtown")
 
     def test_a_month_with_nothing_resolved_omits_the_count(self):
-        month = build_site([_scheduled()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        month = build_site([_scheduled()], NOW, TOWNS)["counties"]["Carlow"]
         assert "resolved_n" not in month["towns"]["T1"]["months"]["2026-05"]
 
 
@@ -999,14 +845,14 @@ class TestVanished:
         return _case(**(base | overrides))
 
     def test_it_is_neither_open_nor_resolved(self):
-        county = build_site([self._row()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site([self._row()], NOW, TOWNS)["counties"]["Carlow"]
         assert county["open"] == [] and county["open_total"] == 0
         assert county["resolved"] == {}
 
     def test_it_stops_accruing_to_now(self):
         # no end signal and no lift: the closed-no-signal branch, not the accrual
-        live = resolve_case(self._row(vanished_at=None), SA_INDEX, {}, NOW)
-        gone = resolve_case(self._row(), SA_INDEX, {}, NOW)
+        live = resolve_case(self._row(vanished_at=None), {}, NOW)
+        gone = resolve_case(self._row(), {}, NOW)
         assert live.intervals[0][1] == NOW
         assert gone.intervals[0][1] == live.start + timedelta(seconds=1)
         assert not gone.is_open
@@ -1036,8 +882,7 @@ class TestOpenReading:
         return _case(**(base | overrides))
 
     def test_a_reported_completion_closes_it_everywhere(self, tmp_path):
-        site = build_site([self._complete(description="Works are now complete.")],
-                          SA_INDEX, NOW, TOWNS)
+        site = build_site([self._complete(description="Works are now complete.")], NOW, TOWNS)
         county = site["counties"]["Carlow"]
         assert county["open"] == [] and county["open_total"] == 0
         event = site["history"]["Carlow"]["T1"]["events"][0]
@@ -1055,17 +900,17 @@ class TestOpenReading:
         """The arithmetic trusted the extracted end already; this only brings
         the display into line with it. Same case, feed Open and feed Closed:
         identical figures, differing only in the open list."""
-        as_open = build_site([self._complete()], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
-        as_closed = build_site([self._complete(status="Closed")], SA_INDEX, NOW, TOWNS)
+        as_open = build_site([self._complete()], NOW, TOWNS)["counties"]["Carlow"]
+        as_closed = build_site([self._complete(status="Closed")], NOW, TOWNS)
         as_closed = as_closed["counties"]["Carlow"]
         assert as_open == as_closed
-        assert as_open["months"]["2026-05"]["person_h"] == round(17747 / 3600 * 1000)
+        assert as_open["months"]["2026-05"]["median_completion_h"] == round(17747 / 3600, 1)
 
     def test_a_completion_still_ahead_of_the_build_leaves_it_open(self):
         """An update written for a time still to come: nothing has ended yet."""
         row = self._complete(end_local_date="2026-05-10", end_local_time="09:00")  # NOW is 00:00
         assert is_open(row, NOW)
-        county = build_site([row], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site([row], NOW, TOWNS)["counties"]["Carlow"]
         assert county["open_total"] == 1
 
     def test_a_passed_scheduled_end_does_not_close_it(self):
@@ -1104,7 +949,7 @@ class TestOpenReading:
     ])
     def test_a_paired_lift_closes_the_notice(self, issued, lifted):
         rows = [self._standing(issued), self._lift(lifted, "2026-05-03T00:00:00+00:00")]
-        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site(rows, NOW, TOWNS)["counties"]["Carlow"]
         assert county["open"] == [] and county["open_total"] == 0
         assert county["months"]["2026-05"]["health_n"] == 1
 
@@ -1112,7 +957,7 @@ class TestOpenReading:
         # Downings, 232476: the lift is stamped a day before the issue it lifts
         rows = [self._standing("boil_notice_issued", start_date="2026-05-02T11:18:49+00:00"),
                 self._lift("boil_notice_lifted", "2026-05-01T08:18:20+00:00")]
-        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site(rows, NOW, TOWNS)["counties"]["Carlow"]
         assert county["open"] == []
         month = county["months"]["2026-05"]
         assert month["events"]["quality"] == 1 and month["health_n"] == 1
@@ -1121,10 +966,10 @@ class TestOpenReading:
         """Marker and open status stop together (owner decision, 2026-09-24)."""
         young = self._standing(start_date="2026-05-01T00:00:00+00:00")
         now = datetime(2026, 5, 10, tzinfo=UTC)
-        county = build_site([young], SA_INDEX, now, TOWNS)["counties"]["Carlow"]
+        county = build_site([young], now, TOWNS)["counties"]["Carlow"]
         assert county["open_total"] == 1 and county["months"]["2026-05"]["health_now"] == 1
         now = datetime(2026, 5, 20, tzinfo=UTC)
-        county = build_site([young], SA_INDEX, now, TOWNS)["counties"]["Carlow"]
+        county = build_site([young], now, TOWNS)["counties"]["Carlow"]
         assert county["open_total"] == 0 and county["months"]["2026-05"]["health_now"] == 0
         assert county["months"]["2026-05"]["events"]["quality"] == 1
 
@@ -1134,7 +979,7 @@ class TestOpenReading:
                              notice_to_end_seconds=2.5 * 86400)
         now = datetime(2026, 5, 20, tzinfo=UTC)
         assert is_open(row, now)
-        county = build_site([row], SA_INDEX, now, TOWNS)["counties"]["Carlow"]
+        county = build_site([row], now, TOWNS)["counties"]["Carlow"]
         assert county["open_total"] == 0
 
     def test_the_feed_and_the_vanished_stamp_still_close_it_first(self):
@@ -1149,12 +994,12 @@ class TestResolved:
     def test_a_reported_completion_dates_the_close(self):
         # the feed closed it four days after the notice said the works were done
         rows = [_case(status="Closed", closed_at="2026-05-06T04:00:00+00:00")]
-        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site(rows, NOW, TOWNS)["counties"]["Carlow"]
         assert county["resolved"]["2026-05"]["cases"][0]["closed"] == "2026-05-02"
 
     def test_a_completion_the_feed_has_not_closed_yet_is_listed(self):
         rows = [_case(status="Open", closed_at=None)]
-        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site(rows, NOW, TOWNS)["counties"]["Carlow"]
         assert county["open_total"] == 0
         assert county["resolved"]["2026-05"]["n"] == 1
 
@@ -1162,12 +1007,12 @@ class TestResolved:
         rows = [_case(status="Closed", start_date="2026-04-30T09:00:00+00:00",
                       end_local_date="2026-04-30", end_local_time="17:00",
                       notice_to_end_seconds=7 * 3600.0, closed_at="2026-05-03T04:00:00+00:00")]
-        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site(rows, NOW, TOWNS)["counties"]["Carlow"]
         assert set(county["resolved"]) == {"2026-04"}
 
     def test_an_event_with_a_pin_still_open_is_not_listed_closed(self):
         rows = [_open(id=1), _case(id=2, status="Open", full_lat=52.837)]
-        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        site = build_site(rows, NOW, TOWNS)
         county = site["counties"]["Carlow"]
         assert county["open_total"] == 1 and county["resolved"] == {}
         assert "closed" not in site["history"]["Carlow"]["T1"]["events"][0]
@@ -1175,7 +1020,7 @@ class TestResolved:
     def test_an_event_closes_on_its_earliest_pin(self):
         rows = [_scheduled(id=10, status="Closed", closed_at="2026-05-06T04:00:00+00:00"),
                 _case(id=11, status="Closed", full_lat=52.837)]
-        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        site = build_site(rows, NOW, TOWNS)
         assert site["counties"]["Carlow"]["resolved"]["2026-05"]["cases"][0]["closed"] == (
             "2026-05-02")
         assert site["history"]["Carlow"]["T1"]["events"][0]["closed"] == "2026-05-02"
@@ -1188,7 +1033,7 @@ class TestResolved:
                      notice_to_end_seconds=None, end_source="not_found", end_local_date=None,
                      location="Downings", reference_num="LIFT1",
                      start_date="2026-05-03T10:00:00+00:00")
-        county = build_site([issue, lift], SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site([issue, lift], NOW, TOWNS)["counties"]["Carlow"]
         assert county["resolved"]["2026-05"]["cases"][0]["closed"] == "2026-05-03"
 
     def test_the_cap_dates_the_close_of_a_standing_notice(self):
@@ -1196,7 +1041,7 @@ class TestResolved:
                     notice_to_end_seconds=None, end_source="not_found", end_local_date=None,
                     end_local_time=None)
         now = datetime(2026, 5, 20, tzinfo=UTC)
-        county = build_site([row], SA_INDEX, now, TOWNS)["counties"]["Carlow"]
+        county = build_site([row], now, TOWNS)["counties"]["Carlow"]
         assert county["resolved"]["2026-05"]["cases"][0]["closed"] == "2026-05-15"
 
     def test_a_completion_before_a_start_is_compared_as_instants(self):
@@ -1204,7 +1049,7 @@ class TestResolved:
         row = _case(status="Closed", start_date="2026-05-31T23:30:00+00:00",
                     notice_to_end_seconds=None, end_local_date="2026-06-01",
                     end_local_time="00:10", closed_at="2026-06-02T04:00:00+00:00")
-        county = build_site([row], SA_INDEX, datetime(2026, 6, 10, tzinfo=UTC), TOWNS)
+        county = build_site([row], datetime(2026, 6, 10, tzinfo=UTC), TOWNS)
         assert county["counties"]["Carlow"]["resolved"]["2026-06"]["cases"][0]["closed"] == (
             "2026-06-02")
 
@@ -1213,12 +1058,12 @@ class TestResolved:
         rows = [_case(status="Closed", start_date="2026-05-04T09:00:00+00:00",
                       notice_to_end_seconds=None, end_local_date="2026-05-02",
                       closed_at="2026-05-06T04:00:00+00:00")]
-        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site(rows, NOW, TOWNS)["counties"]["Carlow"]
         assert county["resolved"]["2026-05"]["cases"][0]["closed"] == "2026-05-06"
 
     def test_a_closed_case_is_listed_under_the_month_it_was_observed_to_close(self):
         rows = [_scheduled(status="Closed", closed_at="2026-05-06T04:00:00+00:00")]
-        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site(rows, NOW, TOWNS)["counties"]["Carlow"]
         assert county["resolved"]["2026-05"]["n"] == 1
         assert county["resolved"]["2026-05"]["cases"][0]["closed"] == "2026-05-06"
         assert county["towns"]["T1"]["months"]["2026-05"]["resolved_n"] == 1
@@ -1227,11 +1072,11 @@ class TestResolved:
         """NULL closed_at is ambiguous, so it is reported as nothing rather than
         guessed at."""
         rows = [_scheduled(status="Closed", closed_at=None)]
-        assert build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]["resolved"] == {}
+        assert build_site(rows, NOW, TOWNS)["counties"]["Carlow"]["resolved"] == {}
 
     def test_an_open_case_is_never_listed_as_resolved(self):
         rows = [_open(closed_at="2026-05-06T04:00:00+00:00")]
-        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site(rows, NOW, TOWNS)["counties"]["Carlow"]
         assert county["resolved"] == {}
         assert county["open_total"] == 1
 
@@ -1240,7 +1085,7 @@ class TestResolved:
             _case(id=1, status="Closed", closed_at="2026-05-06T04:00:00+00:00"),
             _case(id=2, status="Closed", closed_at="2026-05-06T04:00:00+00:00"),
         ]
-        county = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]
+        county = build_site(rows, NOW, TOWNS)["counties"]["Carlow"]
         assert county["resolved"]["2026-05"]["n"] == 1
 
     def test_the_listed_cases_are_capped_but_the_count_is_not(self):
@@ -1249,7 +1094,7 @@ class TestResolved:
                        closed_at=f"2026-05-{i + 1:02d}T04:00:00+00:00")
             for i in range(25)
         ]
-        resolved = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]["resolved"]
+        resolved = build_site(rows, NOW, TOWNS)["counties"]["Carlow"]["resolved"]
         assert resolved["2026-05"]["n"] == 25
         assert len(resolved["2026-05"]["cases"]) == 20
         # newest first, so the cap drops the oldest
@@ -1296,7 +1141,7 @@ class TestNoticesPer100km:
     def _site(self, extra=()):
         rows = _notices("Kerry", "KER", self.KERRY) + _notices("Carlow", "CAR", self.CARLOW)
         rows += [dict(r, id=len(rows) + i + 1) for i, r in enumerate(extra)]
-        return build_site(rows, SA_INDEX, OCTOBER, TOWNS)
+        return build_site(rows, OCTOBER, TOWNS)
 
     def test_kerry_and_carlow_reproduce_the_note(self):
         site = self._site()
@@ -1382,7 +1227,7 @@ class TestNoticesPer100km:
         fresh = _case(county="Carlow", reference_num="CAR00000904",
                       start_date="2026-11-01T02:00:00+00:00", end_local_date="2026-11-01")
         rows = _notices("Carlow", "CAR", self.CARLOW) + [dict(fresh, id=999)]
-        carlow = build_site(rows, SA_INDEX, first, TOWNS)["counties"]["Carlow"]
+        carlow = build_site(rows, first, TOWNS)["counties"]["Carlow"]
         assert carlow["months"]["2026-11"]["count_grade"] is None
         assert carlow["last_30"]["count_grade"] == "A"
 
@@ -1394,7 +1239,7 @@ class TestNoticesPer100km:
         rows = _notices("Carlow", "CAR", self.CARLOW) + [dict(early, id=999)]
         for now, lettered in ((COLLECTION_START + timedelta(days=29), False),
                               (COLLECTION_START + timedelta(days=30), True)):
-            site = build_site(rows, SA_INDEX, now, TOWNS)
+            site = build_site(rows, now, TOWNS)
             last_30 = site["counties"]["Carlow"]["last_30"]
             assert last_30["outage_notices"] == 1
             assert (last_30["count_grade"] is not None) is lettered
@@ -1404,14 +1249,14 @@ class TestNoticesPer100km:
         rows = _notices("Carlow", "CAR", self.CARLOW)
         end = datetime(2026, 10, 1, tzinfo=timezone.utc)
         for now, lettered in ((end - timedelta(seconds=1), False), (end, True)):
-            sep = build_site(rows, SA_INDEX, now, TOWNS)["counties"]["Carlow"]["months"]["2026-09"]
+            sep = build_site(rows, now, TOWNS)["counties"]["Carlow"]["months"]["2026-09"]
             assert (sep["count_grade"] is not None) is lettered
 
     def test_a_stale_release_counts_only_to_its_last_read(self):
         rows = _notices("Carlow", "CAR", self.CARLOW)
         last_read = datetime(2026, 9, 29, 7, tzinfo=timezone.utc)
-        stale = build_site(rows, SA_INDEX, OCTOBER, TOWNS, data_as_of=last_read)
-        fresh = build_site(rows, SA_INDEX, last_read, TOWNS)
+        stale = build_site(rows, OCTOBER, TOWNS, data_as_of=last_read)
+        fresh = build_site(rows, last_read, TOWNS)
         assert stale["counties"]["Carlow"]["months"]["2026-09"]["count_grade"] is None
         assert stale["counties"]["Carlow"]["last_30"] == fresh["counties"]["Carlow"]["last_30"]
         assert stale["last_30"] == fresh["last_30"]
@@ -1419,7 +1264,7 @@ class TestNoticesPer100km:
     def test_a_rate_rounding_onto_a_cut_takes_the_letter_it_shows(self):
         rows = _notices("Carlow", "CAR", self.CARLOW)
         mains = dict(MAINS_KM, Carlow=100 / 4.996)
-        may = build_site(rows, SA_INDEX, OCTOBER, TOWNS, mains_km=mains)["counties"]["Carlow"]
+        may = build_site(rows, OCTOBER, TOWNS, mains_km=mains)["counties"]["Carlow"]
         assert (may["months"]["2026-05"]["per_100km"], may["months"]["2026-05"]["count_grade"]) == (
             5.0, "F")
 
@@ -1442,7 +1287,7 @@ class TestClearDays:
     """
 
     def _month(self, now, ym="2026-05"):
-        return build_site([_case()], SA_INDEX, now, TOWNS)["counties"]["Carlow"]["months"][ym]
+        return build_site([_case()], now, TOWNS)["counties"]["Carlow"]["months"][ym]
 
     def test_the_in_progress_month_counts_only_days_that_have_happened(self):
         m = self._month(NOW)          # 10 May 2026
@@ -1466,7 +1311,7 @@ class TestClearDays:
     def test_clear_days_never_exceeds_days_elapsed(self):
         for now in (NOW, AFTER_MAY):
             for ym, month in build_site(
-                [_case()], SA_INDEX, now, TOWNS
+                [_case()], now, TOWNS
             )["counties"]["Carlow"]["months"].items():
                 assert month["clear_days"] <= month["days_elapsed"], ym
 
@@ -1478,9 +1323,9 @@ class TestQualityDaysDoNotColourTheBars:
 
     def test_a_quality_only_day_renders_clear(self):
         m = build_site(
-            [_case(work_category="boil_notice_issued")], SA_INDEX, NOW, TOWNS
+            [_case(work_category="boil_notice_issued")], NOW, TOWNS
         )["counties"]["Carlow"]["months"]["2026-05"]
-        assert m["days"][0] == ["", 0.0]
+        assert m["days"][0] == [""]
         assert m["clear_days"] == 10          # the notice day included
         assert m["events"]["quality"] == 1    # still counted, just not painted
 
@@ -1493,33 +1338,59 @@ class TestQualityDaysDoNotColourTheBars:
             _case(id=2, reference_num="CAR00000002", work_category=None,
                   work_type=None, reduced_pressure=1),
         ]
-        m = build_site(rows, SA_INDEX, NOW, TOWNS)["counties"]["Carlow"]["months"]["2026-05"]
+        m = build_site(rows, NOW, TOWNS)["counties"]["Carlow"]["months"]["2026-05"]
         assert m["days"][0][0] == "degraded"
 
 
 class TestTopEvents:
-    """The largest individual disruptions nationally. Nothing else on the site
-    ranks a single event — person-hours exist per county and per area only."""
+    """The longest disruptions nationally: the month's outage notices whose end
+    was observed, by the hours the published median reads."""
 
-    def test_events_rank_by_person_hours_across_counties(self):
+    def test_events_rank_by_hours_to_works_complete_across_counties(self):
         rows = [
-            # Carlow: 1,000 people for 24h; Kildare: 1,000 people for 48h
             _case(id=1, reference_num="CAR1"),
             _case(id=2, reference_num="KIL1", county="Kildare",
                   notice_to_end_seconds=48 * 3600, end_local_date="2026-05-03"),
         ]
-        top = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)["top"]["2026-05"]
+        top = build_site(rows, AFTER_MAY, TOWNS)["top"]["2026-05"]
         assert [r["county"] for r in top] == ["Kildare", "Carlow"]
-        assert [r["person_h"] for r in top] == [48 * 1000, 24 * 1000]
         assert [r["hours"] for r in top] == [48.0, 24.0]
-        assert top[0]["people"] == 1000
+        assert not {"person_h", "people"} & set(top[0])
+
+    def test_only_an_observed_completion_is_ranked(self):
+        """A schedule is a plan and a token is no measurement: the same line the
+        median draws."""
+        rows = [
+            _case(id=1, reference_num="CAR1"),
+            _case(id=2, reference_num="CAR2", end_source="scheduled_end_with_time",
+                  notice_to_end_seconds=200 * 3600, end_local_date="2026-05-09"),
+            _case(id=3, reference_num="CAR3", notice_to_end_seconds=None,
+                  end_source="not_found", end_local_date=None),
+        ]
+        site = build_site(rows, AFTER_MAY, TOWNS)
+        assert [r["ref"] for r in site["top"]["2026-05"]] == ["CAR1"]
+        month = site["national"]["2026-05"]
+        assert (month["completed_n"], month["scheduled_n"], month["no_end_n"]) == (1, 1, 1)
+
+    def test_a_span_at_the_cap_is_flagged(self):
+        rows = [_case(notice_to_end_seconds=20 * 86400, end_local_date="2026-05-21")]
+        [row] = build_site(rows, AFTER_MAY, TOWNS)["top"]["2026-05"]
+        assert (row["hours"], row["capped"]) == (CAP_DAYS * 24.0, 1)
+        assert "capped" not in build_site([_case()], AFTER_MAY, TOWNS)["top"]["2026-05"][0]
+
+    def test_a_tie_goes_to_the_earlier_publication(self):
+        rows = [_case(id=1, reference_num="CAR1", start_date="2026-05-03T00:00:00+00:00",
+                      end_local_date="2026-05-04"),
+                _case(id=2, reference_num="CAR2")]
+        top = build_site(rows, AFTER_MAY, TOWNS)["top"]["2026-05"]
+        assert [r["ref"] for r in top] == ["CAR2", "CAR1"]
 
     def test_the_in_progress_month_is_excluded(self):
         # the whole scope decision: an open event accruing toward the 14-day cap
         # would reshuffle the list between builds
         rows = [_case()]
-        assert "2026-05" not in build_site(rows, SA_INDEX, NOW, TOWNS)["top"]
-        assert "2026-05" in build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)["top"]
+        assert "2026-05" not in build_site(rows, NOW, TOWNS)["top"]
+        assert "2026-05" in build_site(rows, AFTER_MAY, TOWNS)["top"]
 
     def test_the_list_is_capped_at_ten(self):
         rows = [
@@ -1527,7 +1398,7 @@ class TestTopEvents:
                   end_local_date="2026-05-03")
             for i in range(15)
         ]
-        top = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)["top"]["2026-05"]
+        top = build_site(rows, AFTER_MAY, TOWNS)["top"]["2026-05"]
         assert len(top) == 10
         # largest first, so the cap drops the shortest five
         assert top[0]["hours"] == 15.0
@@ -1544,12 +1415,12 @@ class TestTopEvents:
                   notice_to_end_seconds=200 * 3600, end_local_date="2026-05-09"),
             _case(id=3, reference_num="CAR3"),
         ]
-        top = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)["top"]["2026-05"]
+        top = build_site(rows, AFTER_MAY, TOWNS)["top"]["2026-05"]
         assert [r["ref"] for r in top] == ["CAR3"]
 
     def test_a_multi_pin_event_is_one_row(self):
         rows = [_case(id=1), _case(id=2, full_lat=52.837)]
-        top = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)["top"]["2026-05"]
+        top = build_site(rows, AFTER_MAY, TOWNS)["top"]["2026-05"]
         assert len(top) == 1
         assert top[0]["pins"] == 2
 
@@ -1559,55 +1430,27 @@ class TestTopEvents:
         rows = [_case(id=1)] + [
             _case(id=i, end_source="scheduled_end_with_time") for i in (2, 3, 4)
         ]
-        row = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)["top"]["2026-05"][0]
+        row = build_site(rows, AFTER_MAY, TOWNS)["top"]["2026-05"][0]
         assert (row["pins"], row["confirmed"], row["scheduled"]) == (4, 1, 3)
 
-    def test_an_event_spanning_two_months_is_split_at_the_boundary(self):
-        # 48h from 31 May 12:00: 12h in May, 36h in June
+    def test_an_event_spanning_two_months_ranks_whole_in_its_publication_month(self):
         rows = [_case(start_date="2026-05-31T12:00:00+00:00",
                       notice_to_end_seconds=48 * 3600, end_local_date="2026-06-02")]
-        site = build_site(rows, SA_INDEX, datetime(2026, 7, 5, tzinfo=UTC), TOWNS)
-        assert site["top"]["2026-05"][0]["person_h"] == 12 * 1000
-        assert site["top"]["2026-06"][0]["person_h"] == 36 * 1000
-        # and each half matches what the county reports for that month
-        months = site["counties"]["Carlow"]["months"]
-        assert site["top"]["2026-05"][0]["person_h"] == months["2026-05"]["person_h"]
-        assert site["top"]["2026-06"][0]["person_h"] == months["2026-06"]["person_h"]
-
-    def test_a_row_names_the_area_holding_most_of_the_footprint(self):
-        # two Small Areas in different settlements; the larger one names the row,
-        # even though the first pin sits in the smaller
-        sa = SmallAreaIndex([(52.836, -6.926, "SA1", 100), (52.837, -6.926, "SA2", 900)])
-        towns = TownLookup(
-            [("SA1", "T1", "Smallville", "Carlow"), ("SA2", "T2", "Bigtown", "Carlow")],
-            sa.pop,
-        )
-        rows = [_case(id=1, full_lat=52.836), _case(id=2, full_lat=52.837)]
-        top = build_site(rows, sa, AFTER_MAY, towns)["top"]["2026-05"]
-        assert top[0]["area"] == "Bigtown"
+        site = build_site(rows, datetime(2026, 7, 5, tzinfo=UTC), TOWNS)
+        assert site["top"]["2026-05"][0]["hours"] == 48.0
+        assert site["top"]["2026-06"] == []
 
     def test_a_padded_reference_is_the_same_event(self):
         rows = [_case(id=1, reference_num="CAR1"),
                 _case(id=2, reference_num="CAR1 ", full_lat=52.837),
                 _case(id=3, reference_num="CAR1\xa0", full_lat=52.838)]
-        site = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)
+        site = build_site(rows, AFTER_MAY, TOWNS)
         assert [(r["ref"], r["pins"]) for r in site["top"]["2026-05"]] == [("CAR1", 3)]
         assert site["counties"]["Carlow"]["months"]["2026-05"]["events"]["outage"] == 1
 
-    def test_the_history_counts_every_pin_and_the_top_ten_the_outage_ones(self):
-        # one reference, an outage pin and a low-pressure pin over different areas
-        sa = SmallAreaIndex([(52.836, -6.926, "SA1", 1000), (52.846, -6.926, "SA2", 900)])
-        towns = TownLookup([("SA1", "T1", "Testtown", "Carlow"),
-                            ("SA2", "T1", "Testtown", "Carlow")], sa.pop)
-        rows = [_case(id=1), _case(id=2, full_lat=52.846, reduced_pressure=1)]
-        site = build_site(rows, sa, AFTER_MAY, towns)
-        top = site["top"]["2026-05"][0]
-        history = _history(rows, now=AFTER_MAY, towns=towns, sa=sa)
-        assert (top["people"], history[0]["people"]) == (1000, 1900)
-
     def test_the_ranking_works_without_a_town_lookup(self):
         # every TestBuildSite case calls build_site this way
-        top = build_site([_case()], SA_INDEX, AFTER_MAY)["top"]["2026-05"]
+        top = build_site([_case()], AFTER_MAY)["top"]["2026-05"]
         assert len(top) == 1
         assert "area" not in top[0]
 
@@ -1718,7 +1561,7 @@ class TestRecurrenceGuard:
     be as suspicious as they are."""
 
     def _resolve(self, row):
-        return resolve_case(row, SA_INDEX, {}, NOW)
+        return resolve_case(row, {}, NOW)
 
     def test_a_notice_claiming_no_recurrence_keeps_its_single_interval(self):
         """The no-op proof for the 9,000-odd rows that are not recurring."""
@@ -1798,25 +1641,25 @@ class TestRecurringIntervals:
     """
 
     def _hours(self, row):
-        case = resolve_case(row, SA_INDEX, {}, NOW, None)
+        case = resolve_case(row, {}, NOW, None)
         return sum((e - s).total_seconds() for s, e in case.intervals) / 3600
 
     def test_a_nightly_series_covers_its_windows_not_the_elapsed_span(self):
         assert self._hours(_recurring()) == 63.0  # 7 nights x 9h, not the 165h span
 
-    def test_a_recurring_event_accrues_no_person_hours(self):
+    def test_a_recurring_event_is_not_an_outage_notice(self):
         """A scheduled repeating window is demand management, whatever the title
         says — the rule that stopped one Donegal nightly regime being the largest
         figure on the site while the same villages' April notice counted zero."""
-        month = build_site([_recurring()], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["person_h"] == 0
+        month = build_site([_recurring()], NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["outage_notices"] == 0
         assert month["events"]["outage"] == 0
         assert month["events"]["degraded"] == 1
 
     def test_every_night_of_a_series_still_colours_its_day_bar(self):
         """Reclassifying must change the price, not the visibility — a reader
         looking at the county still sees something on every day it ran."""
-        days = build_site([_recurring()], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        days = build_site([_recurring()], NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert [d[0] for d in days["days"][:8]] == ["degraded"] * 8
 
     def test_pins_with_different_series_ends_union_to_the_longest(self):
@@ -1824,7 +1667,7 @@ class TestRecurringIntervals:
             _recurring(id=1),
             _recurring(id=2, end_local_date="2026-05-06", notice_to_end_seconds=117 * 3600.0),
         ]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        month = build_site(rows, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["degraded"] == 1
 
     def test_a_long_series_still_accrues_at_most_fourteen_days_of_presence(self):
@@ -1835,7 +1678,7 @@ class TestRecurringIntervals:
             end_window_open="12:00", end_window_close="18:00", end_local_time="18:00",
             notice_to_end_seconds=1458 * 3600.0,
         )]
-        case = resolve_case(rows[0], SA_INDEX, {}, NOW)
+        case = resolve_case(rows[0], {}, NOW)
         assert len(case.intervals) == 14
         assert case.intervals[-1][1] <= _dt("2026-05-15T00:00:00+00:00")
 
@@ -1844,8 +1687,7 @@ class TestRecurringIntervals:
         Excluding them also keeps the headline comparing like with like: "how long
         did the works take" means something different for a nightly regime."""
         month = build_site(
-            [_recurring(end_source="completion_update", end_local_time="12:02")],
-            SA_INDEX, NOW,
+            [_recurring(end_source="completion_update", end_local_time="12:02")], NOW,
         )["counties"]["Carlow"]["months"]["2026-05"]
         assert month["median_completion_h"] is None
         assert month["completed_n"] == 0
@@ -1857,7 +1699,7 @@ class TestRecurringIntervals:
         now — so this is a guard rather than a live correction."""
         rows = [_case(start_date="2026-05-31T09:00:00+00:00",
                       end_local_date="2026-06-02", notice_to_end_seconds=48 * 3600.0)]
-        site = build_site(rows, SA_INDEX, datetime(2026, 7, 1, tzinfo=UTC))
+        site = build_site(rows, datetime(2026, 7, 1, tzinfo=UTC))
         months = site["counties"]["Carlow"]["months"]
         assert months["2026-05"]["completed_n"] == 1
         assert months["2026-06"]["completed_n"] == 0
@@ -1869,14 +1711,14 @@ class TestRecurrenceReport:
     only as person-hours quietly falling."""
 
     def _report(self, rows):
-        cases = [resolve_case(r, SA_INDEX, {}, NOW) for r in rows]
+        cases = [resolve_case(r, {}, NOW) for r in rows]
         pin_tags = {}
         for c in cases:
             pin_tags.setdefault((c.county, c.ref), []).append(c.rec)
         return recurrence_report([c for c in cases if c.rec != "none"], pin_tags)
 
     def _cases(self, rows):
-        return [c for c in (resolve_case(r, SA_INDEX, {}, NOW) for r in rows) if c.rec != "none"]
+        return [c for c in (resolve_case(r, {}, NOW) for r in rows) if c.rec != "none"]
 
     def test_nothing_claiming_recurrence_prints_nothing(self):
         assert recurrence_report(self._cases([_case()])) == []
@@ -1937,7 +1779,7 @@ class TestSharedWindows:
     def test_a_pin_with_no_window_inherits_one_from_its_sibling(self):
         rows = [_recurring(id=1), self._completion_pin()]
         shared = event_windows(rows)
-        case = resolve_case(rows[1], SA_INDEX, {}, NOW, shared[("Carlow", "CAR00000001")])
+        case = resolve_case(rows[1], {}, NOW, shared[("Carlow", "CAR00000001")])
         assert case.rec == "expanded_inherited"
         assert len(case.intervals) > 1
 
@@ -1946,7 +1788,7 @@ class TestSharedWindows:
         pin takes the schedule and then stops when it says the works stopped."""
         rows = [_recurring(id=1), self._completion_pin()]
         shared = event_windows(rows)
-        case = resolve_case(rows[1], SA_INDEX, {}, NOW, shared[("Carlow", "CAR00000001")])
+        case = resolve_case(rows[1], {}, NOW, shared[("Carlow", "CAR00000001")])
         # the final night is cut at the completion instant, not run to its 07:00 close
         assert case.intervals[-1] == (_dt("2026-05-07T21:00:00+00:00"),
                                       _dt("2026-05-08T02:00:00+00:00"))
@@ -1956,15 +1798,15 @@ class TestSharedWindows:
         pin stays an outage inside a restriction event, and the per-reference
         union charges its continuous interval in full."""
         rows = [_recurring(id=1), self._completion_pin()]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["person_h"] == 0
+        month = build_site(rows, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["outage_notices"] == 0
         assert month["events"] == {"outage": 0, "quality": 0, "degraded": 1, "maintenance": 0}
 
     def test_an_event_no_pin_gave_a_window_is_untouched(self):
         """Inheritance must not invent a window for an ordinary event."""
         rows = [_case(id=1), _case(id=2)]
         assert event_windows(rows) == {}
-        case = resolve_case(rows[0], SA_INDEX, {}, NOW, None)
+        case = resolve_case(rows[0], {}, NOW, None)
         assert case.rec == "none"
         assert len(case.intervals) == 1
 
@@ -1980,7 +1822,7 @@ class TestSharedWindows:
                                         end_local_time="15:00", end_local_date="2026-05-08",
                                         notice_to_end_seconds=170 * 3600.0)]
         shared = event_windows(rows)
-        case = resolve_case(rows[1], SA_INDEX, {}, NOW, shared[("Carlow", "CAR00000001")])
+        case = resolve_case(rows[1], {}, NOW, shared[("Carlow", "CAR00000001")])
         assert case.rec.startswith("refused")
         assert len(case.intervals) == 1
 
@@ -1990,7 +1832,7 @@ class TestSharedWindows:
         rows = [_recurring(id=1), _case(id=2, status="Open", notice_to_end_seconds=None,
                                         end_source="not_found", end_local_date=None)]
         shared = event_windows(rows)
-        case = resolve_case(rows[1], SA_INDEX, {}, NOW, shared[("Carlow", "CAR00000001")])
+        case = resolve_case(rows[1], {}, NOW, shared[("Carlow", "CAR00000001")])
         assert case.rec == "none"
         assert len(case.intervals) == 1
 
@@ -2030,7 +1872,7 @@ class TestSharedWindows:
         # as every corpus caller resolves it: the severity signal is the key, not
         # the window, so the sibling stays inside a restriction with nothing to
         # inherit rather than becoming an outage pin in the middle of one
-        case = resolve_case(rows[1], SA_INDEX, {}, NOW, shared[key], key in keys)
+        case = resolve_case(rows[1], {}, NOW, shared[key], key in keys)
         assert case.sev == "degraded"
         assert case.rec == "none"
         assert len(case.intervals) == 1
@@ -2053,7 +1895,7 @@ class TestSharedWindows:
         flag the very event inheritance just repaired."""
         rows = [_recurring(id=1), self._completion_pin()]
         shared = event_windows(rows)
-        cases = [resolve_case(r, SA_INDEX, {}, NOW, shared.get(("Carlow", "CAR00000001")))
+        cases = [resolve_case(r, {}, NOW, shared.get(("Carlow", "CAR00000001")))
                  for r in rows]
         tags = {("Carlow", "CAR00000001"): [c.rec for c in cases]}
         report = "\n".join(recurrence_report([c for c in cases if c.rec != "none"], tags))
@@ -2063,82 +1905,57 @@ class TestSharedWindows:
 
 
 class TestEventNaming:
-    """One event, one area name, decided over its whole footprint.
+    """One event, one area name, decided over all its pins.
 
     The open list and the national top ten used to name an event by different
-    rules — first pin published versus largest share of the footprint — so a
-    six-pin burst could read "Allenwood" in one place and "Prosperous" in the
-    other, of the same event on the same page.
+    rules, so a six-pin burst could read "Allenwood" in one place and
+    "Prosperous" in the other, of the same event on the same page.
     """
 
-    # two pins 7 km apart. Each has a home area of its own, and both reach into a
-    # third that is bigger in total than either — the shape that decides whether
-    # naming is done per pin or over the event.
-    SA = SmallAreaIndex([
-        (52.836, -6.926, "SA1", 100),   # pin A's home
-        (52.8362, -6.926, "SA2", 60),   # shared
-        (52.900, -6.926, "SA3", 90),    # pin B's home
-        (52.9002, -6.926, "SA4", 60),   # shared, same area as SA2
-    ])
     TOWNS = TownLookup([
-        ("SA1", "X", "Exton", "Carlow"),
-        ("SA2", "Y", "Wyeville", "Carlow"),
-        ("SA3", "Z", "Zedbury", "Carlow"),
-        ("SA4", "Y", "Wyeville", "Carlow"),
-    ], SA.pop)
+        ("SA1", "X", "Exton", "Carlow", 52.836, -6.926, 100),
+        ("SA2", "Z", "Zedbury", "Carlow", 52.900, -6.926, 900),
+    ])
 
     def _pins(self, **overrides):
-        # id 1 is published first and homes to Zedbury (90); id 2 homes to Exton
-        # (100). So first-pin-wins and largest-share disagree, which is the point.
+        # id 1 is published first and lies in Zedbury; ids 2 and 3 lie in Exton.
+        # So first-pin-wins and most-pins disagree, which is the point.
         return [_case(id=1, full_lat=52.900, **overrides),
-                _case(id=2, full_lat=52.836, **overrides)]
+                _case(id=2, full_lat=52.836, **overrides),
+                _case(id=3, full_lat=52.8361, **overrides)]
 
-    def test_an_event_is_named_over_its_whole_footprint_not_its_first_pin(self):
-        site = build_site(self._pins(), self.SA, datetime(2026, 6, 15, tzinfo=UTC), self.TOWNS)
-        # the first pin published would have said Zedbury; Exton holds more of
-        # the event's footprint, and that is what a reader is shown
+    def test_an_event_is_named_for_where_most_of_its_pins_are(self):
+        site = build_site(self._pins(), datetime(2026, 6, 15, tzinfo=UTC), self.TOWNS)
         assert [r["area"] for r in site["top"]["2026-05"]] == ["Exton"]
 
     def test_the_open_list_and_the_top_ten_agree_on_the_area(self):
-        """The whole point of the change: both read the same decision."""
+        """The whole point: both read the same decision."""
         now = datetime(2026, 6, 15, tzinfo=UTC)
+        site = build_site(self._pins(), now, self.TOWNS)
+        top_area = {r["area"] for r in site["top"]["2026-05"]}
         rows = self._pins(status="Open", notice_to_end_seconds=None,
                           end_source="not_found", end_local_date=None)
-        site = build_site(rows, self.SA, now, self.TOWNS)
-        county = site["counties"]["Carlow"]
+        county = build_site(rows, now, self.TOWNS)["counties"]["Carlow"]
         open_area = {c["area"] for c in county["open"]}
-        top_area = {r["area"] for r in site["top"]["2026-05"]}
         assert len(open_area) == 1
         assert {self.TOWNS.label(code) for code in open_area} == top_area
 
-    def test_the_name_is_restricted_to_areas_the_pins_were_homed_to(self):
-        """Shares are summed per area, so Wyeville — reached by both pins but the
-        home of neither — out-totals Exton and Zedbury across the union. Naming
-        the event Wyeville would produce a code absent from the county breakdown,
-        which the page renders as a blank heading and drops from the area table's
-        open counts."""
-        assert self.TOWNS.dominant(
-            {"SA1": 100, "SA2": 60, "SA3": 90, "SA4": 60}, "Carlow"
-        ) == "Y"
-        assert self.TOWNS.dominant(
-            {"SA1": 100, "SA2": 60, "SA3": 90, "SA4": 60}, "Carlow", {"X", "Z"}
-        ) == "X"
+    def test_a_tie_goes_to_the_earliest_pin_then_the_lowest_id(self):
+        early, late = _dt("2026-05-01T00:00:00+00:00"), _dt("2026-05-02T00:00:00+00:00")
+        assert event_area([(late, 1, "X"), (early, 2, "Z")]) == "Z"
+        assert event_area([(early, 2, "X"), (early, 1, "Z")]) == "Z"
 
-    def test_an_event_is_never_named_after_an_area_no_pin_was_homed_to(self):
-        """The invariant the restriction buys, stated exactly.
+    def test_an_unplaced_pin_never_names_an_event_a_placed_pin_can(self):
+        t = _dt("2026-05-01T00:00:00+00:00")
+        assert event_area([(t, 1, UNPLACED), (t, 2, UNPLACED), (t, 3, "X")]) == "X"
+        assert event_area([(t, 1, UNPLACED)]) == UNPLACED
 
-        It is *not* "every open case resolves in the county breakdown" — four
-        real cases already fail that for an unrelated reason, being advance
-        notices dated far enough ahead that their footprint lands in no listed
-        month, so their area gets no breakdown entry. What this guarantees is
-        narrower: naming cannot invent an area that no pin of the event chose.
-        """
+    def test_an_event_is_never_named_after_an_area_no_pin_was_placed_in(self):
         now = datetime(2026, 6, 15, tzinfo=UTC)
         rows = self._pins(status="Open", notice_to_end_seconds=None,
                           end_source="not_found", end_local_date=None)
-        county = build_site(rows, self.SA, now, self.TOWNS)["counties"]["Carlow"]
-        homes = {self.TOWNS.dominant(self.SA.affected(r["full_lat"], r["full_lon"]), "Carlow")
-                 for r in rows}
+        county = build_site(rows, now, self.TOWNS)["counties"]["Carlow"]
+        homes = {self.TOWNS.place(r["full_lat"], r["full_lon"], "Carlow") for r in rows}
         for case in county["open"]:
             assert case["area"] in homes
             assert case["area"] in county["towns"]
@@ -2182,7 +1999,7 @@ class TestDescribesRecurrence:
         """The eight events a human review found charged as continuous outages:
         every one is a completion notice whose window the model suppressed."""
         row = _case(description="Works are scheduled nightly from 11pm until 7am, 5 to 15 June.")
-        assert resolve_case(row, SA_INDEX, {}, NOW).sev == "degraded"
+        assert resolve_case(row, {}, NOW).sev == "degraded"
 
 
 class TestHealthNotices:
@@ -2197,22 +2014,22 @@ class TestHealthNotices:
                      notice_to_end_seconds=None, end_source="not_found", end_local_date=None,
                      **overrides)
 
-    def test_a_health_notice_is_counted_without_touching_the_grade(self):
-        site = build_site([self._notice()], SA_INDEX, NOW)
+    def test_a_health_notice_is_counted_without_touching_the_count(self):
+        site = build_site([self._notice()], NOW)
         month = site["counties"]["Carlow"]["months"]["2026-05"]
         assert month["health_n"] == 1
-        assert month["grade"] == "A"  # no outage, so availability is untouched
+        assert month["outage_notices"] == 0
         assert month["events"]["quality"] == 1
 
     def test_a_county_with_no_health_notice_reports_zero(self):
-        month = build_site([_case()], SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        month = build_site([_case()], NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["health_n"] == 0
 
     def test_discolouration_is_a_quality_event_but_not_a_health_notice(self):
         """It shows as a quality event and always did; it never knocked, and it
         does not raise the marker either."""
         rows = [_case(work_category="discolouration", boil_water_notice=0)]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        month = build_site(rows, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["events"]["quality"] == 1
         assert month["health_n"] == 0
 
@@ -2222,7 +2039,7 @@ class TestHealthNotices:
         burst main: it accrues as an outage and raises no marker. Nine such cases
         were painting a warning across eight county-months (2026-08-18)."""
         rows = [_case(work_category="burst_main", do_not_drink=1)]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        month = build_site(rows, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["health_n"] == 0
         assert month["events"]["outage"] == 1
 
@@ -2230,23 +2047,23 @@ class TestHealthNotices:
         """Dropping the flags must not cost a real notice its marker: every
         legitimate flagged case on file is already one of these categories."""
         rows = [_case(work_category="consumption_notice_issued", do_not_drink=0)]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        month = build_site(rows, NOW)["counties"]["Carlow"]["months"]["2026-05"]
         assert month["health_n"] == 1
 
-    def test_an_outage_still_grades_on_availability_with_a_notice_present(self):
-        """The two are independent: the letter moves on person-hours, the marker
-        on whether a health notice is active."""
+    def test_an_outage_still_counts_with_a_notice_present(self):
+        """The two are independent: the letter moves on outage notices, the
+        marker on whether a health notice is active."""
         rows = [_case(id=1, reference_num="CAR1", notice_to_end_seconds=300 * 3600.0,
                       end_local_date="2026-05-13"),
                 self._notice(id=2, reference_num="CAR2")]
-        month = build_site(rows, SA_INDEX, NOW)["counties"]["Carlow"]["months"]["2026-05"]
-        assert month["grade"] == "F"       # driven by the outage alone
+        month = build_site(rows, NOW)["counties"]["Carlow"]["months"]["2026-05"]
+        assert month["outage_notices"] == 1
         assert month["health_n"] == 1
 
 
-def _history(rows, now=NOW, towns=TOWNS, sa=SA_INDEX, county="Carlow", code="T1"):
+def _history(rows, now=NOW, towns=TOWNS, county="Carlow", code="T1"):
     """The events one area's history renders, for the common single-area case."""
-    site = build_site(rows, sa, now, towns)
+    site = build_site(rows, now, towns)
     return site["history"][county][code]["events"]
 
 
@@ -2264,7 +2081,7 @@ class TestAreaHistory:
         assert len(events) == 1
         assert events[0] == {
             "ref": "CAR00000001", "title": "Burst Water Main - Carlow", "sev": "outage",
-            "start": "2026-05-01", "pins": 1, "hours": 24.0, "people": 1000,
+            "start": "2026-05-01", "pins": 1, "hours": 24.0,
             "confirmed": 1, "loc": "Somewhere", "closed": "2026-05-02",
         }
 
@@ -2280,10 +2097,7 @@ class TestAreaHistory:
                                     end_source="not_found", end_local_date=None)])[0]
         assert open_case["end"] == "2026-05-09"  # accrues to NOW, midnight on the 10th
 
-    def test_an_imputed_event_carries_the_days_it_was_charged(self):
-        """46 coloured bar days on the 2026-09-23 release listed "0 notices"
-        when tapped: the bar is coloured by the imputed span, the record said
-        nothing past the publication day."""
+    def test_an_event_with_no_end_carries_its_publication_day_alone(self):
         rows = [
             _case(id=1, reference_num="CAR1", notice_to_end_seconds=3 * 86400.0),
             _case(id=2, reference_num="CAR2", status="Closed",
@@ -2291,25 +2105,24 @@ class TestAreaHistory:
                   end_source="not_found", end_local_date=None),
         ]
         event = next(e for e in _history(rows) if e["ref"] == "CAR2")
-        assert event["end"] == "2026-05-07"
-        assert "hours" not in event  # an estimate, not a duration to print
+        assert event["start"] == "2026-05-05"
+        assert not {"from", "end", "hours"} & set(event)
 
-    def test_a_span_charged_backwards_carries_the_day_it_starts(self):
+    def test_an_event_ended_before_publication_is_dated_by_its_publication(self):
         rows = [
-            _case(id=1, reference_num="CAR1"),  # 24h observed: the evidence
+            _case(id=1, reference_num="CAR1"),
             _case(id=2, reference_num="CAR2", status="Closed",
-                  start_date="2026-05-10T00:00:00+00:00", notice_to_end_seconds=None,
+                  start_date="2026-05-09T00:00:00+00:00", notice_to_end_seconds=None,
                   end_source="completion_update", end_local_date="2026-05-05",
                   end_local_time="12:00"),
         ]
         event = next(e for e in _history(rows) if e["ref"] == "CAR2")
-        assert (event["start"], event["from"], event["end"]) == (
-            "2026-05-10", "2026-05-04", "2026-05-05"
-        )
+        assert event["start"] == "2026-05-09"
+        assert not {"from", "end"} & set(event)
 
     def test_every_coloured_day_lists_an_event_of_its_colour(self):
         """The predicate dayEventsHtml applies, over the shapes that colour a
-        day: observed, imputed forwards, imputed backwards, open."""
+        day: observed, no end, ended before publication, open."""
         rows = [
             _case(id=1, reference_num="CAR1", notice_to_end_seconds=3 * 86400.0),
             _case(id=2, reference_num="CAR2", status="Closed",
@@ -2322,11 +2135,11 @@ class TestAreaHistory:
             _open(id=4, reference_num="CAR4", work_category="investigation",
                   start_date="2026-05-25T00:00:00+00:00"),
         ]
-        site = build_site(rows, SA_INDEX, AFTER_MAY, TOWNS)
+        site = build_site(rows, AFTER_MAY, TOWNS)
         events = site["history"]["Carlow"]["T1"]["events"]
         days = site["counties"]["Carlow"]["months"]["2026-05"]["days"]
-        coloured = [(f"2026-05-{i + 1:02d}", sev) for i, (sev, _) in enumerate(days) if sev]
-        assert len(coloured) > 10
+        coloured = [(f"2026-05-{i + 1:02d}", sev) for i, (sev,) in enumerate(days) if sev]
+        assert len(coloured) > 5
         for day, sev in coloured:
             listed = [e for e in events
                       if (e.get("from") or e["start"]) <= day <= (e.get("end") or e["start"])]
@@ -2358,9 +2171,9 @@ class TestAreaHistory:
         assert "so far" not in row and "still open" not in row
         assert "not started yet" in row
 
-    def test_an_estimate_is_never_printed_as_hours_so_far(self):
-        # open in the feed, its own scheduled end before publication: charged a
-        # SpanTable estimate, which is not a measurement
+    def test_a_token_is_never_printed_as_hours_so_far(self):
+        # open in the feed, its own scheduled end before publication: a token
+        # second, which is not a measurement
         rows = [_open(id=1, reference_num="EST1", end_source="scheduled_end_with_time",
                       notice_to_end_seconds=None, end_local_date="2026-05-02",
                       end_local_time="12:00", start_date="2026-05-03T09:00:00+00:00")]
@@ -2475,35 +2288,30 @@ class TestAreaHistory:
                 _case(id=2, start_date="2026-05-01T00:00:00+00:00")]
         assert _history(rows)[0]["start"] == "2026-05-01"
 
-    def test_people_is_the_whole_footprint_capped_at_the_county(self):
-        """The same number the national top ten prints for the same event — two
-        pages disagreeing about how many people a burst reached would be worse
-        than either answer."""
-        sa = SmallAreaIndex([(52.836, -6.926, "SA1", COUNTY_POP["Carlow"] * 2)])
-        towns = TownLookup([("SA1", "T1", "Testtown", "Carlow")], sa.pop)
-        assert _history([_case()], sa=sa, towns=towns)[0]["people"] == COUNTY_POP["Carlow"]
+    def test_a_record_carries_no_estimate_of_the_people_reached(self):
+        assert "people" not in _history([_case()])[0]
 
     def test_a_pin_outside_its_county_lands_in_the_unplaced_bucket(self):
-        towns = TownLookup([("SA1", "T1", "Blessington", "Wicklow")], SA_INDEX.pop)
-        site = build_site([_case()], SA_INDEX, NOW, towns)
+        towns = TownLookup([("SA1", "T1", "Blessington", "Wicklow", 52.836, -6.926, 1000)])
+        site = build_site([_case()], NOW, towns)
         area = site["history"]["Carlow"][UNPLACED]
         assert area["name"] == UNPLACED_LABEL
         assert len(area["events"]) == 1
 
     def test_one_reference_published_in_two_counties_appears_in_both(self):
-        """16 reference numbers do this. Each half has its own footprint and its
-        own county cap, so two records is the honest rendering, not a duplicate."""
-        sa = SmallAreaIndex([(52.836, -6.926, "SA1", 1000), (53.15, -6.8, "SA2", 500)])
-        towns = TownLookup(
-            [("SA1", "T1", "Testtown", "Carlow"), ("SA2", "T2", "Kilcullen", "Kildare")], sa.pop
-        )
+        """16 reference numbers do this. Each half is its own notice in its own
+        county's count, so two records is the honest rendering, not a duplicate."""
+        towns = TownLookup([
+            ("SA1", "T1", "Testtown", "Carlow", 52.836, -6.926, 1000),
+            ("SA2", "T2", "Kilcullen", "Kildare", 53.15, -6.8, 500),
+        ])
         rows = [_case(id=1), _case(id=2, county="Kildare", full_lat=53.15, full_lon=-6.8)]
-        site = build_site(rows, sa, NOW, towns)
+        site = build_site(rows, NOW, towns)
         assert site["history"]["Carlow"]["T1"]["events"][0]["ref"] == "CAR00000001"
         assert site["history"]["Kildare"]["T2"]["events"][0]["ref"] == "CAR00000001"
 
     def test_there_is_no_history_without_a_town_lookup(self):
-        assert build_site([_case()], SA_INDEX, NOW)["history"] == {}
+        assert build_site([_case()], NOW)["history"] == {}
 
 
 def _bare_site(county="Kildare"):
@@ -2541,7 +2349,7 @@ class TestHistoryShards:
     somebody forgetting to pop it."""
 
     def _write(self, tmp_path, rows=None):
-        site = build_site(rows or [_case()], SA_INDEX, NOW, TOWNS)
+        site = build_site(rows or [_case()], NOW, TOWNS)
         site.pop("recurrence_report")
         return site, write_site(site, tmp_path, TOWNS)
 
@@ -2629,20 +2437,12 @@ class TestHistoryShards:
         both would 404, so both stay county-bound."""
         # SA2 and SA3 sit well away from the test pin, so the case still lands
         # in Testtown and the other two areas stay noticeless
-        sa = SmallAreaIndex([
-            (52.836, -6.926, "SA1", 1000),
-            (53.500, -7.500, "SA2", 500),
-            (54.500, -8.500, "SA3", 500),
+        towns = TownLookup([
+            ("SA1", "T1", "Testtown", "Carlow", 52.836, -6.926, 1000),
+            ("SA2", "ed:Carlow:Around Testtown", "Around Testtown", "Carlow", 53.5, -7.5, 500),
+            ("SA3", "T2", "Quietville", "Carlow", 54.5, -8.5, 500),
         ])
-        towns = TownLookup(
-            [
-                ("SA1", "T1", "Testtown", "Carlow"),
-                ("SA2", "ed:Carlow:Around Testtown", "Around Testtown", "Carlow"),
-                ("SA3", "T2", "Quietville", "Carlow"),
-            ],
-            sa.pop,
-        )
-        site = build_site([_case()], sa, NOW, towns)
+        site = build_site([_case()], NOW, towns)
         site.pop("recurrence_report")
         write_site(site, tmp_path, towns)
         body = (tmp_path / "search.js").read_text()
@@ -2660,9 +2460,8 @@ class TestHistoryShards:
         of its own. The index carries the town like any other paged area; it is
         statusui's searchHits that keeps its row beside the county's, so a
         `name != county` filter here would hide the page from the box again."""
-        sa = SmallAreaIndex([(52.836, -6.926, "SA1", 1000)])
-        towns = TownLookup([("SA1", "T1", "Carlow", "Carlow")], sa.pop)
-        site = build_site([_case()], sa, NOW, towns)
+        towns = TownLookup([("SA1", "T1", "Carlow", "Carlow", 52.836, -6.926, 1000)])
+        site = build_site([_case()], NOW, towns)
         site.pop("recurrence_report")
         write_site(site, tmp_path, towns)
         body = (tmp_path / "search.js").read_text()
@@ -2674,7 +2473,7 @@ class TestHistoryShards:
         """No month has reached its notice, so the county breakdown has no row
         for it; its page is built from the history all the same (Laragh, Co.
         Wicklow on the 2026-09-23 release)."""
-        site = build_site([_open(start_date="2026-06-20T00:00:00+00:00")], SA_INDEX, NOW, TOWNS)
+        site = build_site([_open(start_date="2026-06-20T00:00:00+00:00")], NOW, TOWNS)
         site.pop("recurrence_report")
         assert "T1" not in site["counties"]["Carlow"]["towns"]
         write_site(site, tmp_path, TOWNS)
@@ -2713,7 +2512,7 @@ class TestNoticeText:
             _case(id=2, reference_num="CAR00000002", status="Closed",
                   description="Closed text nobody needs."),
         ]
-        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        site = build_site(rows, NOW, TOWNS)
         site.pop("recurrence_report")
         write_site(site, tmp_path, TOWNS)
         assert "notice_text" not in site
@@ -2732,7 +2531,7 @@ class TestNoticeText:
             _open(id=3, reference_num=None, title="No reference"),
             _case(id=4, reference_num="CAR00000004", status="Closed", title="Closed"),
         ]
-        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        site = build_site(rows, NOW, TOWNS)
         site.pop("recurrence_report")
         write_site(site, tmp_path, TOWNS)
         page = (tmp_path / "c" / "carlow.html").read_text()
@@ -2755,7 +2554,7 @@ class TestNoticeText:
             _open(id=2, reference_num="CAR00000002", title="Ahead",
                   start_date="2026-05-20T08:00:00+00:00"),
         ]
-        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        site = build_site(rows, NOW, TOWNS)
         site.pop("recurrence_report")
         write_site(site, tmp_path, TOWNS)
         page = (tmp_path / "c" / "carlow.html").read_text()
@@ -2765,7 +2564,7 @@ class TestNoticeText:
 
     def test_a_notice_starting_later_on_the_build_day_reads_from(self, tmp_path):
         rows = [_open(title="Later today", start_date="2026-05-10T14:00:00+00:00")]
-        site = build_site(rows, SA_INDEX, NOW + timedelta(hours=6), TOWNS)
+        site = build_site(rows, NOW + timedelta(hours=6), TOWNS)
         assert site["counties"]["Carlow"]["open"][0]["ahead"] == 1
         site.pop("recurrence_report")
         write_site(site, tmp_path, TOWNS)
@@ -2779,7 +2578,7 @@ class TestFeeds:
     sightings, the app payload gets none of them."""
 
     def _write(self, tmp_path, rows=None):
-        site = build_site(rows or [_case()], SA_INDEX, NOW, TOWNS)
+        site = build_site(rows or [_case()], NOW, TOWNS)
         site.pop("recurrence_report")
         write_site(site, tmp_path, TOWNS)
         return site
@@ -2874,7 +2673,7 @@ class TestIndexablePages:
     """
 
     def _write(self, tmp_path, rows=None):
-        site = build_site(rows or [_case()], SA_INDEX, NOW, TOWNS)
+        site = build_site(rows or [_case()], NOW, TOWNS)
         site.pop("recurrence_report")
         counties = sorted(site["counties"])
         return counties, write_site(site, tmp_path, TOWNS)
@@ -2950,8 +2749,7 @@ class TestIndexablePages:
 
     def test_after_the_first_30_days_the_county_page_states_the_letter(self, tmp_path):
         site = build_site([_case(county="Dublin", reference_num="DUB00000001",
-                                 start_date="2026-06-01T00:00:00+00:00")],
-                          SA_INDEX, AFTER_MAY, TOWNS)
+                                 start_date="2026-06-01T00:00:00+00:00")], AFTER_MAY, TOWNS)
         write_site(site, tmp_path, TOWNS)
         page = (tmp_path / "c" / "dublin.html").read_text()
         assert "Over the last 30 days: grade <strong>A</strong>, 1 outage notice, 0.02 per" in page
@@ -2970,7 +2768,7 @@ class TestIndexablePages:
 
         Matched on the whole href rather than on `index.html`, because a row now
         points at a page or at the hash route depending on the area."""
-        site = build_site([_case()], SA_INDEX, NOW, TOWNS)
+        site = build_site([_case()], NOW, TOWNS)
         county, areas = area_index(site["history"], TOWNS)[0]
         assert _area_items(county, areas, "../") == _area_items(county, areas).replace(
             'href="', 'href="../'
@@ -3086,7 +2884,7 @@ class TestPayloadShape:
     """
 
     def _site(self):
-        site = build_site([_case()], SA_INDEX, AFTER_MAY, TOWNS)
+        site = build_site([_case()], AFTER_MAY, TOWNS)
         site.pop("recurrence_report")
         site.pop("history")
         site.pop("notice_text")
@@ -3095,7 +2893,7 @@ class TestPayloadShape:
 
     def test_the_freshness_stamp_follows_the_data_not_the_build_clock(self):
         site = build_site(
-            [_case()], SA_INDEX, AFTER_MAY, TOWNS,
+            [_case()], AFTER_MAY, TOWNS,
             data_as_of=datetime(2026, 6, 14, 18, 30, tzinfo=UTC),
         )
         assert site["data_as_of_iso"] == "2026-06-14T18:30:00Z"
@@ -3130,45 +2928,39 @@ class TestPayloadShape:
         # derive it, because ui.js's slug() leaves a fada as a dash
         assert set(county["towns"]["T1"]) == {"name", "pop", "months", "slug"}
         # resolved_n because the fixture's event closes by its own completion
-        assert set(county["towns"]["T1"]["months"]["2026-05"]) == {
-            "events", "availability", "person_h", "resolved_n"
-        }
+        assert set(county["towns"]["T1"]["months"]["2026-05"]) == {"events", "resolved_n"}
 
     def test_the_county_month_keys_are_unchanged(self):
         month = self._site()["counties"]["Carlow"]["months"]["2026-05"]
         assert set(month) == {
-            "days", "clear_days", "days_elapsed", "grade", "events", "person_h",
-            "period_h", "availability",
+            "days", "clear_days", "days_elapsed", "events",
             "health_n", "median_completion_h", "completed_n", "median_scheduled_h",
-            "scheduled_n", "median_pooled_h", "imputed_n", "health_now",
+            "scheduled_n", "no_end_n", "health_now",
             "outage_notices", "per_100km", "count_grade",
         }
 
     def test_the_national_month_keys_are_unchanged(self):
         assert set(self._site()["national"]["2026-05"]) == {
             "median_completion_h", "completed_n", "median_scheduled_h", "scheduled_n",
-            "median_pooled_h", "imputed_n", "outage_notices", "per_100km",
+            "no_end_n", "outage_notices", "per_100km",
         }
 
     def test_the_top_row_keys_are_unchanged(self):
         """Guards the widening of event_meta to every severity from drifting
         into the published ranking."""
         assert set(self._site()["top"]["2026-05"][0]) == {
-            "ref", "county", "title", "person_h", "hours", "people", "start", "pins",
-            "confirmed", "scheduled", "area",
+            "ref", "county", "title", "hours", "start", "pins", "confirmed", "scheduled",
+            "area",
         }
 
 
 # two Small Areas 1.5 km apart in different settlements, so a two-pin event
 # published across both is homed to one area per pin — the shape 764 real events
 # have, and the one the county breakdown and the history used to disagree about
-SPLIT_SA = SmallAreaIndex(
-    [(52.836, -6.926, "SA1", 1000), (52.850, -6.926, "SA2", 400)]
-)
-SPLIT_TOWNS = TownLookup(
-    [("SA1", "T1", "Bigtown", "Carlow"), ("SA2", "T2", "Smallville", "Carlow")],
-    SPLIT_SA.pop,
-)
+SPLIT_TOWNS = TownLookup([
+    ("SA1", "T1", "Bigtown", "Carlow", 52.836, -6.926, 1000),
+    ("SA2", "T2", "Smallville", "Carlow", 52.850, -6.926, 400),
+])
 
 
 def _split_event():
@@ -3187,7 +2979,7 @@ class TestMultiAreaEvents:
     """
 
     def _site(self):
-        return build_site(_split_event(), SPLIT_SA, NOW, SPLIT_TOWNS)
+        return build_site(_split_event(), NOW, SPLIT_TOWNS)
 
     def test_every_area_in_the_county_tables_has_a_history(self):
         """The invariant the pin/event mismatch broke, and the reason the area
@@ -3201,13 +2993,10 @@ class TestMultiAreaEvents:
         assert [e["ref"] for e in history["T1"]["events"]] == ["CAR00000001"]
         assert [e["ref"] for e in history["T2"]["events"]] == ["CAR00000001"]
 
-    def test_both_listings_report_the_whole_events_footprint(self):
-        """The record describes an event, not an area's accrual — so it is the
-        same number the national top ten prints for the same event, on both."""
+    def test_both_listings_report_the_whole_event(self):
+        """The record describes an event, not an area's share of it."""
         history = self._site()["history"]["Carlow"]
-        big, small = history["T1"]["events"][0], history["T2"]["events"][0]
-        assert big["people"] == small["people"] == 1400
-        assert big["hours"] == small["hours"]
+        assert history["T1"]["events"][0] is history["T2"]["events"][0]
 
     def test_a_shared_event_says_how_many_areas_it_is_in(self):
         """Or meeting the same burst on two pages reads as double-counting."""
@@ -3233,7 +3022,7 @@ class TestAreaIndex:
     """The directory page's rows: every area with a notice, county by county."""
 
     def _index(self):
-        site = build_site(_split_event(), SPLIT_SA, NOW, SPLIT_TOWNS)
+        site = build_site(_split_event(), NOW, SPLIT_TOWNS)
         return area_index(site["history"], SPLIT_TOWNS)
 
     def test_counties_and_areas_come_out_sorted(self):
@@ -3251,15 +3040,15 @@ class TestAreaIndex:
         months, so summing the county payload's month rows would overstate."""
         rows = [_case(start_date="2026-05-31T12:00:00+00:00",
                       notice_to_end_seconds=48 * 3600, end_local_date="2026-06-02")]
-        site = build_site(rows, SA_INDEX, datetime(2026, 7, 5, tzinfo=UTC), TOWNS)
+        site = build_site(rows, datetime(2026, 7, 5, tzinfo=UTC), TOWNS)
         months = site["counties"]["Carlow"]["towns"]["T1"]["months"]
         assert sum(m["events"]["outage"] for m in months.values()) == 2   # the trap
         [(_, areas)] = area_index(site["history"], TOWNS)
         assert areas[0][3] == 1                                          # the truth
 
     def test_an_unplaced_bucket_is_labelled_and_has_no_population(self):
-        towns = TownLookup([("SA1", "T1", "Blessington", "Wicklow")], SA_INDEX.pop)
-        site = build_site([_case()], SA_INDEX, NOW, towns)
+        towns = TownLookup([("SA1", "T1", "Blessington", "Wicklow", 52.836, -6.926, 1000)])
+        site = build_site([_case()], NOW, towns)
         [(_, areas)] = area_index(site["history"], towns)
         assert areas == [(UNPLACED, UNPLACED_LABEL, None, 1)]
 
@@ -3359,7 +3148,7 @@ class TestExpectedBack:
     """An open notice that states an end carries it, and every open list prints it."""
 
     def _back(self, rows, now=NOW):
-        county = build_site(rows, SA_INDEX, now, TOWNS)["counties"]["Carlow"]
+        county = build_site(rows, now, TOWNS)["counties"]["Carlow"]
         return [o.get("back") for o in county["open"]]
 
     def test_a_stated_end_rides_on_the_open_entry_in_irish_time(self):
@@ -3403,7 +3192,7 @@ class TestExpectedBack:
     def test_the_county_page_says_when_supply_is_expected_back(self, tmp_path):
         rows = [_open(end_source="scheduled_end_with_time", notice_to_end_seconds=1011600.0,
                       end_local_date="2026-05-12", end_local_time="18:00")]
-        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        site = build_site(rows, NOW, TOWNS)
         write_site(site, tmp_path, TOWNS)
         assert "expected back by " in (tmp_path / "c" / "carlow.html").read_text()
 
@@ -3424,15 +3213,13 @@ class TestThePagesSayTheCount:
         rows = [_case(), _open(id=2, reference_num="CAR2", end_source="scheduled_end_with_time",
                                notice_to_end_seconds=1011600.0,
                                end_local_date="2026-05-12", end_local_time="18:00")]
-        site = build_site(rows, SA_INDEX, NOW, TOWNS)
+        site = build_site(rows, NOW, TOWNS)
         site.pop("recurrence_report")
         write_site(site, tmp_path, TOWNS)
         pages = list(tmp_path.glob("*.html")) + list(tmp_path.glob("[ca]/**/*.html"))
         assert len(pages) > 3
         for page in pages:
-            # the inlined payload still carries the estimate's keys until session 4
-            text = re.sub(r"<script>window\.UISCE_DATA = .*?</script>", "",
-                          page.read_text(), flags=re.S).lower()
+            text = page.read_text().lower()
             for word in ("availability", "person-hours", "500 m", "500&nbsp;m"):
                 assert word not in text, (page.name, word)
 
@@ -3443,5 +3230,9 @@ class TestThePagesSayTheCount:
             assert "figures(c, " in _app_fn(view)
             assert "m.count_grade" not in _app_fn(view)
 
-    def test_the_top_ten_view_is_gone_from_the_app(self):
-        assert "renderTop" not in APP and 'location.hash === "#top"' not in APP
+    def test_the_top_ten_ranks_on_hours_and_prints_no_headcount(self):
+        top = _app_fn("renderTop")
+        assert "topHours(r)" in top and "endBadge(r, false)" in top
+        for word in ("person_h", "people", "fmtPersonH"):
+            assert word not in top
+        assert 'location.hash === "#top"' in APP

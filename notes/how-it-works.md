@@ -18,7 +18,7 @@ ArcGIS feed ──uisce-pipeline──▶ out/uisce.db ──uisce-site──▶
 - **`data/inferred_end_times.jsonl`** — committed, append-only, the cache for LLM end-time extraction. It is the source of truth for what has been inferred; the `inferred_cases` table is a rebuilt projection of it. Querying the table to decide what needs inference is the classic mistake — see [pipeline-dependencies.md](pipeline-dependencies.md).
 - **`out/site/`** — fully static, regenerated from scratch every time, safe to delete.
 
-Two committed lookups sit outside the loop, refreshed only when the CSO revises its geography: `data/sa_pop.csv` and `data/sa_towns.csv`.
+One committed lookup sits outside the loop, refreshed only when the CSO revises its geography: `data/sa_towns.csv`.
 
 ## Flow 1 — getting cases in (`pipeline.py`, `uisce-pipeline`)
 
@@ -57,14 +57,13 @@ The third file is `areas.html`, a directory of every area with a notice, linking
 
 `site.html` is the whole front end: hash routing between an overview, one county view, one area history and the top ten, no build step, no dependencies.
 
-## Flow 4 — the geography (`sa_pop.py`, `towns.py`)
+## Flow 4 - the geography (`towns.py`)
 
-Both write committed CSVs and are run only when the Census geography changes.
+It writes a committed CSV and is run only when the Census geography changes.
 
-- `uisce-fetch-sa-pop` → `data/sa_pop.csv`: Small Area centroid and population.
-- `uisce-fetch-towns` → `data/sa_towns.csv`: the named area each Small Area belongs to — a settlement, a Local Electoral Area of a city, or the countryside around an Electoral Division.
+- `uisce-fetch-towns` → `data/sa_towns.csv`: each Small Area's centroid and population, and the named area it belongs to - a settlement, a Local Electoral Area of a city, or the countryside around an Electoral Division.
 
-At runtime `SmallAreaIndex` answers "which Small Areas does this pin affect?" by grid-hashed radius lookup, and `TownLookup` answers "which named area is that, and how many people live in it?". Both are pure-Python with no GIS dependency, and everything the geography needs comes from attributes the CSO already publishes — [population-data-sources.md](population-data-sources.md) records why deriving it from boundary polygons instead was both heavier and less accurate.
+At runtime `TownLookup.place` answers "which named area is this pin in?" by the nearest Small Area centroid, from a grid hash, and `TownLookup.pop` "how many people live in it?". It is pure-Python with no GIS dependency, and everything the geography needs comes from attributes the CSO already publishes: [population-data-sources.md](population-data-sources.md) records why deriving it from boundary polygons instead was both heavier and less accurate.
 
 ## Where to change things
 
@@ -72,11 +71,11 @@ At runtime `SmallAreaIndex` answers "which Small Areas does this pin affect?" by
 |---|---|
 | What counts as an outage / a quality notice | `classify` and the `*_CATS` sets in `site.py` |
 | How a title becomes a category | `CategoryRule` in `pipeline.py`, then run `uisce-backfill` |
-| Grade thresholds | `grade` in `site.py` |
+| Grade thresholds | `COUNT_CUTS` in `site.py` |
 | How long an open case accrues for | `CAP_DAYS`, and `resolve_case` |
 | What counts as open, everywhere the site says so | `is_open` in `site.py`, carried on `Case.is_open` |
 | Which end signals count as observed | `OBSERVED_END_SOURCES` in `config.py` |
-| The affected-population radius | `AFFECT_RADIUS_KM` / `FALLBACK_KM` |
+| How far a pin may be from the Small Area it is placed by | `PLACE_KM` |
 | When a settlement is split into electoral areas | `SPLIT_ABOVE_POP` / `MIN_PART_SHARE` in `towns.py` |
 | Anything visual, or the page copy | `site.html` (single file, no build) |
 | The LLM prompt or model | `inference.py`, then re-run inference and rebuild |

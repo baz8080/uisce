@@ -2,29 +2,21 @@
 
 Per county and calendar month the generator computes:
 
-- a daily worst-condition status for the statuspage-style day bars, with
-  intensity = share of county population affected that day
+- a daily worst-condition status for the statuspage-style day bars
 - events, deduplicated by reference_num with pin intervals unioned
-- population-weighted supply availability: 100% minus person-disruption-seconds
-  over county person-seconds, measured across the observed window only
+- outage notices per 100 km of water main, and the A-F letter cut on that count
+  (count_grade); an active boil-water / do-not-drink / do-not-consume notice is
+  published beside the letter (health_n) rather than folded into it
 - a median notice-to-completion time over events whose end was *observed*
   (an "works are now complete" update), excluding those whose only end signal
   was a schedule — see the notice_to_end_seconds docstring in build.py
-- an A-F grade from availability alone; an active boil-water / do-not-drink /
-  do-not-consume notice is published beside the grade (health_n) rather than
-  folded into it — see grade() for why the knock was removed
-- outage notices per 100 km of water main, and a second letter cut on that
-  count (count_grade), published beside the availability figures
 
-Each county then breaks down into the named Census settlements its cases fall
-in, plus one bucket for everything outside a settlement. A town gets the same
-counts, person-hours and availability as a county, computed with the same
-arithmetic over a narrower population — but no letter grade, because the
-thresholds are calibrated to county-months and a single burst in a village
-would read F while being entirely ordinary.
+Each county then breaks down into named Census areas, a pin placed in the area
+of its nearest Small Area centroid, with the same per-class counts as the county
+and no letter: a letter needs a length of main, which is published by supply
+zone, not by town.
 
-Methodology, data findings, and the benchmark context behind the grade
-thresholds are documented in notes/statuspage-methodology.md.
+Methodology and data findings are documented in notes/statuspage-methodology.md.
 """
 
 import csv
@@ -50,7 +42,6 @@ from uisce.config import (
     DUBLIN,
     OBSERVED_END_SOURCES,
     RECURRING,
-    SA_POP_PATH,
     SA_TOWNS_PATH,
     SITE_DIR,
     describes_recurrence,
@@ -81,28 +72,19 @@ COLLECTION_START = datetime(2026, 4, 20, tzinfo=timezone.utc)
 # (conservation restrictions) are classed degraded and never accrue anyway.
 CAP_DAYS = 14
 
-# Smallest number of observed completions a work_category needs before its own
-# median is used to impute a missing span; below this it falls back to the
-# global one. Fifteen keeps every category that carries real volume on its own
-# figure (mains_repair 7.5h against pump_repair 43.7h — the spread is wide
-# enough to be worth honouring) while stopping a category with three cases from
-# setting a number for itself.
-MIN_CATEGORY_N = 15
+# A pin is placed in the area of the nearest Small Area centroid within this.
+PLACE_KM = 8.0
 
-# A pin is assumed to affect the Small Areas whose centroids lie within
-# AFFECT_RADIUS_KM; if none, the nearest Small Area within FALLBACK_KM.
-AFFECT_RADIUS_KM = 0.5
-FALLBACK_KM = 8.0
-
-# Key and label for the county drill-down bucket holding cases whose pin
-# footprint lies outside the county the notice names (~1.5% of case-months) —
-# a disagreement between the feed's `county` and its own coordinates, not a
-# gap in the geography. See notes/data-quality.md ("county and the pin's own
-# coordinates disagree") and notes/statuspage-methodology.md.
+# Key and label for the county drill-down bucket holding cases whose pin lies
+# nearest a Small Area outside the county the notice names: a disagreement
+# between the feed's `county` and its own coordinates, not a gap in the
+# geography. See notes/data-quality.md ("county and the pin's own coordinates
+# disagree") and notes/statuspage-methodology.md.
 UNPLACED = "unplaced"
 UNPLACED_LABEL = "Couldn't be placed in a town"
 
-# Census 2022 county populations (approximate; city+county combined).
+# Census 2022 county populations (approximate; city+county combined), printed
+# beside each county and the list of counties a case must name.
 COUNTY_POP = {
     "Carlow": 61968, "Cavan": 81704, "Clare": 127938, "Cork": 584156,
     "Donegal": 167084, "Dublin": 1458154, "Galway": 276451, "Kerry": 156458,
@@ -113,7 +95,7 @@ COUNTY_POP = {
     "Westmeath": 96221, "Wexford": 163919, "Wicklow": 155851,
 }
 
-# Severity classes, worst first. Only "outage" accrues availability downtime.
+# Severity classes, worst first. Only "outage" is counted.
 SEV_ORDER = ["outage", "quality", "degraded", "maintenance"]
 
 QUALITY_CATS = {"boil_notice_issued", "consumption_notice_issued", "discolouration"}
@@ -355,7 +337,7 @@ def charged_end(end, start):
 
     CAP_DAYS is a ceiling on one notice's contribution, not a claim about how
     long it ran: an observed `completion_update` is capped, the open-and-accruing
-    branch is capped, an imputed span is capped. A paired lift is not stronger
+    branch is capped. A paired lift is not stronger
     evidence than a completion update, so it gets no exemption either.
 
     Without this, pairing a notice *raised* what it accrued: an unpaired notice
@@ -452,45 +434,9 @@ def merge(intervals):
     return merged
 
 
-def union_seconds(intervals, lo, hi):
-    """Seconds covered by already-merged intervals, clipped to [lo, hi)."""
-    total = 0.0
-    for start, end in intervals:
-        start, end = max(start, lo), min(end, hi)
-        if end > start:
-            total += (end - start).total_seconds()
-    return total
-
-
-def grade(availability):
-    """A-F from population-weighted availability (see notes for calibration).
-
-    Availability and nothing else. An active boil-water or do-not-drink notice
-    used to knock the letter one step, which conflated two things the page is
-    better off saying separately: the letter now means supply availability, and a
-    health notice is published beside it as its own marker (`health_n`).
-
-    The knock was measured before it was removed. Across 78 settled county-months
-    it set the published letter for 8, and it was wildly out of scale with
-    everything else on the page — the median knocking notice would have cost
-    0.003 points of availability had it accrued like an outage, against the 0.45
-    points of the letter band it crossed, a factor of about a hundred. That is
-    not an argument that a boil notice is unimportant; it is an argument that its
-    importance is not measured in person-hours, and so should not be expressed by
-    moving a person-hours score. Donegal's July F was by then the knock alone,
-    which a reader comparing it to a genuine F could not see.
-    """
-    if availability >= 99.9:
-        return "A"
-    if availability >= 99.75:
-        return "B"
-    if availability >= 99.45:
-        return "C"
-    if availability >= 99.0:
-        return "D"
-    if availability >= 98.7:
-        return "E"
-    return "F"
+def overlaps(intervals, lo, hi):
+    """Whether any of `intervals` covers part of [lo, hi)."""
+    return any(max(start, lo) < min(end, hi) for start, end in intervals)
 
 
 # Fitted on May-Sep 2026 and re-fitted yearly; see "Outage notices per 100 km of main".
@@ -504,197 +450,96 @@ def count_grade(per_100km):
     return "F"
 
 
-class SmallAreaIndex:
-    """Census Small Area centroids + populations, grid-hashed for radius lookups."""
+class TownLookup:
+    """Small Area -> named area, with each Small Area's centroid and population.
 
-    BIN = 0.01  # degrees, ~1.1 km of latitude
+    Built by uisce-fetch-towns (see src/uisce/towns.py). A pin is placed in the
+    area of its nearest Small Area centroid; an area's population is the sum of
+    its Small Areas, so every settlement reproduces its published Census figure.
+    """
+
+    BIN = 0.05  # degrees: a few bins either way cover PLACE_KM
 
     def __init__(self, rows):
+        self.name = {}  # code -> area name
+        self.county = {}  # code -> county
+        self.pop = defaultdict(int)  # code -> population
         self._bins = defaultdict(list)
         self._cache = {}
-        self.pop = {}
-        for lat, lon, guid, pop in rows:
-            self._bins[(int(lat / self.BIN), int(lon / self.BIN))].append((lat, lon, guid, pop))
-            self.pop[guid] = pop
+        for _guid, code, name, county, lat, lon, pop in rows:
+            self.name.setdefault(code, name)
+            self.county.setdefault(code, county)
+            self.pop[code] += pop
+            self._bins[self._bin(lat, lon)].append((lat, lon, code))
 
     @classmethod
     def from_csv(cls, path):
         with open(path, newline="") as f:
             return cls(
-                (float(r["lat"]), float(r["lon"]), r["guid"], int(r["pop"]))
+                (r["guid"], r["town_code"], r["town_name"], r["town_county"],
+                 float(r["lat"]), float(r["lon"]), int(r["pop"]))
                 for r in csv.DictReader(f)
             )
 
-    def _near(self, lat, lon, r_km):
-        dlat = r_km / 111.0
-        dlon = r_km / (111.0 * math.cos(math.radians(lat)))
-        hits = []
-        for bi in range(int((lat - dlat) / self.BIN) - 1, int((lat + dlat) / self.BIN) + 2):
-            for bj in range(int((lon - dlon) / self.BIN) - 1, int((lon + dlon) / self.BIN) + 2):
-                for slat, slon, guid, pop in self._bins.get((bi, bj), ()):
-                    dist = math.hypot(
-                        (slat - lat) * 111.0,
-                        (slon - lon) * 111.0 * math.cos(math.radians(lat)),
-                    )
-                    if dist <= r_km:
-                        hits.append((dist, guid, pop))
-        return hits
+    def _bin(self, lat, lon):
+        return math.floor(lat / self.BIN), math.floor(lon / self.BIN)
 
-    def affected(self, lat, lon):
-        """{guid: pop} of Small Areas a pin at this coordinate is assumed to affect."""
-        key = (round(lat, 4), round(lon, 4))
+    def _nearest(self, lat, lon):
+        kx = 111.0 * math.cos(math.radians(lat))
+        (lo_i, lo_j), (hi_i, hi_j) = (
+            self._bin(lat - PLACE_KM / 111.0, lon - PLACE_KM / kx),
+            self._bin(lat + PLACE_KM / 111.0, lon + PLACE_KM / kx),
+        )
+        best = None
+        for bi in range(lo_i, hi_i + 1):
+            for bj in range(lo_j, hi_j + 1):
+                for slat, slon, code in self._bins.get((bi, bj), ()):
+                    dist = math.hypot((slat - lat) * 111.0, (slon - lon) * kx)
+                    if dist <= PLACE_KM and (best is None or dist < best[0]):
+                        best = (dist, code)
+        return best and best[1]
+
+    def place(self, lat, lon, county):
+        """The area a pin is placed in: its nearest Small Area's, or UNPLACED when
+        that lies in another county than the notice names, or none is in range.
+
+        Not re-homed to the best area that *is* in the county: a pin nearest a
+        Wicklow Small Area on a Kildare notice is where the feed's own two fields
+        disagree, and naming a Kildare town for it would hide that.
+        """
+        key = (round(lat, 5), round(lon, 5))
         if key not in self._cache:
-            hits = self._near(lat, lon, AFFECT_RADIUS_KM)
-            if not hits:
-                fallback = self._near(lat, lon, FALLBACK_KM)
-                hits = [min(fallback)] if fallback else []
-            self._cache[key] = {guid: pop for _, guid, pop in hits}
-        return self._cache[key]
-
-
-class TownLookup:
-    """Small Area -> Census settlement, with each settlement's population.
-
-    Built by uisce-fetch-towns (see src/uisce/towns.py): every Small Area whose
-    centroid falls inside a CSO Urban Area 2022 boundary is listed against that
-    settlement. A town's population is the sum of its Small Areas, not the
-    published Census settlement figure, so that town populations and the county
-    availability denominator are derived from one source and cannot disagree.
-    """
-
-    def __init__(self, rows, sa_pop):
-        self.town = {}  # SA guid -> settlement code
-        self.name = {}  # code -> settlement name
-        self.county = {}  # code -> county
-        self.pop = defaultdict(int)  # code -> population
-        for guid, code, name, county in rows:
-            if guid not in sa_pop:
-                continue
-            self.town[guid] = code
-            if code not in self.name:
-                self.name[code] = name
-                self.county[code] = county
-            self.pop[code] += sa_pop[guid]
-
-    @classmethod
-    def from_csv(cls, path, sa_pop):
-        with open(path, newline="") as f:
-            return cls(
-                (
-                    (r["guid"], r["town_code"], r["town_name"], r["town_county"])
-                    for r in csv.DictReader(f)
-                ),
-                sa_pop,
-            )
+            self._cache[key] = self._nearest(lat, lon)
+        code = self._cache[key]
+        return code if code is not None and self.county[code] == county else UNPLACED
 
     def label(self, code):
         return UNPLACED_LABEL if code == UNPLACED else self.name[code]
 
-    def dominant(self, sas, county, allowed=None):
-        """Area holding the largest share of an affected population, or UNPLACED.
 
-        Pins rarely straddle a boundary — the median dominant share is 1.00 on
-        the July 2026 corpus — so one home per pin costs almost nothing and
-        keeps per-area case counts summing to the county's.
-
-        Only areas in the case's own county are considered. Border pins are real
-        (a Kildare-labelled notice whose footprint reaches Blessington, Co.
-        Wicklow), and re-homing one across a county line would contradict the
-        page it appears on — so the pin goes to the best area that *is* in the
-        county rather than being set aside. UNPLACED is left for the pin whose
-        whole footprint lies in another county.
-
-        `allowed` restricts the answer to a set of codes. Naming a whole *event*
-        needs it: shares are summed per area, so a secondary area common to
-        several pins can out-total every pin's own winner and produce a code no
-        pin ever registered in the county breakdown — which the page renders as
-        a blank heading and silently drops from the area table's open counts.
-        No event in the corpus does that today; passing the pins' own codes makes
-        it unrepresentable rather than unlikely.
-        """
-        shares = defaultdict(int)
-        for guid, pop in sas.items():
-            code = self.town.get(guid)
-            if code is None or self.county[code] != county:
-                continue
-            if allowed is not None and code not in allowed:
-                continue
-            shares[code] += pop
-        if not shares:
-            return UNPLACED
-        return max(shares.items(), key=lambda kv: kv[1])[0]
-
-    def within(self, sas, code):
-        """The part of a pin's footprint that lies in one area.
-
-        Attributing the whole footprint would let a village accrue person-hours
-        for people who don't live in it, and could push availability below zero
-        when a pin on its edge reaches most of the next one.
-        """
-        return {guid: pop for guid, pop in sas.items() if self.town.get(guid) == code}
+def event_area(pins):
+    """The one area an event is named after, from `pins` [(publication, id, code)]:
+    the area most of its pins were placed in, the earliest pin breaking a tie, and
+    UNPLACED only when every pin is."""
+    placed = [pin for pin in pins if pin[2] != UNPLACED]
+    if not placed:
+        return UNPLACED
+    n = Counter(code for _, _, code in placed)
+    return min(placed, key=lambda pin: (-n[pin[2]], pin[0], pin[1]))[2]
 
 
-class SpanTable:
-    """Typical observed span per work_category, for imputing the ones we lost.
-
-    Built from observed completions only — the same evidence tier the published
-    median rests on — so an imputed value is a statement about how long that
-    kind of works actually took, not how long one was announced to take.
-
-    This exists because a *total* has no exclude option. Availability divides
-    person-disruption-seconds by a denominator fixed by population and calendar,
-    so an event that supplies no duration supplies a zero, and zero is the one
-    value known to be wrong for an outage that really happened. The 1-second
-    token this replaces was introduced to stop open negative-span cases
-    accruing to "now" (see `ended_by_publication`); it fixed that, but as a
-    number it books a burst main as having disrupted nobody.
-
-    The published median does *not* use these values — an imputation is weaker
-    evidence than the scheduled ends already kept out of it. See the
-    2026-08-15 section of notes/statuspage-methodology.md for the split and the
-    censoring checks behind it.
-    """
-
-    def __init__(self, rows):
-        by_cat = defaultdict(list)
-        for r in rows:
-            span = measured_span(r)
-            if span is None or r["end_source"] not in OBSERVED_END_SOURCES:
-                continue
-            by_cat[r["work_category"]].append(min(span, CAP_DAYS * 86400))
-        every = [s for spans in by_cat.values() for s in spans]
-        self.overall = statistics.median(every) if every else None
-        self.by_cat = {
-            cat: statistics.median(spans)
-            for cat, spans in by_cat.items()
-            if len(spans) >= MIN_CATEGORY_N
-        }
-
-    def for_category(self, cat):
-        """Seconds to charge a case of this category whose own span is unusable."""
-        return self.by_cat.get(cat, self.overall)
-
-
-def span_stats(observed_h, scheduled_h, imputed_h=()):
+def span_stats(observed_h, scheduled_h, no_end_n=0):
     """Published notice-to-end figures. `median_completion_h` is the headline and
     covers observed completions only; the scheduled figures are reported
-    alongside so the split is visible rather than silently pooled.
-
-    `imputed_n` and `median_pooled_h` are the disclosure: how many disruption
-    events carried no usable end at all, and what the headline would be if they
-    were included at typical times for their kind of works. Publishing both is
-    what keeps the exclusion an argument rather than a silence — Ofwat's supply
-    interruptions guidance requires companies to report "what proportion of its
-    start/stop times has been informed by each data source" for the same reason.
+    alongside so the split is visible rather than silently pooled, and
+    `no_end_n` counts the events that never reported an end at all.
     """
-    pooled = list(observed_h) + list(imputed_h)
     return {
         "median_completion_h": round(statistics.median(observed_h), 1) if observed_h else None,
         "completed_n": len(observed_h),
         "median_scheduled_h": round(statistics.median(scheduled_h), 1) if scheduled_h else None,
         "scheduled_n": len(scheduled_h),
-        "median_pooled_h": round(statistics.median(pooled), 1) if pooled else None,
-        "imputed_n": len(imputed_h),
+        "no_end_n": no_end_n,
     }
 
 
@@ -858,7 +703,7 @@ def recurring_intervals(row, start, end, shared=None):
     numeric no-op — the caller keeps the single [start, end] interval it would
     have used anyway. That is what lets the checks below be as suspicious as they
     are: the cost of disbelieving the model is zero, and the cost of believing a
-    hallucinated recurrence is a county's person-hours quietly falling by half.
+    hallucinated recurrence is an outage's hours quietly falling by half.
 
     The sharpest check is the cross-check on a scheduled end. The prompt requires
     the reported end to be the last date *at the window's closing time*, so a
@@ -922,11 +767,9 @@ class Case(NamedTuple):
     sev: str
     ref: str
     # publication: the start the span was measured from where build.py pinned
-    # one, else start_date. The intervals open here, except an imputed
-    # negative-span case, which is anchored back from the end it knows.
+    # one, else start_date. The intervals open here.
     start: datetime
     intervals: list
-    sas: dict
     has_end: bool
     observed_end: bool
     rec: str = "none"  # recurrence outcome, for the build report
@@ -936,11 +779,10 @@ class Case(NamedTuple):
     # answers to the evidence rather than to the accrual ceiling. Empty means
     # "same as intervals", which is every other case.
     in_force: tuple = ()
-    # No usable end signal, so the interval is a SpanTable estimate rather than
-    # anything the notice said. Deliberately separate from has_end, which stays
-    # False: that is what keeps these out of the published median without
-    # touching the filter that reads it.
-    imputed: bool = False
+    # Closed, or over by its own text, with no usable end: the interval is a
+    # one-second token on its publication, counted in `no_end_n` and kept out of
+    # every duration.
+    no_end: bool = False
     # is_open(row, now), less what only resolve_case knows (a paired lift, the
     # cap on a standing notice); decided once here so the open list, the
     # history's "still open", the county page's notice text and the Atom feed
@@ -964,7 +806,7 @@ class Case(NamedTuple):
         return self.in_force or self.intervals
 
 
-def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, spans=None):
+def resolve_case(r, lifts, now, shared_window=None, recurring=None):
     """A Case for one row, or None if it isn't an event at all.
 
     `shared_window` is the recurring window this row's *event* reported, used
@@ -976,11 +818,6 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
     event-level signal: an event whose every claimed window is unreadable has no
     window to share, so a pin of it that claimed nothing would classify on its
     own title. Pass `key in recurring_events(...)`, as every corpus caller does.
-
-    `spans` is the SpanTable used to charge a case whose end signal is unusable.
-    Left None, such a case keeps the token 1-second footprint this replaced,
-    which is what lets the single-row callers in the test suite ask about
-    severity and recurrence without standing up a corpus.
 
     The interval rules and their rationale are in
     notes/statuspage-methodology.md; this is the code they describe.
@@ -1003,15 +840,8 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
     # a paired boil-notice lift is an observed end too; set below
     observed_end = has_end and r["end_source"] in OBSERVED_END_SOURCES
     rec = "none"
-    imputed = False
+    no_end = False
     in_force = ()  # empty: the charged intervals are the in-force ones
-    # where the disruption interval opens. Publication for everything with an
-    # end signal (re-pinned below where the span says so), but an imputed
-    # negative-span case is anchored to the end it
-    # does know and runs backwards from there, so the two come apart. `start`
-    # stays publication either way: first_pub reads it to decide which month an
-    # event belongs to, and that is a fact about the notice, not the works.
-    iv_start = start
     back = None
     open_now = is_open(r, now)
     closed_by = None  # when a lift or the cap closed it, for closed_on
@@ -1071,45 +901,27 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
             end = min(now, start + cap)
         else:
             # Closed with no usable end signal, or already over per the notice's
-            # own text. These used to take a token 1-second footprint, which kept
-            # the start day coloured but booked a real outage as zero downtime —
-            # the one value it certainly was not. They are now charged a typical
-            # span for their kind of works; `imputed` keeps them out of the
-            # published median all the same. See notes/statuspage-methodology.md
-            # (2026-08-15) and the SpanTable docstring.
-            charge = spans and spans.for_category(r["work_category"])
-            if not charge:
-                end = start + timedelta(seconds=1)
-            else:
-                imputed = True
-                charge = min(timedelta(seconds=charge), cap)
-                # The negative-span family knows exactly when it ended and only
-                # lost its start (start_date is re-stamped in place upstream —
-                # notes/data-quality.md, 2026-07-20), so it is anchored backwards
-                # from the end. That puts the hours on the days they happened
-                # rather than on the day the notice finally went up.
-                known_end = reported_end_utc(r["end_local_date"], r["end_local_time"])
-                if known_end is None:
-                    end = start + charge
-                else:
-                    iv_start, end = known_end - charge, known_end
+            # own text: a token that keeps its publication day on the bars. The
+            # typical span charged here until 2026-10-06 was a person-hours
+            # instrument (notes/statuspage-methodology.md).
+            no_end = True
+            end = start + timedelta(seconds=1)
     else:
         # The span was measured from the start build.py pinned at first inference;
         # start_date may have been re-stamped since, and adding the span to the
         # new one charges hours past the notice's own end (21 cases, 2026-09-24).
         # The pinned start is the publication for everything that reads one.
         if r["end_input_start_date"]:
-            start = iv_start = parse_dt(r["end_input_start_date"])
-        end = iv_start + min(timedelta(seconds=notice_to_end), cap)
+            start = parse_dt(r["end_input_start_date"])
+        end = start + min(timedelta(seconds=notice_to_end), cap)
         # Recurrence lives strictly under has_end, which keeps it away from the
         # branches above: a boil notice's end is a paired lift and never its own
         # text, and the no-signal branches own the 532 cases whose span build.py
         # nulled because the notice was published after its own works window.
-        windows, rec = recurring_intervals(r, iv_start, end, shared_window)
+        windows, rec = recurring_intervals(r, start, end, shared_window)
         if windows:
             return Case(
-                row=r, sev=sev, ref=case_ref(r), start=start,
-                intervals=windows, sas=sa_index.affected(r["full_lat"], r["full_lon"]),
+                row=r, sev=sev, ref=case_ref(r), start=start, intervals=windows,
                 has_end=has_end, observed_end=observed_end, rec=rec,
                 is_open=open_now, closed=None if open_now else closed_on(r, now, start),
                 ahead=open_now and windows[0][0] > now,
@@ -1122,61 +934,51 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         sev=sev,
         ref=case_ref(r),
         start=start,
-        intervals=[(iv_start, end)],
-        sas=sa_index.affected(r["full_lat"], r["full_lon"]),
+        intervals=[(start, end)],
         has_end=has_end,
         observed_end=observed_end,
         rec=rec,
-        imputed=imputed,
+        no_end=no_end,
         in_force=tuple(in_force),
         is_open=open_now,
         closed=None if open_now else closed_on(r, now, start, closed_by),
-        ahead=open_now and iv_start > now,
+        ahead=open_now and start > now,
         back=back,
     )
 
 
 class Region:
-    """Interval and population accounting for one grouping of cases.
-
-    A county and a town within it are the same object with a different
-    population attributed to each event: the county gets a pin's whole 500 m
-    footprint, a town only the part of it inside the town (`TownLookup.within`).
-    """
+    """Interval accounting for one grouping of cases: a county, or an area in one,
+    which holds the pins placed there."""
 
     def __init__(self):
         self.sev_iv = defaultdict(list)
         self.iv = defaultdict(lambda: defaultdict(list))
-        self.sas = defaultdict(lambda: defaultdict(dict))
         # both are OR'd across an event's pins, which is what the monthly median
         # wants (does this event carry *an* end signal at all?) but not what a
         # per-event badge wants: DON00115765 has 18 pins of which 1 reported a
-        # completion, and the OR would call the whole thing observed. The top-ten
-        # page counts pins instead — see event_meta in build_site.
+        # completion, and the OR would call the whole thing observed. The top ten
+        # prints a pin count instead; see event_meta in build_site.
         self.has_end = defaultdict(lambda: defaultdict(bool))
         self.observed_end = defaultdict(lambda: defaultdict(bool))
-        # OR'd the same way, and read only for the published coverage figure:
-        # an event any of whose pins had to be estimated is not one the site can
-        # claim it observed.
-        self.imputed = defaultdict(lambda: defaultdict(bool))
+        # OR'd the same way, and read only for the published `no_end_n`
+        self.no_end = defaultdict(lambda: defaultdict(bool))
         # ref -> the intervals its knocking pins were *in force* over, which is
         # the charged interval for all but a lift paired past the cap. Kept apart
-        # from `iv` so the marker is not silently bounded by an accrual ceiling:
-        # grade() already records that a health notice's importance is not
-        # measured in person-hours, and a cap is a person-hours instrument.
+        # from `iv` so the marker is not silently bounded by the cap, which says
+        # how far a notice may run, not how long a warning stood.
         self.knock_iv = defaultdict(list)
         self.open_now = {}  # ref -> case (dedups multi-pin events)
         self.unstated = set()  # refs with an open pin that states no end
         self.resolved = {}  # ref -> case, for cases observed to close
 
-    def add(self, case, sas):
+    def add(self, case):
         sev, ref = case.sev, case.ref
         self.sev_iv[sev].extend(case.intervals)
         self.iv[sev][ref].extend(case.intervals)
-        self.sas[sev][ref].update(sas)
         self.has_end[sev][ref] |= case.has_end
         self.observed_end[sev][ref] |= case.observed_end
-        self.imputed[sev][ref] |= case.imputed
+        self.no_end[sev][ref] |= case.no_end
         if knocks_grade(case.row):
             self.knock_iv[ref].extend(case.marker_intervals)
         r = case.row
@@ -1222,12 +1024,6 @@ class Region:
     def knock_events(self):
         return {ref: merge(iv) for ref, iv in self.knock_iv.items()}
 
-    def event_pop(self, cap_pop):
-        return {
-            sev: {ref: min(sum(s.values()), cap_pop) for ref, s in self.sas[sev].items()}
-            for sev in SEV_ORDER
-        }
-
 
 def seen_span(lo, hi, seen):
     """The part of [lo, hi) the site has seen: not before collection began, and
@@ -1259,28 +1055,20 @@ def back_key(back):
     return back if "T" in back or not back else back + "T24:00"
 
 
-def region_month(region, pop, ym, now):
-    """Counts, person-hours and availability for one region in one month.
-
-    Shared by counties and towns. Day bars and the completion median are county
-    only — see build_site.
+def region_month(region, ym, now):
+    """Counts for one region in one month: events active in it by class, and the
+    health notices in force. Shared by counties and areas; the day bars, the
+    outage count and the completion median are county only - see build_site.
     """
     lo, hi = month_bounds(ym)
-    # nothing accrues beyond "now" (future scheduled works are not downtime
-    # yet) nor before collection began
+    # nothing is active beyond "now" (future scheduled works have not started)
+    # nor before collection began
     eff_hi, eff_lo = min(hi, now), max(lo, COLLECTION_START)
-    events, epop = region.events(), region.event_pop(pop)
-
-    counts, person_s = {}, 0.0
-    for sev in SEV_ORDER:
-        n = 0
-        for ref, iv in events[sev].items():
-            secs = union_seconds(iv, eff_lo, eff_hi)
-            if secs > 0:
-                n += 1
-                if sev == "outage":
-                    person_s += secs * epop[sev].get(ref, 0)
-        counts[sev] = n
+    events = region.events()
+    counts = {
+        sev: sum(1 for iv in events[sev].values() if overlaps(iv, eff_lo, eff_hi))
+        for sev in SEV_ORDER
+    }
 
     # Health-relevant quality notices — boil water, do not drink, do not consume
     # — published beside the grade rather than inside it. Counted over the months
@@ -1289,9 +1077,7 @@ def region_month(region, pop, ym, now):
     # interval dropped the warning from months the lift itself proves the notice
     # was standing. See Region.knock_iv.
     knock = region.knock_events()
-    health_n = sum(
-        1 for iv in knock.values() if union_seconds(iv, eff_lo, eff_hi) > 0
-    )
+    health_n = sum(1 for iv in knock.values() if overlaps(iv, eff_lo, eff_hi))
     # How many of those are standing *right now*. A right-now snapshot on a
     # per-month figure, like `open_now` on the county: the same value on every
     # month, and only the month the snapshot belongs to may read it. It exists
@@ -1301,22 +1087,7 @@ def region_month(region, pop, ym, now):
     # inclusive of `e`: an ongoing notice accrues to exactly `now` (see
     # resolve_case), so a half-open test reports the live ones as not standing
     health_now = sum(1 for iv in knock.values() if any(s <= now <= e for s, e in iv))
-
-    period_s = max((eff_hi - eff_lo).total_seconds(), 1.0)
-    availability = 100.0 * (1 - person_s / (pop * period_s))
-    return {
-        "person_h": round(person_s / 3600),
-        "period_h": round(period_s / 3600),
-        "availability": round(max(availability, 0.0), 3),
-        "events": counts,
-        # active health notices, published beside the grade rather than folded
-        # into it — see grade()
-        "health_n": health_n,
-        "health_now": health_now,
-        # for the caller to pop: grading off the rounded, clamped figure would
-        # flip a county sitting a thousandth under a threshold
-        "avail_raw": availability,
-    }
+    return {"events": counts, "health_n": health_n, "health_now": health_now}
 
 
 RESOLVED_SHOWN = 20
@@ -1351,87 +1122,60 @@ def resolved_by_month(region, shown=None):
 TOP_EVENTS_SHOWN = 10
 
 
-def top_events(counties, event_meta, towns, area_of, ym, now, shown=TOP_EVENTS_SHOWN):
-    """The largest individual supply disruptions nationally in one month.
+def top_events(longest, event_meta, towns, area_of, shown=TOP_EVENTS_SHOWN):
+    """The longest supply disruptions nationally among one month's outage notices.
 
-    Nothing else on the site ranks a single event: person-hours are computed per
-    county and per area, and a reader who wants to know what actually happened in
-    July gets 26 county rows instead of the burst that caused them. In July 2026
-    the ten largest events were 21% of every person-hour lost nationally, one of
-    them 9% on its own, so the distribution is worth a page.
+    `longest` is [(hours, county, ref)], the events the month's published median
+    is taken over: outage notices first published in the month whose end was
+    observed, at the covered hours that median reads. So the ten are the tail of
+    the distribution the headline summarises, and no figure here is one the
+    median does not already rest on. Why this ranking and not another is in
+    notes/statuspage-methodology.md ("The national top ten").
 
-    Person-hours are clipped to the month with the same bounds region_month uses,
-    not attributed whole to the month an event started, which keeps the ranking
-    summable against the county figures already published — "these ten are a fifth
-    of July" is only true under clipping. person_h comes from the unrounded span
-    for that reason, so multiplying the two displayed figures reproduces it to
-    within the rounding of `hours`, not exactly.
-
-    Keyed by (county, ref), not ref: 15 reference numbers span two counties, and
-    event_pop caps each half against its own county's population, so they are
-    genuinely separate accruals and two rows is the honest rendering.
+    Keyed by (county, ref), not ref: 15 reference numbers span two counties and
+    each half is its own notice in its own county's count.
     """
-    lo, hi = month_bounds(ym)
-    eff_hi, eff_lo = min(hi, now), max(lo, COLLECTION_START)
-
+    ranked = sorted(
+        longest, key=lambda e: (-e[0], event_meta[e[1:]]["first_pub"], e[1:])
+    )[:shown]
     rows = []
-    for county, region in counties.items():
-        events, epop = region.events()["outage"], region.event_pop(COUNTY_POP[county])
-        for ref, iv in events.items():
-            secs = union_seconds(iv, eff_lo, eff_hi)
-            people = epop["outage"].get(ref, 0)
-            if secs <= 0 or people <= 0:
-                continue
-            meta = event_meta[(county, ref)]
-            row = {
-                "ref": ref,
-                "county": county,
-                "title": meta["title"],
-                "person_h": round(secs * people / 3600),
-                "hours": round(secs / 3600, 1),
-                "people": people,
-                "start": meta["start"],
-                "pins": meta["pins"],
-                "confirmed": meta["confirmed"],
-                "scheduled": meta["scheduled"],
-            }
-            if towns is not None and (county, ref) in area_of:
-                # the same name the county's open list uses — one event, one area,
-                # decided once in build_site over the event's whole footprint
-                row["area"] = towns.label(area_of[(county, ref)])
-            rows.append(row)
-
-    rows.sort(key=lambda r: r["person_h"], reverse=True)
-    return rows[:shown]
+    for hours, county, ref in ranked:
+        meta = event_meta[(county, ref)]
+        row = {
+            "ref": ref,
+            "county": county,
+            "title": meta["title"],
+            "hours": round(hours, 1),
+            "start": meta["start"],
+            "pins": meta["pins"],
+            "confirmed": meta["confirmed"],
+            "scheduled": meta["scheduled"],
+        }
+        # the reported span can run past the cap; the page says "at least"
+        if hours >= CAP_DAYS * 24:
+            row["capped"] = 1
+        if towns is not None and (county, ref) in area_of:
+            # the same name the county's open list uses: one event, one area
+            row["area"] = towns.label(area_of[(county, ref)])
+        rows.append(row)
+    return rows
 
 
-def town_months(region, pop, months, now, placed=True):
-    """Per-month figures for one area, only for the months it has activity in.
+def town_months(region, months, now):
+    """Per-month counts for one area, only for the months it has activity in.
 
     Every field that is zero, absent or implied is left out, and the reader fills
     the gaps. These are the bulk of the page — a few thousand area-months against
     26 counties — and most of them are one disruption and three zeroes, so
     spelling out the zeroes cost a quarter of the whole payload.
-
-    An unplaced pin has no population to divide by, its footprint being in
-    another county, so it reports counts and nothing derived from a denominator.
     """
     resolved = resolved_by_month(region)
     out = {}
     for ym in months:
-        stats = region_month(region, pop, ym, now)
-        counts = {sev: n for sev, n in stats["events"].items() if n}
+        counts = {sev: n for sev, n in region_month(region, ym, now)["events"].items() if n}
         if not counts:
             continue
         month = {"events": counts}
-        if placed:
-            # two decimals is what the page renders; the third was never read,
-            # and a clear month's 100.0 is implied like every other zero here
-            availability = round(stats["availability"], 2)
-            if availability < 100:
-                month["availability"] = availability
-            if stats["person_h"]:
-                month["person_h"] = stats["person_h"]
         if resolved.get(ym):
             month["resolved_n"] = resolved[ym]["n"]
         out[ym] = month
@@ -1441,18 +1185,14 @@ def town_months(region, pop, months, now, placed=True):
 def county_town_data(regions, towns, county, months, now):
     """The drill-down for one county: every named area with a case that month.
 
-    No letter grade. The A-F thresholds are calibrated to the distribution of
-    county-months, and an area's population is small enough that one burst main
-    covering the whole of it reads F — which would be true arithmetic and a
-    false comparison. Availability is still published, against the area's own
-    population, because that is the figure the drill-down exists to show.
+    No letter grade: a letter needs a length of main, which Uisce Éireann
+    publishes by supply zone, not by town.
     """
     if towns is None:
         return {}
     out = {}
     for code, region in regions.items():
-        placed = code != UNPLACED
-        by_month = town_months(region, towns.pop[code] or 1, months, now, placed)
+        by_month = town_months(region, months, now)
         if not by_month:
             continue
         # no open-case list here: each one is already in the county's, tagged with
@@ -1464,7 +1204,7 @@ def county_town_data(regions, towns, county, months, now):
         # rather than left to work it out.
         if area_has_page(code):
             area["slug"] = statusui.slug(area["name"])
-        if placed:
+        if code != UNPLACED:
             area["pop"] = towns.pop[code]
         else:
             area["unplaced"] = True
@@ -1472,7 +1212,7 @@ def county_town_data(regions, towns, county, months, now):
     return out
 
 
-def event_record(county, ref, meta, intervals, sas, now):
+def event_record(ref, meta, intervals, now):
     """One published event as the per-area history renders it.
 
     Every field that is zero, absent or implied is left out, the same discipline
@@ -1482,12 +1222,12 @@ def event_record(county, ref, meta, intervals, sas, now):
     Three of the omissions are not thrift but honesty:
 
     `hours` is dropped entirely for an event that is closed and never reported an
-    end. Those carry an imputed span or resolve_case's token one-second
-    footprint, so publishing the number would print an estimate, or "0.0h" for
-    801 events, as a measurement. The page says no end was ever reported instead.
+    end. Those carry resolve_case's token one-second footprint, so publishing the
+    number would print "0.0h" for 801 events as a measurement. The page says no
+    end was ever reported instead.
 
     `hours` is what has elapsed by `now` on the pins that measured something,
-    never a SpanTable estimate nor time still ahead. An open event with nothing
+    never a token nor time still ahead. An open event with nothing
     elapsed yet carries `ahead` instead, which the pages read as "not started".
 
     `span_h` appears only when a recurring window makes it differ from `hours`.
@@ -1519,21 +1259,13 @@ def event_record(county, ref, meta, intervals, sas, now):
         if span - hours > 0.1:
             record["span_h"] = round(span, 1)
     if iv:
-        # a negative-span case is charged backwards from its reported end, so
-        # its first charged day can precede its publication
+        # a repeating window can first open after the notice went up
         first = iv[0][0].strftime("%Y-%m-%d")
         if first != record["start"]:
             record["from"] = first
         end = (iv[-1][1] - timedelta(seconds=1)).strftime("%Y-%m-%d")
         if end != record["start"]:
             record["end"] = end
-    # the whole event's footprint across every class of pin, capped as
-    # Region.event_pop caps it. This describes the event, as `hours` does; the
-    # national top ten prints the outage pins' footprint only, so the two
-    # differ for the few events whose pins disagree on class.
-    people = min(sum(sas.values()), COUNTY_POP[county])
-    if people:
-        record["people"] = people
     for field in ("confirmed", "scheduled"):
         if meta[field]:
             record[field] = meta[field]
@@ -1551,7 +1283,7 @@ def event_record(county, ref, meta, intervals, sas, now):
     return record
 
 
-def area_history(event_meta, event_iv, event_sas, event_codes, towns, now):
+def area_history(event_meta, event_iv, event_codes, towns, now):
     """{county: {code: {"name": ..., "events": [...]}}}, newest event first.
 
     A regrouping of what build_site already holds rather than new geography.
@@ -1559,8 +1291,8 @@ def area_history(event_meta, event_iv, event_sas, event_codes, towns, now):
     An event is listed under **every** area its pins were homed to, not only the
     one area_of names it after. The two answer different questions and the county
     breakdown already takes this position: it homes each pin individually, so a
-    burst published as pins in Naas and in Sallins puts counts and person-hours
-    on both rows. Listing it only under the area holding most of its people left
+    burst published as pins in Naas and in Sallins puts a count on both rows.
+    Listing it only under the area it is named after left
     220 of the county tables' 1,830 areas with no history at all, and their pages
     said "no notice has ever been published here" directly underneath the row
     that had just counted one. 764 events are multi-area; the duplication costs
@@ -1575,7 +1307,7 @@ def area_history(event_meta, event_iv, event_sas, event_codes, towns, now):
     not what it is called.
 
     Keyed (county, ref) throughout, so the 16 reference numbers published in two
-    counties appear in both, each with its own footprint and its own county cap.
+    counties appear in both, each its own notice in its own county's count.
     That is the same "two rows is the honest rendering" decision top_events
     documents, not a duplicate.
 
@@ -1588,11 +1320,9 @@ def area_history(event_meta, event_iv, event_sas, event_codes, towns, now):
     for key, codes in event_codes.items():
         county, ref = key
         # built once and shared by reference across the areas it is listed in:
-        # event_record merges intervals and sums a footprint, and the record is
+        # event_record merges intervals, and the record is
         # the same event whichever page it appears on
-        record = event_record(
-            county, ref, event_meta[key], event_iv[key], event_sas[key], now
-        )
+        record = event_record(ref, event_meta[key], event_iv[key], now)
         if len(codes) > 1:
             record["areas"] = len(codes)
         for code in codes:
@@ -2096,7 +1826,7 @@ def recurrence_report(cases, pin_tags=None):
 
     Printed on every build, matching backfill_work_category's unmatched-title
     report: a prompt that starts hallucinating recurrence would otherwise show up
-    only as person-hours quietly falling, and the expanded count moving together
+    only as hours quietly falling, and the expanded count moving together
     with the hour delta is what makes that visible within one build.
 
     `pin_tags` maps (county, ref) to the outcome of *every* pin, including the
@@ -2170,7 +1900,7 @@ def recurrence_report(cases, pin_tags=None):
     return lines
 
 
-def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
+def build_site(rows, now, towns=None, data_as_of=None, mains_km=None):
     # data_as_of is when the feed was last read; the site can be rebuilt without
     # a data build, so the freshness banner must not follow the build clock
     data_as_of = data_as_of or now
@@ -2181,9 +1911,9 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
 
     counties = defaultdict(Region)
     county_towns = defaultdict(lambda: defaultdict(Region))
-    # (county, ref) -> the event's whole footprint and the areas its pins were
-    # homed to, so the event can be named once, after the loop, from all of it
-    event_sas = defaultdict(dict)
+    # (county, ref) -> (publication, id, area) per pin, so the event can be named
+    # once, after the loop, from all of them
+    event_pins = defaultdict(list)
     event_codes = defaultdict(set)
     # (county, ref) -> every disruption interval the event's pins contributed,
     # unmerged. area_history merges them; nothing else reads this.
@@ -2206,17 +1936,16 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
     pin_tags = defaultdict(list)
     shared = event_windows(rows)
     recurring = recurring_events(rows, shared)
-    spans = SpanTable(rows)
 
     for r in rows:
         key = (r["county"], case_ref(r))
-        case = resolve_case(r, sa_index, lifts, now, shared.get(key), key in recurring, spans)
+        case = resolve_case(r, lifts, now, shared.get(key), key in recurring)
         if case is None:
             continue
         pin_tags[(case.county, case.ref)].append(case.rec)
         if case.rec != "none":
             recurrence.append(case)
-        counties[case.county].add(case, case.sas)
+        counties[case.county].add(case)
         meta = event_meta.setdefault(
             (case.county, case.ref),
             # first pin wins, matching how the event's open entry is recorded
@@ -2251,25 +1980,20 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
             # takes it, so the history and the closed list agree on the day
             meta["closed"] = case.closed
         event_iv[(case.county, case.ref)].extend(case.intervals)
-        if not case.imputed:
+        if not case.no_end:
             meta["measured"].extend(case.intervals)
         if towns is not None:
-            # the breakdown still homes each pin individually, with `within`
-            # clipping its footprint, so an area only accrues its own people
-            code = towns.dominant(case.sas, case.county)
-            county_towns[case.county][code].add(case, towns.within(case.sas, code))
-            event_sas[(case.county, case.ref)].update(case.sas)
+            # the breakdown homes each pin individually; the event is named once
+            code = towns.place(r["full_lat"], r["full_lon"], case.county)
+            county_towns[case.county][code].add(case)
+            event_pins[(case.county, case.ref)].append((case.start, r["id"], code))
             event_codes[(case.county, case.ref)].add(code)
 
-    # One name per event, decided on its whole footprint rather than on whichever
-    # pin the feed happened to publish first. A 6-pin burst spread across two
-    # settlements was being labelled from one pin and ranked from another, so the
-    # same event could read "Allenwood" in the open list and "Prosperous" in the
-    # national top ten. Restricted to codes the pins were homed to — see dominant.
-    area_of = {
-        key: towns.dominant(sas, key[0], event_codes[key])
-        for key, sas in event_sas.items()
-    }
+    # One name per event, decided on all its pins rather than on whichever the
+    # feed happened to publish first. A 6-pin burst spread across two settlements
+    # was being labelled from one pin and ranked from another, so the same event
+    # could read "Allenwood" in the open list and "Prosperous" in the top ten.
+    area_of = {key: event_area(pins) for key, pins in event_pins.items()}
 
     site = {
         "generated": now.strftime("%Y-%m-%d %H:%M UTC"),
@@ -2286,7 +2010,9 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
     # scheduled. Only the observed list feeds the published headline.
     national_observed = defaultdict(list)
     national_scheduled = defaultdict(list)
-    national_imputed = defaultdict(list)
+    national_no_end = Counter()
+    # ym -> (hours, county, ref) of every event the observed median reads
+    national_longest = defaultdict(list)
 
     # county -> first publication of each event whose worst pin is an outage
     outage_pubs = defaultdict(list)
@@ -2310,10 +2036,8 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
     for county in sorted(counties):
         region = counties[county]
         merged, events = region.merged(), region.events()
-        cpop = COUNTY_POP[county]
-        epop = region.event_pop(cpop)
         cdata = {
-            "pop": cpop,
+            "pop": COUNTY_POP[county],
             "mains_km": round(mains_km[county]),
             "last_30": count_figures(
                 count_notices(outage_pubs[county], rolling_lo, seen, seen), mains_km[county],
@@ -2348,8 +2072,10 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
             days_elapsed = clear_days = 0
             for d in range(ndays):
                 dlo, dhi = lo + timedelta(days=d), lo + timedelta(days=d + 1)
+                # one element, not a bare string: a cached page from before
+                # 2026-10-06 destructures [severity, share] and still reads it
                 if dhi <= COLLECTION_START:
-                    days.append(["nd", 0])
+                    days.append(["nd"])
                     continue
                 # the same predicate dayCells applies client-side, and both
                 # sides read UTC dates, so they agree on the boundary
@@ -2358,72 +2084,59 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
                 worst = ""
                 for sev in SEV_ORDER:
                     # Quality never colours a bar: drinking-water safety is the
-                    # healthmark's job, availability is the bar's — and skipping
+                    # healthmark's job, supply is the bar's - and skipping
                     # it here lets a quality+restriction day fall through to the
                     # restriction, which no client-side remap could recover.
                     if sev == "quality":
                         continue
-                    if union_seconds(merged[sev], dlo, dhi) > 0:
+                    if overlaps(merged[sev], dlo, dhi):
                         worst = sev
                         break
-                pct = 0.0
-                if worst:
-                    affected = sum(
-                        epop[worst].get(ref, 0)
-                        for ref, iv in events[worst].items()
-                        if union_seconds(iv, dlo, dhi) > 0
-                    )
-                    pct = min(100.0, 100.0 * affected / cpop)
                 clear_days += elapsed and not worst
-                days.append([worst, round(pct, 2)])
+                days.append([worst])
 
-            stats = region_month(region, cpop, ym, now)
-            county_grade = grade(stats.pop("avail_raw"))
+            stats = region_month(region, ym, now)
 
             notices = count_notices(outage_pubs[county], lo, hi, seen)
             national_notices[ym] += notices
 
             # Notice-to-end span of disruption events that started this month.
-            # Three tiers, never pooled into the headline: an observed completion
+            # Two tiers, never pooled into the headline: an observed completion
             # says how long works took; a scheduled end only says what was
-            # announced; an imputed span says nothing the notice said at all and
-            # is reported as coverage, so the exclusion is visible arithmetic
-            # rather than a silence. Events still open with no signal carry
-            # neither flag and stay out of all three.
-            observed_h, scheduled_h, imputed_h = [], [], []
+            # announced. An event that never reported an end is counted, so the
+            # exclusion is visible rather than a silence. Events still open with
+            # no signal stay out of every figure here.
+            observed_h, scheduled_h, no_end_n = [], [], 0
             for ref, iv in events["outage"].items():
                 # an empty interval list would not raise here, it would quietly
                 # contribute a 0.0 and drag the published median toward zero
                 if not iv:
                     continue
-                # publication, not iv[0][0]: a recurring event's first *window*
-                # can open in the month after the notice went up, and an imputed
-                # event's interval can close before it — the median is over
-                # events that started this month either way
-                if not (region.has_end["outage"][ref] or region.imputed["outage"][ref]):
-                    continue
+                # publication, not iv[0][0]: the median is over events that
+                # started this month, wherever their intervals fall
                 if not lo <= event_meta[(county, ref)]["first_pub"] < hi:
+                    continue
+                if not region.has_end["outage"][ref]:
+                    no_end_n += region.no_end["outage"][ref]
                     continue
                 # covered hours, not elapsed span — for a recurring event these
                 # differ, and what the works took is the honest reading
                 hours = sum((e - s).total_seconds() for s, e in iv) / 3600
-                if not region.has_end["outage"][ref]:
-                    imputed_h.append(hours)
-                elif region.observed_end["outage"][ref]:
+                if region.observed_end["outage"][ref]:
                     observed_h.append(hours)
+                    national_longest[ym].append((hours, county, ref))
                 else:
                     scheduled_h.append(hours)
             national_observed[ym].extend(observed_h)
             national_scheduled[ym].extend(scheduled_h)
-            national_imputed[ym].extend(imputed_h)
+            national_no_end[ym] += no_end_n
 
             cdata["months"][ym] = {
                 "days": days,
                 "clear_days": clear_days,
                 "days_elapsed": days_elapsed,
-                "grade": county_grade,
                 **stats,
-                **span_stats(observed_h, scheduled_h, imputed_h),
+                **span_stats(observed_h, scheduled_h, no_end_n),
                 **count_figures(notices, mains_km[county], whole=seen_whole(lo, hi, seen)),
             }
         site["counties"][county] = cdata
@@ -2431,25 +2144,24 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
     for ym in months:
         lo, hi = month_bounds(ym)
         site["national"][ym] = {
-            **span_stats(national_observed[ym], national_scheduled[ym], national_imputed[ym]),
+            **span_stats(national_observed[ym], national_scheduled[ym], national_no_end[ym]),
             **count_figures(
                 national_notices[ym], national_km, graded=False, whole=seen_whole(lo, hi, seen)
             ),
         }
 
-    # Complete months only. The in-progress month reshuffles between builds as
-    # open events accrue toward the 14-day cap and then resolve, so a "largest
-    # disruptions of this month" list would contradict itself twice a day.
+    # Complete months only. The in-progress month gains completions as notices
+    # report them, so a "longest of this month" list would reshuffle twice a day.
     current = now.strftime("%Y-%m")
     site["top"] = {
-        ym: top_events(counties, event_meta, towns, area_of, ym, now)
+        ym: top_events(national_longest[ym], event_meta, towns, area_of)
         for ym in months
         if ym < current
     }
     # Not part of the payload: write_site splits it into per-county shards the
     # page loads on demand. All of it together is twice the size of data.js.
     site["history"] = (
-        area_history(event_meta, event_iv, event_sas, event_codes, towns, now) if towns else {}
+        area_history(event_meta, event_iv, event_codes, towns, now) if towns else {}
     )
     # popped by write_site into the county pages; never part of the payload
     site["notice_text"] = dict(notice_text)
@@ -2588,6 +2300,7 @@ def first_render_payload(site):
     # named, not "all but": a key added to the payload must not ride into the HTML
     keys = ("generated", "generated_iso", "data_as_of_iso", "months", "last_30", "mains_km")
     first = {k: site[k] for k in keys if k in site}
+    first["top_months"] = list(site["top"])
     first["national"] = {m: v for m, v in site["national"].items() if m in newest}
     first["counties"] = {
         name: {
@@ -2849,10 +2562,9 @@ def write_site(site, site_dir, towns=None):
 
 
 def run():
-    sa_index = SmallAreaIndex.from_csv(SA_POP_PATH)
-    towns = TownLookup.from_csv(SA_TOWNS_PATH, sa_index.pop)
+    towns = TownLookup.from_csv(SA_TOWNS_PATH)
     rows, data_as_of = read_cases()
-    site = build_site(rows, sa_index, datetime.now(timezone.utc), towns, data_as_of)
+    site = build_site(rows, datetime.now(timezone.utc), towns, data_as_of)
 
     # a diagnostic for the build log, not for the page
     for line in site.pop("recurrence_report"):

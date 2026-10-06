@@ -10,17 +10,17 @@ class TestPlain:
 
 
 class TestScore:
-    def _file(self, tmp_path, rows):
+    def _file(self, tmp_path, rows, fieldnames=FIELDNAMES):
         path = tmp_path / "recurrence_review_2026-08-02.csv"
         with open(path, "w", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=FIELDNAMES)
+            w = csv.DictWriter(f, fieldnames=fieldnames)
             w.writeheader()
             for r in rows:
-                w.writerow({k: r.get(k, "") for k in FIELDNAMES})
+                w.writerow({k: r.get(k, "") for k in fieldnames})
         return path
 
     def _row(self, **kw):
-        base = {"case_id": 1, "reference_num": "CAR1", "county": "Carlow", "person_h": 1000,
+        base = {"case_id": 1, "reference_num": "CAR1", "county": "Carlow", "hours": 1000,
                 "effect": "downgraded to restriction", "human_verdict": ""}
         return base | kw
 
@@ -31,8 +31,8 @@ class TestScore:
 
     def test_counts_verdicts_and_names_the_calls_to_fix(self, tmp_path, capsys):
         path = self._file(tmp_path, [
-            self._row(case_id=1, reference_num="CAR1", human_verdict="correct", person_h=1000),
-            self._row(case_id=2, reference_num="CAR2", human_verdict="wrong", person_h=500,
+            self._row(case_id=1, reference_num="CAR1", human_verdict="correct", hours=1000),
+            self._row(case_id=2, reference_num="CAR2", human_verdict="wrong", hours=500,
                       human_notes="one continuous period, not a repeat"),
         ])
         score(["--csv", str(path)])
@@ -43,13 +43,22 @@ class TestScore:
 
     def test_reports_what_is_still_unreviewed_and_what_it_is_worth(self, tmp_path, capsys):
         path = self._file(tmp_path, [
-            self._row(case_id=1, human_verdict="correct", person_h=1000),
-            self._row(case_id=2, person_h=750),
+            self._row(case_id=1, human_verdict="correct", hours=1000),
+            self._row(case_id=2, hours=750),
         ])
         score(["--csv", str(path)])
         out = capsys.readouterr().out
         assert "1 of 2 row(s) reviewed" in out
-        assert "1 row(s) left, 750 person-hours unreviewed" in out
+        assert "1 row(s) left, 750 hours unreviewed" in out
+
+    def test_a_review_written_before_2026_10_06_is_read_in_person_hours(self, tmp_path, capsys):
+        old = [k if k != "hours" else "person_h" for k in FIELDNAMES]
+        path = self._file(tmp_path, [
+            {"case_id": 1, "human_verdict": "correct", "person_h": 1000},
+            {"case_id": 2, "person_h": 750},
+        ], old)
+        score(["--csv", str(path)])
+        assert "1 row(s) left, 750 person-hours unreviewed" in capsys.readouterr().out
 
 
 class TestUniqueReviewPath:

@@ -1,9 +1,12 @@
+from uisce import towns
 from uisce.towns import (
     area_rows,
     around_label,
     check_populations,
     county_name,
     elsewhere_label,
+    fetch_small_areas,
+    geography_rows,
     resolve_settlements,
     split_large_settlements,
 )
@@ -198,3 +201,33 @@ class TestLabels:
 
     def test_around_names_the_countryside_for_its_town(self):
         assert around_label("Celbridge") == "Around Celbridge"
+
+
+class TestGeographyRows:
+    def test_each_row_carries_its_centroid_and_population(self):
+        small_areas = [_sa("a") | {"centroid": (-6.9, 52.8)}]
+        rows = geography_rows([("a", "T1", "Town", "Cork")], small_areas, {"a": 120})
+        assert rows == [("a", "T1", "Town", "Cork", -6.9, 52.8, 120)]
+
+    def test_a_small_area_with_no_centroid_or_population_is_left_out(self):
+        small_areas = [_sa("a") | {"centroid": None}, _sa("b") | {"centroid": (-6.9, 52.8)}]
+        rows = [("a", "T1", "Town", "Cork"), ("b", "T1", "Town", "Cork")]
+        assert geography_rows(rows, small_areas, {"a": 120}) == []
+
+
+class TestFetchSmallAreas:
+    def test_the_centroid_rides_on_the_attributes(self, monkeypatch):
+        page = {"features": [
+            {"attributes": _sa("a"), "centroid": {"x": -6.1234567, "y": 53.7654321}},
+            {"attributes": _sa("b")},
+        ]}
+
+        class Session:
+            def get(self, url, params, timeout):
+                assert params["returnCentroid"] == "true" and params["outSR"] == "4326"
+                return type("R", (), {"raise_for_status": lambda self: None,
+                                      "json": lambda self: page})()
+
+        monkeypatch.setattr(towns, "PAGE_SIZE", 10)
+        got = list(fetch_small_areas(Session()))
+        assert [a["centroid"] for a in got] == [(-6.123457, 53.765432), None]

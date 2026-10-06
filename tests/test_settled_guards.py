@@ -12,7 +12,7 @@ import statusui
 from conftest import make_cases_table
 from conftest import site_case as _case
 from test_area_pages import _write
-from test_site import APP, NOW, SA_INDEX, TOWNS
+from test_site import APP, NOW, TOWNS
 
 from uisce import build, pipeline, site
 from uisce.site import COUNT_CUTS, classify, count_grade, knocks_grade, resolve_case
@@ -66,7 +66,7 @@ class TestFirstInferenceStartIsPinned:
         row = _case(start_date=self.BACKWARD_RESTAMP, end_input_start_date=self.FIRST,
                     notice_to_end_seconds=24 * 3600.0, end_local_date="2026-06-02",
                     end_local_time="10:00")
-        case = resolve_case(row, SA_INDEX, {}, NOW)
+        case = resolve_case(row, {}, NOW)
         assert case.start == site.parse_dt(self.FIRST)
         assert case.intervals[0][0] == site.parse_dt(self.FIRST)
 
@@ -129,7 +129,6 @@ class TestInitialBudgetWarnsNeverFails:
         assert site.INITIAL_BUDGET == 512 * 1024
 
     def _run(self, tmp_path, monkeypatch, initial):
-        monkeypatch.setattr(site.SmallAreaIndex, "from_csv", lambda *a: SA_INDEX)
         monkeypatch.setattr(site.TownLookup, "from_csv", lambda *a: TOWNS)
         monkeypatch.setattr(site, "read_cases", lambda: ([_case()], NOW))
         monkeypatch.setattr(site, "SITE_DIR", tmp_path)

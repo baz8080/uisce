@@ -1,7 +1,8 @@
 """Map every Census 2022 Small Area to the named area a notice pin there belongs to.
 
-Writes data/sa_towns.csv (guid, town_code, town_name, town_county) — the lookup
-uisce-site uses to break a county down into named areas. Three kinds of area, in
+Writes data/sa_towns.csv (guid, town_code, town_name, town_county, lon, lat, pop) -
+the lookup uisce-site uses to place a pin in a named area (by the nearest Small
+Area centroid) and to print that area's Census population. Three kinds of area, in
 priority order: a Census settlement, a Local Electoral Area for one too big to
 read as one row (see split_large_settlements), or "Around <Electoral Division>"
 for Small Areas in no settlement at all.
@@ -16,8 +17,11 @@ import csv
 import io
 from collections import Counter, defaultdict
 
-from uisce.config import SA_POP_PATH, SA_TOWNS_PATH, make_session
+from uisce.config import SA_TOWNS_PATH, make_session
 
+SAPS_CSV_URL = (
+    "https://www.cso.ie/en/media/csoie/census/census2022/SAPS_2022_Small_Area_UR_171024.csv"
+)
 BUA_CSV_URL = "https://www.cso.ie/en/media/csoie/census/census2022/SAPS_2022_BUA_270923.csv"
 SMALL_AREAS_URL = (
     "https://services-eu1.arcgis.com/BuS9rtTsYEV5C0xh/arcgis/rest/services/"
@@ -29,6 +33,7 @@ URBAN_AREAS_URL = (
 )
 SA_FIELDS = "SA_GUID_2022,SA_URBAN_AREA_NAME,CSO_LEA,ED_ENGLISH,COUNTY_ENGLISH"
 PAGE_SIZE = 2000
+CENSUS_2022_STATE_POP = 5_149_139
 
 # A settlement this large is an agglomeration rather than a town and reads
 # uselessly as one row: "Dublin city and suburbs" is a single Census settlement of
@@ -78,6 +83,14 @@ def around_label(ed_name):
     return f"Around {ed_name}"
 
 
+def fetch_saps_populations(session):
+    """Small Area GUID -> total population, from the SAPS small-area CSV."""
+    response = session.get(SAPS_CSV_URL, timeout=120)
+    response.raise_for_status()
+    reader = csv.DictReader(io.StringIO(response.content.decode("utf-8-sig")))
+    return {row["GUID"]: int(row["T1_1AGETT"]) for row in reader}
+
+
 def fetch_bua_populations(session):
     """Settlement code -> Census 2022 population, from the SAPS Built-Up Areas CSV.
 
@@ -117,7 +130,8 @@ def fetch_settlements(session):
 
 
 def fetch_small_areas(session):
-    """Yield one attribute dict per Census 2022 Small Area, paginated."""
+    """Yield one attribute dict per Census 2022 Small Area, paginated, with its
+    centroid as `centroid` (lon, lat), or None where the layer gives none."""
     offset = 0
     while True:
         response = session.get(
@@ -126,6 +140,8 @@ def fetch_small_areas(session):
                 "where": "1=1",
                 "outFields": SA_FIELDS,
                 "returnGeometry": "false",
+                "returnCentroid": "true",
+                "outSR": "4326",
                 "resultOffset": offset,
                 "resultRecordCount": PAGE_SIZE,
                 "f": "json",
@@ -136,7 +152,10 @@ def fetch_small_areas(session):
         data = response.json()
         features = data.get("features", [])
         for feature in features:
-            yield feature["attributes"]
+            centroid = feature.get("centroid")
+            yield feature["attributes"] | {
+                "centroid": (round(centroid["x"], 6), round(centroid["y"], 6)) if centroid else None
+            }
         offset += len(features)
         if not features or (not data.get("exceededTransferLimit") and len(features) < PAGE_SIZE):
             return
@@ -248,6 +267,17 @@ def area_rows(small_areas, assignment, names, counties):
     return rows
 
 
+def geography_rows(rows, small_areas, sa_pop):
+    """area_rows with each Small Area's centroid and population, sorted; one with
+    neither cannot place a pin or count toward an area, so it is left out."""
+    centroid = {a["SA_GUID_2022"]: a["centroid"] for a in small_areas}
+    return sorted(
+        (*row, *centroid[row[0]], sa_pop[row[0]])
+        for row in rows
+        if centroid.get(row[0]) and row[0] in sa_pop
+    )
+
+
 def check_populations(assignment, sa_pop, census_pop, codes):
     """Every settlement's Small Areas must sum to its published Census population.
 
@@ -277,11 +307,13 @@ def run():
 
     small_areas = list(fetch_small_areas(session))
     print(f"Small Areas: {len(small_areas)}")
-    with open(SA_POP_PATH, newline="") as f:
-        sa_pop = {row["guid"]: int(row["pop"]) for row in csv.DictReader(f)}
+    sa_pop = fetch_saps_populations(session)
     missing = [a for a in small_areas if a["SA_GUID_2022"] not in sa_pop]
     if missing:
-        print(f"WARNING: {len(missing)} Small Areas are absent from {SA_POP_PATH}")
+        print(f"WARNING: {len(missing)} Small Areas have no SAPS population")
+    total = sum(sa_pop.get(a["SA_GUID_2022"], 0) for a in small_areas)
+    if total != CENSUS_2022_STATE_POP:
+        print(f"WARNING: populations sum to {total:,}, not {CENSUS_2022_STATE_POP:,}")
 
     resolved = resolve_settlements(small_areas, settlements)
     urban = sum(sa_pop.get(guid, 0) for guid in resolved)
@@ -316,8 +348,11 @@ def run():
     rural = sum(1 for _, code, _, _ in rows if code.startswith("ed:"))
     print(f"Named areas: {len(areas)} ({rural} Small Areas grouped by Electoral Division)")
 
+    written = geography_rows(rows, small_areas, sa_pop)
+    if len(written) < len(rows):
+        print(f"WARNING: {len(rows) - len(written)} Small Areas lack a centroid or population")
     with open(SA_TOWNS_PATH, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["guid", "town_code", "town_name", "town_county"])
-        writer.writerows(sorted(rows))
+        writer.writerow(["guid", "town_code", "town_name", "town_county", "lon", "lat", "pop"])
+        writer.writerows(written)
     print(f"Wrote {SA_TOWNS_PATH}")

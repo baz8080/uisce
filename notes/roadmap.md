@@ -27,7 +27,7 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
    it happened instead of a month later. A candidate, not agreed.
 4. **The negative-span family reads "no end reported" in the histories.** 302 cases on the
    2026-09-05 release carry a completion update whose end precedes the re-stamped
-   `start_date`, so `build.py` nulls the span and they are charged an imputed one. Their
+   `start_date`, so `build.py` nulls the span and they carry no length. Their
    history rows and the app's end badge then say "no end reported" / "withdrawn without a
    completion update", which is false: the end was reported, the start was lost. Seven of
    them were also listed as open until the 2026-09-05 `is_open` change; now they read the
@@ -76,18 +76,6 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
   there; adjudicate that row in end-time-eval.md, never in the CSV. The same bump could say
   that an alternative supply's hours are not the works' end (239696-239698 read the tanker's
   23:59 as the end), measured on its own.
-- **An imputed pin beside measured siblings sets its event's span.** The completion median
-  sums the event's whole union, imputed intervals included, so 16 outage events on the
-  2026-10-04 release (11 filed as observed, 5 as scheduled) publish an estimate in a tier
-  that is meant to hold none: `KER00113057` reads 14.6h where its measured pins say 1.2h,
-  `WEX00118070` 14.6h against 1.9h. The history record already reads `meta["measured"]`.
-  Reading it in the median too moves Donegal October 12.0h to 3.6h, national July 12.7h to
-  12.5h, national October 6.1h to 6.0h, Kerry June 4.3h to 4.2h, Wexford August 3.7h to
-  3.6h, and four county scheduled medians by 0.1h to 1.0h. The availability side is the same
-  question: in the 10 of those events whose other pins are all observed, the 13 imputed
-  pins add 218,456 person-hours beyond the measured union. Measured 2026-10-04 while
-  guarding the year-0206 start (data-quality.md, "A start typed into the wrong
-  millennium"); not changed there because it is a different decision.
 - **Simplification, agreed 2026-10-06.** The county letters rested on the 500 m footprint
   (statuspage-methodology.md, "Density sensitivity": rank correlation 0.60 against a fixed
   headcount, 91 of 156 letters move). The owner chose to count outage notices per 100 km of
@@ -111,10 +99,6 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
   listed as open because a schedule is a plan; a labelled sample showing announced ends are
   met reliably would let them close for display too.
 
-- **The E cut at 98.7%**, fitted to a 130-row archive: re-measure against the latest release
-  DB as months worse than 98.459% arrive (statuspage-methodology.md).
-- **Overlap double-counting**, 2.0% of national outage person-hours on 2026-08-18:
-  `uv run uisce-eval-overlap` (statuspage-methodology.md, "Known limitations").
 - **Boil-notice pairing**, only if the feed starts publishing the issue and the lift for the
   same schemes (boil-notices.md). Do-not-consume: no case in the release carries either
   `consumption_notice_*` category since the purge, so that pairing runs in tests alone; reopen
