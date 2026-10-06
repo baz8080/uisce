@@ -12,6 +12,7 @@ from uisce.config import BASE_URL
 from uisce.pipeline import SCHEMA_VERSION
 from uisce.site import (
     CAP_DAYS,
+    COLLECTION_START,
     COUNTY_POP,
     MIN_CATEGORY_N,
     SITE_HTML,
@@ -1285,7 +1286,7 @@ def _per_100km(site, county):
 
 
 class TestNoticesPer100km:
-    """The count the methodology note measured on the 2026-10-04 release: 648
+    """The count the methodology note measured on release 2026-10-06-2104: 648
     Kerry and 26 Carlow outage notices over May to September, 23.8 and 4.4 per
     100 km of main. The rows here are that many notices, one event each."""
 
@@ -1385,6 +1386,20 @@ class TestNoticesPer100km:
         assert carlow["months"]["2026-11"]["count_grade"] is None
         assert carlow["last_30"]["count_grade"] == "A"
 
+    def test_a_window_seen_only_in_part_gets_no_letter(self):
+        # the fixture's one May notice is in both windows; the one before
+        # collection began is inside the part window and must not be counted
+        early = _case(county="Carlow", reference_num="CAR00000905",
+                      start_date="2026-04-19T12:00:00+00:00", end_local_date="2026-04-19")
+        rows = _notices("Carlow", "CAR", self.CARLOW) + [dict(early, id=999)]
+        for now, lettered in ((COLLECTION_START + timedelta(days=29), False),
+                              (COLLECTION_START + timedelta(days=30), True)):
+            site = build_site(rows, SA_INDEX, now, TOWNS)
+            last_30 = site["counties"]["Carlow"]["last_30"]
+            assert last_30["outage_notices"] == 1
+            assert (last_30["count_grade"] is not None) is lettered
+            assert (site["last_30"]["per_100km"] is not None) is lettered
+
     def test_a_month_is_lettered_from_the_instant_it_ends(self):
         rows = _notices("Carlow", "CAR", self.CARLOW)
         end = datetime(2026, 10, 1, tzinfo=timezone.utc)
@@ -1409,7 +1424,7 @@ class TestNoticesPer100km:
             5.0, "F")
 
     def test_a_quiet_month_is_an_a(self):
-        assert count_figures(0, MAINS_KM["Carlow"]) == {
+        assert count_figures(0, MAINS_KM["Carlow"], whole=True) == {
             "outage_notices": 0, "per_100km": 0.0, "count_grade": "A"}
 
     def test_the_national_rate_is_over_every_county_main(self):
@@ -2508,7 +2523,7 @@ def _bare_site(county="Kildare"):
             county: {
                 "pop": COUNTY_POP[county],
                 "mains_km": round(MAINS_KM[county]),
-                "last_30": count_figures(0, MAINS_KM[county]),
+                "last_30": count_figures(0, MAINS_KM[county], whole=True),
                 "months": {},
                 "open": [],
                 "open_total": 0,
@@ -2928,9 +2943,18 @@ class TestIndexablePages:
             notice_to_end_seconds=3600.0, end_local_time="01:00",
         )])
         page = (tmp_path / "c" / "dublin.html").read_text()
-        assert "Over the last 30 days: grade <strong>A</strong>" in page
+        assert "Over the last 30 days: 1 outage notice, too soon for a rate." in page
+        assert "None" not in page
         assert "km of water main, from Uisce Éireann's supply zones" in page
         assert "availability" not in page.lower() and "person-hours" not in page.lower()
+
+    def test_after_the_first_30_days_the_county_page_states_the_letter(self, tmp_path):
+        site = build_site([_case(county="Dublin", reference_num="DUB00000001",
+                                 start_date="2026-06-01T00:00:00+00:00")],
+                          SA_INDEX, AFTER_MAY, TOWNS)
+        write_site(site, tmp_path, TOWNS)
+        page = (tmp_path / "c" / "dublin.html").read_text()
+        assert "Over the last 30 days: grade <strong>A</strong>, 1 outage notice, 0.02 per" in page
 
     def test_an_empty_county_page_still_renders_and_says_so(self, tmp_path):
         """A county with no notice is a page a search result can still land on,

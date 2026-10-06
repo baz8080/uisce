@@ -1229,28 +1229,29 @@ class Region:
         }
 
 
+def seen_span(lo, hi, seen):
+    """The part of [lo, hi) the site has seen: not before collection began, and
+    not after the feed was last read."""
+    return max(lo, COLLECTION_START), min(hi, seen)
+
+
+def seen_whole(lo, hi, seen):
+    return seen_span(lo, hi, seen) == (lo, hi)
+
+
 def count_notices(first_pubs, lo, hi, seen):
-    """How many events were first published in the part of [lo, hi) the site has
-    seen: not before collection began, and not after the feed was last read."""
-    eff_lo, eff_hi = max(lo, COLLECTION_START), min(hi, seen)
+    eff_lo, eff_hi = seen_span(lo, hi, seen)
     return sum(1 for pub in first_pubs if eff_lo <= pub < eff_hi)
 
 
-def count_figures(notices, km, graded=True):
-    """The count, its rate per 100 km of main, and the letter on the published figure."""
-    per_100km = round(100.0 * notices / km, 2)
+def count_figures(notices, km, *, whole, graded=True):
+    """The count, its rate per 100 km of main and the letter on the published
+    figure; a span the site saw only in part carries its count so far alone."""
+    per_100km = round(100.0 * notices / km, 2) if whole else None
     figures = {"outage_notices": notices, "per_100km": per_100km}
     if graded:
-        figures["count_grade"] = count_grade(per_100km)
+        figures["count_grade"] = count_grade(per_100km) if whole else None
     return figures
-
-
-def month_figures(notices, km, lo, hi, seen, graded=True):
-    """A month the site saw whole gets a rate; any other carries only its count so far."""
-    if lo >= COLLECTION_START and hi <= seen:
-        return count_figures(notices, km, graded)
-    blank = {"outage_notices": notices, "per_100km": None}
-    return blank | {"count_grade": None} if graded else blank
 
 
 def back_key(back):
@@ -1878,10 +1879,15 @@ def _county_summary_html(county, cdata, n_areas, n_events, months):
                 f'notice{"" if m["health_now"] == 1 else "s"}</span>'
             )
         n = last["outage_notices"]
+        # inside collection's first 30 days the window carries its count alone
+        rated = (
+            f'grade <strong>{last["count_grade"]}</strong>, {n} outage '
+            f'notice{"" if n == 1 else "s"}, {_rate_text(last["per_100km"])} per 100 km of main'
+            if last["count_grade"]
+            else f'{n} outage notice{"" if n == 1 else "s"}, too soon for a rate'
+        )
         parts.append(
-            f'<p class="now">Over the last 30 days: grade <strong>{last["count_grade"]}</strong>, '
-            f'{n} outage notice{"" if n == 1 else "s"}, '
-            f'{_rate_text(last["per_100km"])} per 100 km of main. This month, '
+            f'<p class="now">Over the last 30 days: {rated}. This month, '
             f'{m["clear_days"]} of {m["days_elapsed"]} elapsed days clear of '
             f'supply disruption.'
             f'{health}</p>'
@@ -2295,9 +2301,10 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
     seen = min(now, data_as_of)
     # the month in progress is graded on this window, not on its own part-month
     rolling_lo = seen - timedelta(days=30)
+    rolling_whole = seen_whole(rolling_lo, seen, seen)
     site["last_30"] = count_figures(
         sum(count_notices(pubs, rolling_lo, seen, seen) for pubs in outage_pubs.values()),
-        national_km, graded=False,
+        national_km, graded=False, whole=rolling_whole,
     )
 
     for county in sorted(counties):
@@ -2309,7 +2316,8 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
             "pop": cpop,
             "mains_km": round(mains_km[county]),
             "last_30": count_figures(
-                count_notices(outage_pubs[county], rolling_lo, seen, seen), mains_km[county]
+                count_notices(outage_pubs[county], rolling_lo, seen, seen), mains_km[county],
+                whole=rolling_whole,
             ),
             "months": {},
             "open": sorted(
@@ -2416,7 +2424,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
                 "grade": county_grade,
                 **stats,
                 **span_stats(observed_h, scheduled_h, imputed_h),
-                **month_figures(notices, mains_km[county], lo, hi, seen),
+                **count_figures(notices, mains_km[county], whole=seen_whole(lo, hi, seen)),
             }
         site["counties"][county] = cdata
 
@@ -2424,7 +2432,9 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
         lo, hi = month_bounds(ym)
         site["national"][ym] = {
             **span_stats(national_observed[ym], national_scheduled[ym], national_imputed[ym]),
-            **month_figures(national_notices[ym], national_km, lo, hi, seen, graded=False),
+            **count_figures(
+                national_notices[ym], national_km, graded=False, whole=seen_whole(lo, hi, seen)
+            ),
         }
 
     # Complete months only. The in-progress month reshuffles between builds as
