@@ -856,3 +856,13 @@ statuspage-methodology.md, "Outage notices per 100 km of main".
 
 This supersedes "The page said more than the method" above: that section's copy is gone
 with the figures it qualified.
+
+**Amended the same day, session 4.** The top ten is back at `#top` as the *ten longest*, by
+time from notice to "works complete" (the ranking and its rejected alternatives are in
+statuspage-methodology.md, "The estimate is removed"). It keeps its old layout with the
+person-hours column replaced by those hours (with a "+" past the cap), a lede naming how many
+completed notices it was drawn from and the month's median, and the end badge. `top_months`
+is back in the inline payload so the overview's link draws on first paint. The pooled-median
+sentence (`sensNote`) went with `median_pooled_h`, the county tile's "never reported an end"
+reads `no_end_n`, and `TestThePagesSayTheCount` no longer skips the inline payload: nothing in
+it carries the estimate now.

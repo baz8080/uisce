@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 import statusui
 from conftest import site_case as _case
-from test_site import NOW, SA_INDEX, TOWNS
+from test_site import NOW, TOWNS
 
 from uisce.config import BASE_URL
 from uisce.site import (
@@ -32,7 +32,7 @@ from uisce.site import (
 
 
 def _write(tmp_path, rows=None):
-    site = build_site(rows or [_case()], SA_INDEX, NOW, TOWNS)
+    site = build_site(rows or [_case()], NOW, TOWNS)
     site.pop("recurrence_report")
     return write_site(site, tmp_path, TOWNS)
 
@@ -220,7 +220,7 @@ class TestTheRestOfTheSite:
         ).read_text()
 
     def test_the_payload_carries_the_slug_exactly_when_there_is_a_page(self, tmp_path):
-        site = build_site([_case()], SA_INDEX, NOW, TOWNS)
+        site = build_site([_case()], NOW, TOWNS)
         towns = site["counties"]["Carlow"]["towns"]
         assert towns["T1"]["slug"] == "testtown"
         assert all(("slug" in t) == area_has_page(code) for code, t in towns.items())

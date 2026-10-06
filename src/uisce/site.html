@@ -44,6 +44,7 @@
   @media (max-width: 640px) {
     /* the drinking-water key stays above the list: that one is a warning, not a key */
     #overview > .healthkey { order: 3; }
+    #overview > #topLink { order: 8; }
   }
 
   .incident { display: flex; gap: 8px; padding: 5px 0; border-top: 1px dashed var(--grid); align-items: baseline; font-size: 13.5px; }
@@ -62,6 +63,32 @@
   .card > h3 .n { color: var(--muted); font-weight: 400; font-size: 12.5px; }
   .note { color: var(--muted); font-size: 12.5px; margin-bottom: 10px; }
 
+  .toplink {
+    display: inline-block; margin-bottom: 14px; font-size: 13.5px;
+    color: var(--ink-2); text-decoration: none;
+    border-bottom: 1px solid var(--border); padding-bottom: 2px;
+  }
+  .toplink:hover { color: var(--ink); }
+  /* last thing in the overview, so footer's own margin is the whole gap */
+  #topLink .toplink { margin-bottom: 0; }
+  .lede { font-size: 14.5px; line-height: 1.5; margin-bottom: 14px; }
+  .lede b { font-weight: 650; }
+  .toprow {
+    display: grid; grid-template-columns: 28px 1fr auto; gap: 12px;
+    align-items: baseline; padding: 11px 0;
+  }
+  /* not :first-of-type, which the note above the rows takes */
+  .toprow + .toprow { border-top: 1px solid var(--border); }
+  .toprow .rank { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
+  .toprow .t { font-size: 14.5px; font-weight: 600; }
+  .toprow .m { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .toprow .dur { text-align: right; font-weight: 650; font-size: 15px; white-space: nowrap; }
+  .toprow .dur span { display: block; color: var(--muted); font-weight: 400; font-size: 11.5px; }
+  @media (max-width: 480px) {
+    .toprow { grid-template-columns: 22px 1fr; }
+    .toprow .dur { grid-column: 2; text-align: left; margin-top: 4px; }
+    .toprow .dur span { display: inline; margin-left: 5px; }
+  }
   .badge {
     display: inline-block; margin-top: 5px; padding: 1px 7px; border-radius: 999px;
     font-size: 11.5px; border: 1px solid;
@@ -201,10 +228,12 @@
          should not have to scroll past six abstractions to reach it. -->
     <h3 class="natheading" id="natHeading"></h3>
     <div class="tiles" id="tiles"></div>
+    <div id="topLink"></div>
   </div>
 
   <div id="countyview" hidden></div>
   <div id="areaview" hidden></div>
+  <div id="topview" hidden></div>
   <div id="openview" hidden></div>
   <div id="waitview" hidden></div>
 
@@ -226,7 +255,7 @@
       <h4>How long a disruption lasted</h4>
       <p>The time from a notice going up to its stated &ldquo;works are now complete&rdquo; update. Incidents whose only end signal was a <em>scheduled</em> finish are counted separately - a published plan is not evidence the works ended then. End times are read from the notice text (see the <a href="https://github.com/baz8080/uisce/blob/main/notes/end-time-eval.md">accuracy evaluation</a>); no time on this page is a measurement taken in the field.</p>
 
-      <p>About one incident in twenty never reports an end at all - the count is shown beside the county&rsquo;s outage count each month. Those stay out of the figure above: checked both ways, they run <em>shorter</em> than average, so leaving them out moves the typical duration <em>up</em>, not down. <span id="sensNote"></span></p>
+      <p>About one incident in twenty never reports an end at all - the count is shown beside the county&rsquo;s outage count each month. Those stay out of the figure above: checked both ways, they run <em>shorter</em> than average, so leaving them out moves the typical duration <em>up</em>, not down.</p>
 
       <h4>When a notice closed</h4>
       <p>A notice counts as closed on the day its own update reports the works complete. One that never says so counts as closed the first time a twice-daily check finds it gone, so those dates run late and the closed-in-month lists are minimums.</p>
@@ -252,13 +281,16 @@
       <h4>Why the <span class="healthmark sm">!</span> sits beside the grade, not inside it</h4>
       <p>Whether the water is safe to drink is a different question from how often supply is cut, and a letter cannot answer both - so an active boil-water / do-not-drink / do-not-consume notice is a marker beside the grade, never folded into it.</p>
 
+      <h4>The ten longest</h4>
+      <p>The <a href="#top" onclick="go('#top'); return false;">ten longest disruptions</a> of each finished month are the outage notices first published that month whose own update reported the works complete, ranked by the time from notice to &ldquo;works complete&rdquo; - the same notices and the same hours the typical time is taken over. One notice is counted at most 14 days, and an event with a notice cut there carries a +.</p>
+
       <p>Full methodology: <a href="https://github.com/baz8080/uisce/blob/main/notes/statuspage-methodology.md">the full methodology, on GitHub</a>.</p>
     </details>
 
     <p class="simply"><b>Simply put:</b> since 6 October 2026 the letters count notices; the entries before it describe figures this site no longer publishes.</p>
     <details class="method">
       <summary>Changes to how this site measures</summary>
-      <p><b>6 October 2026.</b> Counties used to be graded on an estimate: each notice was charged to everyone living within a fixed distance of its pin, for as long as it stood, and the letter was the share of people&rsquo;s time no notice covered. The feed never says how many people a notice reaches, and the fixed distance charged a city notice about ten times the people of a rural one. The letters now count outage notices per 100&nbsp;km of water main, which the feed and Uisce Éireann&rsquo;s own records do say. The population-weighted figures are gone, and the ten largest disruptions, which were ranked on them, are withdrawn until they can be ranked on something the feed says.</p>
+      <p><b>6 October 2026.</b> Counties used to be graded on an estimate: each notice was charged to everyone living within a fixed distance of its pin, for as long as it stood, and the letter was the share of people&rsquo;s time no notice covered. The feed never says how many people a notice reaches, and the fixed distance charged a city notice about ten times the people of a rural one. The letters now count outage notices per 100&nbsp;km of water main, which the feed and Uisce Éireann&rsquo;s own records do say. The population-weighted figures are gone. Disruptions that never report an end are no longer given an estimated length: they count as notices and stay out of every time. The ten largest disruptions, ranked on the estimate, are now the ten longest, ranked on the time from notice to &ldquo;works complete&rdquo;; the day bars, once shaded by the share of a county&rsquo;s people in range, take one shade; and a notice is placed in the area of the nearest Census Small Area to its pin.</p>
       <p><b>15 August 2026.</b> Disruptions that never report an end used to count as one second long, which recorded a real outage as having disrupted nobody. They were then charged the typical length of completed works of the same kind. The national figure moved by hundredths of a point; four county-months dropped one grade.</p>
       <p><b>2 August 2026.</b> An active boil-water or do-not-drink notice used to knock the grade down one step. It no longer does - a notice affecting 200 people read the same as a county that lost supply county-wide. It is now a marker beside the grade instead.</p>
     </details>
@@ -285,7 +317,9 @@ let county = null;  // the county being drilled into, when view === "county"
 let areaCounty = null, areaCode = null;  // the area whose history is on screen
 let dayPick = null;  // the day in the county bar whose notices are listed
 let view = "overview";
-const VIEW_EL = { overview: "overview", county: "countyview", area: "areaview", open: "openview", wait: "waitview" };
+const VIEW_EL = { overview: "overview", county: "countyview", area: "areaview", top: "topview", open: "openview", wait: "waitview" };
+// months with a finished top ten; the in-progress month has none (see top_events)
+let TOP_MONTHS = D.top_months || [];
 const today = new Date().toISOString().slice(0, 10);
 
 // Four entries, one desktop line. Quality notices left the bars entirely —
@@ -402,8 +436,8 @@ function isLatest() { return curMonth === LATEST; }
 
 function isPartial() { return curMonth === today.slice(0, 7); }
 
-// one cell for the shared dayCells: [class, caption]. A cell is a [severity,
-// share] pair; the share is a population estimate and is not read.
+// one cell for the shared dayCells: [class, caption]. A cell is [severity]; a
+// data.js from before 2026-10-06 also carries a population share, not read.
 function describeCell([s], date) {
   if (date > today) return ["future", `${fmtDay(date)}: still to come`];
   if (s === "nd") return ["future", `${fmtDay(date)}: before this site started collecting`];
@@ -423,7 +457,7 @@ function incident(o, when) {
     </div>`;
 }
 
-const RENDER = { overview: renderOverview, county: renderCounty, area: renderArea, open: renderOpen };
+const RENDER = { overview: renderOverview, county: renderCounty, area: renderArea, top: renderTop, open: renderOpen };
 
 function render() {
   if (D === FIRST && window.UISCE_DATA !== FIRST) adopt(window.UISCE_DATA);
@@ -461,12 +495,6 @@ function renderOverview() {
   const rate = last30 ? D.last_30 : nat;
   document.getElementById("basis").innerHTML = basisNote(last30, rate.per_100km != null);
   const natFix = nat.median_completion_h == null ? "—" : nat.median_completion_h + "h";
-  // written from the data, not fixed in the copy: the gap varies by month
-  document.getElementById("sensNote").textContent =
-    (nat.median_pooled_h == null || nat.median_completion_h == null || !nat.imputed_n)
-      ? ""
-      : `Including them for ${monthLabelLong(curMonth)} would put the figure at `
-        + `${nat.median_pooled_h}h rather than ${nat.median_completion_h}h.`;
   document.getElementById("natHeading").textContent = `The national picture in ${monthLabelLong(curMonth)}`;
   // no outage-count or typical-time tile: the banner already carries both
   document.getElementById("tiles").innerHTML = `
@@ -474,6 +502,13 @@ function renderOverview() {
     <div class="tile"><div class="v">${D.mains_km.toLocaleString()}</div><div class="k">km of water main, from Uisce Éireann&rsquo;s supply zones</div></div>
     <div class="tile"><div class="v">${quality}</div><div class="k">water-quality notices</div></div>
     ${isLatest() ? `<a class="tile" href="#open" onclick="go('#open'); return false;"><div class="v">${openNow}</div><div class="k">notices open right now →</div></a>` : ""}`;
+
+  // the top ten is a finished-month list, so on the in-progress month this
+  // deliberately points at a different month than the one on screen
+  const topYm = TOP_MONTHS.length ? topMonth() : null;
+  document.getElementById("topLink").innerHTML = topYm
+    ? `<a class="toplink" href="#top" onclick="go('#top'); return false;">The ten longest disruptions of ${monthLabelLong(topYm)} →</a>`
+    : "";
 
   const letters = Object.values(D.counties)
     .map(c => figures(c, c.months[curMonth]).count_grade).filter(Boolean);
@@ -652,7 +687,7 @@ function renderCounty() {
     : `<div class="tile"><div class="v">${m.median_completion_h}h</div><div class="k">typical time to &ldquo;works complete&rdquo;</div></div>`;
   // the "scheduled only / never reported an end" split decomposes the outage
   // count, so it rides on that tile rather than on the duration beside it
-  const endSplit = `${m.scheduled_n ? ` · ${m.scheduled_n} scheduled only` : ""}${m.imputed_n ? `${m.scheduled_n ? "," : " ·"} ${m.imputed_n} never reported an end` : ""}`;
+  const endSplit = `${m.scheduled_n ? ` · ${m.scheduled_n} scheduled only` : ""}${m.no_end_n ? `${m.scheduled_n ? "," : " ·"} ${m.no_end_n} never reported an end` : ""}`;
   document.getElementById("countyview").innerHTML = `
     <a class="back" href="#" onclick="go(''); return false;">← All counties</a>
     <div class="chead">
@@ -692,7 +727,7 @@ function renderCounty() {
       <p class="simply"><b>Simply put:</b> each notice is listed under the town, or the countryside, around its pin.</p>
       <details class="method">
         <summary>How areas are drawn</summary>
-        <p>Each notice is placed in the Census 2022 area around its pin: the settlement it is in, or - for the roughly 40% of the network that runs between towns - the countryside of the surrounding Electoral Division, shown as <em>Around&nbsp;…</em> to keep it distinct from the town of the same name. The Census counts a city and its suburbs as one settlement, so any settlement above 50,000 is broken into its Local Electoral Areas instead. There are no letter grades at this level: a letter needs a length of water main, and Uisce Éireann publishes that by supply zone, not by town.</p>
+        <p>Each notice is placed in the Census 2022 area of the Small Area nearest its pin: the settlement it is in, or - for the roughly 40% of the network that runs between towns - the countryside of the surrounding Electoral Division, shown as <em>Around&nbsp;…</em> to keep it distinct from the town of the same name. The Census counts a city and its suburbs as one settlement, so any settlement above 50,000 is broken into its Local Electoral Areas instead. There are no letter grades at this level: a letter needs a length of water main, and Uisce Éireann publishes that by supply zone, not by town.</p>
       </details>
       ${countyShardBody(county) || townRows(c)}
     </div>
@@ -739,6 +774,53 @@ function endBadge(r, open) {
   if (open) return r.ahead ? "" : `<span class="badge sched">still open - no end announced</span>`;
   if (r.health) return `<span class="badge none" title="No lift was published for this notice. It counts as closed once Uisce Éireann stops listing it, or 14 days after it was issued if that comes first. It is counted as an incident.">no lift published</span>`;
   return `<span class="badge none" title="The notice was withdrawn without an update saying the works had finished, so there is no measured duration to report. It is still counted as a notice.">withdrawn without a completion update</span>`;
+}
+
+// ---- the national top ten ----
+
+function topMonth() {
+  // curMonth is shared with the other views and defaults to the in-progress
+  // month, which by construction has no top ten - fall back to the newest
+  // month that has one rather than rendering nothing
+  return TOP_MONTHS.includes(curMonth) ? curMonth : TOP_MONTHS[TOP_MONTHS.length - 1];
+}
+
+// the cap is a ceiling on what one notice counts, not how long it ran
+function topHours(r) { return `${r.hours}h${r.capped ? "+" : ""}`; }
+
+function renderTop() {
+  const ym = topMonth();
+  const rows = D.top[ym];
+  const nat = D.national[ym] || {};
+  const startedNote = ym === D.months[0] ? " This site started collecting partway through April, so April is a part-month." : "";
+
+  document.getElementById("topview").innerHTML = `
+    <a class="back" href="#" onclick="go(''); return false;">← All counties</a>
+    <div class="chead"><h2>The ten longest disruptions</h2>
+      <span class="pop">${monthLabelLong(ym)} · notice to &ldquo;works complete&rdquo;</span></div>
+    <div class="controls"><div class="months">${monthTabs(TOP_MONTHS, ym, "setMonth")}</div></div>
+    <div class="card">
+      <p class="lede">The longest of the <b>${(nat.completed_n || 0).toLocaleString()}</b> outage notices
+        first published in ${monthLabelLong(ym)} that reported the works complete. The typical one took
+        <b>${nat.median_completion_h == null ? "-" : nat.median_completion_h + "h"}</b>.${startedNote}</p>
+      <p class="simply"><b>Simply put:</b> how long the longest outages of the month took to fix, by Uisce Éireann&rsquo;s own updates.</p>
+      <div class="note">Only outage notices are ranked - bursts, reservoir, treatment-plant and
+        pump-station interruptions, and unplanned repairs - and only those whose own update said the
+        works were complete. Every span is measured from when the notice was <em>published</em>, so
+        these are minimums, and one notice is counted at most 14 days. More in
+        <a href="#" onclick="openMethod(); return false;" style="color:inherit">how these numbers are worked out</a>.</div>
+      ${rows.map((r, i) => `<div class="toprow">
+        <div class="rank">${i + 1}</div>
+        <div>
+          <div class="t">${esc(r.title)}</div>
+          <div class="m">${r.area ? esc(r.area) + " · " : ""}<a href="#county/${encodeURIComponent(r.county)}"
+            onclick="goCounty('${encodeURIComponent(r.county)}'); return false;">Co. ${esc(r.county)}</a>
+            · from ${fmtDate(r.start, today)}</div>
+          ${endBadge(r, false)}
+        </div>
+        <div class="dur">${topHours(r)}<span>to works complete</span></div>
+      </div>`).join("")}
+    </div>`;
 }
 
 // ---- every open notice, nationally ----
@@ -922,7 +1004,7 @@ const DATA_STATE = {};
 
 // the area view reads its shard alone, whatever month is selected
 function needsAll() {
-  return view === "county" || view === "open"
+  return view === "county" || view === "top" || view === "open"
     || (view === "overview" && curMonth !== LATEST);
 }
 
@@ -946,6 +1028,7 @@ function adopt(full) {
   if (skew) {
     const wasLatest = curMonth === LATEST;
     LATEST = D.months[D.months.length - 1];
+    TOP_MONTHS = Object.keys(D.top || {});
     if (wasLatest || !D.months.includes(curMonth)) curMonth = LATEST;
   }
   return skew;
@@ -1009,18 +1092,27 @@ function route() {
   county = name && D.counties[name] ? name : null;
   areaCounty = am && D.counties[decodeURIComponent(am[1])] ? decodeURIComponent(am[1]) : null;
   areaCode = areaCounty ? decodeURIComponent(am[2]) : null;
-  // An unknown county, or a retired hash such as #top, falls back to the
-  // overview rather than rendering an empty view. An unknown *area code*
+  // An unknown county, or #top on a build with no complete month yet, falls back
+  // to the overview rather than rendering an empty view. An unknown *area code*
   // does not: the county is real, so the page can say that nothing was ever
   // published there, which is a better answer than silently going somewhere else.
   view = areaCounty ? "area"
     : county ? "county"
+    : location.hash === "#top" && TOP_MONTHS.length ? "top"
     : location.hash === "#open" ? "open" : "overview";
   if (areaCounty) loadHistory(areaCounty);
   if (county) loadCounty(county);
   if (needsAll()) loadAll();
   render();
 }
+// The footer's methodology is collapsed by default; anything that points a
+// reader at it has to open it too, or the link looks broken.
+function openMethod() {
+  const d = document.getElementById("method");
+  d.open = true;
+  d.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 // A hit is an entry point rather than a drill-down, so it is a real link: an
 // area goes straight to its page, and a county keeps its click in the app while
 // still yielding c/<county>.html to a middle-click. `slug` is ui.js's, which is

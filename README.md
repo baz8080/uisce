@@ -75,17 +75,17 @@ Two options for working without the paid geocoding step:
 uv run uisce-site
 ```
 
-Reads `out/uisce.db` and writes a fully static site to `out/site/` (serve it with any file server, e.g. `python -m http.server -d out/site`, or just open `index.html` — it needs no server). Per county and month it shows day-by-day status bars, population-weighted supply availability, and an A–F grade — only hard supply outages (bursts, plant/reservoir/pump interruptions, unplanned repairs) count against availability; restrictions, discolouration and non-disruptive works are shown but never accrue downtime.
+Reads `out/uisce.db` and writes a fully static site to `out/site/` (serve it with any file server, e.g. `python -m http.server -d out/site`, or just open `index.html`; it needs no server). Per county and month it shows day-by-day status bars, the outage notices published per 100 km of water main with an A-F letter cut on that count, and the typical time from notice to "works complete". Only hard supply outages (bursts, plant/reservoir/pump interruptions, unplanned repairs) are counted; restrictions, discolouration and non-disruptive works are shown but never counted. `#top` lists the ten longest outages of each finished month.
 
-Clicking a county drills into it (`#county/Kildare`): the same figures per **named area**, plus the cases open right now grouped by area and the cases observed to close that month. Availability there is measured against the area's own population, which makes it far harsher than the county figure and is the whole point; there are no letter grades at that level, because the A–F thresholds are calibrated to county-months.
+Clicking a county drills into it (`#county/Kildare`): the notice counts per **named area**, plus the cases open right now grouped by area and the cases observed to close that month. There are no letter grades at that level: a letter needs a length of main, which Uisce Éireann publishes by supply zone, not by town.
 
 Every pin lands in one of three kinds of area, all of them Census geography:
 
-* the **settlement** its affected population centres on, so `Newbridge`, `Mount Carmel, Newbridge` and `Newbridge,` collapse onto one row with a real population;
+* the **settlement** of the Census Small Area nearest the pin, so `Newbridge`, `Mount Carmel, Newbridge` and `Newbridge,` collapse onto one row with a real population;
 * a **Local Electoral Area**, where the settlement is too big to read as one row — the Census counts a city and its suburbs as a single settlement, and `Dublin city and suburbs` is one area of 1.26 million that held 83% of Dublin's cases. Splitting the five agglomerations over 50,000 turns Dublin into 40 rows. Be warned that LEA names are electoral compounds rather than the names people use: `Clontarf` and `Dundrum` read naturally, `Kimmage-Rathmines` does not;
 * **`Around <Electoral Division>`** for the ~40% of cases outside any settlement, since most of the network runs between towns rather than through one. The prefix matters: a rural Electoral Division is the parish *around* the town it is named for, and that town has its own row.
 
-The weighting uses Census 2022 Small Area populations (`data/sa_pop.csv`, committed; regenerate with `uv run uisce-fetch-sa-pop`) and the area each Small Area belongs to (`data/sa_towns.csv`, committed; regenerate with `uv run uisce-fetch-towns`). Both come from attributes on the CSO Small Area layer, so the area populations reproduce every published Census settlement figure exactly. Before reading too much into the numbers, see the notes:
+The placement uses each Census 2022 Small Area's centroid, population and the area it belongs to (`data/sa_towns.csv`, committed; regenerate with `uv run uisce-fetch-towns`). All of it comes from attributes on the CSO Small Area layer, so the area populations reproduce every published Census settlement figure exactly. Before reading too much into the numbers, see the notes:
 
 * [notes/statuspage-methodology.md](notes/statuspage-methodology.md) — every modelling decision and its rationale
 * [notes/water-sla-benchmarks.md](notes/water-sla-benchmarks.md) — Ofwat/CRU service levels and why the grades can't borrow them
@@ -116,8 +116,8 @@ src/uisce/
   rules.py       CPU rules for the templated majority
   build.py       build inferred_cases from the JSONL   (uisce-build-inferred)
   site.py        generate the static status site       (uisce-site)
-  sa_pop.py      fetch Census Small Area populations   (uisce-fetch-sa-pop)
-  towns.py       map Small Areas to named areas        (uisce-fetch-towns)
+  towns.py       Small Areas, their centroids and      (uisce-fetch-towns)
+                 populations, mapped to named areas
   site.html      front end copied into out/site/
   config.py      shared paths, constants, HTTP session
 tests/           pytest suite (no network access needed)
