@@ -1,5 +1,7 @@
 # Pipeline dependencies
 
+**Simply put:** three things get out of step: the database, the file of extracted end times, and the site built from both. This note says how, and what each mismatch looks like.
+
 ## `uisce-build-inferred` requires the local DB to be at least as fresh as the inference run
 
 `data/inferred_end_times.jsonl` and `out/uisce.db` are two independently-evolving artifacts. The JSONL is produced by running `uisce-infer` against whatever `out/uisce.db` happened to be on disk at the time — often on a different machine, at a different point in the scrape history, than whatever `out/uisce.db` you currently have locally.
@@ -27,15 +29,13 @@ Measured on the 2026-07-20 snapshot:
 
 The skew is structural, not coincidental: un-inferred cases are by definition the most recently downloaded, and recent cases are the ones still open. So the backlog is not a random 2% — it is concentrated almost entirely in the population the site treats as ongoing.
 
-**Why that matters for the site.** In `site.py`, a case that is `Open`, has no usable end signal, and classifies as `outage` accrues disruption time from publication until *now*, capped at 14 days. A never-inferred case has no end signal by construction, so it takes that branch. On this snapshot **126 cases are accruing to "now" with `end_source` NULL for 121 of them** — they are accruing because inference has not run, not because anything is known to be ongoing.
-
-This inflates the newest month specifically, which is the month a reader looks at first. [statuspage-methodology.md](statuspage-methodology.md) already notes that "the current month grades harshly while in progress" and attributes it to open cases accruing against a part-elapsed denominator and to stale feed `status`; this is a distinct third cause, and unlike the other two it is an artifact of pipeline scheduling rather than a modelling choice.
+**Why that matters for the site.** A never-inferred case has no end signal by construction. Since 2026-10-06 that moves no letter (the count reads a notice's publication, not its end), but it still shows: an open never-inferred outage colours the day bars to "now", capped at 14 days, prints no "expected back by", and is missing from the month's median until it is inferred. On this snapshot **126 cases were running to "now" with `end_source` NULL for 121 of them** - running because inference had not run, not because anything was known to be ongoing. It lands on the newest month, which is the month a reader looks at first, and it is an artifact of pipeline scheduling rather than a modelling choice.
 
 **Not fixed here, because the fix is a real decision.** The options are not equivalent:
 
 - *Run inference before building the site* — correct but manual, and it re-couples the site build to a local LLM.
 - *Don't accrue for never-inferred cases* — treats "we haven't looked yet" as "no disruption", which under-counts in the opposite direction and silently hides a growing backlog.
-- *Surface the backlog* — show un-inferred open cases as a data-freshness caveat rather than silently folding them into downtime.
+- *Surface the backlog* - show un-inferred open cases as a data-freshness caveat rather than silently folding them into the bars.
 
 The third is the honest default and the cheapest, but it changes what the page claims, so it wants a deliberate choice rather than a drive-by patch. The decision itself is still open; as of 2026-07-20 the backlog is at least no longer invisible — `uisce-build-inferred` prints the never-inferred count (and how many are open) on every build, via `count_never_inferred` in `build.py`.
 

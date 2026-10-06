@@ -1,5 +1,7 @@
 # Boil notices
 
+**Simply put:** a boil-water notice never says when it ended; the lift is a separate notice, and the feed rarely publishes both for the same scheme. So the site can almost never measure how long one lasted, and keeps them mainly as live warnings.
+
 Boil-water notices are the weakest class in the dataset. This note records why, what was measured, and the policy that follows — so the question doesn't get re-litigated from scratch. Measurements are from the 2026-07-18 snapshot (7,553 cases).
 
 ## The structural problem: a notice cannot end itself
@@ -51,7 +53,7 @@ was never a separate case. Nothing this pipeline can do makes a lift pair with a
 was never published.
 
 What that leaves: 13 of the 17 issue events are `Open` in the feed, older than the cap and
-never lifted, and the site excludes them, which is right for the availability arithmetic and
+never lifted, and the site excludes them, which is right for the figures and
 wrong for a reader if any of them is a boil notice genuinely still standing (Carrignagower
 since January 2025, Tipperary Town since February). Whether they are standing cannot be told
 from the feed, and that is the class's whole problem.
@@ -71,7 +73,7 @@ Before 2026-07-18 an unpaired open notice accrued from its start until now, capp
 
 221165 is also the one case where `end_source = lifted_immediate` leaks past the lift exclusion, because that exclusion keys on `work_category` (derived from the **title**), and this record is titled "Boil Water Notice - Tipperary", not "Lifting of…". It is a notice record whose description was overwritten in place with lift text — a third publishing pattern, distinct from the two below.
 
-Accruing those stale notices fabricated roughly 37 merged days of quality time across Cork, Donegal, Mayo, Tipperary and Waterford. Because `quality` doesn't accrue availability downtime (only `outage` does), the damage landed on **grades, day colouring, `clear_days` and open counts** rather than the availability percentage. Removing it moved Cork 2026-05 from F to D and Donegal 2026-04 from C to B — those grades were being knocked by notices resolved months earlier. (The grade knock was itself removed on 2026-08-02: a health notice is now published as a marker beside the grade rather than moving it. See [statuspage-methodology.md](statuspage-methodology.md). Stale notices still matter here — they colour days, inflate open counts and would raise the marker — so nothing in this note's policy changes.)
+Accruing those stale notices fabricated roughly 37 merged days of quality time across Cork, Donegal, Mayo, Tipperary and Waterford, landing on **grades, day colouring, `clear_days` and open counts**. Removing it moved Cork 2026-05 from F to D and Donegal 2026-04 from C to B - those grades were being knocked by notices resolved months earlier. (The grade knock was itself removed on 2026-08-02: a health notice is now published as a marker beside the grade rather than moving it. See [statuspage-methodology.md](statuspage-methodology.md). Stale notices still matter here - they colour days, inflate open counts and would raise the marker - so nothing in this note's policy changes.)
 
 ## The policy
 

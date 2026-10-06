@@ -1,8 +1,9 @@
 # uisce
 
 A static status site for Uisce Éireann water disruption notices, built from an ArcGIS feed.
-`notes/` carries ~33k tokens of measured findings and settled decisions across 11 files — too much
-to read wholesale, which is why the important ones are indexed here.
+`notes/` carries measured findings and settled decisions across 13 files, indexed in
+`notes/README.md`, with retired text in `notes/archive/`. Too much to read wholesale, which is why
+the decisions that bind are indexed here. Every note opens with a "Simply put" paragraph.
 
 ## The UI is shared — change it upstream
 
@@ -37,7 +38,7 @@ with the evidence that closed them.
 | Recurring windows are charged as hours inside the windows, not as continuous days. | statuspage-methodology.md — "Recurring windows cover hours, not days" (2026-08-01) |
 | Only a window `_read_window` can honour stands in `event_windows`' vote - one refused wherever it is read must not beat a sibling's usable one, and the vote and the refusal read it through the same function so they cannot drift. The event **key** survives with a `None` value: it is also the recurrence signal, and dropping it would downgrade a nightly restriction to an outage. | data-quality.md - "A pin can report half a window" (2026-09-13) |
 | The grade chips: **C alone takes dark lettering**, the other five carry white. B and D were dark-inked on 2026-08-18 on WCAG 2 alone, reversed 2026-08-30 once APCA showed dark ink on B at Lc 38.6 against white's 69.2. B is `--fair`, D is `--serious-deep`; no two of the six chips are closer than delta-E 20.2. Colours live in `../statusui`, guarded there by `test_fills_carry_the_lettering_set_on_them`. | frontend-notes.md - "Contrast pass 2026-08-18" and its 2026-08-30 amendment |
-| An active boil-water / do-not-drink notice is a marker *beside* the grade, not a knock to it. | statuspage-methodology.md — "The health notice was unbundled from the grade" (2026-08-02) |
+| An active boil-water / do-not-drink notice is a marker *beside* the grade, not a knock to it. | statuspage-methodology.md - "The health notice is a marker beside the grade, not inside it" (2026-08-02) |
 | `lifted_immediate` lift records are excluded from site metrics (by category); its duration is NULL, never 0. A notice whose own text was overwritten with lift wording keeps its event. | end-time-eval.md - "Decision: `lifted_immediate` is excluded" (2026-07-18) |
 | Boil-notice pairing is 1 of 17 events and **will not grow with history**: the feed publishes the issue for some schemes and the lift for others, almost never both. `IGNORE_BOIL_NOTICES` stays off for the live warnings' sake. | boil-notices.md - "Re-measured 2026-09-05" |
 | Do-not-consume notices get lift pairing but **not** the boil-notice staleness exclusion. A paired lift is capped for what it charges, uncapped for the health marker, and closes the notice for display. Unlifted, the notice closes at 14 days, marker and open status together (owner, 2026-09-24). | statuspage-methodology.md - "Do-not-consume notices got the pairing, not the exclusion" (2026-08-18, amended 2026-09-24) |
@@ -49,7 +50,7 @@ with the evidence that closed them.
 | `closed_at` is a floor: short-lived cases are never observed open. Twice-daily builds are the settled cadence. | data-quality.md — "`closed_at` is a floor" (re-measured 2026-07-31) |
 | The `replay_closed_at` dispatch input is gone: a dry run over all 75 releases found 0 values to stamp or change. The script stays for a DB restored from an older release, run by hand. | data-quality.md - "The replay has nothing left to recover" (2026-09-24) |
 | Every data build publishes its **own release**, tagged `YYYY-MM-DD-HHMM` (UTC); `scripts/publish-db.sh` and `scripts/fetch-db.sh` are the only publish and download. Replacing the asset in a per-day release was rejected: `--clobber` deletes first, and a rename swap stranded releases in three ways. | data-quality.md - "One release per build" (2026-09-24) |
-| A case the feed drops while `Open` is stamped `vanished_at` (schema v4) and is closed with no signal on the site, never `closed_at`; the stamp touches closed rows too. It is safe only behind the feed-count guard (`FEED_COUNT_TOLERANCE`), which refuses a short download before anything touches the DB, and behind the empty-download refusal. Paging is by `OBJECTID`, refused unless each page is strictly ascending. | data-quality.md - "Cases that vanish from the feed" (2026-09-05, amended 2026-09-24) |
+| A case the feed drops while `Open` is stamped `vanished_at` (schema v4) and is closed with no signal on the site, never `closed_at`; the stamp touches closed rows too. It is safe only behind the feed-count guard (`FEED_COUNT_TOLERANCE`), which refuses a short download before anything touches the DB, and behind the empty-download refusal. Paging is by `OBJECTID`, refused unless each page is strictly ascending. | data-quality.md - "cases that vanish while Open are stamped" (2026-09-05, amended 2026-09-24) |
 | A feature with no pin (no `geometry`, or `"NaN"`) keeps the pin the DB last stored, or is set aside with a `::warning::` until the feed pins it. Nullable coordinates were rejected: not an additive migration. | data-quality.md - "A feature with no pin" (2026-09-24) |
 | **A case is open only while nothing its own text has ended.** `is_open(row, now)` reads `status`, `vanished_at` and a passed *observed* end, decided once in `resolve_case` and carried on `Case.is_open` for every surface that says open. The close date follows the same reading: the notice's own completion, else `closed_at` (`closed_on`, 2026-09-24). The feed closes a case a median 72h after the notice reports completion; 216 of 562 `Open` cases were past one, 0 of 7,667 completions were ever followed up. Scheduled ends do not close a case for display. | statuspage-methodology.md - "The notice's own completion closes it" (2026-09-05) |
 | gemma-4-12b-qat over qwen3.5-9b for end-time extraction; prompt version is at v3. | model-and-runtime-benchmarks.md, end-time-eval.md |
@@ -82,6 +83,10 @@ with the evidence that closed them.
   trade-off to record. Deferring one to the owner means measuring both sides first - how many
   cases the display gets wrong today, and how often the signal would get it wrong - and writing
   the numbers into the entry. The `is_open` row above is what an unmeasured deferral cost.
+- Every note, and any section a lay reader would stall on, opens with a **Simply put** paragraph:
+  one plain statement of the idea before the detail. Retired text moves to `notes/archive/`
+  unedited, under a header saying what replaced it; a live note never describes a figure the site
+  does not publish, and `notes/README.md` indexes both.
 - Decisions go in `notes/`, dated, with the rejected alternatives and their numbers. Add a row here
   when one closes something off — this file carries pointers only, never the rationale, or it
   becomes the thing it exists to fix.

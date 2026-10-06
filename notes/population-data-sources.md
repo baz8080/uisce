@@ -1,5 +1,7 @@
 # Population data sources
 
+**Simply put:** the Census Small Area is the smallest patch the CSO publishes a population for. Each one comes with its centre point and the town or electoral division it belongs to, so a notice pin can be placed by its nearest Small Area without any map polygons.
+
 The open datasets behind the committed lookup `uisce-site` depends on: `data/sa_towns.csv`, each Small Area's centroid, Census population and the named area it belongs to, used to place a pin and to print an area's population. See [statuspage-methodology.md](statuspage-methodology.md) for what it feeds. Everything here is free, keyless, and unthrottled. `uisce-fetch-towns` (src/uisce/towns.py) automates the joins and needs re-running only if the CSO revises the geography.
 
 Until 2026-10-06 the centroids and populations were a second file, `data/sa_pop.csv`, from a second command joining the SAPS populations to the same layer's centroids; the two were folded together when the population estimate was removed (statuspage-methodology.md, "The estimate is removed").
@@ -43,7 +45,7 @@ A settlement may also genuinely straddle a county line, leaving its minority-cou
 
 Summing Small Area populations reproduces **all 867 published settlement populations exactly**, and the urban total is **3,630,501 — the published figure to the person**. `uisce-fetch-towns` asserts that equality per settlement rather than allowing a tolerance: the CSO does the assignment itself, so any drift means the two datasets have stopped describing the same geography.
 
-This is why the attribute is used rather than geometry. An earlier implementation derived the same mapping by point-in-polygon over downloaded boundaries, and it was both heavier and wrong in ways that mattered: 37 MB of polygons and ~60 lines of ray casting, recovering only 97.5% of urban population, **dropping 54 settlements whose boundary happened to contain no Small Area centroid** (Knockbridge, Termonbarry, Kilmore Quay — their cases fell into the rural bucket and the village never appeared), and leaving **187 of 789 settlements more than 10% short**. Doneraile came out at 214 people against a published 857, and since the site divides by that population to get availability, a burst there read about four times worse than it was.
+This is why the attribute is used rather than geometry. An earlier implementation derived the same mapping by point-in-polygon over downloaded boundaries, and it was both heavier and wrong in ways that mattered: 37 MB of polygons and ~60 lines of ray casting, recovering only 97.5% of urban population, **dropping 54 settlements whose boundary happened to contain no Small Area centroid** (Knockbridge, Termonbarry, Kilmore Quay - their cases fell into the rural bucket and the village never appeared), and leaving **187 of 789 settlements more than 10% short**. Doneraile came out at 214 people against a published 857, which the site then printed as the village's population.
 
 ### Cities and countryside
 
@@ -57,7 +59,3 @@ See the drill-down section of [statuspage-methodology.md](statuspage-methodology
 ## How the lookups are used
 
 A notice pin is placed in the area of its nearest Small Area centroid within 8 km, and is unplaced when that Small Area lies in another county than the notice names. Centroids are grid-hashed, so the lookup is pure-Python fast, with no GIS dependencies. Until 2026-10-06 a pin was instead assumed to affect every Small Area within 500 m, and placed in the area holding most of that population (statuspage-methodology.md, "The estimate is removed"). County populations are hardcoded Census 2022 figures in site.py, printed beside each county. See the drill-down section of [statuspage-methodology.md](statuspage-methodology.md).
-
-## Future refinement: EPA public water supplies register
-
-Boil-water notices name their supply scheme in the `location` field ("Ballymacarbry Upper Public Water Supply"), and the EPA's register of public water supplies records **population served per scheme** — a better affected-population estimate for quality notices than any radius. Not yet integrated.

@@ -1,5 +1,7 @@
 # Rules vs LLM for end-time extraction
 
+**Simply put:** most notices follow a template, so a set of text rules reads the end time for about 93% of them in under a second; the language model handles the rest.
+
 **2026-08-21.** Question: how much of `uisce-infer`'s LLM work is actually language
 understanding, and how much is template filling a regex could do on a CPU? Answer:
 **~93% is template filling.** A rules extractor (`src/uisce/rules.py`, `rules-v1`)
@@ -180,7 +182,7 @@ fourth, smaller widening that fell out of checking the cases the review named.
 
 **1. "until midnight on D" after a start on D.** "from 2pm until midnight on 11 September"
 (244089) was read as 11 September 00:00, fourteen hours before the works began and before
-the notice was published, so build.py nulled the span and the site charged an imputed one.
+the notice was published, so build.py nulled the span.
 245031 ("from 8pm until midnight on 29 September") ended twenty hours before its own start.
 Now a 00:00 end (midnight, 12am) is read against the `from` directly before its `until`:
 
