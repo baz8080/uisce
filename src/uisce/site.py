@@ -484,18 +484,19 @@ class TownLookup:
     def _bin(self, lat, lon):
         return math.floor(lat / self.BIN), math.floor(lon / self.BIN)
 
-    def _nearest(self, lat, lon):
+    def _nearest(self, lat, lon, km):
+        """The code of the nearest centroid within `km`, or None."""
         kx = 111.0 * math.cos(math.radians(lat))
         (lo_i, lo_j), (hi_i, hi_j) = (
-            self._bin(lat - PLACE_KM / 111.0, lon - PLACE_KM / kx),
-            self._bin(lat + PLACE_KM / 111.0, lon + PLACE_KM / kx),
+            self._bin(lat - km / 111.0, lon - km / kx),
+            self._bin(lat + km / 111.0, lon + km / kx),
         )
         best = None
         for bi in range(lo_i, hi_i + 1):
             for bj in range(lo_j, hi_j + 1):
                 for slat, slon, code in self._bins.get((bi, bj), ()):
                     dist = math.hypot((slat - lat) * 111.0, (slon - lon) * kx)
-                    if dist <= PLACE_KM and (best is None or dist < best[0]):
+                    if dist <= km and (best is None or dist < best[0]):
                         best = (dist, code)
         return best and best[1]
 
@@ -509,7 +510,8 @@ class TownLookup:
         """
         key = (round(lat, 5), round(lon, 5))
         if key not in self._cache:
-            self._cache[key] = self._nearest(lat, lon)
+            # a near search first: a Dublin box of PLACE_KM holds thousands of centroids
+            self._cache[key] = self._nearest(lat, lon, 1.0) or self._nearest(lat, lon, PLACE_KM)
         code = self._cache[key]
         return code if code is not None and self.county[code] == county else UNPLACED
 
@@ -792,6 +794,8 @@ class Case(NamedTuple):
     closed: str | None = None
     # open and not yet started at the build: every surface says "from", not "since"
     ahead: bool = False
+    # its own span ran past CAP_DAYS and was cut there
+    capped: bool = False
     # the end an open notice states and has not reported reached, in Irish wall
     # clock: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM"; None for a repeating window
     back: str | None = None
@@ -843,6 +847,7 @@ def resolve_case(r, lifts, now, shared_window=None, recurring=None):
     no_end = False
     in_force = ()  # empty: the charged intervals are the in-force ones
     back = None
+    capped = False
     open_now = is_open(r, now)
     closed_by = None  # when a lift or the cap closed it, for closed_on
     # a standing notice no lift has closed closes at the cap, where its marker
@@ -913,6 +918,7 @@ def resolve_case(r, lifts, now, shared_window=None, recurring=None):
         # The pinned start is the publication for everything that reads one.
         if r["end_input_start_date"]:
             start = parse_dt(r["end_input_start_date"])
+        capped = timedelta(seconds=notice_to_end) > cap
         end = start + min(timedelta(seconds=notice_to_end), cap)
         # Recurrence lives strictly under has_end, which keeps it away from the
         # branches above: a boil notice's end is a paired lift and never its own
@@ -924,7 +930,7 @@ def resolve_case(r, lifts, now, shared_window=None, recurring=None):
                 row=r, sev=sev, ref=case_ref(r), start=start, intervals=windows,
                 has_end=has_end, observed_end=observed_end, rec=rec,
                 is_open=open_now, closed=None if open_now else closed_on(r, now, start),
-                ahead=open_now and windows[0][0] > now,
+                ahead=open_now and windows[0][0] > now, capped=capped,
             )
         if open_now and not observed_end and r["end_local_date"]:
             back = r["end_local_date"] + (f"T{r['end_local_time']}" if r["end_local_time"] else "")
@@ -944,6 +950,7 @@ def resolve_case(r, lifts, now, shared_window=None, recurring=None):
         closed=None if open_now else closed_on(r, now, start, closed_by),
         ahead=open_now and start > now,
         back=back,
+        capped=capped,
     )
 
 
@@ -1151,8 +1158,8 @@ def top_events(longest, event_meta, towns, area_of, shown=TOP_EVENTS_SHOWN):
             "confirmed": meta["confirmed"],
             "scheduled": meta["scheduled"],
         }
-        # the reported span can run past the cap; the page says "at least"
-        if hours >= CAP_DAYS * 24:
+        # a pin's reported span ran past the cap; the page says "14 days+"
+        if meta["capped"]:
             row["capped"] = 1
         if towns is not None and (county, ref) in area_of:
             # the same name the county's open list uses: one event, one area
@@ -1953,7 +1960,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None):
              "first_pub": case.start,
              "pins": 0, "confirmed": 0, "scheduled": 0, "sev": case.sev,
              "loc": r["location"] or "", "open": False, "closed": None, "health": False,
-             "measured": [],
+             "measured": [], "capped": False,
              "seen": r["first_seen"] or r["start_date"]},
         )
         meta["pins"] += 1
@@ -1982,6 +1989,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None):
         event_iv[(case.county, case.ref)].extend(case.intervals)
         if not case.no_end:
             meta["measured"].extend(case.intervals)
+        meta["capped"] |= case.capped and case.sev == "outage"
         if towns is not None:
             # the breakdown homes each pin individually; the event is named once
             code = towns.place(r["full_lat"], r["full_lon"], case.county)

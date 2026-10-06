@@ -492,9 +492,6 @@ class TestBuildSite:
         assert month["events"]["outage"] == 1
 
     def test_a_closed_case_without_an_end_is_counted_with_no_length(self):
-        """A one-second token on its publication: its day is coloured and it is
-        counted in no_end_n, and no length is guessed for it. The typical span it
-        was charged from 2026-08-15 to 2026-10-06 was for the person-hours."""
         rows = [
             _case(id=1, reference_num="CAR1"),  # observed, 24h
             _case(id=2, reference_num="CAR2", full_lat=52.900, status="Closed",
@@ -1377,6 +1374,13 @@ class TestTopEvents:
         [row] = build_site(rows, AFTER_MAY, TOWNS)["top"]["2026-05"]
         assert (row["hours"], row["capped"]) == (CAP_DAYS * 24.0, 1)
         assert "capped" not in build_site([_case()], AFTER_MAY, TOWNS)["top"]["2026-05"][0]
+
+    def test_pins_adding_up_past_the_cap_are_not_flagged(self):
+        rows = [_case(id=1, notice_to_end_seconds=200 * 3600.0, end_local_date="2026-05-09"),
+                _case(id=2, start_date="2026-05-11T00:00:00+00:00",
+                      notice_to_end_seconds=200 * 3600.0, end_local_date="2026-05-19")]
+        [row] = build_site(rows, AFTER_MAY, TOWNS)["top"]["2026-05"]
+        assert row["hours"] == 400.0 and "capped" not in row
 
     def test_a_tie_goes_to_the_earlier_publication(self):
         rows = [_case(id=1, reference_num="CAR1", start_date="2026-05-03T00:00:00+00:00",
@@ -2994,7 +2998,6 @@ class TestMultiAreaEvents:
         assert [e["ref"] for e in history["T2"]["events"]] == ["CAR00000001"]
 
     def test_both_listings_report_the_whole_event(self):
-        """The record describes an event, not an area's share of it."""
         history = self._site()["history"]["Carlow"]
         assert history["T1"]["events"][0] is history["T2"]["events"][0]
 

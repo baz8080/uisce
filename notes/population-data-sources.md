@@ -1,8 +1,8 @@
 # Population data sources
 
-The open datasets behind the two committed lookups `uisce-site` depends on: `data/sa_pop.csv` (Small Area populations, used to population-weight availability) and `data/sa_towns.csv` (the named area each Small Area belongs to, used for the county drill-down). See [statuspage-methodology.md](statuspage-methodology.md) for what they feed. Everything here is free, keyless, and unthrottled. `uisce-fetch-sa-pop` (src/uisce/sa_pop.py) and `uisce-fetch-towns` (src/uisce/towns.py) automate the joins; neither needs re-running unless the CSO revises the geography.
+The open datasets behind the committed lookup `uisce-site` depends on: `data/sa_towns.csv`, each Small Area's centroid, Census population and the named area it belongs to, used to place a pin and to print an area's population. See [statuspage-methodology.md](statuspage-methodology.md) for what it feeds. Everything here is free, keyless, and unthrottled. `uisce-fetch-towns` (src/uisce/towns.py) automates the joins and needs re-running only if the CSO revises the geography.
 
-Both files are derived from the same ArcGIS layer by two separate commands, which is one command and one file more than necessary — see the next steps in [statuspage-methodology.md](statuspage-methodology.md).
+Until 2026-10-06 the centroids and populations were a second file, `data/sa_pop.csv`, from a second command joining the SAPS populations to the same layer's centroids; the two were folded together when the population estimate was removed (statuspage-methodology.md, "The estimate is removed").
 
 ## SAPS 2022 — population per Small Area
 
@@ -20,13 +20,13 @@ Join key is the `GUID` column; total population is **`T1_1AGETT`** (theme 1, all
 
 ## Verification
 
-`SA_GUID_2022` matches the SAPS `GUID` for **all 18,919** Small Areas, and the joined populations sum to **5,149,139 — the exact Census 2022 state total**. `uisce-fetch-sa-pop` checks this invariant and warns if it drifts.
+`SA_GUID_2022` matches the SAPS `GUID` for **all 18,919** Small Areas, and the joined populations sum to **5,149,139 — the exact Census 2022 state total**. `uisce-fetch-towns` checks this invariant and warns if it drifts.
 
 ## The drill-down geography — all of it from Small Area attributes
 
 `data/sa_towns.csv` maps every Small Area to the named area a notice pin there belongs to. It needs no boundary polygons at all, because the Small Area layer already carries the answers as attributes:
 
-`https://services-eu1.arcgis.com/BuS9rtTsYEV5C0xh/arcgis/rest/services/SMALL_AREA_2022_Genralised_20m_view/FeatureServer/0` — the same layer `uisce-fetch-sa-pop` queries for centroids — exposes **`SA_URBAN_AREA_NAME`** (the Census settlement the Small Area is in, blank if none), **`CSO_LEA`**, **`ED_ENGLISH`** and **`COUNTY_ENGLISH`** alongside `SA_GUID_2022`. Query with `returnGeometry=false` and paginate; 18,919 rows in ten pages, a couple of seconds.
+`https://services-eu1.arcgis.com/BuS9rtTsYEV5C0xh/arcgis/rest/services/SMALL_AREA_2022_Genralised_20m_view/FeatureServer/0` - the same layer that gives the centroids, fetched in the same query - exposes **`SA_URBAN_AREA_NAME`** (the Census settlement the Small Area is in, blank if none), **`CSO_LEA`**, **`ED_ENGLISH`** and **`COUNTY_ENGLISH`** alongside `SA_GUID_2022`. Query with `returnGeometry=false` and paginate; 18,919 rows in ten pages, a couple of seconds.
 
 Two supporting fetches:
 
@@ -56,9 +56,7 @@ See the drill-down section of [statuspage-methodology.md](statuspage-methodology
 
 ## How the lookups are used
 
-A notice pin is assumed to affect the Small Areas whose centroids lie within 500 m (nearest Small Area within 8 km as a rural fallback). Centroids are grid-hashed in 0.01° bins, so the radius query is pure-Python fast — no GIS dependencies. County totals used for the availability denominator are hardcoded Census 2022 figures in site.py — the last population in the project that is not derived from the Small Areas.
-
-For the drill-down, those affected Small Areas are mapped through `sa_towns.csv` and the pin is placed in whichever area holds the largest share of the affected population, considering only areas in the case's own county. See the drill-down section of [statuspage-methodology.md](statuspage-methodology.md).
+A notice pin is placed in the area of its nearest Small Area centroid within 8 km, and is unplaced when that Small Area lies in another county than the notice names. Centroids are grid-hashed, so the lookup is pure-Python fast, with no GIS dependencies. Until 2026-10-06 a pin was instead assumed to affect every Small Area within 500 m, and placed in the area holding most of that population (statuspage-methodology.md, "The estimate is removed"). County populations are hardcoded Census 2022 figures in site.py, printed beside each county. See the drill-down section of [statuspage-methodology.md](statuspage-methodology.md).
 
 ## Future refinement: EPA public water supplies register
 

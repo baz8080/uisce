@@ -75,9 +75,10 @@
   .lede b { font-weight: 650; }
   .toprow {
     display: grid; grid-template-columns: 28px 1fr auto; gap: 12px;
-    align-items: baseline; padding: 11px 0; border-top: 1px solid var(--border);
+    align-items: baseline; padding: 11px 0;
   }
-  .toprow:first-of-type { border-top: 0; }
+  /* not :first-of-type, which the note above the rows takes */
+  .toprow + .toprow { border-top: 1px solid var(--border); }
   .toprow .rank { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
   .toprow .t { font-size: 14.5px; font-weight: 600; }
   .toprow .m { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
@@ -281,7 +282,7 @@
       <p>Whether the water is safe to drink is a different question from how often supply is cut, and a letter cannot answer both - so an active boil-water / do-not-drink / do-not-consume notice is a marker beside the grade, never folded into it.</p>
 
       <h4>The ten longest</h4>
-      <p>The <a href="#top" onclick="go('#top'); return false;">ten longest disruptions</a> of each finished month are the outage notices first published that month whose own update reported the works complete, ranked by the time from notice to &ldquo;works complete&rdquo; - the same notices and the same hours the typical time is taken over. One notice is counted at most 14 days; a longer one reads &ldquo;14 days or more&rdquo;.</p>
+      <p>The <a href="#top" onclick="go('#top'); return false;">ten longest disruptions</a> of each finished month are the outage notices first published that month whose own update reported the works complete, ranked by the time from notice to &ldquo;works complete&rdquo; - the same notices and the same hours the typical time is taken over. One notice is counted at most 14 days; a longer one reads &ldquo;14 days+&rdquo;.</p>
 
       <p>Full methodology: <a href="https://github.com/baz8080/uisce/blob/main/notes/statuspage-methodology.md">the full methodology, on GitHub</a>.</p>
     </details>
