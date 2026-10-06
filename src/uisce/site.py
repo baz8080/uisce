@@ -495,9 +495,6 @@ def grade(availability):
 
 # Fitted on May-Sep 2026 and re-fitted yearly; see "Outage notices per 100 km of main".
 COUNT_CUTS = (1.0, 2.0, 3.0, 4.0, 5.0)
-# The month in progress is graded on the trailing window instead: a part-month
-# letter matched the month-end one in 73 of 130 county-months even at day 7.
-ROLLING_DAYS = 30
 
 
 def count_grade(per_100km):
@@ -1218,10 +1215,10 @@ class Region:
         }
 
 
-def count_notices(first_pubs, lo, hi, now):
-    """How many events were first published in the part of a month the site has
-    seen: not before collection began, and not a notice dated ahead of the build."""
-    eff_lo, eff_hi = max(lo, COLLECTION_START), min(hi, now)
+def count_notices(first_pubs, lo, hi, seen):
+    """How many events were first published in the part of [lo, hi) the site has
+    seen: not before collection began, and not after the feed was last read."""
+    eff_lo, eff_hi = max(lo, COLLECTION_START), min(hi, seen)
     return sum(1 for pub in first_pubs if eff_lo <= pub < eff_hi)
 
 
@@ -1234,9 +1231,9 @@ def count_figures(notices, km, graded=True):
     return figures
 
 
-def month_figures(notices, km, lo, hi, now, graded=True):
+def month_figures(notices, km, lo, hi, seen, graded=True):
     """A month the site saw whole gets a rate; any other carries only its count so far."""
-    if lo >= COLLECTION_START and hi <= now:
+    if lo >= COLLECTION_START and hi <= seen:
         return count_figures(notices, km, graded)
     blank = {"outage_notices": notices, "per_100km": None}
     return blank | {"count_grade": None} if graded else blank
@@ -2286,9 +2283,13 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
             outage_pubs[county].append(meta["first_pub"])
     national_km = sum(mains_km.values())
     national_notices = Counter()
-    rolling_lo = now - timedelta(days=ROLLING_DAYS)
+    # counted to the last feed read: a UI deploy on a stale release must not
+    # read the days nobody fetched as quiet ones
+    seen = min(now, data_as_of)
+    # the month in progress is graded on this window, not on its own part-month
+    rolling_lo = seen - timedelta(days=30)
     site["last_30"] = count_figures(
-        sum(count_notices(pubs, rolling_lo, now, now) for pubs in outage_pubs.values()),
+        sum(count_notices(pubs, rolling_lo, seen, seen) for pubs in outage_pubs.values()),
         national_km, graded=False,
     )
 
@@ -2301,7 +2302,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
             "pop": cpop,
             "mains_km": round(mains_km[county]),
             "last_30": count_figures(
-                count_notices(outage_pubs[county], rolling_lo, now, now), mains_km[county]
+                count_notices(outage_pubs[county], rolling_lo, seen, seen), mains_km[county]
             ),
             "months": {},
             "open": sorted(
@@ -2364,7 +2365,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
             stats = region_month(region, cpop, ym, now)
             county_grade = grade(stats.pop("avail_raw"))
 
-            notices = count_notices(outage_pubs[county], lo, hi, now)
+            notices = count_notices(outage_pubs[county], lo, hi, seen)
             national_notices[ym] += notices
 
             # Notice-to-end span of disruption events that started this month.
@@ -2408,7 +2409,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
                 "grade": county_grade,
                 **stats,
                 **span_stats(observed_h, scheduled_h, imputed_h),
-                **month_figures(notices, mains_km[county], lo, hi, now),
+                **month_figures(notices, mains_km[county], lo, hi, seen),
             }
         site["counties"][county] = cdata
 
@@ -2416,7 +2417,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
         lo, hi = month_bounds(ym)
         site["national"][ym] = {
             **span_stats(national_observed[ym], national_scheduled[ym], national_imputed[ym]),
-            **month_figures(national_notices[ym], national_km, lo, hi, now, graded=False),
+            **month_figures(national_notices[ym], national_km, lo, hi, seen, graded=False),
         }
 
     # Complete months only. The in-progress month reshuffles between builds as

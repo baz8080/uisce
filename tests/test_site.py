@@ -1383,6 +1383,22 @@ class TestNoticesPer100km:
         assert carlow["months"]["2026-11"]["count_grade"] is None
         assert carlow["last_30"]["count_grade"] == "A"
 
+    def test_a_month_is_lettered_from_the_instant_it_ends(self):
+        rows = _notices("Carlow", "CAR", self.CARLOW)
+        end = datetime(2026, 10, 1, tzinfo=timezone.utc)
+        for now, lettered in ((end - timedelta(seconds=1), False), (end, True)):
+            sep = build_site(rows, SA_INDEX, now, TOWNS)["counties"]["Carlow"]["months"]["2026-09"]
+            assert (sep["count_grade"] is not None) is lettered
+
+    def test_a_stale_release_counts_only_to_its_last_read(self):
+        rows = _notices("Carlow", "CAR", self.CARLOW)
+        last_read = datetime(2026, 9, 29, 7, tzinfo=timezone.utc)
+        stale = build_site(rows, SA_INDEX, OCTOBER, TOWNS, data_as_of=last_read)
+        fresh = build_site(rows, SA_INDEX, last_read, TOWNS)
+        assert stale["counties"]["Carlow"]["months"]["2026-09"]["count_grade"] is None
+        assert stale["counties"]["Carlow"]["last_30"] == fresh["counties"]["Carlow"]["last_30"]
+        assert stale["last_30"] == fresh["last_30"]
+
     def test_a_rate_rounding_onto_a_cut_takes_the_letter_it_shows(self):
         rows = _notices("Carlow", "CAR", self.CARLOW)
         mains = dict(MAINS_KM, Carlow=100 / 4.996)
