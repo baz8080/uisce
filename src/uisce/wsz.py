@@ -16,18 +16,25 @@ WSZ_URL = (
 WSZ_FIELDS = "SCHEME_COD,SCHEME_NAM,LOCALAUTHORITY,DISMAINSLENGTH"
 PAGE_SIZE = 1000
 COLUMNS = ["code", "name", "local_authority", "county", "mains_m"]
+# The layer published 688 zones on 2026-10-06; far fewer means a failed or partial fetch.
+MIN_ZONES = 600
 
-# The layer's 31 local authorities against the site's 26 counties; Waterford and
-# Limerick are already city and county together, so they map to themselves.
+COUNTIES = {
+    "Carlow", "Cavan", "Clare", "Cork", "Donegal", "Dublin", "Galway", "Kerry",
+    "Kildare", "Kilkenny", "Laois", "Leitrim", "Limerick", "Longford", "Louth",
+    "Mayo", "Meath", "Monaghan", "Offaly", "Roscommon", "Sligo", "Tipperary",
+    "Waterford", "Westmeath", "Wexford", "Wicklow",
+}
+
+# The layer's 31 local authorities against the site's 26 counties; any other
+# authority is already named for its county.
 LA_COUNTY = {
     "Dublin City": "Dublin",
     "Fingal": "Dublin",
     "South Dublin": "Dublin",
     "Dun Laoghaire-Rathdown": "Dublin",
     "Cork City": "Cork",
-    "Cork": "Cork",
     "Galway City": "Galway",
-    "Galway": "Galway",
 }
 
 
@@ -40,16 +47,8 @@ def county_of(local_authority):
     raise ValueError(f"unmapped local authority: {local_authority!r}")
 
 
-COUNTIES = {
-    "Carlow", "Cavan", "Clare", "Cork", "Donegal", "Dublin", "Galway", "Kerry",
-    "Kildare", "Kilkenny", "Laois", "Leitrim", "Limerick", "Longford", "Louth",
-    "Mayo", "Meath", "Monaghan", "Offaly", "Roscommon", "Sligo", "Tipperary",
-    "Waterford", "Westmeath", "Wexford", "Wicklow",
-}
-
 
 def fetch_zones(session):
-    """Yield one attribute dict per supply zone, paginated."""
     offset = 0
     while True:
         response = session.get(
@@ -67,6 +66,8 @@ def fetch_zones(session):
         )
         response.raise_for_status()
         data = response.json()
+        if "error" in data:
+            raise RuntimeError(f"supply zone query failed: {data['error']}")
         features = data.get("features", [])
         for feature in features:
             yield feature["attributes"]
@@ -99,7 +100,6 @@ def read_zones(path=WSZ_MAINS_PATH):
 
 
 def county_mains_km(rows):
-    """{county: km of distribution main}, from per-zone rows."""
     metres = defaultdict(int)
     for row in rows:
         metres[row["county"]] += int(row["mains_m"])
@@ -110,6 +110,8 @@ def run():
     rows = zone_rows(fetch_zones(make_session()))
     if len({r["code"] for r in rows}) != len(rows):
         raise RuntimeError("duplicate zone codes in the layer")
+    if len(rows) < MIN_ZONES:
+        raise RuntimeError(f"only {len(rows)} zones fetched; not overwriting {WSZ_MAINS_PATH}")
     with open(WSZ_MAINS_PATH, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=COLUMNS)
         writer.writeheader()
