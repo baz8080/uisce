@@ -485,7 +485,6 @@ class TownLookup:
         return math.floor(lat / self.BIN), math.floor(lon / self.BIN)
 
     def _nearest(self, lat, lon, km):
-        """The code of the nearest centroid within `km`, or None."""
         kx = 111.0 * math.cos(math.radians(lat))
         (lo_i, lo_j), (hi_i, hi_j) = (
             self._bin(lat - km / 111.0, lon - km / kx),
@@ -498,7 +497,7 @@ class TownLookup:
                     dist = math.hypot((slat - lat) * 111.0, (slon - lon) * kx)
                     if dist <= km and (best is None or dist < best[0]):
                         best = (dist, code)
-        return best and best[1]
+        return None if best is None else best[1]
 
     def place(self, lat, lon, county):
         """The area a pin is placed in: its nearest Small Area's, or UNPLACED when
@@ -511,7 +510,8 @@ class TownLookup:
         key = (round(lat, 5), round(lon, 5))
         if key not in self._cache:
             # a near search first: a Dublin box of PLACE_KM holds thousands of centroids
-            self._cache[key] = self._nearest(lat, lon, 1.0) or self._nearest(lat, lon, PLACE_KM)
+            code = self._nearest(lat, lon, 1.0)
+            self._cache[key] = self._nearest(lat, lon, PLACE_KM) if code is None else code
         code = self._cache[key]
         return code if code is not None and self.county[code] == county else UNPLACED
 
@@ -794,7 +794,6 @@ class Case(NamedTuple):
     closed: str | None = None
     # open and not yet started at the build: every surface says "from", not "since"
     ahead: bool = False
-    # its own span ran past CAP_DAYS and was cut there
     capped: bool = False
     # the end an open notice states and has not reported reached, in Irish wall
     # clock: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM"; None for a repeating window
@@ -1158,7 +1157,7 @@ def top_events(longest, event_meta, towns, area_of, shown=TOP_EVENTS_SHOWN):
             "confirmed": meta["confirmed"],
             "scheduled": meta["scheduled"],
         }
-        # a pin's reported span ran past the cap; the page says "14 days+"
+        # a reported completion ran past the cap, so the hours are a floor
         if meta["capped"]:
             row["capped"] = 1
         if towns is not None and (county, ref) in area_of:
@@ -1989,7 +1988,8 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None):
         event_iv[(case.county, case.ref)].extend(case.intervals)
         if not case.no_end:
             meta["measured"].extend(case.intervals)
-        meta["capped"] |= case.capped and case.sev == "outage"
+        # the observed pins only: a schedule past the cap is no works complete
+        meta["capped"] |= case.capped and case.observed_end and case.sev == "outage"
         if towns is not None:
             # the breakdown homes each pin individually; the event is named once
             code = towns.place(r["full_lat"], r["full_lon"], case.county)

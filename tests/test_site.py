@@ -1373,6 +1373,11 @@ class TestTopEvents:
         rows = [_case(notice_to_end_seconds=20 * 86400, end_local_date="2026-05-21")]
         [row] = build_site(rows, AFTER_MAY, TOWNS)["top"]["2026-05"]
         assert (row["hours"], row["capped"]) == (CAP_DAYS * 24.0, 1)
+        scheduled = _case(id=2, end_source="scheduled_end_with_time",
+                          notice_to_end_seconds=20 * 86400, end_local_date="2026-05-21")
+        [row] = build_site([_case(), scheduled], AFTER_MAY, TOWNS)["top"]["2026-05"]
+        assert row["hours"] == CAP_DAYS * 24.0  # the sibling's schedule, counted but no flag
+        assert "capped" not in row
         assert "capped" not in build_site([_case()], AFTER_MAY, TOWNS)["top"]["2026-05"][0]
 
     def test_pins_adding_up_past_the_cap_are_not_flagged(self):

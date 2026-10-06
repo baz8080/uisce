@@ -20,7 +20,7 @@ Join key is the `GUID` column; total population is **`T1_1AGETT`** (theme 1, all
 
 ## Verification
 
-`SA_GUID_2022` matches the SAPS `GUID` for **all 18,919** Small Areas, and the joined populations sum to **5,149,139 — the exact Census 2022 state total**. `uisce-fetch-towns` checks this invariant and warns if it drifts.
+`SA_GUID_2022` matches the SAPS `GUID` for **all 18,919** Small Areas, and the joined populations sum to **5,149,139, the exact Census 2022 state total**. `uisce-fetch-towns` checks this invariant and warns if it drifts.
 
 ## The drill-down geography — all of it from Small Area attributes
 
