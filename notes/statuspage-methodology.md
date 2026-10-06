@@ -302,6 +302,16 @@ So the zone is a correction to the circle, not an answer to the density question
 
 Normalised by mains length, outage notices per 100 km run from Carlow 4.4, Louth 4.7 and Leitrim 4.8 to Wexford 16.9, Waterford 20.7 and Kerry 23.8, with Dublin 8.7 (13th). That ordering correlates 0.60 with notices per 10,000 people, and agrees with the ends that held under both footprints. Zones are keyed to a local authority, not a county (Dublin's four and the two cities merged by hand); Louth's zones hold 110% of its census population, so some cross the county line.
 
+## Mains length per county (2026-10-06)
+
+`uisce-fetch-wsz` writes `data/wsz_mains.csv`, one row per supply zone (688: code, name, local authority, county, `DISMAINSLENGTH` in metres), from the layer named above with `returnGeometry=false`. Source and attribution: Uisce Éireann's Water Supply Zones layer; terms have been requested and no licence is stated on the item, so the site should credit Uisce Éireann wherever the figure is shown. A county total is `wsz.county_mains_km`, an aggregate of the zone rows rather than a second file.
+
+The layer's 31 local authorities merge to the site's 26 counties: Dublin City, Fingal, South Dublin and Dun Laoghaire-Rathdown to Dublin; Cork City and Cork to Cork; Galway City and Galway to Galway. Waterford and Limerick arrive already as city and county. An authority outside the map raises rather than drops its mains.
+
+Totals sum to 53,756 km, the layer's own figure. Largest: Dublin 6,170, Cork 5,144, Donegal 4,418, Tipperary 3,519, Galway 2,963; smallest: Carlow 585, Cavan 653, Monaghan 650, Waterford 1,017, Wicklow 1,042.
+
+Zones keyed to one authority can serve another county. With attributes alone, the one measurable signal is zone `CENSUSPOPULATION` against the county's census population: only Louth exceeds 100% (153,114 against 139,703, 109.6%, so about 13,400 people served from Louth zones live elsewhere, in practice Meath around Drogheda). Every other county is at or below 97%, the shortfall being group and private schemes. How much Louth's 1,625 km, or any other zone's, belongs over the line is not known without the boundary polygons; the figure is read as the authority's mains, not the county's, and a notice pinned in Meath counts against Meath but its zone's mains count for Louth, so Louth's rate per 100 km is the one most likely to read low and Meath's high.
+
 ## The national top ten (added 2026-08-01)
 
 `#top` ranks the ten largest **individual** disruptions nationally in a month, by person-hours. Nothing else on the site does: person-hours are computed per county and per area, so a reader who wants to know what actually happened in July gets 26 county rows rather than the burst that caused them. The distribution justifies the page — in July 2026 the ten largest events were **21.9%** of every person-hour lost nationally, and one Donegal reservoir interruption was 9% on its own.
