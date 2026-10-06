@@ -57,9 +57,17 @@ scheduled end shows "expected back by".
 `eval_overlap.py`, imputed spans, `union_seconds`, their scripts and
 tests. Area pages today map a pin to an area through Small Areas inside the circle; re-base on
 nearest settlement centroid (`sa_towns.csv`) and write down how many of the 739 areas change.
-Opus, high: a 2,790-line file, 790 tests, one mapping that must not move silently. Depends
-on: 3. Done when: pytest passes and the set of area pages differs only by a measured, recorded
-amount.
+The pooled-median sentence in the method (`sensNote`, `median_pooled_h`) goes with the
+imputed spans. Two surfaces session 3 withdrew come back here on figures the feed supports (owner,
+2026-10-06). **The ten largest disruptions:** the owner liked the page, so it returns with
+a ranking that needs no headcount, for example the longest notice-to-"works complete" span
+among the month's outage notices, with the choice and its rejected alternatives recorded.
+**The day-bar shade:** session 3 put every outage day on one shade because the
+minor/moderate/major steps were a population share; either bring back a ramp on a count
+(outage notices standing that day, per 100 km) or keep one shade and drop the share from
+each cell. Opus, high: a 2,790-line file, 790 tests, one mapping that must not move silently.
+Depends on: 3. Done when: pytest passes, the set of area pages differs only by a measured,
+recorded amount, the top ten is back at `#top`, and no cell carries a population share.
 
 ## Phase 2: notes audit
 

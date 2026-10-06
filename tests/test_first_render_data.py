@@ -37,11 +37,10 @@ def test_the_first_render_keeps_the_newest_month_and_the_month_lists():
     site = _site()
     first = first_render_payload(site)
     assert set(first) == {
-        "generated", "generated_iso", "data_as_of_iso", "months", "last_30", "top_months",
+        "generated", "generated_iso", "data_as_of_iso", "months", "last_30", "mains_km",
         "national", "counties",
     }
     assert first["months"] == site["months"] == ["2026-04", "2026-05", "2026-06"]
-    assert first["top_months"] == ["2026-04", "2026-05"]
     assert set(first["national"]) == {"2026-06"}
     assert set(first["counties"]["Carlow"]) == {
         "pop", "mains_km", "last_30", "open_total", "months"}
@@ -80,7 +79,6 @@ def test_the_built_page_inlines_the_first_render_and_data_js_stays_whole(tmp_pat
     full = json.loads((tmp_path / "data.js").read_text().split("=", 1)[1].rstrip(";"))
     carlow = full["counties"]["Carlow"]
     assert carlow["open"] and set(carlow["months"]) == set(site["months"])
-    assert set(full["top"]) == set(expected["top_months"])
 
 
 def test_the_page_no_longer_waits_on_data_js_to_draw():
@@ -95,7 +93,7 @@ def test_data_js_is_loaded_after_the_first_render_and_a_view_that_needs_it_waits
     guard = "if (needsAll() && D === FIRST) return renderWaiting();"
     assert APP.index("function render() {") < APP.index(guard)
     needs = APP[APP.index("function needsAll()"):].split("}")[0]
-    for view in ('"county"', '"top"', '"open"', '(view === "overview" && curMonth !== LATEST)'):
+    for view in ('"county"', '"open"', '(view === "overview" && curMonth !== LATEST)'):
         assert view in needs
     assert '"area"' not in needs
 

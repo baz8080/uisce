@@ -117,12 +117,11 @@ class TestThePage:
         assert "<td>1</td>" in table          # the one outage
         assert "2026-04" not in table         # no notice, no row
 
-    def test_a_month_without_person_hours_reads_as_plain_figures(self, tmp_path):
+    def test_a_month_row_carries_the_four_counts_and_nothing_estimated(self, tmp_path):
         _write(tmp_path, [_case(work_category="essential_works")])
         page = (tmp_path / area_path("Carlow", "Testtown")).read_text()
         row = re.search(r'<tr><th scope="row">2026-05</th>(.*?)</tr>', page).group(1)
-        assert row.startswith("<td>100.00%</td><td>0</td>")
-        assert row.endswith("<td>0</td>")
+        assert row == "<td>0</td><td>0</td><td>0</td><td>1</td>"
 
     def test_it_carries_the_notice_and_the_population(self, tmp_path):
         _write(tmp_path)
@@ -143,26 +142,13 @@ class TestThePage:
                  "start": "2026-05-01", "areas": n}
         assert expected in _events_html([event], multi_area=True)
 
-    @pytest.mark.parametrize(
-        "event,expected",
-        [
-            ({"areas": 4, "people": 3775}, True),
-            ({"areas": 4}, False),
-        ],
-        ids=["with-a-people-figure", "without-one"],
-    )
-    def test_a_multi_area_row_says_whose_people_those_are(self, event, expected):
-        """`people` is the whole event's footprint. An area page states the
-        area's own population two lines above it, so a notice spanning five
-        areas can print seven times that number — the app's badge carries this
-        caveat and the page has to as well. Said only when there is a figure to
-        qualify."""
+    def test_a_row_prints_no_estimate_of_the_people_affected(self):
         row = _events_html(
             [{"ref": "R", "title": "Burst", "sev": "outage",
-              "start": "2026-05-01", **event}],
+              "start": "2026-05-01", "areas": 4, "people": 3775}],
             multi_area=True,
         )
-        assert ("not this area\u2019s share" in row) is expected
+        assert "3,775" not in row and "people" not in row
 
     def test_the_county_list_never_carries_that_note(self):
         """It de-duplicates, so every event on it is there once and saying

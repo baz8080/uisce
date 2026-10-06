@@ -950,6 +950,9 @@ class Case(NamedTuple):
     closed: str | None = None
     # open and not yet started at the build: every surface says "from", not "since"
     ahead: bool = False
+    # the end an open notice states and has not reported reached, in Irish wall
+    # clock: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM"; None for a repeating window
+    back: str | None = None
 
     @property
     def county(self):
@@ -1009,6 +1012,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
     # stays publication either way: first_pub reads it to decide which month an
     # event belongs to, and that is a fact about the notice, not the works.
     iv_start = start
+    back = None
     open_now = is_open(r, now)
     closed_by = None  # when a lift or the cap closed it, for closed_on
     # a standing notice no lift has closed closes at the cap, where its marker
@@ -1110,6 +1114,8 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
                 is_open=open_now, closed=None if open_now else closed_on(r, now, start),
                 ahead=open_now and windows[0][0] > now,
             )
+        if open_now and not observed_end and r["end_local_date"]:
+            back = r["end_local_date"] + (f"T{r['end_local_time']}" if r["end_local_time"] else "")
 
     return Case(
         row=r,
@@ -1126,6 +1132,7 @@ def resolve_case(r, sa_index, lifts, now, shared_window=None, recurring=None, sp
         is_open=open_now,
         closed=None if open_now else closed_on(r, now, start, closed_by),
         ahead=open_now and iv_start > now,
+        back=back,
     )
 
 
@@ -1159,6 +1166,7 @@ class Region:
         # measured in person-hours, and a cap is a person-hours instrument.
         self.knock_iv = defaultdict(list)
         self.open_now = {}  # ref -> case (dedups multi-pin events)
+        self.unstated = set()  # refs with an open pin that states no end
         self.resolved = {}  # ref -> case, for cases observed to close
 
     def add(self, case, sas):
@@ -1185,6 +1193,12 @@ class Region:
             )
             if not case.ahead:
                 entry.pop("ahead", None)
+            # the latest end its open pins state, and none if any open pin states none
+            if not case.back or ref in self.unstated:
+                self.unstated.add(ref)
+                entry.pop("back", None)
+            elif back_key(case.back) > back_key(entry.get("back", "")):
+                entry["back"] = case.back
         elif case.closed:
             held = self.resolved.get(ref)
             # the earliest close across the event's pins, as event_meta takes it
@@ -1237,6 +1251,11 @@ def month_figures(notices, km, lo, hi, seen, graded=True):
         return count_figures(notices, km, graded)
     blank = {"outage_notices": notices, "per_100km": None}
     return blank | {"count_grade": None} if graded else blank
+
+
+def back_key(back):
+    """A stated end as a sortable wall-clock string; a date alone means the end of that day."""
+    return back if "T" in back or not back else back + "T24:00"
 
 
 def region_month(region, pop, ym, now):
@@ -1780,7 +1799,7 @@ def _notice_text_html(description):
     )
 
 
-def _county_open_html(cdata, today, text=None):
+def _county_open_html(cdata, today, text=None, built=""):
     """Notices open right now — the one thing on the page a reader may have come
     for today rather than for the record. `text` is ref -> the notice's own
     words, carried here and nowhere in the app payload: the open notices are
@@ -1802,6 +1821,7 @@ def _county_open_html(cdata, today, text=None):
             if (url := notice_url(o["ref"]))
             else ""
         )
+        + (f" · {_back_text(o['back'], built)}" if o.get("back") else "")
         + "</span>"
         + _notice_text_html(text.get(o["ref"]))
         + "</li>"
@@ -1814,23 +1834,27 @@ def _county_open_html(cdata, today, text=None):
     )
 
 
-def _avail_text(month):
-    """Availability as the county page prints it, clamped the way the app's
-    availText clamps it: a month that lost person-time never rounds up to a clean
-    hundred, which reads as a claim the page is not making. Keyed on person_h, as
-    in the app, so a footprint too small to round to an hour still shows plain."""
-    availability = month["availability"]
-    if month["person_h"]:
-        availability = min(availability, 99.999)
-    return f"{availability:.3f}%"
+def _back_text(back, built):
+    """"expected back by Wed 7 Oct, 18:00", the end an open notice states; one
+    already past at `built` (Irish wall clock, as `back` is) was expected."""
+    when = _fmt_day(back[:10]) + (f", {back[11:]}" if "T" in back else "")
+    return f"{'was ' if back_key(back) < built else ''}expected back by {when}"
+
+
+def _rate_text(per_100km):
+    return "-" if per_100km is None else f"{per_100km:.2f}"
+
+
+def _grade_cell(letter):
+    """The month table's grade cell; a month the site did not see whole has none."""
+    if letter is None:
+        return '<td class="g g-none">-</td>'
+    return f'<td class="g g-{letter}">{letter}</td>'
 
 
 def _county_summary_html(county, cdata, n_areas, n_events, months):
     """The opening paragraph and the current-state line."""
     pop = cdata["pop"]
-    # Newest month with any elapsed days: the current month is legitimate here
-    # (unlike in `top`, which needs settled months to rank) because this states
-    # a present condition rather than a ranking that must not reshuffle.
     latest = next(
         (ym for ym in reversed(months) if cdata["months"][ym]["days_elapsed"]), None
     )
@@ -1838,23 +1862,26 @@ def _county_summary_html(county, cdata, n_areas, n_events, months):
         f"<p class=\"sub\">Every water supply notice Uisce Éireann has published for "
         f"Co. {html.escape(county)}: "
         f"{n_events:,} notice{'' if n_events == 1 else 's'} across "
-        f"{n_areas:,} area{'' if n_areas == 1 else 's'}, "
-        f"population {pop:,}.</p>"
+        f"{n_areas:,} area{'' if n_areas == 1 else 's'}. "
+        f"Population {pop:,}; {cdata['mains_km']:,} km of water main, "
+        f"from Uisce Éireann's supply zones.</p>"
     ]
     if latest:
         m = cdata["months"][latest]
+        last = cdata["last_30"]
         health = ""
-        # health_now, not health_n: this line says "This month", and a notice
-        # lifted on the 3rd is not an active warning on the 25th. The month's
-        # own count is in the table below, where it is a record and reads as one.
+        # health_now, not health_n: this line says "now", and a notice lifted
+        # on the 3rd is not an active warning on the 25th
         if m["health_now"]:
             health = (
                 f' <span class="health">{m["health_now"]} active health '
                 f'notice{"" if m["health_now"] == 1 else "s"}</span>'
             )
+        n = last["outage_notices"]
         parts.append(
-            f'<p class="now">This month: grade <strong>{m["grade"]}</strong>, '
-            f'{_avail_text(m)} supply availability, '
+            f'<p class="now">Over the last 30 days: grade <strong>{last["count_grade"]}</strong>, '
+            f'{n} outage notice{"" if n == 1 else "s"}, '
+            f'{_rate_text(last["per_100km"])} per 100 km of main. This month, '
             f'{m["clear_days"]} of {m["days_elapsed"]} elapsed days clear of '
             f'supply disruption.'
             f'{health}</p>'
@@ -1872,11 +1899,10 @@ def _county_months_html(cdata, months):
         ev = m["events"]
         rows.append(
             f'<tr><th scope="row">{ym}</th>'
-            f'<td class="g g-{m["grade"]}">{m["grade"]}</td>'
-            f'<td>{_avail_text(m)}</td>'
-            f'<td>{ev["outage"]}</td><td>{ev["quality"]}</td>'
-            f'<td>{ev["degraded"]}</td><td>{ev["maintenance"]}</td>'
-            f'<td>{m["person_h"]:,}</td></tr>'
+            f'{_grade_cell(m["count_grade"])}'
+            f'<td>{_rate_text(m["per_100km"])}</td>'
+            f'<td>{m["outage_notices"]}</td><td>{ev["quality"]}</td>'
+            f'<td>{ev["degraded"]}</td><td>{ev["maintenance"]}</td></tr>'
         )
     if not rows:
         return ""
@@ -1884,38 +1910,29 @@ def _county_months_html(cdata, months):
         '<section id="months"><h2>Month by month</h2>'
         '<div class="scroll"><table><thead><tr>'
         '<th scope="col">Month</th><th scope="col">Grade</th>'
-        '<th scope="col">Availability</th>'
-        '<th scope="col" title="Supply disruptions">Outages</th>'
+        '<th scope="col" title="Outage notices published per 100 km of the county\'s water main; '
+        'only for a month the site saw whole">Per 100 km</th>'
+        '<th scope="col" title="Supply disruptions first published this month">Outages</th>'
         '<th scope="col" title="Boil water, do not drink, discolouration">Quality</th>'
         '<th scope="col" title="Restrictions and low pressure">Restricted</th>'
         '<th scope="col" title="Planned or non-disruptive works">Works</th>'
-        '<th scope="col" title="Population-weighted hours of lost supply">Person-hours</th>'
         f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div></section>'
     )
 
 
 def _area_months_html(area_months, months):
     """One row per month with a notice, from the same area-month rows the app's
-    county breakdown charts. No grade: the A-F cuts are calibrated to county-
-    months, which is why the app's breakdown carries none either."""
+    county breakdown charts. No grade: a letter needs the county's mains."""
     rows = []
     for ym in reversed(months):
         m = area_months.get(ym)
         if not m:
             continue
         ev = m["events"]
-        # the sparse rules of town_months, read back: an absent count is zero
-        # and an absent availability is a clear month
-        avail = m.get("availability", 100.0)
-        person_h = m.get("person_h", 0)
-        if person_h:
-            avail = min(avail, 99.99)
         rows.append(
             f'<tr><th scope="row">{ym}</th>'
-            f'<td>{avail:.2f}%</td>'
             f'<td>{ev.get("outage", 0)}</td><td>{ev.get("quality", 0)}</td>'
-            f'<td>{ev.get("degraded", 0)}</td><td>{ev.get("maintenance", 0)}</td>'
-            f'<td>{person_h:,}</td></tr>'
+            f'<td>{ev.get("degraded", 0)}</td><td>{ev.get("maintenance", 0)}</td></tr>'
         )
     if not rows:
         return ""
@@ -1923,12 +1940,10 @@ def _area_months_html(area_months, months):
         '<section id="months"><h2>Month by month</h2>'
         '<div class="scroll"><table><thead><tr>'
         '<th scope="col">Month</th>'
-        '<th scope="col" title="Against this area\'s own population">Availability</th>'
         '<th scope="col" title="Supply disruptions">Outages</th>'
         '<th scope="col" title="Boil water, do not drink, discolouration">Quality</th>'
         '<th scope="col" title="Restrictions and low pressure">Restricted</th>'
         '<th scope="col" title="Planned or non-disruptive works">Works</th>'
-        '<th scope="col" title="Population-weighted hours of lost supply">Person-hours</th>'
         f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div></section>'
     )
 
@@ -1956,8 +1971,6 @@ def _events_html(events, heading="Notice history", multi_area=False):
             # build, not what the works took, and a bare "0h · still open" on
             # something published this morning reads as a completed nothing
             bits.append(f'{e["hours"]:g}h so far' if e.get("open") else f'{e["hours"]:g}h')
-        if e.get("people"):
-            bits.append(f'{e["people"]:,} people')
         if e.get("open"):
             bits.append("still open" if started else "not started yet")
         elif e.get("closed"):
@@ -1979,16 +1992,7 @@ def _events_html(events, heading="Notice history", multi_area=False):
                 f'<span class="also">Also published in '
                 f'{e["areas"] - 1} other area'
                 f'{"" if e["areas"] == 2 else "s"}, and listed in each'
-                # the figure above is the whole event's footprint, and this page
-                # states the area's own population two lines up; the app's badge
-                # carries the same caveat in its title
-                + (
-                    "; the people affected is the whole notice\u2019s, "
-                    "not this area\u2019s share"
-                    if e.get("people")
-                    else ""
-                )
-                + "</span>"
+                "</span>"
                 if multi_area and e.get("areas")
                 else ""
             )
@@ -2033,7 +2037,9 @@ def area_page_html(county, name, pop, events, area_months=None, months=()):
     )
 
 
-def county_page_html(county, cdata, areas, events, months, all_counties, today, text=None):
+def county_page_html(
+    county, cdata, areas, events, months, all_counties, today, text=None, built=""
+):
     """The whole body of c/<slug>.html.
 
     Server-rendered in full and carrying no data.js: the point of these pages is
@@ -2055,7 +2061,7 @@ def county_page_html(county, cdata, areas, events, months, all_counties, today, 
         f'Co. {html.escape(county)}</a> - daily bars, month switching and the '
         f'area drill-down.</p></header>'
         f'<nav>{nav}</nav>'
-        f'{_county_open_html(cdata, today, text)}'
+        f'{_county_open_html(cdata, today, text, built)}'
         f'{_county_months_html(cdata, months)}'
         f'{_events_html(events)}'
         f'<section id="areas"><h2>Areas with a notice '
@@ -2282,6 +2288,7 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
         if meta["sev"] == "outage":
             outage_pubs[county].append(meta["first_pub"])
     national_km = sum(mains_km.values())
+    site["mains_km"] = round(national_km)
     national_notices = Counter()
     # counted to the last feed read: a UI deploy on a stale release must not
     # read the days nobody fetched as quiet ones
@@ -2569,9 +2576,8 @@ def first_render_payload(site):
     """What the first overview render reads, for index.html to inline; data.js stays whole."""
     newest = set(site["months"][-1:])
     # named, not "all but": a key added to the payload must not ride into the HTML
-    keys = ("generated", "generated_iso", "data_as_of_iso", "months", "last_30")
+    keys = ("generated", "generated_iso", "data_as_of_iso", "months", "last_30", "mains_km")
     first = {k: site[k] for k in keys if k in site}
-    first["top_months"] = list(site["top"])
     first["national"] = {m: v for m, v in site["national"].items() if m in newest}
     first["counties"] = {
         name: {
@@ -2738,6 +2744,8 @@ def write_site(site, site_dir, towns=None):
         county_dir.mkdir(exist_ok=True)
         by_county = dict(index)
         all_counties = sorted(site["counties"])
+        built = (datetime.fromisoformat(site["generated_iso"]).astimezone(DUBLIN)
+                 .strftime("%Y-%m-%dT%H:%M"))
         for county in all_counties:
             slug = county_slug(county)
             areas = by_county.get(county, [])
@@ -2745,7 +2753,7 @@ def write_site(site, site_dir, towns=None):
             body = county_page_html(
                 county, site["counties"][county] | county_data[county], areas, events,
                 site["months"], all_counties, site["generated_iso"][:10],
-                notice_text.get(county),
+                notice_text.get(county), built,
             )
             page = page_html(
                 COUNTY_HTML,
