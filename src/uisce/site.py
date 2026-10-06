@@ -495,6 +495,9 @@ def grade(availability):
 
 # Fitted on May-Sep 2026 and re-fitted yearly; see "Outage notices per 100 km of main".
 COUNT_CUTS = (1.0, 2.0, 3.0, 4.0, 5.0)
+# The month in progress is graded on the trailing window instead: a part-month
+# letter matched the month-end one in 73 of 130 county-months even at day 7.
+ROLLING_DAYS = 30
 
 
 def count_grade(per_100km):
@@ -1222,14 +1225,21 @@ def count_notices(first_pubs, lo, hi, now):
     return sum(1 for pub in first_pubs if eff_lo <= pub < eff_hi)
 
 
-def notices_per_100km(notices, km, ndays, days_elapsed):
-    """Notices per 100 km of main for the month. A month the site has not seen
-    whole is scaled to its full length, so the letter reads the month's pace
-    rather than starting every month at A."""
-    rate = 100.0 * notices / km
-    if 0 < days_elapsed < ndays:
-        rate *= ndays / days_elapsed
-    return rate
+def count_figures(notices, km, graded=True):
+    """The count, its rate per 100 km of main, and the letter on the published figure."""
+    per_100km = round(100.0 * notices / km, 2)
+    figures = {"outage_notices": notices, "per_100km": per_100km}
+    if graded:
+        figures["count_grade"] = count_grade(per_100km)
+    return figures
+
+
+def month_figures(notices, km, lo, hi, now, graded=True):
+    """A month the site saw whole gets a rate; any other carries only its count so far."""
+    if lo >= COLLECTION_START and hi <= now:
+        return count_figures(notices, km, graded)
+    blank = {"outage_notices": notices, "per_100km": None}
+    return blank | {"count_grade": None} if graded else blank
 
 
 def region_month(region, pop, ym, now):
@@ -2276,7 +2286,11 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
             outage_pubs[county].append(meta["first_pub"])
     national_km = sum(mains_km.values())
     national_notices = Counter()
-    month_days = {}  # ym -> (days in the month, days the site has seen of it)
+    rolling_lo = now - timedelta(days=ROLLING_DAYS)
+    site["last_30"] = count_figures(
+        sum(count_notices(pubs, rolling_lo, now, now) for pubs in outage_pubs.values()),
+        national_km, graded=False,
+    )
 
     for county in sorted(counties):
         region = counties[county]
@@ -2286,6 +2300,9 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
         cdata = {
             "pop": cpop,
             "mains_km": round(mains_km[county]),
+            "last_30": count_figures(
+                count_notices(outage_pubs[county], rolling_lo, now, now), mains_km[county]
+            ),
             "months": {},
             "open": sorted(
                 (
@@ -2349,9 +2366,6 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
 
             notices = count_notices(outage_pubs[county], lo, hi, now)
             national_notices[ym] += notices
-            month_days[ym] = (ndays, days_elapsed)
-            # graded on the published figure, so the letter never contradicts it
-            per_100km = round(notices_per_100km(notices, mains_km[county], ndays, days_elapsed), 2)
 
             # Notice-to-end span of disruption events that started this month.
             # Three tiers, never pooled into the headline: an observed completion
@@ -2394,19 +2408,15 @@ def build_site(rows, sa_index, now, towns=None, data_as_of=None, mains_km=None):
                 "grade": county_grade,
                 **stats,
                 **span_stats(observed_h, scheduled_h, imputed_h),
-                "outage_notices": notices,
-                "per_100km": per_100km,
-                "count_grade": count_grade(per_100km),
+                **month_figures(notices, mains_km[county], lo, hi, now),
             }
         site["counties"][county] = cdata
 
     for ym in months:
-        notices = national_notices[ym]
-        per_100km = notices_per_100km(notices, national_km, *month_days[ym])
+        lo, hi = month_bounds(ym)
         site["national"][ym] = {
             **span_stats(national_observed[ym], national_scheduled[ym], national_imputed[ym]),
-            "outage_notices": notices,
-            "per_100km": round(per_100km, 2),
+            **month_figures(national_notices[ym], national_km, lo, hi, now, graded=False),
         }
 
     # Complete months only. The in-progress month reshuffles between builds as
@@ -2558,7 +2568,7 @@ def first_render_payload(site):
     """What the first overview render reads, for index.html to inline; data.js stays whole."""
     newest = set(site["months"][-1:])
     # named, not "all but": a key added to the payload must not ride into the HTML
-    keys = ("generated", "generated_iso", "data_as_of_iso", "months")
+    keys = ("generated", "generated_iso", "data_as_of_iso", "months", "last_30")
     first = {k: site[k] for k in keys if k in site}
     first["top_months"] = list(site["top"])
     first["national"] = {m: v for m, v in site["national"].items() if m in newest}

@@ -28,6 +28,7 @@ from uisce.site import (
     build_site,
     classify,
     collect_lifts,
+    count_figures,
     count_grade,
     county_events,
     county_slug,
@@ -1342,16 +1343,45 @@ class TestNoticesPer100km:
         site = self._site([early])
         assert site["counties"]["Carlow"]["months"]["2026-04"]["outage_notices"] == 0
 
-    def test_a_part_month_reads_its_pace(self):
-        """Six days into October one Kerry notice is 0.04 per 100 km, which
-        would open every month at A; the letter reads the rate over the days
-        seen, scaled to the month, as availability already does."""
+    def test_the_month_in_progress_carries_its_count_and_no_letter(self):
         fresh = _case(county="Kerry", reference_num="KER00000900",
-                      start_date="2026-10-02T09:00:00+00:00", end_local_date="2026-10-02")
+                      start_date="2026-10-01T09:00:00+00:00", end_local_date="2026-10-01")
         month = self._site([fresh])["counties"]["Kerry"]["months"]["2026-10"]
-        assert month["outage_notices"] == 1
-        assert month["per_100km"] == round(100 / MAINS_KM["Kerry"] * 31 / 6, 2)
-        assert month["count_grade"] == "A"
+        figures = (month["outage_notices"], month["per_100km"], month["count_grade"])
+        assert figures == (1, None, None)
+
+    def test_a_month_seen_only_in_part_gets_no_letter(self):
+        april = self._site()["counties"]["Carlow"]["months"]["2026-04"]
+        assert (april["per_100km"], april["count_grade"]) == (None, None)
+        assert self._site()["national"]["2026-04"]["per_100km"] is None
+
+    def test_the_last_30_days_span_the_month_boundary(self):
+        # OCTOBER is the 6th: the window opens on 6 September
+        before = _case(county="Carlow", reference_num="CAR00000901",
+                       start_date="2026-09-05T09:00:00+00:00", end_local_date="2026-09-05")
+        inside = _case(county="Carlow", reference_num="CAR00000902",
+                       start_date="2026-09-07T09:00:00+00:00", end_local_date="2026-09-07")
+        today = _case(county="Carlow", reference_num="CAR00000903",
+                      start_date="2026-10-02T09:00:00+00:00", end_local_date="2026-10-02")
+        base = self._site()["counties"]["Carlow"]["last_30"]["outage_notices"]
+        site = self._site([before, inside, today])
+        last_30 = site["counties"]["Carlow"]["last_30"]
+        assert last_30["outage_notices"] == base + 2
+        km = MAINS_KM["Carlow"]
+        assert last_30["per_100km"] == round(100 * last_30["outage_notices"] / km, 2)
+        assert last_30["count_grade"] == count_grade(last_30["per_100km"])
+        assert site["last_30"]["outage_notices"] == sum(
+            c["last_30"]["outage_notices"] for c in site["counties"].values())
+        assert "count_grade" not in site["last_30"]
+
+    def test_one_notice_on_the_first_of_the_month_is_not_an_f(self):
+        first = datetime(2026, 11, 1, 6, tzinfo=timezone.utc)
+        fresh = _case(county="Carlow", reference_num="CAR00000904",
+                      start_date="2026-11-01T02:00:00+00:00", end_local_date="2026-11-01")
+        rows = _notices("Carlow", "CAR", self.CARLOW) + [dict(fresh, id=999)]
+        carlow = build_site(rows, SA_INDEX, first, TOWNS)["counties"]["Carlow"]
+        assert carlow["months"]["2026-11"]["count_grade"] is None
+        assert carlow["last_30"]["count_grade"] == "A"
 
     def test_a_rate_rounding_onto_a_cut_takes_the_letter_it_shows(self):
         rows = _notices("Carlow", "CAR", self.CARLOW)
@@ -1361,8 +1391,8 @@ class TestNoticesPer100km:
             5.0, "F")
 
     def test_a_quiet_month_is_an_a(self):
-        month = self._site()["counties"]["Carlow"]["months"]["2026-04"]
-        assert (month["outage_notices"], month["per_100km"], month["count_grade"]) == (0, 0.0, "A")
+        assert count_figures(0, MAINS_KM["Carlow"]) == {
+            "outage_notices": 0, "per_100km": 0.0, "count_grade": "A"}
 
     def test_the_national_rate_is_over_every_county_main(self):
         national = self._site()["national"]["2026-05"]
@@ -2526,7 +2556,7 @@ class TestHistoryShards:
         site, _ = self._write(tmp_path)
         data = (tmp_path / "data.js").read_text()
         assert set(site["counties"]["Carlow"]) == {
-            "pop", "mains_km", "months", "open", "open_total",
+            "pop", "mains_km", "last_30", "months", "open", "open_total",
         }
         assert "Testtown" not in data and "towns" not in data and "resolved" not in data
         shard = (tmp_path / "t" / "carlow.js").read_text()
@@ -3047,13 +3077,13 @@ class TestPayloadShape:
     def test_the_top_level_keys_are_unchanged(self):
         assert set(self._site()) == {
             "generated", "generated_iso", "data_as_of_iso", "months", "counties",
-            "national", "top",
+            "national", "last_30", "top",
         }
 
     def test_the_county_keys_are_unchanged(self):
         county = self._site()["counties"]["Carlow"]
         assert set(county) == {
-            "pop", "mains_km", "open_total", "months", "open", "towns", "resolved",
+            "pop", "mains_km", "last_30", "open_total", "months", "open", "towns", "resolved",
         }
         # "slug" is present exactly when the area has a page: the app cannot
         # derive it, because ui.js's slug() leaves a fada as a dash
