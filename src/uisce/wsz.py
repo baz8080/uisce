@@ -16,8 +16,6 @@ WSZ_URL = (
 WSZ_FIELDS = "SCHEME_COD,SCHEME_NAM,LOCALAUTHORITY,DISMAINSLENGTH"
 PAGE_SIZE = 1000
 COLUMNS = ["code", "name", "local_authority", "county", "mains_m"]
-# The layer published 688 zones on 2026-10-06; far fewer means a failed or partial fetch.
-MIN_ZONES = 600
 
 COUNTIES = {
     "Carlow", "Cavan", "Clare", "Cork", "Donegal", "Dublin", "Galway", "Kerry",
@@ -48,26 +46,32 @@ def county_of(local_authority):
 
 
 
+def query(session, params):
+    response = session.get(WSZ_URL, params={"where": "1=1", "f": "json", **params}, timeout=120)
+    response.raise_for_status()
+    data = response.json()
+    if "error" in data:
+        raise RuntimeError(f"supply zone query failed: {data['error']}")
+    return data
+
+
+def zone_count(session):
+    return query(session, {"returnCountOnly": "true"})["count"]
+
+
 def fetch_zones(session):
     offset = 0
     while True:
-        response = session.get(
-            WSZ_URL,
-            params={
-                "where": "1=1",
+        data = query(
+            session,
+            {
                 "outFields": WSZ_FIELDS,
                 "returnGeometry": "false",
                 "orderByFields": "OBJECTID",
                 "resultOffset": offset,
                 "resultRecordCount": PAGE_SIZE,
-                "f": "json",
             },
-            timeout=120,
         )
-        response.raise_for_status()
-        data = response.json()
-        if "error" in data:
-            raise RuntimeError(f"supply zone query failed: {data['error']}")
         features = data.get("features", [])
         for feature in features:
             yield feature["attributes"]
@@ -106,16 +110,22 @@ def county_mains_km(rows):
     return {county: metres[county] / 1000 for county in sorted(metres)}
 
 
-def run():
-    rows = zone_rows(fetch_zones(make_session()))
+def write_zones(session, path=WSZ_MAINS_PATH):
+    expected = zone_count(session)
+    rows = zone_rows(fetch_zones(session))
     if len({r["code"] for r in rows}) != len(rows):
         raise RuntimeError("duplicate zone codes in the layer")
-    if len(rows) < MIN_ZONES:
-        raise RuntimeError(f"only {len(rows)} zones fetched; not overwriting {WSZ_MAINS_PATH}")
-    with open(WSZ_MAINS_PATH, "w", newline="") as f:
+    if len(rows) != expected:
+        raise RuntimeError(f"fetched {len(rows)} zones, the layer reports {expected}; not writing")
+    with open(path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=COLUMNS)
         writer.writeheader()
         writer.writerows(rows)
+    return rows
+
+
+def run():
+    rows = write_zones(make_session())
     totals = county_mains_km(rows)
     print(f"Zones: {len(rows)}, {sum(totals.values()):,.0f} km of main in {len(totals)} counties")
     for county, km in totals.items():
