@@ -794,6 +794,8 @@ class Case(NamedTuple):
     closed: str | None = None
     # open and not yet started at the build: every surface says "from", not "since"
     ahead: bool = False
+    # cut at CAP_DAYS, whatever its end signal: the hours are a floor, and the cut
+    # is ours, not the notice's
     capped: bool = False
     # the end an open notice states and has not reported reached, in Irish wall
     # clock: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM"; None for a repeating window
@@ -903,6 +905,7 @@ def resolve_case(r, lifts, now, shared_window=None, recurring=None):
         elif open_now and start < now and not already_over:
             # ongoing with no inferred end: runs from start until now, capped
             end = min(now, start + cap)
+            capped = now > start + cap
         else:
             # Closed with no usable end signal, or already over per the notice's
             # own text: a token that keeps its publication day on the bars. The
@@ -1136,7 +1139,7 @@ def top_events(longest, event_meta, towns, area_of, shown=TOP_EVENTS_SHOWN):
     observed, at the covered hours that median reads. So the ten are the tail of
     the distribution the headline summarises, and no figure here is one the
     median does not already rest on. Why this ranking and not another is in
-    notes/statuspage-methodology.md ("The national top ten").
+    notes/statuspage-methodology.md ("The estimate is removed").
 
     Keyed by (county, ref), not ref: 15 reference numbers span two counties and
     each half is its own notice in its own county's count.
@@ -1157,7 +1160,7 @@ def top_events(longest, event_meta, towns, area_of, shown=TOP_EVENTS_SHOWN):
             "confirmed": meta["confirmed"],
             "scheduled": meta["scheduled"],
         }
-        # a reported completion ran past the cap, so the hours are a floor
+        # an outage pin was cut at the cap, so the hours are a floor
         if meta["capped"]:
             row["capped"] = 1
         if towns is not None and (county, ref) in area_of:
@@ -1988,8 +1991,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None):
         event_iv[(case.county, case.ref)].extend(case.intervals)
         if not case.no_end:
             meta["measured"].extend(case.intervals)
-        # the observed pins only: a schedule past the cap is no works complete
-        meta["capped"] |= case.capped and case.observed_end and case.sev == "outage"
+        meta["capped"] |= case.capped and case.sev == "outage"
         if towns is not None:
             # the breakdown homes each pin individually; the event is named once
             code = towns.place(r["full_lat"], r["full_lon"], case.county)
