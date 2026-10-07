@@ -7,6 +7,7 @@ no licence on the item.
 
 import csv
 import json
+import math
 from collections import defaultdict
 
 from uisce.config import WSZ_MAINS_PATH, WSZ_SHAPES_PATH, make_session
@@ -256,6 +257,16 @@ class ZoneLookup:
                 None,
             )
         return self._cache[key]
+
+    def cells(self, deg):
+        """{(i, j): [(code, rings)]} on a `deg` grid of lon and lat, each zone in every
+        cell its bbox touches, in lookup order so a cell's first hit is `zone`'s."""
+        out = defaultdict(list)
+        for code, (x0, y0, x1, y1), rings in self._zones:
+            for i in range(math.floor(x0 / deg), math.floor(x1 / deg) + 1):
+                for j in range(math.floor(y0 / deg), math.floor(y1 / deg) + 1):
+                    out[i, j].append((code, [ring for _, ring in rings]))
+        return dict(out)
 
 
 def run():

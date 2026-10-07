@@ -70,3 +70,10 @@ ul.notices details p { margin: 6px 0 0; color: var(--ink-2); line-height: 1.5; }
 /* One event published as pins in several areas is listed under each. The area
    pages say so on the row; the county list de-duplicates and never shows it. */
 .also { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+
+.where { margin-top: 10px; font-size: 13.5px; color: var(--ink-2); line-height: 1.5; }
+.where button {
+  font: inherit; color: var(--ink); background: var(--surface); cursor: pointer;
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; margin-right: 6px;
+}
+.where button:hover { background: var(--grid); }
