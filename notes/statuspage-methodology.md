@@ -211,24 +211,15 @@ Zones keyed to one authority can serve another county. With attributes alone, th
 
 **Simply put:** every pin is matched to the Water Supply Zone whose boundary it falls inside, at build, from boundaries committed in the repo. About 95 pins in 100 land in one; the rest are on group or private schemes the layer does not draw.
 
-`uisce-fetch-wsz` also writes `data/wsz.geojson`: each zone's boundary, keyed by code alone, one zone a line so a re-fetch diffs by zone, and the fetch prints how many zones were added, removed and reshaped. The two files are written together or not at all: the boundaries must list exactly the mains table's zones. It is asked of the layer as GeoJSON (WGS84) with `maxAllowableOffset=0.0005` and `geometryPrecision=4`, simplified by the server. `wsz.ZoneLookup` answers a pin with a bounding-box prefilter and an even-odd ray cast over all of a zone's rings, which handles holes and separate parts alike; pure Python, no shapely. It loads in 0.05 s and answers 14,665 distinct pins in 0.9 s. The assignment is made at build and stored nowhere: the boundaries are re-fetched by hand, and a zone column in the DB would go stale behind them. `uisce-site` prints the coverage line every build.
+`uisce-fetch-wsz` also writes `data/wsz.geojson`: each zone's boundary as the layer serves it, every vertex, coordinates to 5 decimal places (about 1 m), keyed by code alone, one zone a line so a re-fetch diffs by zone. The fetch prints how many zones were added, removed and reshaped, and writes the mains table and the boundaries together or not at all: the boundaries must list exactly the mains table's zones. `wsz.ZoneLookup` answers a pin with a bounding-box prefilter and a ray cast, pure Python, no shapely; 14,665 distinct pins take about 3 s. The assignment is made at build and stored nowhere: the boundaries are re-fetched by hand, and a zone column in the DB would go stale behind them. `uisce-site` prints the coverage line every build.
 
-**The simplification**, measured on release 2026-10-06-2104 (14,665 distinct pin coordinates) against the full boundaries:
+**Coverage**, distinct pin coordinates: 95.47% of 14,467 on release 2026-10-04-1942, which reproduces the probe's 95.4% under "Supply zones as a limit on the circle" ([archive/availability-method.md](archive/availability-method.md)), and 95.52% of 14,665 on 2026-10-06-2104.
 
-| Offset (degrees) | Precision | Size | Pins whose answer moves |
-|---|---|---|---|
-| none | 5 dp | 11.6 MB | 0 (95.09% in a zone) |
-| 0.0001 | 5 dp | 5.2 MB | 28 |
-| 0.0002 | 5 dp | 4.3 MB | 62 |
-| 0.0004 | 4 dp | 3.0 MB | 108 |
-| 0.0005 | 5 dp | 3.0 MB | 123 |
-| **0.0005** | **4 dp** | **2.7 MB** | **128 (94.84% in a zone)** |
+**A zone is tested part by part.** Some zones are drawn with parts that overlap each other. An even-odd ray cast over all of a zone's rings reads the overlap as a hole; it was the first version here, and it put 95.04% of pins in a zone on 2026-10-04-1942 instead of 95.47%. A pin is in a zone when it is inside one part's outer ring and none of that part's holes.
 
-The plan's budget was 3 MB; the two rows at 3.0 MB sit on it, so a re-fetch could tip them over. 0.0005 degrees is 35 m east-west and 55 m north-south. Of the 128 moved pins (0.9%), 69 fall out of every zone, 33 fall into one, and 26 change zone, all at boundaries already approximate: 81 were `UnderReview` on 2026-10-05.
+**A pin in two zones** goes to the smaller by area. The layer overlaps 8 pairs of zones under pins on 2026-10-06-2104, 24 pins in all: Kilsellagh inside Foxes Den (8), DCC Zone 3 and Zone 4 Leixlip (8), Glanmire inside Glashaboy, Innishannon inside Cork Harbour and City, and four with one pin each. The smaller is usually a town zone drawn inside its rural scheme.
 
-**A pin in two zones** goes to the smaller by area, because the common overlap is a town zone drawn inside its rural scheme (Gorey Urban in Gorey Rural, Carlingford in Cooley, Cork City in Cork Harbour and City). The full boundaries put 2 pins in two zones, the simplified 11; for 8 of those 11 the smaller zone is the one the full boundaries choose.
-
-**The 95.4% did not reproduce.** The probe under "Supply zones as a limit on the circle" ([archive/availability-method.md](archive/availability-method.md)) found 95.4% of 14,356 distinct pins in a zone and 19 in two, with shapely; its code was not kept. On release 2026-10-04-1942 the full boundaries give 95.04% of 14,467 (94.80% simplified), with 1 pin in two. Projecting the pins into the layer's native Irish Grid with pyproj (EPSG:29900, 29902 and 29903) gives 95.05% under all three, so the gap is not the datum. No distinct-coordinate count of either release is 14,356 (the 4-dp rounded pins are 14,363). The figure the site stands on is the one above.
+**Rejected: simplified boundaries.** The plan's 3 MB budget for the file was never measured against accuracy, and nothing the browser loads reads the file. Fitting it needs the layer to smooth the boundaries by 35-55 m (`maxAllowableOffset=0.0005` degrees, 2.7 MB), which moved 128 of 14,665 pins against the full boundaries. Full-precision coordinates (21.5 MB, 8.3 MB compressed) were rejected for the 5 dp file (11.6 MB, 2.9 MB compressed in git): 3 of 14,665 pins differ.
 
 ## Outage notices per 100 km of main (2026-10-06)
 

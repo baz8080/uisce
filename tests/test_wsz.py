@@ -1,6 +1,5 @@
 import pytest
 
-from uisce.config import WSZ_SHAPES_PATH
 from uisce.site import COUNTY_POP, zone_report
 from uisce.wsz import (
     COUNTIES,
@@ -147,7 +146,6 @@ def test_complete_fetch_writes_the_table(tmp_path):
 
 
 def test_committed_boundaries_are_the_committed_zones():
-    assert WSZ_SHAPES_PATH.stat().st_size < 3_000_000
     assert [f["properties"]["code"] for f in read_shapes()] == [r["code"] for r in read_zones()]
 
 
@@ -182,6 +180,12 @@ def test_a_hole_is_outside_and_a_second_part_inside():
     assert lookup.zone(5, 5) is None
     assert lookup.zone(1, 21) == "Z"
     assert lookup.zone(15, 15) is None
+
+
+def test_overlapping_parts_of_one_zone_are_not_a_hole():
+    parts = [[square(0, 0, 6, 6)], [square(4, 4, 10, 10)]]
+    lookup = ZoneLookup([shape("Z", "MultiPolygon", parts)])
+    assert lookup.zone(5, 5) == "Z"
 
 
 def test_a_pin_in_two_zones_goes_to_the_smaller():

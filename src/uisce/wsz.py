@@ -17,9 +17,6 @@ WSZ_URL = (
 )
 WSZ_FIELDS = "SCHEME_COD,SCHEME_NAM,LOCALAUTHORITY,DISMAINSLENGTH"
 PAGE_SIZE = 1000
-# Degrees (35-55 m), applied by the layer; chosen in statuspage-methodology.md, "Zone lookup".
-SIMPLIFY_DEG = 0.0005
-PRECISION = 4
 COLUMNS = ["code", "name", "local_authority", "county", "mains_m"]
 
 COUNTIES = {
@@ -94,12 +91,8 @@ def fetch_zones(session):
 
 
 def fetch_shapes(session):
-    params = {
-        "outFields": "SCHEME_COD",
-        "f": "geojson",
-        "maxAllowableOffset": SIMPLIFY_DEG,
-        "geometryPrecision": PRECISION,
-    }
+    # every vertex, to about 1 m: smoothing the boundaries moves pins between zones
+    params = {"outFields": "SCHEME_COD", "f": "geojson", "geometryPrecision": 5}
     return fetch_features(session, params)
 
 
@@ -198,6 +191,14 @@ def _ring_area(ring):
     return abs(sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in edges(ring))) / 2
 
 
+def _in_ring(x, y, ring):
+    inside = False
+    for (x0, y0), (x1, y1) in edges(ring):
+        if (y0 > y) != (y1 > y) and x < (x1 - x0) * (y - y0) / (y1 - y0) + x0:
+            inside = not inside
+    return inside
+
+
 class ZoneLookup:
     """Point-in-polygon on the committed boundaries: a bbox prefilter, then a ray cast."""
 
@@ -208,12 +209,12 @@ class ZoneLookup:
             polygons = geometry["coordinates"]
             if geometry["type"] == "Polygon":
                 polygons = [polygons]
-            rings = [ring for polygon in polygons for ring in polygon]
-            xs = [x for ring in rings for x, _ in ring]
-            ys = [y for ring in rings for _, y in ring]
+            parts = []
+            for outer, *holes in polygons:
+                xs, ys = [x for x, _ in outer], [y for _, y in outer]
+                parts.append(((min(xs), min(ys), max(xs), max(ys)), outer, holes))
             area = sum(_ring_area(p[0]) - sum(map(_ring_area, p[1:])) for p in polygons)
-            bbox = (min(xs), min(ys), max(xs), max(ys))
-            zones.append((area, f["properties"]["code"], bbox, rings))
+            zones.append((area, f["properties"]["code"], parts))
         # smallest first, so a pin in two zones goes to the town inside its rural scheme
         zones.sort(key=lambda z: (z[0], z[1]))
         self._zones = [z[1:] for z in zones]
@@ -224,25 +225,21 @@ class ZoneLookup:
         return cls(read_shapes(path))
 
     @staticmethod
-    def _inside(x, y, rings):
-        # even-odd across every ring, which counts holes and separate parts alike
-        inside = False
-        for ring in rings:
-            for (x0, y0), (x1, y1) in edges(ring):
-                if (y0 > y) != (y1 > y) and x < (x1 - x0) * (y - y0) / (y1 - y0) + x0:
-                    inside = not inside
-        return inside
+    def _inside(x, y, parts):
+        # part by part, not even-odd over every ring: the layer draws some zones
+        # with overlapping parts, and even-odd reads the overlap as a hole
+        return any(
+            x0 <= x <= x1 and y0 <= y <= y1 and _in_ring(x, y, outer)
+            and not any(_in_ring(x, y, hole) for hole in holes)
+            for (x0, y0, x1, y1), outer, holes in parts
+        )
 
     def zone(self, lat, lon):
         """The zone code a pin falls in, or None for a scheme the layer does not cover."""
         key = (lat, lon)
         if key not in self._cache:
             self._cache[key] = next(
-                (
-                    code
-                    for code, (x0, y0, x1, y1), rings in self._zones
-                    if x0 <= lon <= x1 and y0 <= lat <= y1 and self._inside(lon, lat, rings)
-                ),
+                (code for code, parts in self._zones if self._inside(lon, lat, parts)),
                 None,
             )
         return self._cache[key]
@@ -257,4 +254,5 @@ def run():
     print(f"Boundaries: {len(added)} added, {len(removed)} removed, {len(reshaped)} reshaped")
     for label, codes in (("removed", removed), ("reshaped", reshaped)):
         if codes:
-            print(f"  {label}: {', '.join(codes)}")
+            more = f" and {len(codes) - 20} more" if len(codes) > 20 else ""
+            print(f"  {label}: {', '.join(codes[:20])}{more}")
