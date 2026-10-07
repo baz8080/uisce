@@ -376,6 +376,20 @@ So a window is treated as a property of the **works**, not of the notice: `event
 
 **The guard refuses by default.** A refusal is a numeric no-op, so the checks are deliberately suspicious: the recurrence value must be exactly `daily`, all three window fields must parse, open must differ from close, the series must produce at least two windows, and for a *scheduled* end the window's closing time must match the reported end time — the prompt requires them to be the same, so a disagreement is the model contradicting itself. Completion updates have no such cross-check available (their `local_time` is the completion, not a window close), so they are honoured and listed individually in the build report.
 
+## Months and days are Dublin's (2026-10-07)
+
+**Simply put:** the site stores and computes in UTC, but every month, day cell and printed date is Irish. Until this change a notice published at 00:30 Irish time on 1 July was dated 30 June and counted in June.
+
+- `month_bounds` and the day cells cut at Dublin midnight, held as UTC instants (`local_midnight`). Two datetimes zoned Dublin subtract by wall clock and lose the hour at a clock change, so nothing keeps one.
+- A month's cell count is `calendar.monthrange`, never `(hi - lo).days`: a Dublin March is 23 hours short of 31 days and would draw 30 cells.
+- Every printed date goes through `local_date`: `since`, the history's `start`, `from` and `end`, the Atom summary, and `closed_on`, which returned a Dublin date for a completion but a UTC date for a lift or `closed_at`. A bare-date `closed_at` from schema v2's first builds is kept as written.
+- The month in progress (`top`'s cut-off, `month_list`) and the app's `today` read Dublin's date, so the first hour of 1 August no longer treats July as in progress.
+- `COLLECTION_START` is Dublin midnight on 20 April.
+
+Measured on the local DB (last seen 2026-10-06): 65 of 14,633 notices since 29 March were published between 23:00 and 00:00 UTC in summer time, each dated a day early; none crossed a month, so no letter, count or median changed. The rules' year guess still reads `start_date`'s UTC date: it picks the year nearest publication, which an hour cannot move.
+
+esb (baz8080/esb#51) and lifts (2026-08-18) follow the same rule.
+
 
 
 ## Known limitations

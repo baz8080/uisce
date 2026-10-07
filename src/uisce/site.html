@@ -327,7 +327,7 @@ let view = "overview";
 const VIEW_EL = { overview: "overview", county: "countyview", area: "areaview", top: "topview", open: "openview", wait: "waitview" };
 // months with a finished top ten; the in-progress month has none (see top_events)
 let TOP_MONTHS = D.top_months || [];
-const today = new Date().toISOString().slice(0, 10);
+const today = irishNow().slice(0, 10);
 
 // Four entries, one desktop line. Quality notices left the bars entirely —
 // the healthmark and the county view carry them — so the legend no longer

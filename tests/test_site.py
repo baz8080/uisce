@@ -27,6 +27,7 @@ from uisce.site import (
     boil_notice_fate,
     build_site,
     classify,
+    closed_on,
     collect_lifts,
     count_figures,
     count_grade,
@@ -84,6 +85,8 @@ def _scheduled(**overrides):
 
 
 NOW = datetime(2026, 5, 10, tzinfo=UTC)
+# 00:00 on 1 May in Dublin; the fixture's own start is 01:00 Irish time
+MAY_1 = "2026-04-30T23:00:00+00:00"
 
 # one Small Area of 1,000 people sitting right on the test pin, inside a Co.
 # Carlow settlement; the pin therefore lands in the town, not the unplaced bucket
@@ -399,6 +402,61 @@ class TestMonths:
     def test_month_bounds_december(self):
         lo, hi = month_bounds("2026-12")
         assert (lo.month, hi.year, hi.month) == (12, 2027, 1)
+
+
+class TestDublinDays:
+    """Months and days are cut at Dublin midnight, and every date printed is Dublin's."""
+
+    # 00:30 Irish time on 1 July
+    JULY_1 = "2026-06-30T23:30:00+00:00"
+
+    def _july_case(self, **overrides):
+        return _case(**({"start_date": self.JULY_1, "notice_to_end_seconds": 1800.0,
+                         "end_local_date": "2026-07-01", "end_local_time": "01:00"}
+                        | overrides))
+
+    def test_a_summer_month_starts_at_dublin_midnight(self):
+        assert month_bounds("2026-07") == (_dt("2026-06-30T23:00:00+00:00"),
+                                           _dt("2026-07-31T23:00:00+00:00"))
+        assert month_bounds("2026-01")[0] == _dt("2026-01-01T00:00:00+00:00")
+
+    def test_the_month_list_reads_dublin_months(self):
+        aug_1 = _dt("2026-07-31T23:30:00+00:00")
+        assert month_list(aug_1, aug_1) == ["2026-08"]
+
+    def test_a_notice_after_midnight_on_the_1st_is_filed_under_the_new_month(self):
+        site = build_site([self._july_case()], datetime(2026, 7, 15, tzinfo=UTC), TOWNS)
+        months = site["counties"]["Carlow"]["months"]
+        assert months["2026-06"]["outage_notices"] == 0
+        assert months["2026-07"]["outage_notices"] == 1
+        assert not any(sev for (sev,) in months["2026-06"]["days"])
+        assert months["2026-07"]["days"][0] == ["outage"]
+        event = site["history"]["Carlow"]["T1"]["events"][0]
+        assert (event["start"], event["closed"]) == ("2026-07-01", "2026-07-01")
+
+    def test_an_open_notice_is_dated_on_dublin_s_calendar(self):
+        row = _open(start_date=self.JULY_1)
+        county = build_site([row], datetime(2026, 7, 2, tzinfo=UTC), TOWNS)["counties"]["Carlow"]
+        assert county["open"][0]["since"] == "2026-07-01"
+
+    def test_closed_at_is_dated_in_dublin_like_every_other_close(self):
+        row = _scheduled(closed_at="2026-07-31T23:30:00+00:00")
+        now = datetime(2026, 8, 5, tzinfo=UTC)
+        assert closed_on(row, now, _dt(row["start_date"])) == "2026-08-01"
+        assert closed_on(row | {"closed_at": "2026-07-17"}, now, _dt(row["start_date"])) == (
+            "2026-07-17")
+
+    def test_the_clock_change_months_keep_every_day(self):
+        months = build_site([_case()], datetime(2027, 3, 31, 12, tzinfo=UTC), TOWNS)[
+            "counties"]["Carlow"]["months"]
+        assert len(months["2026-10"]["days"]) == len(months["2027-03"]["days"]) == 31
+
+    def test_july_is_finished_in_the_first_hour_of_august(self):
+        site = build_site([_case()], _dt("2026-07-31T23:30:00+00:00"), TOWNS)
+        assert "2026-07" in site["top"]
+
+    def test_the_app_reads_today_in_dublin(self):
+        assert "const today = irishNow().slice(0, 10);" in APP
 
 
 class TestSchemePairing:
@@ -1244,7 +1302,7 @@ class TestNoticesPer100km:
 
     def test_a_month_is_lettered_from_the_instant_it_ends(self):
         rows = _notices("Carlow", "CAR", self.CARLOW)
-        end = datetime(2026, 10, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 9, 30, 23, tzinfo=timezone.utc)  # Dublin midnight
         for now, lettered in ((end - timedelta(seconds=1), False), (end, True)):
             sep = build_site(rows, now, TOWNS)["counties"]["Carlow"]["months"]["2026-09"]
             assert (sep["count_grade"] is not None) is lettered
@@ -1284,7 +1342,7 @@ class TestClearDays:
     """
 
     def _month(self, now, ym="2026-05"):
-        return build_site([_case()], now, TOWNS)["counties"]["Carlow"]["months"][ym]
+        return build_site([_case(start_date=MAY_1)], now, TOWNS)["counties"]["Carlow"]["months"][ym]
 
     def test_the_in_progress_month_counts_only_days_that_have_happened(self):
         m = self._month(NOW)          # 10 May 2026
@@ -2088,7 +2146,7 @@ class TestAreaHistory:
     """
 
     def test_one_event_becomes_one_record(self):
-        events = _history([_case()])
+        events = _history([_case(start_date=MAY_1)])
         assert len(events) == 1
         assert events[0] == {
             "ref": "CAR00000001", "title": "Burst Water Main - Carlow", "sev": "outage",
@@ -2099,14 +2157,14 @@ class TestAreaHistory:
     def test_the_last_charged_day_is_carried_when_it_differs_from_the_first(self):
         """The county bar finds a day's events by [start, end]; a one-day event
         omits the end, the sparse rule the rest of the record follows."""
-        assert "end" not in _history([_case()])[0]  # 1 May 00:00 to 2 May 00:00
-        three_days = _history([_case(notice_to_end_seconds=3 * 86400.0)])[0]
+        assert "end" not in _history([_case(start_date=MAY_1)])[0]
+        three_days = _history([_case(start_date=MAY_1, notice_to_end_seconds=3 * 86400.0)])[0]
         assert three_days["end"] == "2026-05-03"  # ends 4 May 00:00, so the 3rd
         recurring = _history([_recurring()], now=AFTER_MAY)[0]
         assert recurring["end"] == "2026-05-08"
         open_case = _history([_case(status="Open", notice_to_end_seconds=None,
                                     end_source="not_found", end_local_date=None)])[0]
-        assert open_case["end"] == "2026-05-09"  # accrues to NOW, midnight on the 10th
+        assert open_case["end"] == "2026-05-10"  # accrues to NOW, 01:00 Irish on the 10th
 
     def test_an_event_with_no_end_carries_its_publication_day_alone(self):
         rows = [
@@ -2167,7 +2225,7 @@ class TestAreaHistory:
         event = _history(rows)[0]
         assert event["open"] == 1
         assert event["hours"] == 48.0  # 8 May -> NOW, not the 120h scheduled
-        assert event["end"] == "2026-05-12"  # the bar still shows the days ahead
+        assert event["end"] == "2026-05-13"  # the days ahead, to 01:00 Irish on the 13th
 
     def test_an_open_event_that_has_not_started_has_no_hours_so_far(self):
         """38 of 271 open events on the 2026-09-23 release: "Mon 5 Oct - 7.2h so
