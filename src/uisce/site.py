@@ -22,6 +22,7 @@ collection began, with no letter either: see zone_data.
 Methodology and data findings are documented in notes/statuspage-methodology.md.
 """
 
+import calendar
 import csv
 import html
 import json
@@ -71,7 +72,7 @@ def page_html(template, markers):
 
 # The feed was first snapshotted on 2026-04-20; earlier days are unobserved
 # (the ArcGIS source only retains recent notices).
-COLLECTION_START = datetime(2026, 4, 20, tzinfo=timezone.utc)
+COLLECTION_START = datetime(2026, 4, 20, tzinfo=DUBLIN).astimezone(timezone.utc)
 
 # Notice-to-end spans above this are capped; the genuinely long events
 # (conservation restrictions) are classed degraded and never accrue anyway.
@@ -192,8 +193,12 @@ def closed_on(row, now, start, closed_by=None):
     if end is not None and start <= end <= now:
         return row["end_local_date"]
     if closed_by is not None:
-        return closed_by.strftime("%Y-%m-%d")
-    return row["closed_at"][:10] if row["closed_at"] else None
+        return local_date(closed_by)
+    closed_at = row["closed_at"]
+    # schema v2's first builds stamped a bare date
+    if closed_at and len(closed_at) > 10:
+        return local_date(parse_dt(closed_at))
+    return closed_at
 
 
 def classify(row, recurring=False):
@@ -412,15 +417,26 @@ def measured_span(row):
     return row["notice_to_end_seconds"]
 
 
+def local_date(dt):
+    """The Irish calendar date of an instant, as YYYY-MM-DD."""
+    return dt.astimezone(DUBLIN).strftime("%Y-%m-%d")
+
+
+def local_midnight(day):
+    # held in UTC: two datetimes zoned Dublin subtract by wall clock and lose the clock-change hour
+    return datetime.combine(day, time(), DUBLIN).astimezone(timezone.utc)
+
+
 def month_bounds(ym):
     year, month = (int(p) for p in ym.split("-"))
-    start = datetime(year, month, 1, tzinfo=timezone.utc)
-    end = datetime(year + (month == 12), month % 12 + 1, 1, tzinfo=timezone.utc)
+    start = local_midnight(date(year, month, 1))
+    end = local_midnight(date(year + (month == 12), month % 12 + 1, 1))
     return start, end
 
 
 def month_list(start, end):
-    """['2026-04', ...] covering every month from start to end inclusive."""
+    """['2026-04', ...] covering every Irish month from start to end inclusive."""
+    start, end = start.astimezone(DUBLIN), end.astimezone(DUBLIN)
     months = []
     year, month = start.year, start.month
     while (year, month) <= (end.year, end.month):
@@ -1009,7 +1025,7 @@ class Region:
                     "sev": sev,
                     "title": r["title"],
                     "loc": r["location"] or "",
-                    "since": case.start.strftime("%Y-%m-%d"),
+                    "since": local_date(case.start),
                 } | ({"ahead": 1} if case.ahead else {}),
             )
             if not case.ahead:
@@ -1028,7 +1044,7 @@ class Region:
                     "sev": sev,
                     "title": r["title"],
                     "loc": r["location"] or "",
-                    "since": case.start.strftime("%Y-%m-%d"),
+                    "since": local_date(case.start),
                     "closed": case.closed,
                 }
 
@@ -1162,7 +1178,7 @@ def resolved_by_month(region, shown=None):
         # an event with a pin still open is open, whatever its siblings say; a
         # close before collection began (a standing notice capped years ago) is
         # in no month the site shows
-        if ref not in region.open_now and event["closed"] >= f"{COLLECTION_START:%Y-%m-%d}":
+        if ref not in region.open_now and event["closed"] >= local_date(COLLECTION_START):
             by_month[event["closed"][:7]].append(event)
     out = {}
     for ym, events in by_month.items():
@@ -1298,7 +1314,7 @@ def event_record(ref, meta, intervals, now):
         "sev": meta["sev"],
         # earliest publication across the event's pins, not the first pin's own
         # date: rows arrive in id order, not start_date order
-        "start": meta["first_pub"].strftime("%Y-%m-%d"),
+        "start": local_date(meta["first_pub"]),
         "pins": meta["pins"],
     }
     counted = [(s, min(e, now)) for s, e in merge(meta["measured"]) if s < now]
@@ -1312,10 +1328,10 @@ def event_record(ref, meta, intervals, now):
             record["span_h"] = round(span, 1)
     if iv:
         # a repeating window can first open after the notice went up
-        first = iv[0][0].strftime("%Y-%m-%d")
+        first = local_date(iv[0][0])
         if first != record["start"]:
             record["from"] = first
-        end = (iv[-1][1] - timedelta(seconds=1)).strftime("%Y-%m-%d")
+        end = local_date(iv[-1][1] - timedelta(seconds=1))
         if end != record["start"]:
             record["end"] = end
     for field in ("confirmed", "scheduled"):
@@ -1656,7 +1672,7 @@ def county_events(areas_history):
 
 def _fmt_day(iso):
     """'Fri 1 Aug' for readers, with the year appended when it isn't this year's."""
-    return statusui.fmt_date(iso, date.today())
+    return statusui.fmt_date(iso, datetime.now(DUBLIN).date())
 
 
 def notice_paragraphs(description):
@@ -1978,7 +1994,8 @@ def county_page_html(
 
 
 def _since():
-    return f"{COLLECTION_START.day} {COLLECTION_START:%B %Y}"
+    start = COLLECTION_START.astimezone(DUBLIN)
+    return f"{start.day} {start:%B %Y}"
 
 
 def _mains_text(km):
@@ -2264,7 +2281,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
         meta = event_meta.setdefault(
             (case.county, case.ref),
             # first pin wins, matching how the event's open entry is recorded
-            {"title": r["title"], "start": case.start.strftime("%Y-%m-%d"),
+            {"title": r["title"], "start": local_date(case.start),
              "first_pub": case.start,
              "pins": 0, "confirmed": 0, "scheduled": 0, "sev": case.sev,
              "loc": r["location"] or "", "open": False, "closed": None, "health": False,
@@ -2392,7 +2409,10 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
 
         for ym in months:
             lo, hi = month_bounds(ym)
-            ndays = (hi - lo).days
+            first = date(*map(int, ym.split("-")), 1)
+            # not (hi - lo).days: a Dublin March is 23 hours short
+            ndays = calendar.monthrange(first.year, first.month)[1]
+            today = now.astimezone(DUBLIN).date()
 
             days = []
             # Days the month has actually reached: neither before collection
@@ -2401,15 +2421,15 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
             # county with four bad days out of six read "27/31 clear days".
             days_elapsed = clear_days = 0
             for d in range(ndays):
-                dlo, dhi = lo + timedelta(days=d), lo + timedelta(days=d + 1)
+                day = first + timedelta(days=d)
+                dlo, dhi = local_midnight(day), local_midnight(day + timedelta(days=1))
                 # one element, not a bare string: a cached page from before
                 # 2026-10-06 destructures [severity, share] and still reads it
                 if dhi <= COLLECTION_START:
                     days.append(["nd"])
                     continue
-                # the same predicate dayCells applies client-side, and both
-                # sides read UTC dates, so they agree on the boundary
-                elapsed = dlo.date() <= now.date()
+                # the same predicate dayCells applies client-side, on Dublin's date
+                elapsed = day <= today
                 days_elapsed += elapsed
                 worst = ""
                 for sev in SEV_ORDER:
@@ -2460,7 +2480,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
 
     # Complete months only. The in-progress month gains completions as notices
     # report them, so a "longest of this month" list would reshuffle twice a day.
-    current = now.strftime("%Y-%m")
+    current = local_date(now)[:7]
     site["top"] = {
         ym: top_events(national_longest[ym], event_meta, towns, area_of)
         for ym in months
@@ -2807,7 +2827,7 @@ def write_site(site, site_dir, towns=None):
             events = county_events(history.get(county, {}))
             body = county_page_html(
                 county, site["counties"][county] | county_data[county], areas, events,
-                site["months"], all_counties, site["generated_iso"][:10],
+                site["months"], all_counties, built[:10],
                 notice_text.get(county), built,
             )
             page = page_html(
