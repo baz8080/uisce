@@ -2,7 +2,7 @@
 
 Notes on `site.html` / `areas.html` / `county.html`, kept here so the reasoning isn't lost to chat history. See [how-it-works.md](how-it-works.md) for how the three pages fit together.
 
-**Simply put:** what the pages look like and why, in the order the decisions were made: the shared design, the page copy, the area pages and search, the payload split and the loading work. Entries a later one replaced are in [archive/frontend-superseded.md](archive/frontend-superseded.md).
+Entries a later one replaced are in [archive/frontend-superseded.md](archive/frontend-superseded.md).
 
 ## 2026-08-20: the vendored copy became a pinned uv git dependency
 
@@ -38,6 +38,8 @@ That was not hypothetical. `#overview { display: flex }`, added for the narrow-s
 **Amended 2026-10-02:** the shared rule, in statusui's `base.css` since 2026-08-20, became `[hidden]:not([hidden="until-found"])` so that find-in-page can still reveal an until-found element ([baz8080/statusui#19](https://github.com/baz8080/statusui/pull/19), for rail-delays' paged list). The parser read that `:not(` as a pseudo-class that never matches and failed three of these guards on a page the browser renders correctly, so it now takes exactly that exclusion as matching: these pages only ever set plain `hidden`. Any other pseudo-class still reads as no match.
 
 ## Contrast pass 2026-08-18: the grade chips could not carry white text
+
+**Simply put:** the grade chips were checked with two contrast formulas. The older one (WCAG 2) said dark lettering on the olive B chip was fine; the newer one (APCA), which better matches what eyes see, said it was the least readable chip on the page. So five chips carry white lettering and only the amber C carries dark, and a test upstream in statusui holds each pairing.
 
 From a cold external usability review. Every ratio below was recomputed independently against the WCAG 2.1 relative-luminance formula before anything changed; all of the review's figures reproduced exactly, including the `color-mix` for grade B, which lands on `#69930f`.
 
@@ -450,6 +452,8 @@ day of the month.
 
 ## The county's own data left data.js - 2026-09-05
 
+**Simply put:** the index page used to download every county's town table and closed-notice list up front, although the overview reads none of it. Each county's detail now arrives in its own file when the county is opened, and the index file is a quarter of its old size.
+
 Measured on the 2026-09-04 release, `data.js` was 955,516 bytes and the overview read a third
 of it. By block: `towns` 583,560 (61%), `resolved` 164,809 (17%), `months` 133,842 (14%),
 `open` 58,212 (6%), `top` 11,548. The first two are read by the county view alone. The
@@ -486,6 +490,8 @@ request per county, but the county view would wait for 2.4 MB of history it does
 and the area view would carry a breakdown it does not read either.
 
 ## The day list and "so far" read the charged span - 2026-09-24
+
+**Simply put:** tapping a day in a county's bar lists the notices on that day, and an open notice's "so far" shows hours that have actually passed rather than hours that were planned. Both were wrong for notices whose interval did not start on the day they were published.
 
 Measured on the 2026-09-23 release with the clock pinned to 2026-09-24 06:00 UTC, and again
 by running the app's own `dayEventsHtml` over every coloured cell up to today in Chromium.
@@ -538,6 +544,8 @@ pages reachable from search (the slug is now read from the history alone).
 
 
 ## The first paint waits for the data - 2026-10-02
+
+**Simply put:** the page used to draw its header and footer at once, then jump when the data arrived and filled the middle. Now everything below the header stays out of the paint until the first render has run, and every way the data can fail to arrive still reveals the page. Layout shift went from 0.45, which Google counts as poor, to 0.
 
 Cloudflare RUM put the index at CLS 0.453 on `html>body>div.wrap` (13% of loads poor), with
 LCP p50 2.2s and p75 2.5s. The scripts sit at the end of `<body>`, so Chrome paints the
@@ -602,6 +610,8 @@ existing nodes, so it counts. It is in roadmap.md.
 
 ## Long static lists skip what is off screen - 2026-10-02
 
+**Simply put:** a county page lists every notice, and Dublin's has over 1,700 rows. The browser now skips laying out rows that are off screen, which makes the longest page about ten times quicker to load. Each row tells the browser roughly how tall it will be so the scrollbar does not jump.
+
 The county pages list every notice (c/dublin.html: 1,733 rows, 436 KB) and areas.html lists
 2,123 areas in 26 sections. Chrome laid all of it out and painted what it could before the
 reader had moved: total long-task time on a cold load, 4x CPU, median of 7 (desktop / mobile
@@ -657,6 +667,8 @@ change), so screenshots are not byte-identical.
 A section drawn once keeps its last height while skipped: Chromium gives every `content-visibility: auto` element `contain-intrinsic-size: auto` whether the rule says so or not, so the search's rewrite of `--n`/`--r` reached only sections never painted. After scrolling the whole directory, a search for "bally" left a 14,987 px page over 4,210 px of rows at 1366 px (34,589 against 6,157 at 412). A search now adds `.searching` to the body, which draws every section (`content-visibility: visible`): the filtered list is short, and the page is exactly as tall as its rows. Clearing the search leaves each section its filtered height until it comes near the screen, so the scrollbar runs short for a while (17,864 against 30,554 px); anchor jumps after clearing still measured 0 CLS at both widths. The sections also took the 6 px `overflow-clip-margin` the notice rows already had, for the focus rings on edge links. Safari supports `content-visibility: auto` but not `overflow-clip-margin`, so it would have cut those rings; both skipping rules now sit inside `@supports (overflow-clip-margin: 6px)`, and Safari gets the lists as they were before, laid out in full. esb's review found it first.
 
 ## The first render's data is inline - 2026-10-02
+
+**Simply put:** the figures the first screen needs are written into the page itself, so it draws before the full data file has downloaded. The other views wait for that file behind a "Loading" note, and a newer file that arrives later is adopted.
 
 With the footer held back (the entry above) the first paint still waited on `data.js`: 216 KB
 raw, 28.4 KB gz, a blocking `<script>` at the end of the body. The first overview reads one

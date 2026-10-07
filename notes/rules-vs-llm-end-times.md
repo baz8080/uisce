@@ -176,6 +176,8 @@ Where the JSONL lives was the real question — esb and lifts keep collected dat
 
 ## rules-v2: midnight, tanker hours, bilingual completions (2026-09-24)
 
+**Simply put:** "until midnight on the 11th" can mean the start or the end of that day. The rules now read it as the end of the day when the works started that day, as the start when the notice says "12am on the 22nd" after a start the day before, and give up otherwise. An "until" about a water tanker is not the works' end, and an English completion under an Irish one is read.
+
 A review of the 2026-09-23 release found three wrong readings in rules-v1, each emitting or
 withholding an answer the site then published. All three are fixed in `rules-v2`, with a
 fourth, smaller widening that fell out of checking the cases the review named.

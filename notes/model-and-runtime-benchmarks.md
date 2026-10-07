@@ -1,7 +1,5 @@
 # Model and runtime benchmarks for duration inference
 
-**Simply put:** the local model was tested against every faster option, and each one was slower, wrong more often, or blocked by the runtime. Keep gemma-4-12b-qat, one request at a time.
-
 Findings from a benchmarking session on 2026-07-15, kept here so the reasoning isn't lost to chat history. The question was whether `uisce-infer` (see `src/uisce/inference.py`) could be made faster — by prompt caching, request concurrency, a different model, speculative decoding, or the MLX runtime. Short answer: no. Every avenue tested either lost accuracy, gained nothing, or was blocked by the runtime. The current setup — `gemma-4-12b-qat` (GGUF) on LM Studio, plain sequential requests — is the right one.
 
 All accuracy comparisons below re-ran the same 567 records from the 2026-07-15 inference run (419 unique descriptions after the multi-pin dedupe), with the same prompt (version 1) and temperature 0, and diffed `end_source` / `local_date` / `local_time` per case against the gemma baseline.

@@ -1,7 +1,5 @@
 # Pipeline dependencies
 
-**Simply put:** three things get out of step: the database, the file of extracted end times, and the site built from both. This note says how, and what each mismatch looks like.
-
 ## `uisce-build-inferred` requires the local DB to be at least as fresh as the inference run
 
 `data/inferred_end_times.jsonl` and `out/uisce.db` are two independently-evolving artifacts. The JSONL is produced by running `uisce-infer` against whatever `out/uisce.db` happened to be on disk at the time — often on a different machine, at a different point in the scrape history, than whatever `out/uisce.db` you currently have locally.
@@ -17,6 +15,8 @@ scripts/fetch-db.sh
 (defaults to the latest release; pass a specific tag if you know which one you need). There's no automatic reconciliation here on purpose — the inference run itself doesn't record which DB snapshot it used (see the description-hash discussion elsewhere in this repo's history for why the hash alone is enough for correctness, just not for provenance), so "grab the latest release" is the practical default rather than something that could be automated reliably.
 
 ## The mirror image: CI outruns inference, and the un-inferred backlog is almost all *open* cases
+
+**Simply put:** CI downloads new notices twice a day and runs the text rules, but cannot run the language model, so the notices the rules cannot read have no end time until someone runs the model by hand. Those are mostly the newest open notices, which is where a missing end shows most. And a gap in the database table does not mean the model has not run: the JSONL file is the truth, and the table is rebuilt from it.
 
 The section above covers the DB being older than the inference run, which fails loudly. The reverse — the DB being *newer* — fails silently, and it distorts the status site.
 

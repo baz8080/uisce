@@ -1,7 +1,5 @@
 # Data quality findings
 
-**Simply put:** the feed's fields often do not mean what their names say. This note records each one that was tested, what it turned out to mean, and what the site does about it.
-
 Notes on data quality issues discovered while building the duration-inference pipeline, kept here so the reasoning isn't lost to chat history. Effects quoted in person-hours or availability were measured before 2026-10-06, when the site stopped publishing those figures ([archive/availability-method.md](archive/availability-method.md)); the findings stand.
 
 ## `cases.start_date` / `cases.end_date` are not trustworthy duration signals
@@ -81,6 +79,8 @@ So neither population gains. **The toggle is dropped** — not on cherry-picking
 
 ### Measured 2026-07-20: ends preceding publication are 532 cases, not ~19 — and `start_date` is re-stamped in place
 
+**Simply put:** the feed sometimes rewrites a notice's start date after the event, so a few hundred notices look as if they ended before they began. Those get no length at all. Two obvious rescues, the earliest start ever seen and the works window the text names, were tried and both give a wrong number, so the gap stays.
+
 `build.py` nulls a computed span when the extracted end precedes `start_date`. The edge-cases section above recorded this as "~19 cases" on the pv1 corpus; on the current corpus (8,074 inferred) it is **532 cases, 6.6%** — 314 `scheduled_end_with_time`, 218 `completion_update`. Spot-checks across the magnitude range confirm the extractions are right: the text really does state an end before the publication timestamp.
 
 The distribution says what it is. Median −2.7h, 78% within −6h, and the descriptions are same-day: either the notice was published just after the works window it announces had closed ("works 9am until midday on 03 July", published 17:04 — case 237573), or the *first* publication already carried the completion update. For these, the true notice→end value is ≤ 0 — the event was over at publication — so NULL is the honest store and the family is the negative-side continuation of the "sub-minute durations" pattern in the outliers section.
@@ -103,6 +103,8 @@ So the spans stay NULL.
 **Consequence, fixed 2026-07-20:** an *open* case with a nulled span used to fall into the site's accrue-to-now branch, 28 such cases on this snapshot, 12 of them outage-class, running toward the 14-day cap for events whose own text says they finished. `ended_by_publication()` in `site.py` now routes them to the token 1-second footprint instead: their day still colours and they count as events, but no span runs. Open cases with genuinely *no* signal (`not_found`, or not yet inferred) still run to now - that behaviour is unchanged, and the never-inferred backlog is printed by `uisce-build-inferred` (see [pipeline-dependencies.md](pipeline-dependencies.md)).
 
 ## Scheduled vs actual end: the second signal is real and cheap (probed 2026-07-20)
+
+**Simply put:** most "works are now complete" updates still carry the originally planned end underneath, so the site could one day say how often Uisce Éireann beats its own estimate. It was probed, not built: a simple pattern match says about seven in ten run late, but nothing has checked that number by hand.
 
 An earlier session concluded that extracting scheduled-vs-actual "probably would not materially change things". **That was answering the wrong question** and is superseded here.
 
@@ -131,6 +133,8 @@ A crude regex probe (`until <time> on <date>`, no LLM spend at all) parsed 4,342
 **Amended 2026-09-24: the span and its anchor came from different starts.** `build.py` measures `notice_to_end_seconds` from the start it pinned at first inference (`end_input_start_date`), but `site.py` added that span to the *current* `start_date`. When the feed re-stamped the start between the two, the charged interval matched neither reading and ran past the notice's own end. On the 2026-09-23 release that was **21 cases with a usable span**, so the "confined to the nulled family" reading above no longer holds for the site: 243451 (Clare) was charged 4 days past its own completion, and 235225 (Meath, start moved +40 days) was charged the whole 14-day cap after its scheduled end. The interval now starts at `end_input_start_date`, the start the span was measured from, and so does the event's publication date everywhere it is read (the month the completion median files it under, the history, the top ten, the open and closed lists): a code review of the first cut found that leaving `start_date` as the publication produced history records ending before they started and a July median counting a completion July's own event count did not. The span lengths are unchanged, so this moves hours onto the right days rather than adding or removing them. No grade changed.
 
 ### A start typed into the wrong millennium (2026-10-04)
+
+**Simply put:** one notice was typed with the year 0206. It made an 1,820-year span, a page dated "Aug 0206", and a notice that fell in no month. Any start before the year 2000 is now ignored wherever a start is read; the other guards considered either missed it or caught real notices.
 
 Case 241224 (`WEX00118070`, "Burst Water Main - Wexford") carries `start_date` and `first_start_date` of `0206-08-10T10:15:00+00:00`: a hand-typed start (round `10:15:00`, where the feed's own stamps carry seconds) with the year's digits transposed. Its sibling pins 241225 and 241230 start 2026-08-10 08:51 and 09:12, all three were first seen 2026-08-10 12:01 and all three carry a completion update at 11:45 that day. Nothing checked the year, so on the 2026-10-04 release:
 
@@ -178,6 +182,8 @@ One real-world event is often published as several map pins sharing a `reference
 **Padded references (found 2026-09-24).** 57 references on the 2026-09-23 release carry a trailing space or `\xa0`, and 16 of them also appear without it, so 15 events were split in two: listed twice, and counted twice in the month's event counts. `case_ref` strips the reference before keying on it.
 
 ## `work_category` and `work_type` derivation from title categories
+
+**Simply put:** every notice title is "Kind of work - County", so the kind of work comes from the title, not from reading the text. For bursts, failures and new connections the title also settles whether the work was planned, and overrides the feed's own planned/unplanned flag, which is missing on most notices.
 
 Titles are rigidly structured as `"Category – County"` (dash inconsistently a hyphen or en-dash, spacing messy). A single mechanism, `CATEGORY_RULES` in `src/uisce/pipeline.py`, normalises the category part to a stable `work_category` slug and attaches a `work_type` policy (26 categories as of 2026-07; that list is the source of truth). `work_category` is a pure deterministic normalisation of an existing column, so it lives in `cases`, not `inferred_cases`; a title matching no rule gets a NULL `work_category`.
 
@@ -253,6 +259,8 @@ One reading decides both, `_read_window`, rather than the vote keeping its own l
 
 ## The notice title is not a reliable severity signal (found 2026-08-02)
 
+**Simply put:** the warnings inside a notice ("may cause supply disruptions", "allow 3-4 hours") appear on every kind of notice, so they say nothing about how bad it is. The one phrase that does carry meaning is "may cause low pressure", and Uisce Éireann also uses two different titles for the same nightly restriction.
+
 Prompted by a sniff test on the national top ten of the day: its largest event looked wrong. Investigating it turned up two things, and the language analysis is worth keeping because it rules out the obvious reading.
 
 **The hedging in Uisce's notices carries no severity signal.** "May cause supply disruptions" appears on **100% of burst mains**, which are unambiguous total outages — it is boilerplate about *who* is affected within a named area, not *whether*. Likewise "allow 3-4 hours for your supply to fully return" (99–100% of every category) and "supply should have returned" (39–48% of every category, and used *more* by `low_pressure` notices than by burst mains). None of them distinguish anything.
@@ -276,6 +284,8 @@ Counted layer-wide against the live service: `LASTUPDATE IS NOT NULL` returns **
 Consequence: **the feed is a complete archive of cases but a pure snapshot of status.** It returns everything (8,155 live vs 8,131 in the DB), yet carries no time dimension whatsoever, so no amount of re-querying recovers when a case changed. `status` transitions are observable only by us, only at build time, which is why `cases.closed_at` is stamped in the upsert and why the published daily release DBs are the only route to history before that column existed (see [`uisce.replay_closed_at`](../src/uisce/replay_closed_at.py)). Do not re-derive this; the fields will keep looking promising.
 
 ## `closed_at` is a floor: short-lived cases are never observed open
+
+**Simply put:** the site only learns a notice has closed by looking and finding it no longer open. A notice that opens and closes between two looks is never seen open, so counts of closures always run low. Building more often helped a little; the rest of the gap is Uisce Éireann marking notices closed about three days after the works finished, which no schedule can fix.
 
 Measured 2026-07-21 by replaying the 10 published snapshots (2026-06-30 → 2026-07-20): of the 2,224 cases that first appeared after the earliest snapshot, **256 (12%) were never seen `Open` in any snapshot** — created and closed inside a single gap between builds. No transition exists for those, so they can neither be replayed nor caught live.
 

@@ -1,6 +1,6 @@
 # Notes
 
-**Simply put:** these notes hold the measurements and decisions behind the site, so nobody has to work one out twice. Start with how-it-works.md. Every note opens with a "Simply put" paragraph; the detail follows it.
+The measurements and decisions behind the site, so nobody has to work one out twice. Start with how-it-works.md. A dense section opens with a "Simply put" paragraph: the idea in plain words before the detail.
 
 | Note | What it holds |
 |---|---|

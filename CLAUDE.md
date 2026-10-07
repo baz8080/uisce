@@ -3,7 +3,7 @@
 A static status site for Uisce Éireann water disruption notices, built from an ArcGIS feed.
 `notes/` carries measured findings and settled decisions across 13 files, indexed in
 `notes/README.md`, with retired text in `notes/archive/`. Too much to read wholesale, which is why
-the decisions that bind are indexed here. Every note opens with a "Simply put" paragraph.
+the decisions that bind are indexed here.
 
 ## The UI is shared — change it upstream
 
@@ -83,8 +83,9 @@ with the evidence that closed them.
   trade-off to record. Deferring one to the owner means measuring both sides first - how many
   cases the display gets wrong today, and how often the signal would get it wrong - and writing
   the numbers into the entry. The `is_open` row above is what an unmeasured deferral cost.
-- Every note, and any section a lay reader would stall on, opens with a **Simply put** paragraph:
-  one plain statement of the idea before the detail. Retired text moves to `notes/archive/`
+- A section a lay reader would stall on opens with a **Simply put** paragraph: the idea in plain
+  words, with its one load-bearing number, before the detail. Not a label on the top of every file,
+  and never a paraphrase of the heading. Retired text moves to `notes/archive/`
   unedited, under a header saying what replaced it; a live note never describes a figure the site
   does not publish, and `notes/README.md` indexes both.
 - Decisions go in `notes/`, dated, with the rejected alternatives and their numbers. Add a row here

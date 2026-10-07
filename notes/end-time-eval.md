@@ -1,6 +1,6 @@
 # End-time extraction evaluation
 
-**Simply put:** a person reads a sample of notices and checks the end time the software pulled out. Three rounds so far; the last two found no errors in 120 notices each. The working notes from the pv2 prompt change are in [archive/end-time-eval-handoffs.md](archive/end-time-eval-handoffs.md).
+The working notes from the pv2 prompt change are in [archive/end-time-eval-handoffs.md](archive/end-time-eval-handoffs.md).
 
 The LLM end-time extraction (`uisce-infer`) is the least-validated link in the chain: everything downstream - durations, disruption metrics, grades - trusts it, and the one in-feed cross-check (`end_date`) turned out to be untrustworthy (see [data-quality.md](data-quality.md)). This eval puts a measured accuracy number on it.
 
@@ -39,6 +39,8 @@ Interpretation rules, matching the prompt spec in `src/uisce/inference.py`:
 - Dates are day/month/year; times are Ireland local, reported as published without timezone conversion.
 
 ## Results
+
+**Simply put:** a person reads a sample of notices and checks the end time the software pulled out. A sample drawn at random from unseen notices measures accuracy; a sample built to over-represent rare kinds of notice measures each kind's error rate but not overall accuracy; and re-scoring a new prompt on notices it was tuned against only shows that the old mistakes are gone. The three are not comparable, which is why the tables below carry different headline numbers.
 
 ### 2026-07-18 — gemma-4-12b-qat, prompt v1, N = 114 (0 unsure)
 
@@ -266,6 +268,8 @@ replace `uisce-eval-sample`, which is still the right tool when per-class error 
 specific minority class are the question.
 
 ## pv3 adds the recurring window itself (2026-08-01)
+
+**Simply put:** the model also reports the nightly window itself (open, close, first date), and no person has ever labelled those fields. Three automatic checks stand in: the window must close at the reported end time, every value must appear in the notice text, and each build prints what was expanded. What none of them can catch is a window the model missed.
 
 v2 already recognised a repeating window and reported the last date at its closing time,
 correctly. What it could not do is say *what the window was*, so `site.py` had no choice but
