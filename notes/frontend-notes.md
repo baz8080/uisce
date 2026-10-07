@@ -749,7 +749,7 @@ arrives after the first render, so it costs no LCP, only 28.4 KB gz of transfer.
 
 **Simply put:** every page now shows the count of outage notices per 100 km of water main,
 its letter and the typical time to "works complete", and nothing from the population
-estimate. Session 3 of [simplification-plan.md](simplification-plan.md); the arithmetic is
+estimate. Session 3 of [simplification-plan.md](archive/simplification-plan.md); the arithmetic is
 statuspage-methodology.md, "Outage notices per 100 km of main".
 
 - **Letters and rates.** A finished month shows its own `count_grade` and `per_100km`. The
