@@ -1,5 +1,11 @@
 # Simplification plan (owner decision 2026-10-06)
 
+**Closed 2026-10-07.** All sessions are merged; session 9 was built as the "Which supply zone am
+I in?" button, not a map. The outcomes live in [../statuspage-methodology.md](../statuspage-methodology.md)
+("Outage notices per 100 km of main", "The estimate is removed", "Zone lookup", "Zone pages") and
+[../frontend-notes.md](../frontend-notes.md) ("The page counts notices", "Search reaches the zone",
+"Which supply zone am I in?"). Kept as it was written.
+
 **Simply put:** the site stops estimating how many people lost water and counts what it can
 see: outage notices per 100 km of water main, per county, per month, a letter cut on that
 count, and the median time to "works complete" beside it. Then a reader can look up their

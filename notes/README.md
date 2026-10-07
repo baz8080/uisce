@@ -16,7 +16,6 @@ The measurements and decisions behind the site, so nobody has to work one out tw
 | [population-data-sources.md](population-data-sources.md) | the Census geography a pin is placed by |
 | [water-sla-benchmarks.md](water-sla-benchmarks.md) | what regulators measure, and why the site cannot borrow it |
 | [roadmap.md](roadmap.md) | follow-ups not started, and decisions waiting on the owner |
-| [simplification-plan.md](simplification-plan.md) | the plan that replaced the population estimate with a count, session by session |
 
 Settled decisions are indexed in [../CLAUDE.md](../CLAUDE.md), one row each, pointing at the section that closed them.
 
@@ -28,6 +27,7 @@ Retired text, kept as it was written. Nothing in it describes a figure the site 
 |---|---|
 | [archive/availability-method.md](archive/availability-method.md) | the population-weighted availability method and its grades, used until 2026-10-06 |
 | [archive/frontend-superseded.md](archive/frontend-superseded.md) | three frontend entries a later one replaced |
+| [archive/simplification-plan.md](archive/simplification-plan.md) | the plan that replaced the population estimate with a count and added supply zones, closed 2026-10-07 |
 | [archive/end-time-eval-handoffs.md](archive/end-time-eval-handoffs.md) | the working notes of the pv2 prompt change, completed July 2026 |
 
 Older history is in git: `git log -p notes/`.

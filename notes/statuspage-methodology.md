@@ -227,7 +227,7 @@ Zones keyed to one authority can serve another county. With attributes alone, th
 
 **Simply put:** every Water Supply Zone gets a page at `z/<name>.html` saying how many outage notices were pinned inside it since collection began on 20 April 2026, the typical time to "works complete", the places in it hit more than once, and every notice, newest first. About one person in five is on a group or private scheme that no zone covers; the index and the zone directory say so.
 
-Session 7 of [simplification-plan.md](simplification-plan.md). All figures are release 2026-10-06-2104, built with the clock at the data horizon.
+Session 7 of [simplification-plan.md](archive/simplification-plan.md). All figures are release 2026-10-06-2104, built with the clock at the data horizon.
 
 **The window is "since 20 April 2026"** (checkpoint C, owner 2026-10-07), from `COLLECTION_START` to the last feed read, as the county count runs. It is re-asked once the archive holds twelve months (roadmap).
 
@@ -303,7 +303,7 @@ Nationally May 1.87, June 2.03, July 2.69, August 2.11, September 2.21.
 
 ## The estimate is removed (2026-10-06)
 
-**Simply put:** the code no longer works out how many people a notice reached. A pin is placed in the area of its nearest Census Small Area, a notice that never reported an end counts as a notice and has no length, and the ten largest disruptions are now the ten longest. Session 4 of [simplification-plan.md](simplification-plan.md); the page stopped showing the estimate in session 3 (frontend-notes.md, "The page counts notices").
+**Simply put:** the code no longer works out how many people a notice reached. A pin is placed in the area of its nearest Census Small Area, a notice that never reported an end counts as a notice and has no length, and the ten largest disruptions are now the ten longest. Session 4 of [simplification-plan.md](archive/simplification-plan.md); the page stopped showing the estimate in session 3 (frontend-notes.md, "The page counts notices").
 
 **What went.** `SmallAreaIndex` and the 500 m circle, `SpanTable` and every imputed span, `union_seconds`, the availability `grade()`, `Region.event_pop`, `TownLookup.dominant` / `within`, and from the payload `person_h`, `period_h`, `availability`, `grade`, `median_pooled_h`, the per-day population share and the history's `people`. `sa_pop.py` and `data/sa_pop.csv` are folded into `towns.py` and `data/sa_towns.csv`, which now carries each Small Area's centroid and Census population (the area populations are Census counts and stay on the page). `eval_overlap.py` went with the person-hours it measured. `imputed_n` is `no_end_n`: the same events, counted the same way, with no span charged.
 
