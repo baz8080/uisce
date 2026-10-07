@@ -171,9 +171,13 @@ def shape(code, geometry_type, coordinates):
             "geometry": {"type": geometry_type, "coordinates": coordinates}}
 
 
+def hole(x0, y0, x1, y1):
+    return square(x0, y0, x1, y1)[::-1]
+
+
 def test_a_hole_is_outside_and_a_second_part_inside():
     lookup = ZoneLookup([shape("Z", "MultiPolygon", [
-        [square(0, 0, 10, 10), square(4, 4, 6, 6)],
+        [square(0, 0, 10, 10), hole(4, 4, 6, 6)],
         [square(20, 0, 22, 2)],
     ])])
     assert lookup.zone(1, 1) == "Z"
@@ -182,10 +186,24 @@ def test_a_hole_is_outside_and_a_second_part_inside():
     assert lookup.zone(15, 15) is None
 
 
+def test_a_hole_exported_as_its_own_part_is_still_a_hole():
+    lookup = ZoneLookup([shape("Z", "MultiPolygon", [[square(0, 0, 10, 10)], [hole(4, 4, 6, 6)]])])
+    assert lookup.zone(1, 1) == "Z"
+    assert lookup.zone(5, 5) is None
+
+
 def test_overlapping_parts_of_one_zone_are_not_a_hole():
     parts = [[square(0, 0, 6, 6)], [square(4, 4, 10, 10)]]
     lookup = ZoneLookup([shape("Z", "MultiPolygon", parts)])
     assert lookup.zone(5, 5) == "Z"
+
+
+def test_a_zone_with_holes_is_the_smaller_in_a_tie():
+    lookup = ZoneLookup([
+        shape("HOLED", "MultiPolygon", [[square(0, 0, 10, 10)], [hole(1, 1, 9, 9)]]),
+        shape("PLAIN", "Polygon", [square(0, 0, 7, 7)]),
+    ])
+    assert lookup.zone(0.5, 0.5) == "HOLED"
 
 
 def test_a_pin_in_two_zones_goes_to_the_smaller():
