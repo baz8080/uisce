@@ -76,7 +76,7 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
   (archive/availability-method.md, "Density sensitivity": rank correlation 0.60 against a fixed
   headcount, 91 of 156 letters move). The owner chose to count outage notices per 100 km of
   water main instead, then add supply-zone pages. The sessions, checkpoints and models are in
-  [simplification-plan.md](simplification-plan.md); sessions 0 to 5 are merged. Delete this
+  [simplification-plan.md](simplification-plan.md); sessions 0 to 6 are merged. Delete this
   entry when that plan closes.
 - **`IGNORE_BOIL_NOTICES`.** Recommendation is to leave it off (boil-notices.md, re-measured
   2026-09-05): the two accruing notices and the one paired one are the live warnings the health
