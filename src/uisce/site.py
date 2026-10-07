@@ -60,6 +60,7 @@ COUNTY_HTML = Path(__file__).parent / "county.html"
 AREA_HTML = Path(__file__).parent / "area.html"
 ZONE_HTML = Path(__file__).parent / "zone.html"
 ZONES_HTML = Path(__file__).parent / "zones.html"
+ZONEFIND_JS = Path(__file__).parent / "zonefind.js"
 SITE_CSS = Path(__file__).parent / "site.css"
 AREAS_MARKER = "<!--AREAS-->"
 CANONICAL_MARKER = "<!--CANONICAL-->"
@@ -2501,6 +2502,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
             event_meta, event_iv, towns, now, seen,
         )
         site["area_zones"] = dict(area_zones)
+        site["zone_cells"] = zones.cells(ZONE_CELL_DEG)
         site["unzoned"] = {
             county: {code: len(keys) for code, keys in areas.items()}
             for county, areas in unzoned.items()
@@ -2631,6 +2633,8 @@ COUNTY_SHARD_DIR = "t"
 COUNTY_DIR = "c"
 AREA_DIR = "a"
 ZONE_DIR = "z"
+ZONE_CELL_DIR = "zs"
+ZONE_CELL_DEG = 0.5
 FEED_DIR = "feed"
 
 
@@ -2694,6 +2698,7 @@ def write_site(site, site_dir, towns=None):
     zones = site.pop("zones", {})
     unzoned = site.pop("unzoned", {})
     area_zones = site.pop("area_zones", {})
+    zone_cells = site.pop("zone_cells", {})
     data = "window.UISCE_DATA = " + json.dumps(site) + ";"
     first = inline_json(first_render_payload(site))
     site_dir.mkdir(parents=True, exist_ok=True)
@@ -2706,7 +2711,11 @@ def write_site(site, site_dir, towns=None):
     (site_dir / "index.html").write_text(
         page_html(
             SITE_HTML,
-            {"CANONICAL": f"{BASE_URL}/", "COUNTY-LINKS": county_links, "FIRST-RENDER": first},
+            {
+                "CANONICAL": f"{BASE_URL}/", "COUNTY-LINKS": county_links,
+                "FIRST-RENDER": first, "ZONE-V": html.escape(site.get("generated", "")),
+                "ZONEFIND": ZONEFIND_JS.read_text() if zones else "",
+            },
         )
     )
     sizes = {"feeds": 0}
@@ -2754,6 +2763,7 @@ def write_site(site, site_dir, towns=None):
     # in an HTML file instead of in Python string literals.
     index_bytes = county_bytes = n_county_pages = search_bytes = 0
     n_area_pages = area_bytes = n_zone_pages = zone_bytes = 0
+    zone_cells_written = (0, 0, 0)
     pages = ["", "areas.html"]
     if towns is not None:
         # The search index: every Census settlement, noticed or not, so a
@@ -2902,8 +2912,9 @@ def write_site(site, site_dir, towns=None):
 
         if zones:
             n_zone_pages, zone_bytes = _write_zone_pages(
-                site_dir, zones, unzoned, history, towns, pages
+                site_dir, zones, unzoned, history, towns, pages, site.get("generated", "")
             )
+            zone_cells_written = _write_zone_cells(site_dir, zone_cells, zones)
 
     # a sitemap over the pages, not the payload: data.js and the shards are
     # fetched by the app, never landed on
@@ -2922,11 +2933,12 @@ def write_site(site, site_dir, towns=None):
         "area_pages": area_bytes,
         "n_zone_pages": n_zone_pages,
         "zone_pages": zone_bytes,
+        "zone_cells": zone_cells_written,
         "sitemap_urls": len(pages),
     }
 
 
-def _write_zone_pages(site_dir, zones, unzoned, history, towns, pages):
+def _write_zone_pages(site_dir, zones, unzoned, history, towns, pages, version):
     """z/<slug>.html for every zone and the zones.html directory; appends their
     paths to `pages` and returns (zone pages written, their bytes)."""
 
@@ -2984,12 +2996,44 @@ def _write_zone_pages(site_dir, zones, unzoned, history, towns, pages):
             ZONES_HTML,
             {
                 "ZONES": _zone_index_html(zones, unzoned, area_items),
+                "ZONE-V": html.escape(version),
+                "ZONEFIND": ZONEFIND_JS.read_text(),
                 "CANONICAL": f"{BASE_URL}/zones.html",
             },
         )
     )
     pages.append("zones.html")
     return len(zones), total
+
+
+def _write_zone_cells(site_dir, cells, zones):
+    """zs/<i>_<j>.js, the boundaries zonefind.js tests a reader's position against,
+    one grid cell per file, and zs/index.js naming the cells that exist. Returns
+    (cells written, their bytes, the largest)."""
+    cell_dir = site_dir / ZONE_CELL_DIR
+    cell_dir.mkdir(exist_ok=True)
+    names, sizes = [], []
+    for (i, j), entries in sorted(cells.items()):
+        name = f"{i}_{j}"
+        # a boundary with no mains row stays, nameless: dropping it would hand its
+        # ground to the zone around it, which the build never does
+        body = [
+            [zones[code]["name"].strip(), zone_path(zones[code]["name"]), rings]
+            if code in zones else [None, None, rings]
+            for code, rings in entries
+        ]
+        text = (
+            f"window.UISCE_ZONES[{json.dumps(name)}] = "
+            + json.dumps(body, separators=(",", ":")) + ";"
+        )
+        (cell_dir / f"{name}.js").write_text(text)
+        names.append(name)
+        sizes.append(len(text.encode()))
+    (cell_dir / "index.js").write_text(
+        "window.UISCE_ZONE_CELLS = "
+        + json.dumps({"deg": ZONE_CELL_DEG, "cells": names}, separators=(",", ":")) + ";"
+    )
+    return len(names), sum(sizes), max(sizes, default=0)
 
 
 def zone_report(rows, zones):
@@ -3041,4 +3085,9 @@ def run():
         f"{s['n_zone_pages']} zone pages {s['zone_pages']:,} bytes  ·  "
         f"sitemap {s['sitemap_urls']} URLs  ·  "
         f"{n_counties + 1} feeds {s['feeds']:,} bytes"
+    )
+    n_cells, cell_bytes, largest = s["zone_cells"]
+    print(
+        f"  {n_cells} zone cells {cell_bytes:,} bytes, largest {largest:,} "
+        f"(one loaded when a reader asks for their zone)"
     )

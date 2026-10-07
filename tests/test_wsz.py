@@ -1,10 +1,14 @@
+import math
+import random
+
 import pytest
 
-from uisce.site import COUNTY_POP, zone_report
+from uisce.site import COUNTY_POP, ZONE_CELL_DEG, zone_report
 from uisce.wsz import (
     COUNTIES,
     LA_COUNTY,
     ZoneLookup,
+    _winding,
     county_mains_km,
     county_of,
     fetch_shapes,
@@ -213,6 +217,35 @@ def test_a_pin_in_two_zones_goes_to_the_smaller():
     ])
     assert lookup.zone(5, 5) == "TOWN"
     assert lookup.zone(1, 1) == "RURAL"
+
+
+def _first_in_cell(cells, deg, lat, lon):
+    # what zonefind.js does in the browser
+    key = math.floor(lon / deg), math.floor(lat / deg)
+    return next(
+        (code for code, rings in cells.get(key, ()) if sum(_winding(lon, lat, r) for r in rings)),
+        None,
+    )
+
+
+def test_a_zone_is_in_every_cell_its_bbox_touches_smallest_first():
+    lookup = ZoneLookup([
+        shape("RURAL", "Polygon", [square(0, 0, 10, 10)]),
+        shape("TOWN", "Polygon", [square(4, 4, 6, 6)]),
+    ])
+    cells = lookup.cells(5)
+    assert len(cells) == 9
+    assert [code for code, _ in cells[1, 1]] == ["TOWN", "RURAL"]
+    assert [code for code, _ in cells[2, 2]] == ["RURAL"]
+
+
+def test_the_browser_lookup_by_cell_agrees_with_the_build(zones):
+    cells = zones.cells(ZONE_CELL_DEG)
+    rng = random.Random(1)
+    points = [(rng.uniform(51.4, 55.4), rng.uniform(-10.6, -5.9)) for _ in range(2000)]
+    answers = [(zones.zone(*p), _first_in_cell(cells, ZONE_CELL_DEG, *p)) for p in points]
+    assert sum(1 for a, _ in answers if a) > 200
+    assert all(a == b for a, b in answers)
 
 
 def test_an_unclosed_ring_keeps_its_last_edge():

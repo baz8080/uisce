@@ -3,6 +3,7 @@ directory with the notices pinned outside every zone."""
 
 import html
 import json
+import math
 import re
 
 import pytest
@@ -12,6 +13,7 @@ from test_site import NOW, TOWNS
 from uisce.config import BASE_URL
 from uisce.site import (
     SPOT_KM,
+    ZONE_CELL_DEG,
     _mains_text,
     _zone_summary_html,
     build_site,
@@ -254,3 +256,40 @@ class TestSearchReachesTheZone:
         _write_zoned(tmp_path, [_case(**OUTSIDE)])
         page = (tmp_path / "a" / "carlow" / "testtown.html").read_text()
         assert "supply zone" not in _text(page)
+
+
+class TestWhichZoneAmIIn:
+    def test_the_cells_name_each_zone_and_its_page(self, tmp_path):
+        _write_zoned(tmp_path)
+        index = (tmp_path / "zs" / "index.js").read_text()
+        cells = json.loads(index.split(" = ", 1)[1].rstrip(";"))
+        assert cells["deg"] == ZONE_CELL_DEG
+        key = f"{math.floor(-6.926 / ZONE_CELL_DEG)}_{math.floor(52.836 / ZONE_CELL_DEG)}"
+        assert key in cells["cells"]
+        body = (tmp_path / "zs" / f"{key}.js").read_text()
+        entries = json.loads(body.split(" = ", 1)[1].rstrip(";"))
+        assert sorted(e[:2] for e in entries) == [
+            ["Nextzone", "z/nextzone.html"], ["Testzone", "z/testzone.html"],
+        ]
+
+    @pytest.mark.parametrize("page", ["index.html", "zones.html"])
+    def test_the_button_is_on_the_page_and_hidden_until_the_script_runs(self, tmp_path, page):
+        write_site(site := _build(), tmp_path, TOWNS)
+        text = (tmp_path / page).read_text()
+        assert f'<button id="where" type="button" data-v="{site["generated"]}" hidden>' in text
+        # inline, so a deploy can never pair a cached script with new cells
+        assert "function winding(" in text and 'src="zonefind.js"' not in text
+
+    def test_a_boundary_with_no_mains_row_stays_in_its_cell_nameless(self, tmp_path):
+        site = _build()
+        zones = site["zones"]
+        del zones["SZT2"]
+        written = write_site(site, tmp_path, TOWNS)["zone_cells"]
+        key = f"{math.floor(-6.910 / ZONE_CELL_DEG)}_{math.floor(52.836 / ZONE_CELL_DEG)}"
+        body = (tmp_path / "zs" / f"{key}.js").read_text()
+        entries = json.loads(body.split(" = ", 1)[1].rstrip(";"))
+        assert sorted((e[0] or "", e[1] or "") for e in entries) == [
+            ("", ""), ("Testzone", "z/testzone.html"),
+        ]
+        n, total, largest = written
+        assert n >= 1 and 0 < largest <= total

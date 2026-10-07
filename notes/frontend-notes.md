@@ -831,3 +831,27 @@ name finds the zone.
 - No map, as planned; session 9 is the optional tap-a-map.
 - Not done: an area with no notice is a bare name and offers no zone, because zones are
   read from its pins. Placing it by its centroid would need the zone lookup in `write_site`.
+
+## "Which supply zone am I in?" - 2026-10-07
+
+**Simply put:** a button on the index and on `zones.html` asks the browser where the reader
+is and names the supply zone they stand in, linked to its page. The position never leaves
+the browser; there is no map.
+
+- Owner, 2026-10-07: this instead of session 9's tap-a-map. The map needed Leaflet and
+  OpenStreetMap tiles, the first tile host the sites would load, and every map visitor's IP
+  would reach it. A reader can still search a place they are not standing in.
+- The test runs in the browser on the committed boundaries, unsimplified, by the build's own
+  rule: a winding number over every ring of a zone, smallest zone first. `zonefind.js`
+  ports `_winding` line for line, and `test_the_browser_lookup_by_cell_agrees_with_the_build`
+  checks the cell-by-cell answer against `ZoneLookup.zone` on 2,000 points.
+- The boundaries ship as `zs/<i>_<j>.js`, one file per half-degree cell of longitude and
+  latitude, each zone in every cell its bbox touches, and `zs/index.js` names the 62 cells
+  that exist; a reader loads the index and one cell. Measured on the 2026-10-07 shapes: a
+  median cell is 81 KB gzipped, the largest 271 KB. All 688 zones in one file is 2.85 MB
+  gzipped, rejected; simplifying the rings was rejected on the same ground as for the build
+  (statuspage-methodology.md - "Zone lookup").
+- A reading less accurate than 500 m, which a desktop placing itself by network often is,
+  says so beside the answer. Outside every zone gets the group-scheme sentence the footer
+  carries. On a phone the button sits under the search box (`order: 2` in the overview's
+  flex column).

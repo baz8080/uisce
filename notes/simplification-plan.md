@@ -103,7 +103,9 @@ directory, which lists the areas holding out-of-zone notices.)
 zone": scheme names join the index, an area hit lists the zones its pins fall in. No map.
 Sonnet, medium. Depends on: 7. Done when: "Abbeydorney" offers its zone.
 
-**9. Map tap (optional).** Goal: tap a map to find a zone. Upstream PR in `../statusui` adding
+**9. Map tap (optional).** (Owner, 2026-10-07: built instead as a "Which supply zone am I
+in?" button on the browser's own location, no map; frontend-notes.md - "Which supply zone am
+I in?".) Goal: tap a map to find a zone. Upstream PR in `../statusui` adding
 a Leaflet map with OSM tiles, then a pin bump here. Opus, medium. Depends on: 8 and an owner
 yes: it is the first third-party script and tile host the sites load. Done when: a tap on
 Tralee opens its zone page.

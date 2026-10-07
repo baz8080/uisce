@@ -51,6 +51,7 @@
     /* the drinking-water key stays above the list: that one is a warning, not a key */
     #overview > .healthkey { order: 3; }
     #overview > #topLink { order: 8; }
+    #overview > .where { order: 2; }
   }
 
   .incident { display: flex; gap: 8px; padding: 5px 0; border-top: 1px dashed var(--grid); align-items: baseline; font-size: 13.5px; }
@@ -222,6 +223,8 @@
         <div class="results" id="results" hidden></div>
       </div>
     </div>
+    <p class="where"><button id="where" type="button" data-v="<!--ZONE-V-->" hidden>Which supply zone am I in?</button> <span id="whereOut" hidden></span></p>
+    <script><!--ZONEFIND--></script>
 
     <div class="legend" id="legend"></div>
     <div class="healthkey" id="healthKey"></div>
