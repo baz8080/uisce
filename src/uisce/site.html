@@ -41,6 +41,12 @@
   .bar i.maintenance { background: var(--maint); }
   .bar i.future { background: var(--cell-empty); }
 
+  /* the county row's readout: a count, then the rate the letter grades */
+  :root { --row-cols: 150px 1fr 240px 10px; }
+  .place .stats { display: block; line-height: 1.45; }
+  .place .stats .gloss { font-size: 12.5px; }
+  .place .stats .gloss b { font-weight: 600; }
+
   @media (max-width: 640px) {
     /* the drinking-water key stays above the list: that one is a warning, not a key */
     #overview > .healthkey { order: 3; }
@@ -530,7 +536,9 @@ function renderOverview() {
     const c = D.counties[name], m = c.months[curMonth], f = figures(c, m);
     // "open" is a right-now snapshot, not a property of the selected month -
     // say so, or it reads as "open during July"
-    const openBadge = isLatest() && c.open_total ? `<b>${c.open_total}</b><span>open now</span>` : "";
+    const openNow = isLatest() ? `<div><b>${c.open_total || 0}</b> open now</div>` : "";
+    const rate = f.per_100km == null ? "" : `<div class="gloss"><b>${f.per_100km.toFixed(1)}</b> per 100&nbsp;km of water main</div>`;
+    const when = f === m ? `in ${MFULL[+curMonth.slice(5, 7) - 1]}` : "in 30 days";
     // the name is a real anchor, as the area rows already are: the row-level
     // onclick alone left every county unreachable by keyboard and unannounced
     // as interactive, and killed middle-click and open-in-new-tab
@@ -544,10 +552,8 @@ function renderOverview() {
         <div class="cname">${gradeChip(f.count_grade)}${healthMark(m)}<a href="${href}" onclick="if (newTab(event)) return true; ${jump}; return false;">${name}</a></div>
         <div class="bar">${bar(m.days)}</div>
         <div class="stats">
-          <div class="counts">
-            <b>${f.outage_notices}</b><span>${pl(f.outage_notices, "outage")}${f === m ? "" : ", 30 days"}</span>${openBadge}
-          </div>
-          <div class="cml"><b>${rateText(f.per_100km)}</b><br>per 100&nbsp;km</div>
+          <div><b>${f.outage_notices}</b> ${pl(f.outage_notices, "outage")} ${when}</div>
+          ${openNow}${rate}
         </div>
         <span class="chev">›</span>
         <div class="daycap"></div>
@@ -713,7 +719,7 @@ function renderCounty() {
       <div class="daycap">Tap a day for its notices.</div>
       <div id="dayEvents">${dayEventsHtml()}</div>
       <div class="tiles" style="margin-bottom:0">
-        <div class="tile"><div class="v">${rateText(f.per_100km)}</div><div class="k">outage notices per 100&nbsp;km of main${onLast30(m) ? ", last 30 days" : ""}</div></div>
+        <div class="tile"><div class="v">${rateText(f.per_100km)}</div><div class="k">outage notices per 100&nbsp;km of water main${onLast30(m) ? ", last 30 days" : ""}</div></div>
         <div class="tile"><div class="v">${m.outage_notices}</div><div class="k">outage ${pl(m.outage_notices, "notice")} published${isPartial() ? " so far" : ""}${endSplit}</div></div>
         ${fixTile}
         <div class="tile"><div class="v">${m.events.maintenance}</div><div class="k">planned ${pl(m.events.maintenance, "work item", "works")}</div></div>
