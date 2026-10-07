@@ -99,7 +99,7 @@ payload. Depends on: 6, C. Done when: 688 pages build and the out-of-zone text s
 index. (Built 2026-10-07: the text is in index.html's footer and on `zones.html`, the zone
 directory, which lists the areas holding out-of-zone notices.)
 
-**8. Find your zone by place.** Goal: the search box reaches a zone. PR "Search reaches the
+**8. Find your zone by place.** (Built 2026-10-07.) Goal: the search box reaches a zone. PR "Search reaches the
 zone": scheme names join the index, an area hit lists the zones its pins fall in. No map.
 Sonnet, medium. Depends on: 7. Done when: "Abbeydorney" offers its zone.
 
