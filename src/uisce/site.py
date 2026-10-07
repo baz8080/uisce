@@ -2754,7 +2754,9 @@ def write_site(site, site_dir, towns=None):
             # ahead has no month row, but its page is built all the same
             area = history.get(county, {}).get(code) or {}
             if "slug" in area:
-                in_zones = sorted(zones[z]["name"] for z in area_zones.get((county, code), ()))
+                in_zones = sorted(
+                    zones[z]["name"] for z in area_zones.get((county, code), ()) if z in zones
+                )
                 names[county].add((name, area["slug"], *([tuple(in_zones)] if in_zones else [])))
             else:
                 names[county].add(name)
@@ -2868,6 +2870,7 @@ def write_site(site, site_dir, towns=None):
                             sorted(
                                 (zones[z]["name"], zone_path(zones[z]["name"]))
                                 for z in area_zones.get((county, code), ())
+                                if z in zones
                             ),
                         ),
                     },

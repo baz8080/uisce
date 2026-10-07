@@ -829,3 +829,5 @@ name finds the zone.
 - The area page says which zones its notices are pinned in, linked, so a hit on a place
   reaches the zone in one more click. A place whose pins fall in no zone says nothing.
 - No map, as planned; session 9 is the optional tap-a-map.
+- Not done: an area with no notice is a bare name and offers no zone, because zones are
+  read from its pins. Placing it by its centroid would need the zone lookup in `write_site`.

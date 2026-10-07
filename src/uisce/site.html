@@ -1129,8 +1129,7 @@ bindSearch({
   // a name that can only reach its county says so: an "Around ..." Electoral
   // Division has no page, and a hit that quietly does something else is worse
   // than one that says what it will do. A town named for its county sits under
-  // the county's own row, so it says which of the two it is. An area hit names
-  // the supply zones its notices are pinned in.
+  // the county's own row, so it says which of the two it is
   note: (name, c, t) => {
     if (!t) return name === c ? "" : `${c} · county`;
     if (t.startsWith("z/")) return `${c} · supply zone`;

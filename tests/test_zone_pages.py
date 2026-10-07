@@ -226,31 +226,24 @@ class TestThePages:
 
 
 class TestSearchReachesTheZone:
-    def _index(self, tmp_path):
-        _write_zoned(tmp_path)
+    def _index(self, tmp_path, rows=None):
+        _write_zoned(tmp_path, rows)
         body = (tmp_path / "search.js").read_text()
-        return json.loads(body.split(" = ", 1)[1].rstrip(";"))
+        return json.loads(body.split(" = ", 1)[1].rstrip(";"))["Carlow"]
 
     def test_every_zone_name_is_in_the_index_under_its_county(self, tmp_path):
-        entries = self._index(tmp_path)["Carlow"]
+        entries = self._index(tmp_path)
         assert ["Testzone", "z/testzone.html"] in entries
         assert ["Quiet Zone", "z/quiet-zone.html"] in entries
 
     def test_an_area_entry_lists_the_zones_its_pins_fall_in(self, tmp_path):
         rows = [_case(), _case(id=2, ref="R2", **NEXT)]
-        _write_zoned(tmp_path, rows)
-        body = (tmp_path / "search.js").read_text()
-        entries = json.loads(body.split(" = ", 1)[1].rstrip(";"))["Carlow"]
+        entries = self._index(tmp_path, rows)
         assert ["Testtown", "testtown", ["Nextzone", "Testzone"]] in entries
 
     def test_an_area_pinned_in_no_zone_keeps_the_two_part_entry(self, tmp_path):
-        entries = self._index_with(tmp_path, [_case(**OUTSIDE)])
+        entries = self._index(tmp_path, [_case(**OUTSIDE)])
         assert ["Testtown", "testtown"] in entries
-
-    def _index_with(self, tmp_path, rows):
-        _write_zoned(tmp_path, rows)
-        body = (tmp_path / "search.js").read_text()
-        return json.loads(body.split(" = ", 1)[1].rstrip(";"))["Carlow"]
 
     def test_the_area_page_links_its_zone(self, tmp_path):
         _write_zoned(tmp_path)
