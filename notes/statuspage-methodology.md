@@ -223,6 +223,24 @@ Zones keyed to one authority can serve another county. With attributes alone, th
 
 **Rejected: simplified boundaries.** The plan's 3 MB budget for the file was never measured against accuracy, and nothing the browser loads reads the file. Fitting it needs the layer to smooth the boundaries by 35-55 m (`maxAllowableOffset=0.0005` degrees, 2.7 MB), which moved 128 of 14,665 pins against the full boundaries. Full-precision coordinates (21.5 MB, 8.3 MB compressed) were rejected for the 5 dp file (11.6 MB, 2.9 MB compressed in git): 3 of 14,665 pins differ.
 
+## Zone pages (2026-10-07)
+
+**Simply put:** every Water Supply Zone gets a page at `z/<name>.html` saying how many outage notices were pinned inside it since collection began on 20 April 2026, the typical time to "works complete", the places in it hit more than once, and every notice, newest first. About one person in five is on a group or private scheme that no zone covers; the index and the zone directory say so.
+
+Session 7 of [simplification-plan.md](simplification-plan.md). All figures are release 2026-10-06-2104, built with the clock at the data horizon.
+
+**The window is "since 20 April 2026"** (checkpoint C, owner 2026-10-07), from `COLLECTION_START` to the last feed read, as the county count runs. It is re-asked once the archive holds twelve months (roadmap).
+
+**What is in a zone.** A notice is in a zone when any of its pins falls inside it (`ZoneLookup.zone`, "Zone lookup" above), so one pinned in two zones is listed in each and says so, as the area pages do: 473 listings on this release. The outage count is the events with an outage-class pin inside the zone, first published in the window. That differs from the county count, which reads an event's worst pin wherever it is, only for an event whose outage pin falls in another zone. The median is the county's own computation (`completion_spans`) over the zone's outage pins: observed completions only, covered hours. 505 of the 688 zones have an outage notice (median 6, most 217, Central Regional: Lough Guitane); 486 have a median, 165 of them on fewer than three completions, printed with the count it rests on rather than withheld. The health marker is the county's: notices in force now, and if none, how many stood since collection began (3 and 7 zones).
+
+**Rejected: a rate or letter per zone.** 46 zones carry 0 m of main and 92 under 1 km, so one notice on Old Leighlin's 564 m would read 177 per 100 km. The page prints the length as context only.
+
+**Repeat spots** are places with two or more outage notices pinned within 200 m (`SPOT_KM`) of one pin, found greedily: the pin with the most distinct notices around it takes every pin within 200 m, then the next. 1,120 spots in 333 zones; 645 of two notices, 475 of three or more. 65 of the two-notice spots were published within two days of each other and may be one incident published twice; the dates are printed so a reader can tell. A spot is named for the area of the nearest Census Small Area in any county (`TownLookup.nearest`; `place` would leave a pin over a county line unnamed) and labelled with the feed's own location text for its pins, not the event's: a multi-pin event's first location labelled three separate spots in Pollan Dam "Burnfoot". Rejected: chaining pin to pin, which joins a town's streets into one spot when its notices sit 150 m apart; a threshold of three, because a street hit twice in five months is what a reader is looking for.
+
+**Outside every zone.** 22.3% of the Census population lives in a Small Area whose centroid is in no zone (1,150,327 of 5,149,139), which the copy rounds to "about one person in five" (the plan said homes; people is what was measured). Notices pinned outside every zone are listed on `zones.html` under the 471 areas they were placed in, each linking its area page, or the app's area view where the area has no page.
+
+**Paths and directory.** The path is the zone's name through `statusui.slug`, unique over all 688 (asserted in `tests/test_zone_pages.py`); a trailing space in the layer's names is stripped. A zone renamed on a re-fetch moves its URL, and the fetch prints boundary changes, not renames. Rejected: the zone code, which is stable but not a name anyone searches for. `zones.html` groups the zones under the county of the council that runs them, so a Louth zone serving Meath sits under Louth. The pages carry no `data.js`; nothing about a zone enters the payload. 688 pages, 13.9 MB, median 17.7 KB, largest 90 KB (SD Zone2).
+
 ## Outage notices per 100 km of main (2026-10-06)
 
 **Simply put:** each county-month carries how many outage notices were published per 100 km of the county's water main, and a letter cut on that count. The median time to "works complete" sits beside it, unchanged.

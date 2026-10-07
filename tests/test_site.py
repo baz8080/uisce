@@ -3223,11 +3223,11 @@ class TestThePagesSayTheCount:
         rows = [_case(), _open(id=2, reference_num="CAR2", end_source="scheduled_end_with_time",
                                notice_to_end_seconds=1011600.0,
                                end_local_date="2026-05-12", end_local_time="18:00")]
-        site = build_site(rows, NOW, TOWNS)
-        site.pop("recurrence_report")
-        write_site(site, tmp_path, TOWNS)
-        pages = list(tmp_path.glob("*.html")) + list(tmp_path.glob("[ca]/**/*.html"))
-        assert len(pages) > 3
+        from test_zone_pages import _write_zoned  # it imports this module
+
+        _write_zoned(tmp_path, rows)
+        pages = list(tmp_path.glob("*.html")) + list(tmp_path.glob("[caz]/**/*.html"))
+        assert {"zones.html", "testzone.html"} <= {p.name for p in pages}
         for page in pages:
             text = page.read_text().lower()
             for word in ("availability", "person-hours", "500 m", "500&nbsp;m"):

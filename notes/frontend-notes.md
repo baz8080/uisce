@@ -378,6 +378,7 @@ Three surfaces named the same destination three ways, and one of the three was f
 | the area directory | "every area with a notice" (index), "every area on the site" (county card), "every area on this site" (area page), **"every area in Ireland"** (static footers) | "every area with a notice" everywhere — the directory's own `<h1>`. The static-footer wording was simply wrong: `area_index` reads the built history, so an area with no notice is not in it |
 | the app | "the interactive map of Co. X" (area page), "the interactive view" (county page) | "Co. X's interactive view". It is bars and a table; it was never a map |
 | a notice count | `· 24` (static), `24 notices` (app cards), `· 24 notices` (app month headings) | `· 24 notices` everywhere, noun included |
+| the zone directory (2026-10-07) | - | "every supply zone" on every link to `zones.html`, guarded beside the area directory's |
 | the footer credit | "Source and methodology" (uisce's three static pages) | "Source code · not affiliated with Uisce Éireann." — already the shape on uisce's index, both lifts pages and all three esb footers, so uisce's static pages were the outlier rather than the pattern |
 
 The area page's "Elsewhere" block dropped to two links. The directory link it gave up now sits

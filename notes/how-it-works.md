@@ -55,7 +55,7 @@ The only genuinely intricate part. It runs in four stages:
 
 The per-area *incident histories*, every notice ever published, event by event, do not go in `data.js`: together they are many times its size. They are written to `h/<county>.js`, one shard per county, each assigning into `window.UISCE_HISTORY`, and the page injects a `<script>` tag for one county when a reader opens an area in it. Same reason as above: an injected script survives `file://`, where `fetch` cannot read a local path at all. `write_site` owns the split, so a field added to the history cannot leak into the payload by somebody forgetting to pop it.
 
-The static pages are templates: `county.html` (`c/<county>.html`), `area.html` (`a/<county>/<area>.html`, for areas that name a place) and `areas.html`, the directory of every area with a notice. Each has a marker that `write_site` substitutes, so markup and CSS stay in an HTML file and only the rows come from Python.
+The static pages are templates: `county.html` (`c/<county>.html`), `area.html` (`a/<county>/<area>.html`, for areas that name a place), `areas.html`, the directory of every area with a notice, `zone.html` (`z/<zone>.html`, one per Water Supply Zone) and `zones.html`, the directory of every zone. Each has a marker that `write_site` substitutes, so markup and CSS stay in an HTML file and only the rows come from Python.
 
 `site.html` is the whole front end: hash routing between an overview, one county view, one area history, the open list and the ten longest, no build step, no dependencies.
 

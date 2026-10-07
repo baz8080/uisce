@@ -57,7 +57,9 @@ def declares(script, name):
 # area.html included: it is a real template (site.py renders one per area) and
 # the likeliest first taker of the caption marker, so leaving it off the list
 # would ship its script unchecked.
-@pytest.mark.parametrize("page", ["site.html", "county.html", "area.html", "areas.html"])
+@pytest.mark.parametrize(
+    "page", ["site.html", "county.html", "area.html", "areas.html", "zone.html", "zones.html"]
+)
 def test_site_script_redeclares_no_shared_global(page):
     shared = statusui.js_globals()
     assert "bindDayCaption" in shared, "the bundle's second file is missing"
