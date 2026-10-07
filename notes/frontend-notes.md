@@ -813,3 +813,19 @@ is back in the inline payload so the overview's link draws on first paint. The p
 sentence (`sensNote`) went with `median_pooled_h`, the county tile's "never reported an end"
 reads `no_end_n`, and `TestThePagesSayTheCount` no longer skips the inline payload: nothing in
 it carries the estimate now.
+
+## Search reaches the zone - 2026-10-07
+
+**Simply put:** typing a place now also finds the supply zone it is in, and a zone's own
+name finds the zone.
+
+- Every zone joins `search.js` under its county as `[name, "z/<slug>.html"]`; the hit's
+  `href` is that path as it stands, where an area's target is a bare slug. A zone sits under
+  the county the mains table gives it, which can differ from the county of a place it serves.
+- An area entry gains a third element, the sorted names of the zones its pins fall in, only
+  when there are any. The shared `searchHits` ignores it; the page's `note` reads it and
+  prints the first two ("Kerry · zone A, B +1"). A real link from the dropdown to the zone
+  needs an upstream change to `bindSearch`, which was not made for this.
+- The area page says which zones its notices are pinned in, linked, so a hit on a place
+  reaches the zone in one more click. A place whose pins fall in no zone says nothing.
+- No map, as planned; session 9 is the optional tap-a-map.

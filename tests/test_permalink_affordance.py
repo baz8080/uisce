@@ -87,7 +87,10 @@ def test_a_search_hit_is_a_link_to_the_page_and_not_just_a_county_jump():
     """The box is the entry point a reader actually uses, so its hits carry the
     same href/click split the overview rows do: an area goes to its page, a
     county keeps the click in the app but still yields c/<county>.html."""
-    assert "href: (c, t) => t ? `a/${slug(c)}/${t}.html` : `c/${slug(c)}.html`," in SITE_HTML
+    assert (
+        "href: (c, t) => !t ? `c/${slug(c)}.html` : t.startsWith(\"z/\") ? t"
+        " : `a/${slug(c)}/${t}.html`,"
+    ) in SITE_HTML
     assert "pick: (c, t) => { if (t) return false; goCounty(c); return true; }" in SITE_HTML
 
 

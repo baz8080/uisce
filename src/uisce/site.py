@@ -1898,7 +1898,20 @@ def _events_html(events, heading="Notice history", listed_in=None):
     )
 
 
-def area_page_html(county, name, pop, events, area_months=None, months=()):
+def _area_zones_html(zones):
+    """Where a reader goes from the place to the Water Supply Zone its pins fall in."""
+    if not zones:
+        return ""
+    links = ", ".join(
+        f'<a href="../../{html.escape(path)}">{html.escape(name)}</a>' for name, path in zones
+    )
+    return (
+        f'<p class="what">Notices here are pinned in the supply '
+        f'{"zone" if len(zones) == 1 else "zones"} {links}.</p>'
+    )
+
+
+def area_page_html(county, name, pop, events, area_months=None, months=(), zones=()):
     """The whole body of a/<county>/<area>.html.
 
     Server-rendered in full and carrying no data.js, for the same reason the
@@ -1920,6 +1933,7 @@ def area_page_html(county, name, pop, events, area_months=None, months=()):
         f'<div class="sub">'
         f'{f"{pop:,} people · Census 2022 · " if pop is not None else ""}'
         f'Co.&nbsp;{html.escape(county)}</div>'
+        f'{_area_zones_html(zones)}'
         f'{_area_months_html(area_months or {}, months)}'
         f'{_events_html(events, "Every notice published here", listed_in="area")}'
         f'<section id="more"><h2>Elsewhere</h2><p class="links">'
@@ -2236,6 +2250,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
     zone_keys = defaultdict(set)
     spot_pins = defaultdict(list)  # zone -> ((lat, lon), key, location) of its outage pins
     unzoned = defaultdict(lambda: defaultdict(set))  # county -> area -> keys
+    area_zones = defaultdict(set)  # (county, area) -> zone codes its pins fall in
 
     for r in rows:
         key = (r["county"], case_ref(r))
@@ -2295,6 +2310,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
             if zone is None:
                 unzoned[case.county][code].add(key)
             else:
+                area_zones[case.county, code].add(zone)
                 zone_regions[zone].add(case, key)
                 zone_keys[zone].add(key)
                 if case.sev == "outage":
@@ -2464,6 +2480,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
             zone_rows or read_zones(), zone_regions, zone_keys, spot_pins,
             event_meta, event_iv, towns, now, seen,
         )
+        site["area_zones"] = dict(area_zones)
         site["unzoned"] = {
             county: {code: len(keys) for code, keys in areas.items()}
             for county, areas in unzoned.items()
@@ -2656,6 +2673,7 @@ def write_site(site, site_dir, towns=None):
     feed = site.pop("feed", {})
     zones = site.pop("zones", {})
     unzoned = site.pop("unzoned", {})
+    area_zones = site.pop("area_zones", {})
     data = "window.UISCE_DATA = " + json.dumps(site) + ";"
     first = inline_json(first_render_payload(site))
     site_dir.mkdir(parents=True, exist_ok=True)
@@ -2735,10 +2753,17 @@ def write_site(site, site_dir, towns=None):
             # the history, not the breakdown: an area whose every notice is still
             # ahead has no month row, but its page is built all the same
             area = history.get(county, {}).get(code) or {}
-            names[county].add((name, area["slug"]) if "slug" in area else name)
+            if "slug" in area:
+                in_zones = sorted(zones[z]["name"] for z in area_zones.get((county, code), ()))
+                names[county].add((name, area["slug"], *([tuple(in_zones)] if in_zones else [])))
+            else:
+                names[county].add(name)
+        for zone in zones.values():
+            if zone["county"] in site["counties"]:
+                names[zone["county"]].add((zone["name"], zone_path(zone["name"])))
 
         def entry(e):
-            return e if isinstance(e, str) else list(e)
+            return e if isinstance(e, str) else [*e[:2], *map(list, e[2:])]
 
         def by_name(e):
             return e if isinstance(e, str) else e[0]
@@ -2840,6 +2865,10 @@ def write_site(site, site_dir, towns=None):
                             county, name, pop, events,
                             county_data[county]["towns"].get(code, {}).get("months"),
                             site["months"],
+                            sorted(
+                                (zones[z]["name"], zone_path(zones[z]["name"]))
+                                for z in area_zones.get((county, code), ())
+                            ),
                         ),
                     },
                 )
