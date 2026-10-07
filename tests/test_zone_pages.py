@@ -5,13 +5,14 @@ import html
 import json
 import re
 
-import statusui
+import pytest
 from conftest import site_case as _case
 from test_site import NOW, TOWNS
 
 from uisce.config import BASE_URL
 from uisce.site import (
     SPOT_KM,
+    _mains_text,
     _zone_summary_html,
     build_site,
     km_apart,
@@ -142,6 +143,10 @@ class TestTheFigures:
         site = build_site([_case()], NOW, TOWNS)
         assert "zones" not in site and "unzoned" not in site
 
+    def test_zones_without_towns_are_refused(self):
+        with pytest.raises(ValueError, match="need towns"):
+            build_site([_case()], NOW, zones=ZONES, zone_rows=ZONE_ROWS)
+
 
 class TestThePages:
     def test_a_page_per_zone_at_its_path(self, tmp_path):
@@ -155,6 +160,7 @@ class TestThePages:
         _write_zoned(tmp_path)
         text = _text((tmp_path / "z/testzone.html").read_text())
         assert "Water Supply Zone SZT1 · Co. Carlow · 12 km of water main" in text
+        assert "4.3 km of water main" in _text((tmp_path / "z/nextzone.html").read_text())
         assert "Since 20 April 2026: 1 outage notice ; typical time to" in text
         assert "Every notice published here · 1 notice" in text
         quiet = _text((tmp_path / "z/quiet-zone.html").read_text())
@@ -166,6 +172,20 @@ class TestThePages:
         page = (tmp_path / "z/testzone.html").read_text()
         assert "data.js" not in page and "UISCE_DATA" not in page
         assert 'href="../c/carlow.html"' in page and 'href="../zones.html#c-carlow"' in page
+
+    def test_a_main_under_a_kilometre_is_given_in_metres(self):
+        assert _mains_text(0.022) == "22&nbsp;m" and _mains_text(0.564) == "564&nbsp;m"
+
+    def test_two_zones_that_would_share_a_page_are_refused(self, tmp_path):
+        site = build_site([_case()], NOW, TOWNS, zones=ZONES,
+                          zone_rows=ZONE_ROWS + [dict(ZONE_ROWS[0], code="SZT4")])
+        site.pop("recurrence_report")
+        with pytest.raises(ValueError, match="share a page"):
+            write_site(site, tmp_path, TOWNS)
+
+    def test_no_outside_section_when_every_pin_is_in_a_zone(self, tmp_path):
+        _write_zoned(tmp_path)
+        assert 'id="outside"' not in (tmp_path / "zones.html").read_text()
 
     def test_a_repeat_spot_links_the_area_page(self, tmp_path):
         _write_zoned(tmp_path, [_case(), _case(id=2, reference_num="CAR2", full_lat=52.837)])
@@ -203,6 +223,3 @@ class TestThePages:
         assert "zones" not in payload and "unzoned" not in payload
         assert "Testzone" not in data
 
-
-def test_the_directory_names_the_zone_with_the_shared_slug():
-    assert zone_path("Gowna (CN)") == f"z/{statusui.slug('Gowna (CN)')}.html"

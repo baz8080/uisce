@@ -1593,7 +1593,7 @@ def zone_data(zone_rows, regions, zone_keys, spot_pins, event_meta, event_iv, to
         for (lat, lon), coords, keys in repeat_spots([(c, key) for c, key, _ in pins]):
             pubs = sorted(event_meta[key]["first_pub"] for key in keys)
             area = towns.nearest(lat, lon)
-            # the feed's own place name for the pins, which a multi-pin event's title is not
+            # the pins' own location text: a multi-pin event's first one can be miles off
             locs = sum((locs_at[c] for c in coords), Counter())
             spots.append({
                 "area": area,
@@ -1967,8 +1967,11 @@ def _since():
     return f"{COLLECTION_START.day} {COLLECTION_START:%B %Y}"
 
 
-def _km_text(km):
-    return f"{km:,.1f}" if km < 10 else f"{km:,.0f}"
+def _mains_text(km):
+    """"22 m", "4.3 km", "172 km": a zone's main can be a few metres long."""
+    if km < 1:
+        return f"{km * 1000:,.0f}&nbsp;m"
+    return f"{km:,.1f}&nbsp;km" if km < 10 else f"{km:,.0f}&nbsp;km"
 
 
 def _plural(n, word):
@@ -2028,7 +2031,7 @@ def zone_page_html(zone, area_href):
         f"{html.escape(zone['local_authority'])}, " if zone["local_authority"] != county else ""
     ) + f"Co.&nbsp;{html.escape(county)}"
     mains = (
-        f" · {_km_text(zone['mains_km'])}&nbsp;km of water main" if zone["mains_km"] else ""
+        f" · {_mains_text(zone['mains_km'])} of water main" if zone["mains_km"] else ""
     )
     return (
         f'<a class="back" href="../zones.html#c-{county_slug(county)}">'
@@ -2069,7 +2072,7 @@ def _zone_index_html(zones, unzoned, area_items):
             f'<li><a href="{zone_path(z["name"])}">{html.escape(z["name"])}</a>'
             f'<span class="fill"></span>'
             f'<span class="n">{_plural(z["outage_n"], "outage notice")}</span>'
-            f'<span class="p">{f"{_km_text(z['mains_km'])} km" if z["mains_km"] else ""}</span>'
+            f'<span class="p">{_mains_text(z["mains_km"]) if z["mains_km"] else ""}</span>'
             "</li>"
             for z in sorted(by_county[county], key=lambda z: (z["name"], z["code"]))
         )
@@ -2079,18 +2082,19 @@ def _zone_index_html(zones, unzoned, area_items):
             f'<h2>Co. {html.escape(county)} <span>· {_plural(n, "zone")}</span></h2>'
             f'<ul class="areas">{rows}</ul></section>'
         )
-    # areas, not notices: a notice placed in two areas is listed under each
-    total = sum(len(areas) for areas in unzoned.values())
-    outside = "".join(
-        f'<h3>Co. {html.escape(county)}</h3><ul class="areas">{area_items(county)}</ul>'
-        for county in sorted(unzoned)
-    )
-    sections.append(
-        f'<section id="outside"><h2>Outside every zone '
-        f'<span>· {_plural(total, "area")}</span></h2>'
-        f'<p class="what">{UNZONED_TEXT} A notice pinned outside every zone is still listed '
-        f'under the area it was placed in:</p>{outside}</section>'
-    )
+    if unzoned:
+        # areas, not notices: a notice placed in two areas is listed under each
+        total = sum(len(areas) for areas in unzoned.values())
+        outside = "".join(
+            f'<h3>Co. {html.escape(county)}</h3><ul class="areas">{area_items(county)}</ul>'
+            for county in sorted(unzoned)
+        )
+        sections.append(
+            f'<section id="outside"><h2>Outside every zone '
+            f'<span>· {_plural(total, "area")}</span></h2>'
+            f'<p class="what">{UNZONED_TEXT} A notice pinned outside every zone is still '
+            f'listed under the area it was placed in:</p>{outside}</section>'
+        )
     return f"<nav>{nav}</nav>\n{''.join(sections)}"
 
 
@@ -2225,8 +2229,9 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
     pin_tags = defaultdict(list)
     shared = event_windows(rows)
     recurring = recurring_events(rows, shared)
-    # zone pages are built beside the area pages, so they need towns as well
-    zoned = zones is not None and towns is not None
+    zoned = zones is not None
+    if zoned and towns is None:
+        raise ValueError("zone pages are built beside the area pages and need towns")
     zone_regions = defaultdict(Region)
     zone_keys = defaultdict(set)
     spot_pins = defaultdict(list)  # zone -> ((lat, lon), key, location) of its outage pins
@@ -2879,6 +2884,9 @@ def _write_zone_pages(site_dir, zones, unzoned, history, towns, pages):
         area = history.get(county, {}).get(code)
         return f"../{area_path(county, area['name'])}" if area and "slug" in area else None
 
+    paths = [zone_path(zone["name"]) for zone in zones.values()]
+    if len(set(paths)) != len(paths) or f"{ZONE_DIR}/.html" in paths:
+        raise ValueError("two zones share a page, or one has no name to make it from")
     zone_dir = site_dir / ZONE_DIR
     zone_dir.mkdir(exist_ok=True)
     total = 0
