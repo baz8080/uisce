@@ -1,6 +1,8 @@
 # Water supply SLA benchmarks
 
-Documented service levels for municipal water supply in nearby jurisdictions, researched July 2026 to calibrate the status site's A–F grades (see [statuspage-methodology.md](statuspage-methodology.md)). Headline: real SLAs exist and are strikingly tight, but they measure something different from what this project can measure, so they inform the framing rather than the thresholds.
+**Simply put:** regulators measure the minutes a property is without water. This site cannot: it only sees published notices. So its letters count notices per 100 km of main, which is how the water industry counts main breaks, and its time figure is notice to "works complete". Neither is comparable to a regulator's figure.
+
+Documented service levels for municipal water supply in nearby jurisdictions, researched July 2026 when the status site's A-F grades were first calibrated (see [statuspage-methodology.md](statuspage-methodology.md)). Headline: real SLAs exist and are strikingly tight, but they measure something different from what this project can measure, so they inform the framing rather than the thresholds.
 
 ## Ofwat (England & Wales)
 
@@ -20,10 +22,10 @@ Sources: [framework publications](https://www.cru.ie/document_group/irish-water-
 
 ## Why these numbers can't be this project's thresholds
 
-Regulators count *measured* minutes without water at the customer's tap, generally only for ≥3-hour events. This project counts the **entire published notice duration** for **everyone within an assumed 500 m of the pin**, including "customers may experience disruptions" notices and short events, with publication-time start floors. The result differs by construction: regulator scales sit at 99.99–99.999% availability, while the county-months here span roughly 99.0–99.9%. That 2–3 order-of-magnitude gap says nothing about Irish supply being that much worse — it reflects exposure-counting versus interruption-measurement. Hence the site's grades are calibrated to the observed distribution of this dataset and presented as a disruption-exposure index, explicitly not comparable to Ofwat/CRU figures.
+Regulators count *measured* minutes without water at the customer's tap, generally only for ≥3-hour events. This project sees only published notices, with publication-time start floors and "customers may experience disruptions" wording on every one, so it does not measure minutes lost at all. Until 2026-10-06 it published an availability estimate ([archive/availability-method.md](archive/availability-method.md)) that sat two to three orders of magnitude from a regulator's figure by construction; it now counts outage notices per 100 km of main, with cuts fixed on this site's own record, and a median time from notice to "works complete". Neither borrows a regulator's number, and the page says so.
 
 ## Related metrics worth adopting later
 
-- **SAIDI / SAIFI / CAIDI** (electricity reliability terms): the site's availability metric is already a SAIDI analogue; CAIDI — median time to restore — is the most consumer-meaningful companion and is robust to over-reporting.
-- **AWWA benchmark**: water main breaks per 100 miles of main per year (industry guide is below ~15) — an asset-health lens once enough located events accumulate.
+- **AWWA benchmark**: water main breaks per 100 miles of main per year (industry guide is below ~15). The site's count metric is this lens, in notices per 100 km per month (statuspage-methodology.md, "Outage notices per 100 km of main").
+- **CAIDI** (electricity: median time to restore) is the analogue of the published median completion.
 - **IBNET/IWA continuity** (hours of supply per day) — aimed at intermittent-supply systems, less relevant here.

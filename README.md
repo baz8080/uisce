@@ -1,10 +1,12 @@
 # uisce
 
-Download, transform, and geocode [Uisce Éireann](https://www.water.ie/) (Irish Water) supply and works notices, and infer each notice's end time from its text with a local LLM. The result is a single SQLite database, rebuilt by CI twice a day and published as a GitHub release, plus a statuspage-style static site with per-county supply availability and A–F grades.
+**Simply put:** this project collects every water-supply notice Uisce Éireann publishes, keeps the ones the feed later drops, reads each notice for when the works ended, and builds a website that grades each county, month by month, on how many outage notices it had per 100 km of water main and how long the works typically took.
+
+Download, transform, and geocode [Uisce Éireann](https://www.water.ie/) (Irish Water) supply and works notices, and read each notice's end time from its text with rules and a local LLM. The result is a single SQLite database, rebuilt by CI twice a day and published as a GitHub release, plus a statuspage-style static site with an A-F letter per county per month.
 
 The [website that this repo generates](https://baz8080.github.io/uisce/) is rebuilt from the latest published DB after every data build and on every push to `main`, so a UI change is live in about a minute without waiting for the next data build.
 
-**What the time figures mean.** This project does not measure outage duration and cannot: the feed never records when supply was actually lost. What it measures is the span from **when a notice was published** to **the end that notice reports** (`notice_to_end_seconds`), and the site publishes the subset where that end is an observed "works are now complete" update rather than a schedule. That published median is a floor on true length. The availability percentages are not: about one disruption in twenty reports no usable end, and since 2026-08-15 those are charged the typical observed span for their kind of works rather than counted as zero — a total has to put a number on every event, and omitting one asserts it lasted no time at all. See [notes/data-quality.md](notes/data-quality.md) and [notes/statuspage-methodology.md](notes/statuspage-methodology.md).
+**What the figures mean.** This project does not measure outage duration and cannot: the feed never records when supply was actually lost. What it measures is the span from **when a notice was published** to **the end that notice reports** (`notice_to_end_seconds`), and the site publishes the subset where that end is an observed "works are now complete" update rather than a schedule. That published median is a floor on true length. The letters count outage notices per 100 km of water main; a notice that never reports an end (about one in twenty) still counts as a notice and has no length. See [notes/data-quality.md](notes/data-quality.md) and [notes/statuspage-methodology.md](notes/statuspage-methodology.md).
 
 ## Just want the data?
 
@@ -35,11 +37,7 @@ Migration is deliberately narrow: **additive nullable columns only**, which SQLi
 * `NULL` is ambiguous: either still open, or closed before the column existed (every case closed prior to v2). Pair it with `status` rather than reading `NULL` as open.
 * It is a **floor**. Cases created and closed between two builds are never observed open, so no transition exists to record. Under the original Mon/Wed/Fri cadence that was 12% of newly-appearing cases (measured 2026-07-21); daily builds cut it to 1.9%, and the twice-daily cadence since 2026-07-31 to ~1.1% at best — the residual is Uisce Éireann's own administrative lag, which no build frequency can close. See [notes/data-quality.md](notes/data-quality.md).
 
-History from before v2 can be partially recovered by replaying the published release DBs, each of which is a full snapshot. Run the **Build DB** workflow with `replay_closed_at` ticked — it does the whole thing in one build, after the pipeline has migrated the DB and stamped its own transitions.
-
-The replay recovers the same measurement the live path makes (first build observing the case non-Open), never overwrites an existing stamp, and is idempotent, so it is safe to re-run — worth doing if the DB is ever restored from an older release. It reached 24% of closed cases on 2026-07-21; the rest closed before the earliest published snapshot.
-
-Locally, against a directory of downloaded snapshots named `<release-tag>.db`:
+If the DB is ever restored from an older release, `uisce-replay-closed-at` re-stamps the transitions the published release snapshots can see (each is a full DB). It recovers the same measurement the live path makes, never overwrites an existing stamp, and is idempotent. A dry run on 2026-09-24 found nothing left to recover on the live DB, so it is run by hand only, against a directory of downloaded snapshots named `<release-tag>.db`:
 
 ```sh
 uv run uisce-replay-closed-at --snapshots snaps          # dry run
@@ -118,10 +116,12 @@ src/uisce/
   site.py        generate the static status site       (uisce-site)
   towns.py       Small Areas, their centroids and      (uisce-fetch-towns)
                  populations, mapped to named areas
+  wsz.py         km of water main per supply zone,     (uisce-fetch-wsz)
+                 summed per county
   site.html      front end copied into out/site/
   config.py      shared paths, constants, HTTP session
 tests/           pytest suite (no network access needed)
-notes/           how it works, data-quality findings, pipeline caveats
+notes/           how it works, decisions and measurements; notes/README.md indexes them
 ```
 
 The commands are console entry points declared in `pyproject.toml`; run them from the repo root, since data paths (`out/`, `data/`) are relative.

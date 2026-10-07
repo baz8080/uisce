@@ -2,6 +2,8 @@
 
 Notes on `site.html` / `areas.html` / `county.html`, kept here so the reasoning isn't lost to chat history. See [how-it-works.md](how-it-works.md) for how the three pages fit together.
 
+Entries a later one replaced are in [archive/frontend-superseded.md](archive/frontend-superseded.md).
+
 ## 2026-08-20: the vendored copy became a pinned uv git dependency
 
 One day of the vendored mechanism was enough to show its cost: a shared fix meant a sync,
@@ -25,37 +27,6 @@ search-result landing still costs one request. The pin lands at the statusui com
 content the last vendored sync already carried, so the switch itself changes nothing but the
 shared files' header comments.
 
-## Shared with esb and lifts since 2026-08-19: the design layer lives in `statusui`
-
-*(Mechanism superseded 2026-08-20, above: the vendored copy is now a pinned git dependency.
-The what-is-shared split and the renames below still hold.)*
-
-The three status sites are deliberately look-alike, and every UI fix had been ported three
-times by hand — and not always: the 2026-08-18 contrast pass below never reached esb. The
-tokens, base rules, the row/bar/card components and the small browser helpers are now one set
-of files in `../statusui` (GitHub `baz8080/statusui`), **vendored** under `src/uisce/ui/` and
-inlined into each page at build by `statusui.assemble()` (`page_html` in `site.py`). The pages
-stay single-file: a search-result landing still costs one request.
-
-Vendoring, not a submodule or a package, was the choice: the sites stay clone-and-build, each
-site's PR shows the real CSS diff, and esb/lifts keep their empty `dependencies`. Drift is
-guarded by `tests/test_ui_vendored.py`, which compares the copy to `../statusui/ui` when that
-checkout is present and skips otherwise — the same convention as `../esb-data`.
-
-**To change the shared UI:** edit in `statusui`, commit, then `scripts/sync-ui.sh` here and in
-each sibling; `uv run pytest`; commit. If a site needed more than the sync, that was a site
-change and belongs in its own block. What is shared and what is deliberately per-site is listed
-in statusui's README; the short rule is that a rule goes upstream when two sites want it and
-none wants it different, and becomes a custom property the moment one does.
-
-What this site gave up in the unification: month tabs abbreviate to "Aug 2026" like the
-siblings (the strip was wrapping on a phone anyway — see the overflow table below), the county
-view's grade chip is the shared 32px, and the footer disclosures take the shared arrow. The
-name collisions were renamed here rather than upstream: `plural` → `pl` (ours returns the word,
-the shared one the count and word), `monthLabel` → `monthLabelLong`, and `dayCells` takes a
-`describe()` for our `[severity, share]` cells. `test_site_css.py` parses the assembled page now,
-since the template alone no longer carries the rules it guards.
-
 ## Fixed 2026-08-06: `hidden` needs `!important`, or an author `display` wins
 
 Both pages are hand-written HTML that switch views on and off with the `hidden` attribute. The UA stylesheet's rule for it is a plain `display: none`, which any author `display` on the same element outranks — the element then stays on screen while the page believes it is gone.
@@ -67,6 +38,8 @@ That was not hypothetical. `#overview { display: flex }`, added for the narrow-s
 **Amended 2026-10-02:** the shared rule, in statusui's `base.css` since 2026-08-20, became `[hidden]:not([hidden="until-found"])` so that find-in-page can still reveal an until-found element ([baz8080/statusui#19](https://github.com/baz8080/statusui/pull/19), for rail-delays' paged list). The parser read that `:not(` as a pseudo-class that never matches and failed three of these guards on a page the browser renders correctly, so it now takes exactly that exclusion as matching: these pages only ever set plain `hidden`. Any other pseudo-class still reads as no match.
 
 ## Contrast pass 2026-08-18: the grade chips could not carry white text
+
+**Simply put:** the grade chips were checked with two contrast formulas. The older one (WCAG 2) said dark lettering on the olive B chip was fine; the newer one (APCA), which better matches what eyes see, said it was the least readable chip on the page. So five chips carry white lettering and only the amber C carries dark, and a test upstream in statusui holds each pairing.
 
 From a cold external usability review. Every ratio below was recomputed independently against the WCAG 2.1 relative-luminance formula before anything changed; all of the review's figures reproduced exactly, including the `color-mix` for grade B, which lands on `#69930f`.
 
@@ -114,23 +87,6 @@ every fill-and-lettering pair the chips actually use, in both schemes, so none o
 silently again. The 2026-08-18 pass had no such test, which is the other reason it went stale
 unnoticed.
 
-### The month-tab overflow starts at six months, not now
-
-The review reported the tab strip already overflowing a 390px phone at five tabs, with the sort control clipped and a page scrollbar. **That did not reproduce and was not true when written.** At five tabs the buttons shrink to fit (89px → 65px) and `document.scrollWidth` equals the viewport exactly. Measured at 390px, without `flex-wrap`:
-
-| tabs | overflow |
-|---|---|
-| 5 (Apr–Aug 2026) | none |
-| 6 | 42px |
-| 7 | 122px |
-| 8 | 214px |
-| 12 | 536px |
-
-Collection began 2026-04-20, so the sixth tab arrives **1 September 2026** and the overflow with it. `flex-wrap: wrap` on `.months` fixes it at every count. Shipped ahead of the fault rather than after it.
-
-**Superseded 2026-08-19**: wrap was the stopgap, not the answer — see "The iPhone review
-pass" below. The strip scrolls horizontally now.
-
 ### Left open
 
 The *fills* still fail the 3:1 non-text threshold against the light page — `--warning` 1.74:1, `--serious` 2.50:1 — which matters for the legend swatches, where the colour itself is the meaning rather than a backdrop for a letter. The review checked `--maint` against this threshold but not the others. Not addressed here: changing the fills reaches the bars and the county grid, which is a bigger visual decision than a text-contrast fix. *Partially closed 2026-08-26*: the worst offenders — the 40%/70% opacity steps, at 1.80:1 and 2.93:1 light and 1.54:1/2.51:1 dark — left the bars with the solid severity ramp (see "The design alignment pass" below); `--warning` at 1.74:1 remains, on restriction days and their swatch.
@@ -160,10 +116,10 @@ the severity tokens: n1 `--serious` (2.50:1 light / 7.37:1 dark), n2 `--critical
 worse literally true in light mode. n1-light and n3-dark still sit just under 3:1 — a partial
 close of the "fills fail 3:1" item above, not a full one. Cross-site wrinkle, deliberate:
 uisce's "minor" is orange where esb's is yellow — colour maps stay per site (statusui's rule).
+*Since 2026-10-06 an outage day takes one shade (n1): the ramp's steps were a population share.*
 
-**Captions became severity words.** "Fri 1 Aug: minor supply disruption" at the old
-thresholds (minor < 0.5% of the county, moderate < 2%, major above), matching esb's pattern;
-the percentage left the caption, the legend ramp carries "darker = worse".
+**Captions became severity words.** "Fri 1 Aug: minor supply disruption", matching esb's pattern;
+the percentage left the caption.
 
 **The sort control was removed; the shared search box replaced it.** 26 rows scroll;
 alphabetical is the only order, and statusui's `bindSearch` (the behaviour esb's box already
@@ -172,12 +128,12 @@ over the full TownLookup so never-noticed towns are findable, built per build an
 the first keystroke (~66 KB, never in the initial payload). Picking routes to the county view.
 
 **Rows gained esb's affordances**: the `›` chevron (the per-site `--row-cols` override that
-dropped its track is gone; both sites ride base), and the bare percentage became the two-line
-`.cml` stat with an "availability" caption. The counts label is "outages" — "disruptions"
+dropped its track is gone; both sites ride base), and the bare figure became the two-line
+`.cml` stat (since 2026-10-06, the rate per 100 km). The counts label is "outages" - "disruptions"
 overflows the shared 92px stats column.
 
 **The banner-duplicate tiles went** ("announced supply disruptions", "typical time…"), the
-basis line became esb's shape ("Counties are graded on water supply availability. Nationally
+basis line became esb's shape ("Counties are graded on … Nationally
 this month: …"), the partial-month note was removed outright (the owner: don't explain that
 future data doesn't exist), the county drill-down card adopted esb's order (legend on top,
 tall bar, tiles instead of the `.drow` run), and the footer's `.method` hairlines went, with
@@ -319,7 +275,7 @@ Uncapped, unlike the county page's 60: an area accrues about one notice a month 
 
 The "open the interactive map" link shipped as `#area/<county>` — one segment where the app's area route needs two — so it matched neither of the router's patterns and dropped the reader on the national overview. It is the county route now, the same one the county pages use. A test reads the two patterns out of `site.html` and runs them against the href, rather than pinning a remembered shape; the build check does the same across all 1,247 hash links the static pages emit.
 
-An event's `people` is the whole event's footprint. On an area page that sits two lines under the area's own Census population, so a notice spanning five areas printed 3,775 people on a page headed 528 with nothing to explain it — the app's badge carries that caveat in its title and the page had dropped it. The multi-area note now carries it too, and only when there is a figure to qualify.
+An event's figures are the whole event's. A notice spanning five areas printed them on a page headed by one area with nothing to explain it - the app's badge carries that caveat in its title and the page had dropped it. The multi-area note now carries it too.
 
 ### What it costs
 
@@ -496,6 +452,8 @@ day of the month.
 
 ## The county's own data left data.js - 2026-09-05
 
+**Simply put:** the index page used to download every county's town table and closed-notice list up front, although the overview reads none of it. Each county's detail now arrives in its own file when the county is opened, and the index file is a quarter of its old size.
+
 Measured on the 2026-09-04 release, `data.js` was 955,516 bytes and the overview read a third
 of it. By block: `towns` 583,560 (61%), `resolved` 164,809 (17%), `months` 133,842 (14%),
 `open` 58,212 (6%), `top` 11,548. The first two are read by the county view alone. The
@@ -520,8 +478,8 @@ loads nothing but the history. The search index and the area pages are written b
 the writer's, so `TestPayloadShape` still guards the full shape and a new guard asserts what
 reaches `data.js`.
 
-Two smaller things went with it. A clear area-month omitted its zero events and its zero
-person-hours but spelled out `"availability": 100.0`; it is implied now, like the others
+Two smaller things went with it. A clear area-month omitted its zero counts but spelled
+out one zero figure in full; it is implied now, like the others
 (1,218 of 4,833 rows). And `run()` prints `statusui.size_report` against `INITIAL_BUDGET`,
 512 KB for index.html plus data.js, with a `::warning::` line on the Pages run when it is
 over. A warning, not a failure: a deploy must not fail on growth alone, and the site would be
@@ -532,6 +490,8 @@ request per county, but the county view would wait for 2.4 MB of history it does
 and the area view would carry a breakdown it does not read either.
 
 ## The day list and "so far" read the charged span - 2026-09-24
+
+**Simply put:** tapping a day in a county's bar lists the notices on that day, and an open notice's "so far" shows hours that have actually passed rather than hours that were planned. Both were wrong for notices whose interval did not start on the day they were published.
 
 Measured on the 2026-09-23 release with the clock pinned to 2026-09-24 06:00 UTC, and again
 by running the app's own `dayEventsHtml` over every coloured cell up to today in Chromium.
@@ -570,8 +530,8 @@ the word the app's `openGroups` already used.
   `ahead: 1`, and so does an open entry in `data.js` (sparse). The county page and
   `openGroups` read it as well as the date. The 37 starting later on the build day used to
   read "since <today>" beside a history saying "not started yet"; they now read "from".
-- **Hours are measured hours.** `hours` sums only pins that did not take a `SpanTable`
-  estimate, and is clipped to the build for every event, open or closed. An open notice
+- **Hours are measured hours.** `hours` sums measured pins only (at the time, those that took no
+  `SpanTable` estimate; since 2026-10-06 none does), and is clipped to the build for every event, open or closed. An open notice
   already over by its own text (charged an estimate) printed that estimate as "at least Nh
   so far", and a closed event with a scheduled end still ahead printed the unelapsed time.
 - **Standing notices.** After #97 the Open column and `OPEN_NOTE` also leave out a
@@ -584,6 +544,8 @@ pages reachable from search (the slug is now read from the history alone).
 
 
 ## The first paint waits for the data - 2026-10-02
+
+**Simply put:** the page used to draw its header and footer at once, then jump when the data arrived and filled the middle. Now everything below the header stays out of the paint until the first render has run, and every way the data can fail to arrive still reveals the page. Layout shift went from 0.45, which Google counts as poor, to 0.
 
 Cloudflare RUM put the index at CLS 0.453 on `html>body>div.wrap` (13% of loads poor), with
 LCP p50 2.2s and p75 2.5s. The scripts sit at the end of `<body>`, so Chrome paints the
@@ -648,6 +610,8 @@ existing nodes, so it counts. It is in roadmap.md.
 
 ## Long static lists skip what is off screen - 2026-10-02
 
+**Simply put:** a county page lists every notice, and Dublin's has over 1,700 rows. The browser now skips laying out rows that are off screen, which makes the longest page about ten times quicker to load. Each row tells the browser roughly how tall it will be so the scrollbar does not jump.
+
 The county pages list every notice (c/dublin.html: 1,733 rows, 436 KB) and areas.html lists
 2,123 areas in 26 sections. Chrome laid all of it out and painted what it could before the
 reader had moved: total long-task time on a cold load, 4x CPU, median of 7 (desktop / mobile
@@ -703,6 +667,8 @@ change), so screenshots are not byte-identical.
 A section drawn once keeps its last height while skipped: Chromium gives every `content-visibility: auto` element `contain-intrinsic-size: auto` whether the rule says so or not, so the search's rewrite of `--n`/`--r` reached only sections never painted. After scrolling the whole directory, a search for "bally" left a 14,987 px page over 4,210 px of rows at 1366 px (34,589 against 6,157 at 412). A search now adds `.searching` to the body, which draws every section (`content-visibility: visible`): the filtered list is short, and the page is exactly as tall as its rows. Clearing the search leaves each section its filtered height until it comes near the screen, so the scrollbar runs short for a while (17,864 against 30,554 px); anchor jumps after clearing still measured 0 CLS at both widths. The sections also took the 6 px `overflow-clip-margin` the notice rows already had, for the focus rings on edge links. Safari supports `content-visibility: auto` but not `overflow-clip-margin`, so it would have cut those rings; both skipping rules now sit inside `@supports (overflow-clip-margin: 6px)`, and Safari gets the lists as they were before, laid out in full. esb's review found it first.
 
 ## The first render's data is inline - 2026-10-02
+
+**Simply put:** the figures the first screen needs are written into the page itself, so it draws before the full data file has downloaded. The other views wait for that file behind a "Loading" note, and a newer file that arrives later is adopted.
 
 With the footer held back (the entry above) the first paint still waited on `data.js`: 216 KB
 raw, 28.4 KB gz, a blocking `<script>` at the end of the body. The first overview reads one
@@ -777,26 +743,6 @@ arrives after the first render, so it costs no LCP, only 28.4 KB gz of transfer.
 - Not fixed here: nothing redraws the moment a late `data.js` lands, because loadShard ignores an onload after its timeout, so the reader sees the failure note until the next navigation. The county and history shards share the defect and never recover, since their state stays `"error"`. The fix belongs in statusui's loadShard. Fixed there in statusui#22 (pinned 2026-10-02): a late onload now sets the state to `"ok"` and calls back again, so the county view, the area view and the views waiting on `data.js` redraw by themselves; held 12 s in a browser, the county appeared at 13.3 s with no navigation.
 - Clearing a search leaves each section its filtered height until it is near the screen. Keeping `.searching` one more frame would record the full heights, at the price of laying out the whole directory on the keystroke that clears it, which is the 700 ms long task the skipping exists to avoid; left as it is. One measurement in four of a programmatic jump to `#c-wicklow` straight after clearing a search shifted 1.09 at 1366 px (0 in the rest, and 0 at 412 px), as sections settled from their filtered heights around the target; a reader's own click on the nav is input and is not counted, and a cold load never searched has no filtered heights to settle.
 - `first_render_payload` names its top-level keys instead of copying all but three, so a key added to the payload later cannot ride into the HTML unnoticed; and the build log prints the inline payload's size.
-
-## The page said more than the method - 2026-10-04
-
-water-sla-benchmarks.md has always called the availability figure an exposure index, two to
-three orders of magnitude above a regulator's measured minutes by construction. The index
-page did not: the national tile read "hours without water, added up across everyone
-affected" and the banner "typical outage 6.1h". Annualised from May to September the
-person-hours come to 48 hours per person per year, against about a quarter of an hour for
-Ofwat's sector figure, so "without water" was a claim the method cannot make.
-
-- The tile reads "hours of announced outage, added up across everyone in range", the pair of
-  its neighbour "of people's time with no outage announced".
-- The banner uses the county tile's name for the same figure: typical time to "works complete".
-- "What this measures" says a notice counts for everyone within 500 m for as long as it
-  stands, and that the figures cannot be compared with a regulator's.
-- "What the letters mean" says the cuts are fitted to this site's own record and that the
-  letters lean on the 500 m assumption (statuspage-methodology.md, "Density sensitivity").
-
-"Availability" keeps its name: it is the grade's basis on every surface, and the caveat now
-sits where the word is defined.
 
 ## The page counts notices - 2026-10-06
 

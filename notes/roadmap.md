@@ -17,15 +17,11 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
    reference in the county view, the national `#open` view and the day list from #81; the Atom
    entries gain `<link rel="related">`. The notice history and the area pages wait on the check
    below.
-2. **Retire the paragraph that asked for the split.** statuspage-methodology.md, "Payload, and
-   when to change the shape", still says the per-county file is "deliberately not done yet".
-   #82 did it; once it merges, point the paragraph at frontend-notes "The county's own data
-   left data.js" instead of re-stating it.
-3. **Put the next purge in the Actions summary, not only the log.** `create_db` prints how
+2. **Put the next purge in the Actions summary, not only the log.** `create_db` prints how
    many cases were stamped `vanished_at`. A `::warning::` line when that count is large, say
    over the 1% the download guard already uses, would have shown the 2026-08-10 purge the day
    it happened instead of a month later. A candidate, not agreed.
-4. **The negative-span family reads "no end reported" in the histories.** 302 cases on the
+3. **The negative-span family reads "no end reported" in the histories.** 302 cases on the
    2026-09-05 release carry a completion update whose end precedes the re-stamped
    `start_date`, so `build.py` nulls the span and they carry no length. Their
    history rows and the app's end badge then say "no end reported" / "withdrawn without a
@@ -34,7 +30,7 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
    same as the 295 closed ones. Wants a record field that says "completion reported, span
    unusable" and copy for it; a payload-shape guard in `tests/test_site.py` will fail when
    the key is added, which is the guard working.
-5. **A day's notice list pushes the county tiles down.** Tapping a day in the county bar
+4. **A day's notice list pushes the county tiles down.** Tapping a day in the county bar
    loads the history shard, and its list lands above the tiles: 0.1492 at 412 and 0.0328 at
    1366, on 3g, when it arrives more than 500ms after the tap (measured 2026-10-02, after the
    first-paint gate took the footer and area-view shifts to 0). The tiles are not replaced, so
@@ -77,17 +73,15 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
   that an alternative supply's hours are not the works' end (239696-239698 read the tanker's
   23:59 as the end), measured on its own.
 - **Simplification, agreed 2026-10-06.** The county letters rested on the 500 m footprint
-  (statuspage-methodology.md, "Density sensitivity": rank correlation 0.60 against a fixed
+  (archive/availability-method.md, "Density sensitivity": rank correlation 0.60 against a fixed
   headcount, 91 of 156 letters move). The owner chose to count outage notices per 100 km of
   water main instead, then add supply-zone pages. The sessions, checkpoints and models are in
-  [simplification-plan.md](simplification-plan.md); delete this entry when that plan closes.
+  [simplification-plan.md](simplification-plan.md); sessions 0 to 5 are merged. Delete this
+  entry when that plan closes.
 - **`IGNORE_BOIL_NOTICES`.** Recommendation is to leave it off (boil-notices.md, re-measured
   2026-09-05): the two accruing notices and the one paired one are the live warnings the health
   marker exists for. The cost of leaving it off is 13 of 17 issue events excluded as stale
   when any of them may be a notice genuinely still standing; the feed cannot say which.
-- **"0 counties graded F" over a month with counties in E.** Raised, measured and left on
-  2026-08-30 (statuspage-methodology.md, "The scale grew an E"). The one-line fix is to count E
-  and F together and say "graded E or F". Listed so it is findable, not to reopen it.
 
 ## Re-measure when
 
@@ -125,10 +119,6 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
 - The day list (#81) is county-view only, and a recurring event matches every day of its span
   because the shard carries hours and span, not the windows. Both accepted; shipping the
   windows reopens the second (frontend-notes.md, "A day in the county bar lists its notices").
-- water-sla-benchmarks.md, "Related metrics worth adopting later": a CAIDI-style time to
-  restore (the published median completion is already the analogue). The AWWA breaks per 100
-  miles of main it also named is now the count metric (statuspage-methodology.md, "Outage
-  notices per 100 km of main"), in notices rather than breaks.
 
 ## Considered in the 2026-09-05 survey and not planned
 
