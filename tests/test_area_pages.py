@@ -140,13 +140,13 @@ class TestThePage:
         renderer rather than end to end."""
         event = {"ref": "R", "title": "Burst", "sev": "outage",
                  "start": "2026-05-01", "areas": n}
-        assert expected in _events_html([event], multi_area=True)
+        assert expected in _events_html([event], listed_in="area")
 
     def test_a_row_prints_no_estimate_of_the_people_affected(self):
         row = _events_html(
             [{"ref": "R", "title": "Burst", "sev": "outage",
               "start": "2026-05-01", "areas": 4, "people": 3775}],
-            multi_area=True,
+            listed_in="area",
         )
         assert "3,775" not in row and "people" not in row
 

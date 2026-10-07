@@ -16,6 +16,9 @@ of its nearest Small Area centroid, with the same per-class counts as the county
 and no letter: a letter needs a length of main, which is published by supply
 zone, not by town.
 
+Each Water Supply Zone gets a page of the notices pinned inside it since
+collection began, with no letter either: see zone_data.
+
 Methodology and data findings are documented in notes/statuspage-methodology.md.
 """
 
@@ -54,6 +57,8 @@ SITE_HTML = Path(__file__).parent / "site.html"
 AREAS_HTML = Path(__file__).parent / "areas.html"
 COUNTY_HTML = Path(__file__).parent / "county.html"
 AREA_HTML = Path(__file__).parent / "area.html"
+ZONE_HTML = Path(__file__).parent / "zone.html"
+ZONES_HTML = Path(__file__).parent / "zones.html"
 SITE_CSS = Path(__file__).parent / "site.css"
 AREAS_MARKER = "<!--AREAS-->"
 CANONICAL_MARKER = "<!--CANONICAL-->"
@@ -499,6 +504,15 @@ class TownLookup:
                         best = (dist, code)
         return None if best is None else best[1]
 
+    def nearest(self, lat, lon):
+        """The area of the nearest Small Area within PLACE_KM, in any county, or None."""
+        key = (round(lat, 5), round(lon, 5))
+        if key not in self._cache:
+            # a near search first: a Dublin box of PLACE_KM holds thousands of centroids
+            code = self._nearest(lat, lon, 1.0)
+            self._cache[key] = self._nearest(lat, lon, PLACE_KM) if code is None else code
+        return self._cache[key]
+
     def place(self, lat, lon, county):
         """The area a pin is placed in: its nearest Small Area's, or UNPLACED when
         that lies in another county than the notice names, or none is in range.
@@ -507,12 +521,7 @@ class TownLookup:
         Wicklow Small Area on a Kildare notice is where the feed's own two fields
         disagree, and naming a Kildare town for it would hide that.
         """
-        key = (round(lat, 5), round(lon, 5))
-        if key not in self._cache:
-            # a near search first: a Dublin box of PLACE_KM holds thousands of centroids
-            code = self._nearest(lat, lon, 1.0)
-            self._cache[key] = self._nearest(lat, lon, PLACE_KM) if code is None else code
-        code = self._cache[key]
+        code = self.nearest(lat, lon)
         return code if code is not None and self.county[code] == county else UNPLACED
 
     def label(self, code):
@@ -981,8 +990,9 @@ class Region:
         self.unstated = set()  # refs with an open pin that states no end
         self.resolved = {}  # ref -> case, for cases observed to close
 
-    def add(self, case):
-        sev, ref = case.sev, case.ref
+    def add(self, case, key=None):
+        # a zone keys by (county, ref): 15 refs are published in two counties
+        sev, ref = case.sev, case.ref if key is None else key
         self.sev_iv[sev].extend(case.intervals)
         self.iv[sev][ref].extend(case.intervals)
         self.has_end[sev][ref] |= case.has_end
@@ -995,7 +1005,7 @@ class Region:
             entry = self.open_now.setdefault(
                 ref,
                 {
-                    "ref": ref,
+                    "ref": case.ref,
                     "sev": sev,
                     "title": r["title"],
                     "loc": r["location"] or "",
@@ -1057,6 +1067,39 @@ def count_figures(notices, km, *, whole, graded=True):
     if graded:
         figures["count_grade"] = count_grade(per_100km) if whole else None
     return figures
+
+
+def completion_spans(region, outage, first_pubs, lo, hi):
+    """Notice-to-end hours of a region's outage events first published in [lo, hi):
+    ({key: hours} observed, [hours] scheduled, how many never reported an end).
+
+    Two tiers, never pooled into the headline: an observed completion says how
+    long works took; a scheduled end only says what was announced. An event that
+    never reported an end is counted, so the exclusion is visible rather than a
+    silence. Events still open with no signal stay out of every figure here.
+    `outage` is the region's merged outage events, keyed as `first_pubs` is.
+    """
+    observed, scheduled, no_end_n = {}, [], 0
+    for key, iv in outage.items():
+        # an empty interval list would not raise here, it would quietly
+        # contribute a 0.0 and drag the published median toward zero
+        if not iv:
+            continue
+        # publication, not iv[0][0]: the median is over events that started in
+        # the span, wherever their intervals fall
+        if not lo <= first_pubs[key] < hi:
+            continue
+        if not region.has_end["outage"][key]:
+            no_end_n += region.no_end["outage"][key]
+            continue
+        # covered hours, not elapsed span: for a recurring event these differ,
+        # and what the works took is the honest reading
+        hours = sum((e - s).total_seconds() for s, e in iv) / 3600
+        if region.observed_end["outage"][key]:
+            observed[key] = hours
+        else:
+            scheduled.append(hours)
+    return observed, scheduled, no_end_n
 
 
 def back_key(back):
@@ -1384,13 +1427,7 @@ def _area_items(county, areas, prefix=""):
     """
     items = []
     for code, name, pop, n in areas:
-        # the page when the area has one, the hash route when it does not:
-        # an ED is only ever reachable inside the app
-        href = (
-            f"{prefix}{area_path(county, name)}"
-            if area_has_page(code)
-            else f"{prefix}index.html#area/{quote(county, safe='')}/{quote(code, safe='')}"
-        )
+        href = _area_href(county, code, name, prefix)
         # The units ride on every row rather than in a column heading: the
         # heading scrolls away after the first county, and two bare
         # right-aligned integers are read in the wrong order by most people
@@ -1404,6 +1441,14 @@ def _area_items(county, areas, prefix=""):
             f'<span class="p">{"" if pop is None else f"{pop:,} people"}</span></li>'
         )
     return "".join(items)
+
+
+def _area_href(county, code, name, prefix=""):
+    """The area's page when it has one, the hash route when it does not: an ED is
+    only ever reachable inside the app."""
+    if area_has_page(code):
+        return f"{prefix}{area_path(county, name)}"
+    return f"{prefix}index.html#area/{quote(county, safe='')}/{quote(code, safe='')}"
 
 
 def _area_index_html(index):
@@ -1479,6 +1524,109 @@ def county_slug(county):
     filename the loader cannot request.
     """
     return county.lower()
+
+
+def zone_path(name):
+    """`z/<slug>.html`; the 688 names slug uniquely, asserted in the tests."""
+    return f"{ZONE_DIR}/{statusui.slug(name)}.html"
+
+
+SPOT_KM = 0.2
+
+
+def km_apart(a, b):
+    """Kilometres between two (lat, lon) pins, flat-earth: exact enough at 200 m."""
+    kx = 111.0 * math.cos(math.radians(a[0]))
+    return math.hypot((a[0] - b[0]) * 111.0, (a[1] - b[1]) * kx)
+
+
+def repeat_spots(pins):
+    """[(centre, coords, keys)] for every place with two or more notices within
+    SPOT_KM of one of its pins, most notices first. `pins` is [((lat, lon), key)].
+
+    Greedy on a centre rather than chained pin to pin, so a town with a notice
+    every 150 m is not one spot.
+    """
+    at = defaultdict(set)
+    for coord, key in pins:
+        at[coord].add(key)
+    coords = sorted(at)
+    near = {c: [d for d in coords if km_apart(c, d) <= SPOT_KM] for c in coords}
+    left, spots = set(coords), []
+    while True:
+        centre, keys = None, set()
+        for c in coords:
+            if c in left:
+                around = set().union(*(at[d] for d in near[c] if d in left))
+                if len(around) > len(keys):
+                    centre, keys = c, around
+        if len(keys) < 2:
+            return spots
+        taken = [d for d in near[centre] if d in left]
+        spots.append((centre, taken, keys))
+        left -= set(taken)
+
+
+def zone_data(zone_rows, regions, zone_keys, spot_pins, event_meta, event_iv, towns, now, seen):
+    """{code: zone} for every zone in the mains table, with notices or none: what
+    z/<slug>.html prints. Outage notices, the median and the spots read the span
+    since collection began; the notice list is every event with a pin inside.
+    """
+    n_zones = Counter(key for keys in zone_keys.values() for key in keys)
+    out = {}
+    for row in zone_rows:
+        code = row["code"]
+        region = regions.get(code) or Region()
+        outage = region.events()["outage"]
+        first_pubs = {key: event_meta[key]["first_pub"] for key in outage}
+        observed, _, _ = completion_spans(region, outage, first_pubs, COLLECTION_START, seen)
+        knock = region.knock_events()
+        pins = [
+            pin for pin in spot_pins.get(code, ())
+            if COLLECTION_START <= event_meta[pin[1]]["first_pub"] < seen
+        ]
+        locs_at = defaultdict(Counter)
+        for coord, _key, loc in sorted(pins):
+            if loc:
+                locs_at[coord][loc] += 1
+        spots = []
+        for (lat, lon), coords, keys in repeat_spots([(c, key) for c, key, _ in pins]):
+            pubs = sorted(event_meta[key]["first_pub"] for key in keys)
+            area = towns.nearest(lat, lon)
+            # the feed's own place name for the pins, which a multi-pin event's title is not
+            locs = sum((locs_at[c] for c in coords), Counter())
+            spots.append({
+                "area": area,
+                "name": towns.label(area) if area else None,
+                "loc": locs.most_common(1)[0][0] if locs else "",
+                "n": len(keys),
+                "first": f"{pubs[0]:%Y-%m-%d}",
+                "last": f"{pubs[-1]:%Y-%m-%d}",
+            })
+        spots.sort(key=lambda sp: (sp["n"], sp["last"]), reverse=True)
+        events = []
+        for key in zone_keys.get(code, ()):
+            record = event_record(key[1], event_meta[key], event_iv[key], now)
+            if n_zones[key] > 1:
+                record["zones"] = n_zones[key]
+            events.append(record)
+        events.sort(key=lambda e: (e["start"], e["ref"]), reverse=True)
+        name = row["name"].strip()
+        out[code] = {
+            "code": code,
+            "name": name,
+            "county": row["county"],
+            "local_authority": row["local_authority"],
+            "mains_km": int(row["mains_m"]) / 1000,
+            "outage_n": count_notices(first_pubs.values(), COLLECTION_START, seen, seen),
+            "median_h": round(statistics.median(observed.values()), 1) if observed else None,
+            "completed_n": len(observed),
+            "health_n": sum(1 for iv in knock.values() if overlaps(iv, COLLECTION_START, now)),
+            "health_now": sum(1 for iv in knock.values() if any(s <= now <= e for s, e in iv)),
+            "spots": spots,
+            "events": events,
+        }
+    return out
 
 
 # Kept in step with SEVLABEL in site.html by hand — the same duplication, and
@@ -1693,17 +1841,17 @@ def _area_months_html(area_months, months):
     )
 
 
-def _events_html(events, heading="Notice history", multi_area=False):
-    """A list of notices, newest first. Shared by the county and area pages.
+def _events_html(events, heading="Notice history", listed_in=None):
+    """A list of notices, newest first. Shared by the county, area and zone pages.
 
     Uncapped on both. These pages exist to be the durable, indexable record, and
     a county's whole history costs a few hundred KB of text — cheaper than a
     document that presents itself as complete and is not.
 
-    `multi_area` adds the note the app's area view carries for the same reason:
-    one event published as pins in several areas is listed under each, so
-    meeting the same burst twice reads as double-counting unless the page says
-    so. The county list de-duplicates and must not carry it.
+    `listed_in` ("area" or "zone") adds the note the app's area view carries for
+    the same reason: one event published as pins in several areas is listed under
+    each, so meeting the same burst twice reads as double-counting unless the
+    page says so. The county list de-duplicates and must not carry it.
     """
     if not events:
         return ""
@@ -1735,10 +1883,10 @@ def _events_html(events, heading="Notice history", multi_area=False):
             + "</span>"
             + (
                 f'<span class="also">Also published in '
-                f'{e["areas"] - 1} other area'
-                f'{"" if e["areas"] == 2 else "s"}, and listed in each'
+                f'{n - 1} other {listed_in}'
+                f'{"" if n == 2 else "s"}, and listed in each'
                 "</span>"
-                if multi_area and e.get("areas")
+                if listed_in and (n := e.get(f"{listed_in}s"))
                 else ""
             )
             + "</li>"
@@ -1773,7 +1921,7 @@ def area_page_html(county, name, pop, events, area_months=None, months=()):
         f'{f"{pop:,} people · Census 2022 · " if pop is not None else ""}'
         f'Co.&nbsp;{html.escape(county)}</div>'
         f'{_area_months_html(area_months or {}, months)}'
-        f'{_events_html(events, "Every notice published here", multi_area=True)}'
+        f'{_events_html(events, "Every notice published here", listed_in="area")}'
         f'<section id="more"><h2>Elsewhere</h2><p class="links">'
         f'<a href="../../{COUNTY_DIR}/{county_slug(county)}.html">'
         f'Co. {html.escape(county)}\u2019s whole record</a> · '
@@ -1813,6 +1961,137 @@ def county_page_html(
         f'<span>· {len(areas):,} area{"" if len(areas) == 1 else "s"}</span></h2>'
         f'<ul class="areas">{_area_items(county, areas, "../")}</ul></section>'
     )
+
+
+def _since():
+    return f"{COLLECTION_START.day} {COLLECTION_START:%B %Y}"
+
+
+def _km_text(km):
+    return f"{km:,.1f}" if km < 10 else f"{km:,.0f}"
+
+
+def _plural(n, word):
+    return f"{n:,} {word}{'' if n == 1 else 's'}"
+
+
+def _zone_summary_html(zone):
+    """The zone's record since collection began, then its health marker."""
+    n, k = zone["outage_n"], zone["completed_n"]
+    if not n:
+        record = f"No outage notice since {_since()}."
+    else:
+        fix = (
+            f"; typical time to &ldquo;works complete&rdquo; "
+            f"<strong>{zone['median_h']:g}h</strong>, from the {k:,} that reported it"
+            if k
+            else "; none has reported its works complete yet"
+        )
+        record = f"Since {_since()}: <strong>{_plural(n, 'outage notice')}</strong>{fix}."
+    health = ""
+    if zone["health_now"]:
+        active = _plural(zone["health_now"], "active health notice")
+        health = f' <span class="health">{active}</span>'
+    elif zone["health_n"]:
+        health = f" {_plural(zone['health_n'], 'health notice')} since then, none in force now."
+    return f'<p class="now">{record}{health}</p>'
+
+
+def _zone_spots_html(spots, area_href):
+    """Places in the zone with two or more outage notices within SPOT_KM."""
+    if not spots:
+        return ""
+    rows = []
+    for sp in spots:
+        name = html.escape(sp["name"] or "Unnamed place")
+        href = area_href(sp["area"]) if sp["area"] else None
+        if href:
+            name = f'<a href="{href}">{name}</a>'
+        loc = f' - {html.escape(sp["loc"])}' if sp["loc"] and sp["loc"] != sp["name"] else ""
+        rows.append(
+            f'<li><strong>{name}</strong>{loc}'
+            f'<span class="when">{_plural(sp["n"], "outage notice")}, '
+            f'{_fmt_day(sp["first"])} to {_fmt_day(sp["last"])}</span></li>'
+        )
+    return (
+        f'<section id="spots"><h2>Repeat spots <span>· {_plural(len(spots), "spot")}</span></h2>'
+        f'<p class="what">Places with two or more outage notices pinned within '
+        f'{SPOT_KM * 1000:.0f}&nbsp;m of each other since {_since()}, named for the '
+        f'nearest Census area.</p><ul class="notices">{"".join(rows)}</ul></section>'
+    )
+
+
+def zone_page_html(zone, area_href):
+    """The whole body of z/<slug>.html; `area_href` is a Census area's page, or None."""
+    county = zone["county"]
+    where = (
+        f"{html.escape(zone['local_authority'])}, " if zone["local_authority"] != county else ""
+    ) + f"Co.&nbsp;{html.escape(county)}"
+    mains = (
+        f" · {_km_text(zone['mains_km'])}&nbsp;km of water main" if zone["mains_km"] else ""
+    )
+    return (
+        f'<a class="back" href="../zones.html#c-{county_slug(county)}">'
+        f'← Every supply zone</a>'
+        f'<div class="chead"><h1>{html.escape(zone["name"])}</h1></div>'
+        f'<div class="sub">Water Supply Zone {html.escape(zone["code"])} · {where}{mains}</div>'
+        f'{_zone_summary_html(zone)}'
+        f'<p class="what">A supply zone is the area one Uisce Éireann supply serves. A notice '
+        f'is listed here when one of its pins falls inside the zone&rsquo;s boundary, so a '
+        f'notice pinned in two zones is listed in each.</p>'
+        f'{_zone_spots_html(zone["spots"], area_href)}'
+        f'{_events_html(zone["events"], "Every notice published here", listed_in="zone")}'
+        f'<section id="more"><h2>Elsewhere</h2><p class="links">'
+        f'<a href="../{COUNTY_DIR}/{county_slug(county)}.html">'
+        f'Co. {html.escape(county)}\u2019s whole record</a> · '
+        f'<a href="../zones.html">Every supply zone</a></p></section>'
+    )
+
+
+UNZONED_TEXT = (
+    "The supply zones cover Uisce Éireann&rsquo;s public supply. About one person in five "
+    "is on a group or private scheme instead, which no zone covers."
+)
+
+
+def _zone_index_html(zones, unzoned, area_items):
+    """The zone directory's body: a jump nav, the zones by county, and the areas
+    whose notices were pinned outside every zone."""
+    by_county = defaultdict(list)
+    for zone in zones.values():
+        by_county[zone["county"]].append(zone)
+    nav = " · ".join(
+        f'<a href="#c-{county_slug(c)}">{html.escape(c)}</a>' for c in sorted(by_county)
+    )
+    sections = []
+    for county in sorted(by_county):
+        rows = "".join(
+            f'<li><a href="{zone_path(z["name"])}">{html.escape(z["name"])}</a>'
+            f'<span class="fill"></span>'
+            f'<span class="n">{_plural(z["outage_n"], "outage notice")}</span>'
+            f'<span class="p">{f"{_km_text(z['mains_km'])} km" if z["mains_km"] else ""}</span>'
+            "</li>"
+            for z in sorted(by_county[county], key=lambda z: (z["name"], z["code"]))
+        )
+        n = len(by_county[county])
+        sections.append(
+            f'<section id="c-{county_slug(county)}" data-county="{html.escape(county)}">'
+            f'<h2>Co. {html.escape(county)} <span>· {_plural(n, "zone")}</span></h2>'
+            f'<ul class="areas">{rows}</ul></section>'
+        )
+    # areas, not notices: a notice placed in two areas is listed under each
+    total = sum(len(areas) for areas in unzoned.values())
+    outside = "".join(
+        f'<h3>Co. {html.escape(county)}</h3><ul class="areas">{area_items(county)}</ul>'
+        for county in sorted(unzoned)
+    )
+    sections.append(
+        f'<section id="outside"><h2>Outside every zone '
+        f'<span>· {_plural(total, "area")}</span></h2>'
+        f'<p class="what">{UNZONED_TEXT} A notice pinned outside every zone is still listed '
+        f'under the area it was placed in:</p>{outside}</section>'
+    )
+    return f"<nav>{nav}</nav>\n{''.join(sections)}"
 
 
 def _window_label(case):
@@ -1909,7 +2188,8 @@ def recurrence_report(cases, pin_tags=None):
     return lines
 
 
-def build_site(rows, now, towns=None, data_as_of=None, mains_km=None):
+def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None,
+               zone_rows=None):
     # data_as_of is when the feed was last read; the site can be rebuilt without
     # a data build, so the freshness banner must not follow the build clock
     data_as_of = data_as_of or now
@@ -1945,6 +2225,12 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None):
     pin_tags = defaultdict(list)
     shared = event_windows(rows)
     recurring = recurring_events(rows, shared)
+    # zone pages are built beside the area pages, so they need towns as well
+    zoned = zones is not None and towns is not None
+    zone_regions = defaultdict(Region)
+    zone_keys = defaultdict(set)
+    spot_pins = defaultdict(list)  # zone -> ((lat, lon), key, location) of its outage pins
+    unzoned = defaultdict(lambda: defaultdict(set))  # county -> area -> keys
 
     for r in rows:
         key = (r["county"], case_ref(r))
@@ -1998,6 +2284,18 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None):
             county_towns[case.county][code].add(case)
             event_pins[(case.county, case.ref)].append((case.start, r["id"], code))
             event_codes[(case.county, case.ref)].add(code)
+        if zoned:
+            key = (case.county, case.ref)
+            zone = zones.zone(r["full_lat"], r["full_lon"])
+            if zone is None:
+                unzoned[case.county][code].add(key)
+            else:
+                zone_regions[zone].add(case, key)
+                zone_keys[zone].add(key)
+                if case.sev == "outage":
+                    spot_pins[zone].append(
+                        ((r["full_lat"], r["full_lon"]), key, r["location"] or "")
+                    )
 
     # One name per event, decided on all its pins rather than on whichever the
     # feed happened to publish first. A 6-pin burst spread across two settlements
@@ -2046,6 +2344,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None):
     for county in sorted(counties):
         region = counties[county]
         merged, events = region.merged(), region.events()
+        first_pubs = {ref: event_meta[(county, ref)]["first_pub"] for ref in events["outage"]}
         cdata = {
             "pop": COUNTY_POP[county],
             "mains_km": round(mains_km[county]),
@@ -2110,33 +2409,11 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None):
             notices = count_notices(outage_pubs[county], lo, hi, seen)
             national_notices[ym] += notices
 
-            # Notice-to-end span of disruption events that started this month.
-            # Two tiers, never pooled into the headline: an observed completion
-            # says how long works took; a scheduled end only says what was
-            # announced. An event that never reported an end is counted, so the
-            # exclusion is visible rather than a silence. Events still open with
-            # no signal stay out of every figure here.
-            observed_h, scheduled_h, no_end_n = [], [], 0
-            for ref, iv in events["outage"].items():
-                # an empty interval list would not raise here, it would quietly
-                # contribute a 0.0 and drag the published median toward zero
-                if not iv:
-                    continue
-                # publication, not iv[0][0]: the median is over events that
-                # started this month, wherever their intervals fall
-                if not lo <= event_meta[(county, ref)]["first_pub"] < hi:
-                    continue
-                if not region.has_end["outage"][ref]:
-                    no_end_n += region.no_end["outage"][ref]
-                    continue
-                # covered hours, not elapsed span — for a recurring event these
-                # differ, and what the works took is the honest reading
-                hours = sum((e - s).total_seconds() for s, e in iv) / 3600
-                if region.observed_end["outage"][ref]:
-                    observed_h.append(hours)
-                    national_longest[ym].append((hours, county, ref))
-                else:
-                    scheduled_h.append(hours)
+            observed, scheduled_h, no_end_n = completion_spans(
+                region, events["outage"], first_pubs, lo, hi
+            )
+            observed_h = list(observed.values())
+            national_longest[ym].extend((hours, county, ref) for ref, hours in observed.items())
             national_observed[ym].extend(observed_h)
             national_scheduled[ym].extend(scheduled_h)
             national_no_end[ym] += no_end_n
@@ -2176,6 +2453,16 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None):
     # popped by write_site into the county pages; never part of the payload
     site["notice_text"] = dict(notice_text)
     site["feed"] = feed_entries(event_meta, area_of, towns)
+    if zoned:
+        # popped by write_site into the zone pages; never part of the payload
+        site["zones"] = zone_data(
+            zone_rows or read_zones(), zone_regions, zone_keys, spot_pins,
+            event_meta, event_iv, towns, now, seen,
+        )
+        site["unzoned"] = {
+            county: {code: len(keys) for code, keys in areas.items()}
+            for county, areas in unzoned.items()
+        }
     site["recurrence_report"] = recurrence_report(recurrence, pin_tags)
 
     return site
@@ -2301,6 +2588,7 @@ HISTORY_DIR = "h"
 COUNTY_SHARD_DIR = "t"
 COUNTY_DIR = "c"
 AREA_DIR = "a"
+ZONE_DIR = "z"
 FEED_DIR = "feed"
 
 
@@ -2361,6 +2649,8 @@ def write_site(site, site_dir, towns=None):
     }
     notice_text = site.pop("notice_text", {})
     feed = site.pop("feed", {})
+    zones = site.pop("zones", {})
+    unzoned = site.pop("unzoned", {})
     data = "window.UISCE_DATA = " + json.dumps(site) + ";"
     first = inline_json(first_render_payload(site))
     site_dir.mkdir(parents=True, exist_ok=True)
@@ -2420,7 +2710,7 @@ def write_site(site, site_dir, towns=None):
     # are the page, and generating them into a template keeps the markup and CSS
     # in an HTML file instead of in Python string literals.
     index_bytes = county_bytes = n_county_pages = search_bytes = 0
-    n_area_pages = area_bytes = 0
+    n_area_pages = area_bytes = n_zone_pages = zone_bytes = 0
     pages = ["", "areas.html"]
     if towns is not None:
         # The search index: every Census settlement, noticed or not, so a
@@ -2553,6 +2843,11 @@ def write_site(site, site_dir, towns=None):
                 pages.append(rel)
                 n_area_pages += 1
 
+        if zones:
+            n_zone_pages, zone_bytes = _write_zone_pages(
+                site_dir, zones, unzoned, history, towns, pages
+            )
+
     # a sitemap over the pages, not the payload: data.js and the shards are
     # fetched by the app, never landed on
     (site_dir / "sitemap.xml").write_text(statusui.sitemap(BASE_URL, pages, site["generated_iso"]))
@@ -2568,7 +2863,73 @@ def write_site(site, site_dir, towns=None):
         "search.js": search_bytes,
         "n_area_pages": n_area_pages,
         "area_pages": area_bytes,
+        "n_zone_pages": n_zone_pages,
+        "zone_pages": zone_bytes,
+        "sitemap_urls": len(pages),
     }
+
+
+def _write_zone_pages(site_dir, zones, unzoned, history, towns, pages):
+    """z/<slug>.html for every zone and the zones.html directory; appends their
+    paths to `pages` and returns (zone pages written, their bytes)."""
+
+    def area_href(code):
+        # only an area with a page built: the nearest one to a spot may have no notice
+        county = towns.county[code]
+        area = history.get(county, {}).get(code)
+        return f"../{area_path(county, area['name'])}" if area and "slug" in area else None
+
+    zone_dir = site_dir / ZONE_DIR
+    zone_dir.mkdir(exist_ok=True)
+    total = 0
+    for zone in zones.values():
+        rel = zone_path(zone["name"])
+        n = zone["outage_n"]
+        fix = (
+            f", typically {zone['median_h']:g}h to works complete" if zone["completed_n"] else ""
+        )
+        page = page_html(
+            ZONE_HTML,
+            {
+                "FEED": f"../{FEED_DIR}/{county_slug(zone['county'])}.xml",
+                "TITLE": html.escape(
+                    f"{zone['name']} water supply zone - outages and notices"
+                ),
+                # the record first, what the page holds after it, as the county pages do
+                "DESC": html.escape(
+                    f"{zone['name']}, Co. {zone['county']}: {_plural(n, 'outage notice')} "
+                    f"since {_since()}{fix}. Every Uisce Éireann notice pinned inside "
+                    f"this water supply zone, newest first."
+                ),
+                "CANONICAL": f"{BASE_URL}/{rel}",
+                "BODY": zone_page_html(zone, area_href),
+            },
+        )
+        (site_dir / rel).write_text(page)
+        total += len(page.encode())
+        pages.append(rel)
+
+    def area_items(county):
+        return "".join(
+            f'<li><a href="{_area_href(county, code, towns.label(code))}">'
+            f"{html.escape(towns.label(code))}</a><span class=\"fill\"></span>"
+            f'<span class="n">{_plural(n, "notice")}</span></li>'
+            for code, n in sorted(
+                unzoned[county].items(), key=lambda a: (towns.label(a[0]), a[0])
+            )
+        )
+
+    (site_dir / "zones.html").write_text(
+        page_html(
+            ZONES_HTML,
+            {
+                "ZONES": _zone_index_html(zones, unzoned, area_items),
+                "CANONICAL": f"{BASE_URL}/zones.html",
+            },
+        )
+    )
+    pages.append("zones.html")
+    return len(zones), total
 
 
 def zone_report(rows, zones):
@@ -2580,13 +2941,14 @@ def zone_report(rows, zones):
 
 def run():
     towns = TownLookup.from_csv(SA_TOWNS_PATH)
+    zones = ZoneLookup.from_geojson()
     rows, data_as_of = read_cases()
-    site = build_site(rows, datetime.now(timezone.utc), towns, data_as_of)
+    site = build_site(rows, datetime.now(timezone.utc), towns, data_as_of, zones=zones)
 
     # a diagnostic for the build log, not for the page
     for line in site.pop("recurrence_report"):
         print(line)
-    print(zone_report(rows, ZoneLookup.from_geojson()))
+    print(zone_report(rows, zones))
 
     n_counties, n_months = len(site["counties"]), len(site["months"])
     n_towns = sum(len(c["towns"]) for c in site["counties"].values())
@@ -2616,6 +2978,7 @@ def run():
     print(
         f"  {s['n_county_pages']} county pages {s['county_pages']:,} bytes  ·  "
         f"{s['n_area_pages']} area pages {s['area_pages']:,} bytes  ·  "
-        f"sitemap {s['n_county_pages'] + s['n_area_pages'] + 2} URLs  ·  "
+        f"{s['n_zone_pages']} zone pages {s['zone_pages']:,} bytes  ·  "
+        f"sitemap {s['sitemap_urls']} URLs  ·  "
         f"{n_counties + 1} feeds {s['feeds']:,} bytes"
     )

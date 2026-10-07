@@ -11,8 +11,8 @@ import pytest
 import statusui
 from conftest import make_cases_table
 from conftest import site_case as _case
-from test_area_pages import _write
 from test_site import APP, NOW, TOWNS
+from test_zone_pages import _write_zoned
 
 from uisce import build, pipeline, site
 from uisce.site import COUNT_CUTS, classify, count_grade, knocks_grade, resolve_case
@@ -151,7 +151,7 @@ class TestInitialBudgetWarnsNeverFails:
 @pytest.fixture(scope="module")
 def pages(tmp_path_factory):
     out = tmp_path_factory.mktemp("site")
-    _write(out)
+    _write_zoned(out)
     return {str(p.relative_to(out)): p.read_text() for p in out.rglob("*.html")}
 
 
@@ -166,9 +166,10 @@ class TestOneNamePerThing:
         return re.sub(r"<script\b.*?</script>", "", text, flags=re.S)
 
     def test_every_kind_of_page_is_checked(self, pages):
-        assert {"index.html", "areas.html", "c/carlow.html", "a/carlow/testtown.html"} <= set(
-            pages
-        )
+        assert {
+            "index.html", "areas.html", "zones.html",
+            "c/carlow.html", "a/carlow/testtown.html", "z/testzone.html",
+        } <= set(pages)
 
     def test_every_footer_carries_the_credit(self, pages):
         assert [p for p, text in pages.items() if self.FOOTER not in text] == []
@@ -185,6 +186,14 @@ class TestOneNamePerThing:
                 linking.add(path)
                 assert label.lower().endswith("every area with a notice"), (path, label)
         assert {"c/carlow.html", "a/carlow/testtown.html"} <= linking
+
+    def test_every_link_to_the_zone_directory_names_it_the_same_way(self, pages):
+        linking = set()
+        for path, text in pages.items():
+            for label in re.findall(r'<a href="[^"]*zones\.html(?:#[^"]*)?"[^>]*>(.*?)</a>', text):
+                linking.add(path)
+                assert label.lower().endswith("every supply zone"), (path, label)
+        assert {"index.html", "areas.html", "c/carlow.html", "z/testzone.html"} <= linking
 
     def test_no_link_calls_the_app_a_map(self, pages):
         for path, text in pages.items():

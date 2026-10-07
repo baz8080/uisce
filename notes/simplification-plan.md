@@ -88,15 +88,16 @@ the 95.4% below counted pins in holes, 95.1% is the figure); a pure-Python ray-c
 polygons is seconds); zone assigned at build, no schema change. Opus, medium. Depends on: A,
 4. Done when: 95.4% of distinct pins land in a zone and a known pin tests to a known zone.
 
-**Checkpoint C:** while the archive is under twelve months, does a zone page say "in the
-past year" or "since D Month 2026"? Recommended: "since".
+**Checkpoint C (answered 2026-10-07):** while the archive is under twelve months, does a zone
+page say "in the past year" or "since D Month 2026"? Owner: "since".
 
 **7. Zone pages.** Goal: `z/<slug>.html` for 688 zones. PR "Zone pages": outages in the
 window from C, median fix time, repeat spots (pins recurring within 200 m, named by nearest
 area), the health marker, and for pins in no zone the message that about one in five homes is
 on a group or private scheme, linking the nearest area page. Opus, high: new template and
 payload. Depends on: 6, C. Done when: 688 pages build and the out-of-zone text shows on the
-index.
+index. (Built 2026-10-07: the text is in index.html's footer and on `zones.html`, the zone
+directory, which lists the areas holding out-of-zone notices.)
 
 **8. Find your zone by place.** Goal: the search box reaches a zone. PR "Search reaches the
 zone": scheme names join the index, an area hit lists the zones its pins fall in. No map.
