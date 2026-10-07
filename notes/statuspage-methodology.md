@@ -207,6 +207,22 @@ Totals sum to 53,756 km, the layer's own figure. Largest: Dublin 6,170, Cork 5,1
 
 Zones keyed to one authority can serve another county. With attributes alone, the one measurable signal is zone `CENSUSPOPULATION` against the county's census population: only Louth exceeds 100% (153,114 against 139,703, 109.6%, so about 13,400 people served from Louth zones live elsewhere, in practice Meath around Drogheda). Every other county is at or below 97%, the shortfall being group and private schemes. How much Louth's 1,625 km, or any other zone's, belongs over the line is not known without the boundary polygons; the figure is read as the authority's mains, not the county's, and a notice pinned in Meath counts against Meath but its zone's mains count for Louth, so Louth's rate per 100 km is the one most likely to read low and Meath's high.
 
+## Zone lookup (2026-10-07)
+
+**Simply put:** every pin is matched to the Water Supply Zone whose boundary it falls inside, at build, from boundaries committed in the repo. About 95 pins in 100 land in one; the rest are on group or private schemes the layer does not draw.
+
+`uisce-fetch-wsz` also writes `data/wsz.geojson`: each zone's boundary as the layer serves it, every vertex, coordinates to 5 decimal places (about 1 m), keyed by code alone, one zone a line so a re-fetch diffs by zone. The fetch prints how many zones were added, removed and reshaped, and writes the mains table and the boundaries together or not at all: the boundaries must list exactly the mains table's zones. `wsz.ZoneLookup` answers a pin with a bounding-box prefilter and a winding number, pure Python, no shapely; 14,665 distinct pins take about 3 s. The assignment is made at build and stored nowhere: the boundaries are re-fetched by hand, and a zone column in the DB would go stale behind them. `uisce-site` prints the coverage line every build.
+
+**Coverage**, distinct pin coordinates: 95.04% of 14,467 on release 2026-10-04-1942 and 95.09% of 14,665 on 2026-10-06-2104.
+
+**A zone is tested by ring direction.** The layer draws a zone's outer rings clockwise and its holes counter-clockwise (1,278 and 1,253 rings in its own JSON). Its GeoJSON export keeps the directions but nests only 446 holes inside their outer ring; 799 polygons come out counter-clockwise, 795 of them inside another polygon of the same zone and wound against it. One nested hole, in SZPUB0497, is wound like its outer ring and reads as land; no pin falls in it on either release. So the lookup ignores the nesting and sums the winding number over every ring of a zone: a pin is inside when the sum is not zero. A part tested on its own, outer ring and attached holes only, reads every split-out hole as land: that version gave 95.47% and was briefly committed here.
+
+**The probe's 95.4% counted pins in holes.** The probe under "Supply zones as a limit on the circle" ([archive/availability-method.md](archive/availability-method.md)) ran shapely on the same GeoJSON, which takes each exported polygon as land. Its 95.4%, and its 19 pins in two zones, are what part-by-part gives here: 95.47% and 19 on 2026-10-04-1942. By ring direction the extra 0.43% are pins inside holes, carved out of a public zone, most likely for a group or private scheme. Projecting the pins into the native Irish Grid (EPSG:29900, 29902, 29903) gives the same 95.05% against the layer's own rings, so the datum plays no part.
+
+**A pin in two zones** goes to the smaller by area, holes subtracted, because the usual overlap is a town zone drawn inside its rural scheme. By ring direction only 2 pins on 2026-10-06-2104 are in two zones: DLR Zone 2 and Zone 8, and Lanesboro inside Longford Central.
+
+**Rejected: simplified boundaries.** The plan's 3 MB budget for the file was never measured against accuracy, and nothing the browser loads reads the file. Fitting it needs the layer to smooth the boundaries by 35-55 m (`maxAllowableOffset=0.0005` degrees, 2.7 MB), which moved 128 of 14,665 pins against the full boundaries. Full-precision coordinates (21.5 MB, 8.3 MB compressed) were rejected for the 5 dp file (11.6 MB, 2.9 MB compressed in git): 3 of 14,665 pins differ.
+
 ## Outage notices per 100 km of main (2026-10-06)
 
 **Simply put:** each county-month carries how many outage notices were published per 100 km of the county's water main, and a letter cut on that count. The median time to "works complete" sits beside it, unchanged.

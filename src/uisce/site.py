@@ -48,7 +48,7 @@ from uisce.config import (
     plausible_start,
 )
 from uisce.pipeline import check_schema_version
-from uisce.wsz import county_mains_km, read_zones
+from uisce.wsz import ZoneLookup, county_mains_km, read_zones
 
 SITE_HTML = Path(__file__).parent / "site.html"
 AREAS_HTML = Path(__file__).parent / "areas.html"
@@ -2571,6 +2571,13 @@ def write_site(site, site_dir, towns=None):
     }
 
 
+def zone_report(rows, zones):
+    pins = {(r["full_lat"], r["full_lon"]) for r in rows}
+    zoned = sum(1 for lat, lon in pins if zones.zone(lat, lon))
+    share = zoned / max(len(pins), 1)
+    return f"Supply zones: {zoned:,} of {len(pins):,} distinct pins in a zone ({share:.1%})"
+
+
 def run():
     towns = TownLookup.from_csv(SA_TOWNS_PATH)
     rows, data_as_of = read_cases()
@@ -2579,6 +2586,7 @@ def run():
     # a diagnostic for the build log, not for the page
     for line in site.pop("recurrence_report"):
         print(line)
+    print(zone_report(rows, ZoneLookup.from_geojson()))
 
     n_counties, n_months = len(site["counties"]), len(site["months"])
     n_towns = sum(len(c["towns"]) for c in site["counties"].values())

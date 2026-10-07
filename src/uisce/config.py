@@ -57,6 +57,7 @@ CASES_MAPPED_PATH = Path("out/cases_mapped.json")
 JSONL_PATH = Path("data/inferred_end_times.jsonl")
 SA_TOWNS_PATH = Path("data/sa_towns.csv")
 WSZ_MAINS_PATH = Path("data/wsz_mains.csv")
+WSZ_SHAPES_PATH = Path("data/wsz.geojson")
 SITE_DIR = Path("out/site")
 
 # Where the built site is published. Read by site.py for canonical URLs and the

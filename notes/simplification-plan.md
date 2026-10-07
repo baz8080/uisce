@@ -82,8 +82,9 @@ publish and every Settled row points at a live section.
 ## Phase 3: your supply zone
 
 **6. Zone lookup.** Goal: each pin knows its zone. PR "Water Supply Zones": the fetch gains
-geometry, simplified and committed as `data/wsz.geojson` (under 3 MB, re-fetched by hand,
-diffed on re-fetch); a pure-Python ray-cast with a bbox prefilter, no shapely (14k pins by 688
+geometry, committed as `data/wsz.geojson` (re-fetched by hand, diffed on re-fetch; amended
+2026-10-07: unsimplified, the 3 MB budget dropped as never measured against accuracy, and
+the 95.4% below counted pins in holes, 95.1% is the figure); a pure-Python ray-cast with a bbox prefilter, no shapely (14k pins by 688
 polygons is seconds); zone assigned at build, no schema change. Opus, medium. Depends on: A,
 4. Done when: 95.4% of distinct pins land in a zone and a known pin tests to a known zone.
 

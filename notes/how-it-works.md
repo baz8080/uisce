@@ -20,7 +20,7 @@ ArcGIS feed ──uisce-pipeline──▶ out/uisce.db ──uisce-site──▶
 - **`data/inferred_end_times.jsonl`**: committed, append-only, the cache for end-time extraction. It is the source of truth for what has been inferred; the `inferred_cases` table is a rebuilt projection of it. Querying the table to decide what needs inference is the classic mistake, see [pipeline-dependencies.md](pipeline-dependencies.md).
 - **`out/site/`**: fully static, regenerated from scratch every time, safe to delete.
 
-Two committed lookups sit outside the loop: `data/sa_towns.csv`, the Census geography, refreshed only when the CSO revises it; and `data/wsz_mains.csv`, the km of water main per supply zone, refreshed by hand from Uisce Éireann's layer.
+Two committed lookups sit outside the loop: `data/sa_towns.csv`, the Census geography, refreshed only when the CSO revises it; and `data/wsz_mains.csv` and `data/wsz.geojson`, the km of water main and the boundary of each supply zone, refreshed by hand from Uisce Éireann's layer.
 
 ## Flow 1 - getting cases in (`pipeline.py`, `uisce-pipeline`)
 
@@ -61,12 +61,12 @@ The static pages are templates: `county.html` (`c/<county>.html`), `area.html` (
 
 ## Flow 4 - the geography (`towns.py`, `wsz.py`)
 
-Two committed CSVs, each written by a command that is run only when its source changes.
+Committed lookups, each written by a command that is run only when its source changes.
 
 - `uisce-fetch-towns` → `data/sa_towns.csv`: each Census Small Area's centroid and population, and the named area it belongs to: a settlement, a Local Electoral Area of a city, or the countryside around an Electoral Division.
-- `uisce-fetch-wsz` → `data/wsz_mains.csv`: one row per Water Supply Zone with its mains length; `wsz.county_mains_km` sums the zones to the 26 counties.
+- `uisce-fetch-wsz` → `data/wsz_mains.csv`: one row per Water Supply Zone with its mains length; `wsz.county_mains_km` sums the zones to the 26 counties. It also writes `data/wsz.geojson`, the zones' boundaries, and `wsz.ZoneLookup` puts a pin in its zone by winding number.
 
-At runtime `TownLookup.place` answers "which named area is this pin in?" by the nearest Small Area centroid within `PLACE_KM`, from a grid hash, and `TownLookup.pop` "how many people live in it?", which is printed and never computed from. It is pure Python with no GIS dependency, and everything the geography needs comes from attributes the CSO already publishes: [population-data-sources.md](population-data-sources.md) records why deriving it from boundary polygons instead was both heavier and less accurate.
+At runtime `TownLookup.place` answers "which named area is this pin in?" by the nearest Small Area centroid within `PLACE_KM`, from a grid hash, and `TownLookup.pop` "how many people live in it?", which is printed and never computed from. It is pure Python with no GIS dependency, and the named areas come from attributes the CSO already publishes: [population-data-sources.md](population-data-sources.md) records why deriving them from Census boundary polygons instead was both heavier and less accurate. `ZoneLookup.zone` answers "which supply zone is this pin in?" by a bounding-box prefilter and a winding number on `data/wsz.geojson`, also pure Python; the build prints how many distinct pins land in a zone.
 
 ## Where to change things
 
@@ -76,6 +76,7 @@ At runtime `TownLookup.place` answers "which named area is this pin in?" by the 
 | How a title becomes a category | `CategoryRule` in `pipeline.py`, then run `uisce-backfill` |
 | Grade thresholds | `COUNT_CUTS` in `site.py` |
 | Mains length per county | `data/wsz_mains.csv` via `uisce-fetch-wsz`, summed by `wsz.county_mains_km` |
+| Which supply zone a pin is in | `data/wsz.geojson` via `uisce-fetch-wsz`, read by `wsz.ZoneLookup` |
 | How long an open case runs for | `CAP_DAYS`, and `resolve_case` |
 | What counts as open, everywhere the site says so | `is_open` in `site.py`, carried on `Case.is_open` |
 | Which end signals count as observed | `OBSERVED_END_SOURCES` in `config.py` |
