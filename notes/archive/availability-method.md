@@ -8,7 +8,7 @@ Nothing in them describes a figure the site still publishes. The live method is
 [../statuspage-methodology.md](../statuspage-methodology.md), and the decision to retire
 this one is its section "The estimate is removed".
 
-Sections below are moved unedited from statuspage-methodology.md, in their original order.
+Sections below are moved from statuspage-methodology.md in their original order, unedited except that links to sibling notes now point one directory up.
 
 ## Why not plain "uptime"?
 

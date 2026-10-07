@@ -24,7 +24,7 @@ Two committed lookups sit outside the loop: `data/sa_towns.csv`, the Census geog
 
 ## Flow 1 - getting cases in (`pipeline.py`, `uisce-pipeline`)
 
-1. `download_cases` pulls every notice from the ArcGIS feature server, paged by `OBJECTID`, after checking the feed's own count so a short download never reaches the DB.
+1. `download_cases` pulls every notice from the ArcGIS feature server, paged by `OBJECTID`. `run` first reads the feed's own count and refuses a short download, so it never reaches the DB; the guard is in `run`, not in `download_cases`.
 2. `map_cases` flattens attributes, converts epoch-ms timestamps, and derives the computed columns: `classify_category` turns a title into a `work_category` slug via the `CategoryRule` table, which also overrides `work_type` where the title is unambiguous (a burst main is never planned).
 3. `geocode_all` reverse-geocodes each *rounded* coordinate through LocationIQ, caching in `geocode_cache`. Rounding is what keeps this affordable; `--skip-geocode` writes placeholder rows for a network-free refresh.
 4. `load_cases` upserts into `cases`, stamps `closed_at` the first time a build observes a case stop being `Open`, and stamps `vanished_at` on a case the feed has dropped.

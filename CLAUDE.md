@@ -86,8 +86,9 @@ with the evidence that closed them.
 - A section a lay reader would stall on opens with a **Simply put** paragraph: the idea in plain
   words, with its one load-bearing number, before the detail. Not a label on the top of every file,
   and never a paraphrase of the heading. Retired text moves to `notes/archive/`
-  unedited, under a header saying what replaced it; a live note never describes a figure the site
-  does not publish, and `notes/README.md` indexes both.
+  unedited, under a header saying what replaced it; a live note never presents a figure the site
+  no longer publishes as current (an old effect may stay, dated, where it is the reason for a
+  fix that stands), and `notes/README.md` indexes both.
 - Decisions go in `notes/`, dated, with the rejected alternatives and their numbers. Add a row here
   when one closes something off — this file carries pointers only, never the rationale, or it
   becomes the thing it exists to fix.

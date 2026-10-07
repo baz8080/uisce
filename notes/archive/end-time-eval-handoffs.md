@@ -1,7 +1,7 @@
 # End-time eval, prompt handoffs (completed)
 
 **Simply put:** the working notes for the pv2 prompt change of July 2026, kept as written
-once the work was done. The results they led to are in
+once the work was done, except that links to sibling notes now point one directory up. The results they led to are in
 [../end-time-eval.md](../end-time-eval.md).
 
 ## Next steps: the pv2 prompt update (handoff notes, 2026-07-18)

@@ -1,7 +1,7 @@
 # Frontend notes, superseded entries
 
 **Simply put:** three entries from frontend-notes.md that a later entry replaced. They are
-kept as written. The live note is [../frontend-notes.md](../frontend-notes.md); each entry
+kept as written, except that links to sibling notes now point one directory up. The live note is [../frontend-notes.md](../frontend-notes.md); each entry
 below names the one that superseded it.
 
 ## Shared with esb and lifts since 2026-08-19: the design layer lives in `statusui`
