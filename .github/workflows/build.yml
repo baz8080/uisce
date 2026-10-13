@@ -20,6 +20,7 @@ jobs:
   refuse:
     if: github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - run: |
           echo "::error::Build DB publishes the latest release and pushes to main; dispatch it from main, not $GITHUB_REF"
@@ -28,6 +29,7 @@ jobs:
   build:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # Guards against a manual dispatch landing on top of a scheduled run - two
     # overlapping runs would silently discard one's closed_at observations. Queue
     # rather than cancel: a cancelled run has already read the feed and would lose
