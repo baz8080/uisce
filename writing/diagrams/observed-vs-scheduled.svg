@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 230" width="560" height="230" font-family="system-ui, sans-serif" font-size="13">
+  <!-- two populations of end signals on one hours axis; medians marked -->
+  <line x1="60" y1="185" x2="540" y2="185" stroke="#333" stroke-width="1.5"/>
+  <g fill="#333" text-anchor="middle">
+    <text x="60" y="205">0 h</text><text x="180" y="205">6 h</text><text x="300" y="205">12 h</text><text x="420" y="205">18 h</text><text x="540" y="205">24 h</text>
+  </g>
+  <!-- observed completions: wide spread, median 17.0 h -->
+  <text x="60" y="55" fill="#1f3a5a" font-weight="600">observed completions (n = 3,166) — "works are now complete at…"</text>
+  <g fill="#3b6ea5" opacity="0.75">
+    <circle cx="120" cy="80" r="5"/><circle cx="170" cy="80" r="5"/><circle cx="220" cy="80" r="5"/><circle cx="260" cy="80" r="5"/><circle cx="300" cy="80" r="5"/><circle cx="340" cy="80" r="5"/><circle cx="370" cy="80" r="5"/><circle cx="400" cy="80" r="5"/><circle cx="430" cy="80" r="5"/><circle cx="470" cy="80" r="5"/><circle cx="510" cy="80" r="5"/><circle cx="535" cy="80" r="5"/>
+  </g>
+  <line x1="400" y1="66" x2="400" y2="94" stroke="#1f3a5a" stroke-width="3"/>
+  <text x="408" y="100" fill="#1f3a5a" font-weight="600">median 17.0 h</text>
+  <!-- scheduled ends: narrow, short, median 5.4 h -->
+  <text x="60" y="130" fill="#7a3e00" font-weight="600">scheduled ends (n = 894) — "works from 9am until 2pm"</text>
+  <g fill="#d98c2b" opacity="0.8">
+    <circle cx="100" cy="155" r="5"/><circle cx="120" cy="155" r="5"/><circle cx="135" cy="155" r="5"/><circle cx="150" cy="155" r="5"/><circle cx="165" cy="155" r="5"/><circle cx="180" cy="155" r="5"/><circle cx="200" cy="155" r="5"/><circle cx="230" cy="155" r="5"/>
+  </g>
+  <line x1="168" y1="141" x2="168" y2="169" stroke="#7a3e00" stroke-width="3"/>
+  <text x="176" y="175" fill="#7a3e00" font-weight="600">median 5.4 h</text>
+  <!-- pooled median -->
+  <line x1="246" y1="40" x2="246" y2="185" stroke="#999" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="252" y="38" fill="#666">pooled median 9.3 h — the number the page used to show</text>
+</svg>
