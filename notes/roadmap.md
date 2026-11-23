@@ -17,16 +17,7 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
    reference in the county view, the national `#open` view and the day list from #81; the Atom
    entries gain `<link rel="related">`. The notice history and the area pages wait on the check
    below.
-2. **Make the two unwatched checks visible.** `create_db` prints how many cases were stamped
-   `vanished_at`, and a count over the 1% the download guard uses would have shown the
-   2026-08-10 purge the day it happened instead of a month later. A finished month whose
-   national rate leaves 3 to 5.5 supply notices per 100 km is the other
-   (statuspage-methodology.md, "Every supply notice per 100 km of main"). A `::warning::` in
-   the Actions log was proposed for both and declined (owner, 2026-11-23): a line in a log is
-   missed. Wanted: something visible and actionable. Candidate, not agreed: the data build
-   opens a GitHub issue, one per condition and none while one is open, carrying the figures
-   and the note section that says what to check.
-3. **The negative-span family reads "no end reported" in the histories.** 302 cases on the
+2. **The negative-span family reads "no end reported" in the histories.** 302 cases on the
    2026-09-05 release carry a completion update whose end precedes the re-stamped
    `start_date`, so `build.py` nulls the span and they carry no length. Their
    history rows and the app's end badge then say "no end reported" / "withdrawn without a
@@ -35,13 +26,13 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
    same as the 295 closed ones. Wants a record field that says "completion reported, span
    unusable" and copy for it; a payload-shape guard in `tests/test_site.py` will fail when
    the key is added, which is the guard working.
-4. **A day's notice list pushes the county tiles down.** Tapping a day in the county bar
+3. **A day's notice list pushes the county tiles down.** Tapping a day in the county bar
    loads the history shard, and its list lands above the tiles: 0.1492 at 412 and 0.0328 at
    1366, on 3g, when it arrives more than 500ms after the tap (measured 2026-10-02, after the
    first-paint gate took the footer and area-view shifts to 0). The tiles are not replaced, so
    the browser counts them. Reserving the list's room is a layout decision, not a flag.
 
-5. **An investigation is drawn as works and counted as an unplanned supply notice** (agreed,
+4. **An investigation is drawn as works and counted as an unplanned supply notice** (agreed,
    owner, 2026-11-23). "We are investigating reports of supply disruptions" follows a report
    of lost supply; it is not exploratory. It classifies as works, so it is blue on the bars
    and "Works" on the pills, while the letter counts it unplanned. 847 events from May to
@@ -51,7 +42,7 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
    days, so measure what each moves, against a class or colour of its own that touches the
    display alone. data-quality.md, "'We are investigating' notices", has the earlier
    measurements.
-6. **Zone pages count outage notices alone** (agreed, owner, 2026-11-23). A zone with heavy
+5. **Zone pages count outage notices alone** (agreed, owner, 2026-11-23). A zone with heavy
    planned works shows none of it. Add the supply notices and how many were planned, as the
    county pages carry them, still with no rate or letter (statuspage-methodology.md, "Zone
    pages").
@@ -106,8 +97,8 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
 - **How notices are published**, if a finished month's national rate leaves 3 to 5.5 supply
   notices per 100 km: check whether a region changed how it announces works or
   investigations before reading the month as service. Not a reason to re-fit (owner,
-  2026-11-23). `uv run uisce-eval-grading` names any such month; nothing runs it for you
-  (Queued, 2).
+  2026-11-23). The data build opens an issue when it happens (data-quality.md, "The build
+  raises an issue for a purge, and for an odd month").
 - **The zone pages' window**, on 2027-04-20, when the archive first holds twelve months:
   checkpoint C chose "since 20 April 2026" for an archive under a year
   (statuspage-methodology.md, "Zone pages"). Ask the owner whether the pages move to "in the

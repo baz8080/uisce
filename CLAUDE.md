@@ -82,6 +82,7 @@ with the evidence that closed them.
 | Each area has a day bar and **no letter**: one row per month a notice covered, drawn from the history records by the county day list's own test (`from` to `end`), so it costs the payload nothing and every coloured day is a notice listed under it. A bar from the area's own pins (98.56% identical, 44 KB gzipped) and a row for every month were rejected. | frontend-notes.md - "The area's day bar" (2026-11-23) |
 | The county bar is red when an outage notice stands anywhere in the county, and stays so: it disagrees with a rate by construction (28 of 64 A and B months red on half their days) and the page says what red means. Shading a day by places hit (48% of red county-days have one or two) and grading each day on the letter's cuts (57% within a band of the month's) were measured and rejected. | statuspage-methodology.md - "Every supply notice per 100 km of main" (2026-11-23) |
 | **The letter counts every supply notice per 100 km of main**: events that are not quality notices, planned works included ("repairs are fair game", owner), `planned` split off by `work_type`. Cuts are **A below 2, B below 3, C below 4, D below 6, E below 8, F at 8**, fixed whole numbers re-fitted yearly; even steps and archive quantiles were declined. All 847 investigations count: pairing them off moves 7 of 156 letters. A re-cut of the outage count, a letter per zone, per area or on time to complete, and no letter at all were measured and rejected. Re-measure with `uv run uisce-eval-grading`. **Do not tune the letter to one county's reputation**: no figure the feed supports makes Kildare a bad county. | statuspage-methodology.md - "Every supply notice per 100 km of main" (2026-11-23); the letter it replaced is archive/outage-letter.md |
+| A purge (cases gone from the feed in one build, over the guard's 1%) and an odd month (the newest finished month's national rate outside 3 to 5.5) are raised as **GitHub issues** by the data build's last step, `uisce-check`, once per occurrence: a title any issue already carries, open or closed, is skipped. A log `::warning::` (missed), failing the build and "none while one is open" were rejected. | data-quality.md - "The build raises an issue for a purge, and for an odd month" (2026-11-23) |
 
 ## Conventions
 
@@ -142,5 +143,6 @@ uv run uisce-infer           # end-time extraction: rules first, LLM fallback; C
 uv run uisce-build-inferred  # rebuild inferred_cases from the JSONL
 uv run uisce-site            # build out/site/
 uv run uisce-eval-grading    # re-measure what the letter rests on; --cuts tries others
+uv run uisce-check           # the data build's last step: findings for scripts/open-check-issues.sh
 uv run pytest
 ```

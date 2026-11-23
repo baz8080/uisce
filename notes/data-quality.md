@@ -385,6 +385,19 @@ download pushed a live case out of the next page and stamped it vanished, and a 
 the 1%. Key paging is only sound on pages returned in `OBJECTID` order, so a page that is not
 ascending fails the build rather than skip or repeat rows.
 
+### The build raises an issue for a purge, and for an odd month (2026-11-23)
+
+**Simply put:** when the feed drops a lot of cases at once, or a month's national count lands outside its usual range, the data build opens a GitHub issue saying what happened and what to look at. Each occurrence is raised once.
+
+The 2026-08-10 purge was found a month late because its only trace was a line in a build log. `uv run uisce-check` (`checks.py`) is the last step of the data build and writes a finding for each of two conditions; `scripts/open-check-issues.sh` opens an issue for each, labelled `data-check` and assigned to the repository's owner.
+
+- **Cases gone from the feed in this build**, when they are more than `FEED_COUNT_TOLERANCE` (1%) of what the feed had been serving: the cases whose `vanished_at` is this build's own stamp. The issue carries how many were still `Open` and a count by month of publication, which is what told the August purge (a date range) from a scattered loss. On the 2026-11-22 release eleven builds have stamped anything: 9,179 on 2026-09-05, the August purge found when the stamp was introduced, 100 the day after, and 1 or 2 on each of the other nine.
+- **The newest finished month's national rate outside 3 to 5.5 supply notices per 100 km**, the band statuspage-methodology.md sets ("Every supply notice per 100 km of main"). The issue carries the last six months and the six counties furthest from their own previous three months, to show whether one region moved or all of them, and says it is a prompt to check publishing practice, not to re-fit the cuts. Only the newest finished month is tested, so an old month is never raised late.
+
+An issue is not re-opened: the script skips a title that any issue, open or closed, already carries, and the title names the occurrence (the count and day of a purge, the month and its rate). So closing one is final, and a second purge or another odd month is a new issue.
+
+Rejected: a `::warning::` in the Actions log (owner, 2026-11-23: a line in a log is missed); failing the build, which would hold back a good release for something that wants a look and no more; "none while one is open", which lets a second purge hide behind an unread first.
+
 ### A feature with no pin (2026-09-24)
 
 ArcGIS omits `geometry` for a null shape, or writes an empty point as `"NaN"`, and one such
