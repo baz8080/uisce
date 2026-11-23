@@ -15,6 +15,7 @@ The measurements and decisions behind the site, so nobody has to work one out tw
 | [pipeline-dependencies.md](pipeline-dependencies.md) | how the DB, the JSONL and the site get out of step |
 | [population-data-sources.md](population-data-sources.md) | the Census geography a pin is placed by |
 | [water-sla-benchmarks.md](water-sla-benchmarks.md) | what regulators measure, and why the site cannot borrow it |
+| [grading-plan.md](grading-plan.md) | the 2026-11-23 review of the letter: count every supply notice, give areas a bar; not built yet |
 | [roadmap.md](roadmap.md) | follow-ups not started, and decisions waiting on the owner |
 
 Settled decisions are indexed in [../CLAUDE.md](../CLAUDE.md), one row each, pointing at the section that closed them.

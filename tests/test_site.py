@@ -2984,8 +2984,8 @@ class TestPayloadShape:
 
     def test_the_top_level_keys_are_unchanged(self):
         assert set(self._site()) == {
-            "generated", "generated_iso", "data_as_of_iso", "months", "counties",
-            "national", "last_30", "mains_km", "top",
+            "generated", "generated_iso", "data_as_of_iso", "collected_from", "months",
+            "counties", "national", "last_30", "mains_km", "top",
         }
 
     def test_the_county_keys_are_unchanged(self):

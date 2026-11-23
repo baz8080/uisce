@@ -82,7 +82,7 @@ At runtime `TownLookup.place` answers "which named area is this pin in?" by the 
 | Which end signals count as observed | `OBSERVED_END_SOURCES` in `config.py` |
 | How far a pin may be from the Small Area it is placed by | `PLACE_KM` |
 | When a settlement is split into electoral areas | `SPLIT_ABOVE_POP` / `MIN_PART_SHARE` in `towns.py` |
-| Anything visual, or the page copy | `site.html` and `site.css` (single file, no build); the shared parts in `../statusui` |
+| Anything visual, or the page copy | `site.html`, `site.css` and `bar.css` (the day bar's cells) (single file, no build); the shared parts in `../statusui` |
 | The LLM prompt or model | `inference.py`, then re-run inference and rebuild |
 | The rules templates (bump `RULES_VERSION`) | `rules.py`, then `uisce-eval-rules-shadow` + `uisce-eval-replay --extractor rules` before re-running inference |
 
