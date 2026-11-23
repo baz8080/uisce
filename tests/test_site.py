@@ -103,8 +103,13 @@ class TestClassify:
         assert classify(_case(work_category="mains_repair", work_type="Planned")) == "maintenance"
 
     def test_non_disruptive_activity_never_accrues_as_outage(self):
-        assert classify(_case(work_category="investigation")) == "maintenance"
         assert classify(_case(work_category="leak_detection")) == "maintenance"
+        assert classify(_case(work_category="hydrant_repair")) == "maintenance"
+
+    def test_a_reported_disruption_under_investigation_is_an_outage(self):
+        assert classify(_case(work_category="investigation")) == "outage"
+        assert classify(_case(work_category="investigation", work_type=None)) == "outage"
+        assert classify(_case(work_category="investigation", work_type="Planned")) == "maintenance"
 
     def test_quality_beats_works_and_lift_notices_are_ignored(self):
         assert classify(_case(work_category="boil_notice_issued")) == "quality"
@@ -1573,7 +1578,7 @@ class TestTopEvents:
         rows = [
             _case(id=1, reference_num="CAR1", work_category="water_conservation",
                   notice_to_end_seconds=200 * 3600, end_local_date="2026-05-09"),
-            _case(id=2, reference_num="CAR2", work_category="investigation",
+            _case(id=2, reference_num="CAR2", work_category="leak_detection",
                   notice_to_end_seconds=200 * 3600, end_local_date="2026-05-09"),
             _case(id=3, reference_num="CAR3"),
         ]
@@ -2405,8 +2410,8 @@ class TestAreaHistory:
 
     def test_the_worst_severity_across_an_events_pins_wins(self):
         """An event is a reference_num, not a severity slice: a burst published
-        alongside its own investigation notice is a burst."""
-        rows = [_case(id=1), _case(id=2, work_category="investigation")]
+        alongside its own leak detection notice is a burst."""
+        rows = [_case(id=1), _case(id=2, work_category="leak_detection")]
         event = _history(rows)[0]
         assert event["sev"] == "outage"
         assert event["pins"] == 2
@@ -2414,7 +2419,7 @@ class TestAreaHistory:
     def test_a_works_event_is_kept_not_only_disruptions(self):
         """The county metrics rank supply disruptions; a history that showed only
         those would answer a narrower question than the one the reader asked."""
-        event = _history([_case(work_category="investigation")])[0]
+        event = _history([_case(work_category="leak_detection")])[0]
         assert event["sev"] == "maintenance"
 
     def test_a_boil_notice_closed_by_its_paired_lift_reads_confirmed(self):

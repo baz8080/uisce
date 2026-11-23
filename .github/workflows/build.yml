@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   # A dispatch from a branch would publish that branch's DB as the latest
@@ -88,3 +89,12 @@ jobs:
             commit -q -m "Infer end times by rules, $(date -u +%Y-%m-%d) build"
           git pull -q --rebase origin main
           git push -q origin HEAD:main
+
+      # Last, so it can lose nothing above it. An issue rather than a warning
+      # here: a line in this log is missed.
+      - name: Open an issue for a tripped data check
+        run: |
+          uv run uisce-check
+          scripts/open-check-issues.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
