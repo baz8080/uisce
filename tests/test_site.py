@@ -15,6 +15,7 @@ from uisce.site import (
     COLLECTION_START,
     COUNTY_POP,
     SITE_HTML,
+    SUPPLY_CUTS,
     UNPLACED,
     UNPLACED_LABEL,
     TownLookup,
@@ -1179,6 +1180,97 @@ def _notices(county, prefix, per_month, **overrides):
                 notice_to_end_seconds=6 * 3600, **overrides,
             ))
     return rows
+
+
+def _supply(site, county, key):
+    return [site["counties"][county]["months"][f"2026-{m:02d}"][key] for m in range(5, 10)]
+
+
+class TestSupplyNotices:
+    """The count grading-plan.md measured on release 2026-11-22-2154: every event
+    that is not a quality notice, planned works included. The rows here are
+    Kerry's and Carlow's May to September, one event each."""
+
+    KERRY = (158, 154, 312, 173, 166)
+    KERRY_PLANNED = (32, 37, 22, 22, 35)
+    CARLOW = (4, 19, 8, 15, 21)
+    CARLOW_PLANNED = (2, 14, 1, 5, 10)
+
+    def _site(self, extra=()):
+        rows = []
+        for county, prefix, total, planned in (
+            ("Kerry", "KER", self.KERRY, self.KERRY_PLANNED),
+            ("Carlow", "CAR", self.CARLOW, self.CARLOW_PLANNED),
+        ):
+            rows += _notices(county, prefix, [t - p for t, p in zip(total, planned)])
+            rows += _notices(county, prefix + "P", planned,
+                             work_category="essential_works", work_type="Planned")
+        rows += list(extra)
+        return build_site([dict(r, id=i + 1) for i, r in enumerate(rows)], OCTOBER, TOWNS)
+
+    def test_kerry_and_carlow_reproduce_the_plan(self):
+        site = self._site()
+        assert _supply(site, "Kerry", "supply_per_100km")[2] == 11.46
+        assert _supply(site, "Carlow", "supply_per_100km") == [0.68, 3.25, 1.37, 2.56, 3.59]
+        assert "".join(_supply(site, "Kerry", "supply_grade")) == "DDFEE"
+        assert "".join(_supply(site, "Carlow", "supply_grade")) == "ACABC"
+
+    def test_planned_works_count_and_are_told_apart(self):
+        july = self._site()["counties"]["Kerry"]["months"]["2026-07"]
+        assert (july["supply_notices"], july["planned"]) == (312, 22)
+
+    def test_the_outage_count_beside_it_is_untouched(self):
+        july = self._site()["counties"]["Kerry"]["months"]["2026-07"]
+        assert july["outage_notices"] == 312 - 22
+        assert july["count_grade"] == count_grade(july["per_100km"])
+
+    def test_every_class_but_quality_counts(self):
+        extra = [
+            _case(county="Carlow", reference_num="CAR00000101",
+                  work_category="mains_repair", work_type="Planned"),
+            _case(county="Carlow", reference_num="CAR00000102", work_category="discolouration"),
+            _case(county="Carlow", reference_num="CAR00000103",
+                  work_category="water_conservation"),
+            _case(county="Carlow", reference_num="CAR00000104",
+                  work_category="boil_notice_lifted", end_source="lifted_immediate"),
+            _case(county="Carlow", reference_num="CAR00000105",
+                  work_category="reservoir_interruption",
+                  description="Supply will be shut off nightly from 10pm until 7am."),
+            _case(county="Carlow", reference_num="HM0000000106", work_category="investigation"),
+        ]
+        may = self._site(extra)["counties"]["Carlow"]["months"]["2026-05"]
+        assert (may["supply_notices"], may["planned"]) == (4 + 4, 2 + 1)
+
+    def test_an_event_is_planned_only_when_every_pin_is(self):
+        pins = [
+            _case(county="Carlow", reference_num="CAR00000201",
+                  work_category="essential_works", work_type=work_type)
+            for work_type in ("Planned", "Unplanned")
+        ]
+        may = self._site(pins)["counties"]["Carlow"]["months"]["2026-05"]
+        assert (may["supply_notices"], may["planned"]) == (4 + 1, 2)
+
+    def test_the_cuts_are_two_three_four_six_and_eight(self):
+        assert SUPPLY_CUTS == (2.0, 3.0, 4.0, 6.0, 8.0)
+        for above, below, cut in zip("ABCDE", "BCDEF", SUPPLY_CUTS):
+            assert count_grade(cut - 0.01, SUPPLY_CUTS) == above
+            assert count_grade(cut, SUPPLY_CUTS) == below
+
+    def test_a_month_seen_only_in_part_carries_its_count_and_no_letter(self):
+        site = self._site()
+        october = site["counties"]["Kerry"]["months"]["2026-10"]
+        assert (october["supply_per_100km"], october["supply_grade"]) == (None, None)
+        assert site["national"]["2026-04"]["supply_per_100km"] is None
+
+    def test_the_last_30_days_and_the_nation_carry_it_and_the_nation_no_letter(self):
+        site = self._site()
+        last_30 = site["counties"]["Kerry"]["last_30"]
+        assert last_30["supply_grade"] == count_grade(last_30["supply_per_100km"], SUPPLY_CUTS)
+        assert site["last_30"]["supply_notices"] == sum(
+            c["last_30"]["supply_notices"] for c in site["counties"].values())
+        assert site["national"]["2026-07"]["supply_notices"] == 312 + 8
+        assert "supply_grade" not in site["last_30"]
+        assert "supply_grade" not in site["national"]["2026-07"]
 
 
 def _per_100km(site, county):
@@ -3006,12 +3098,14 @@ class TestPayloadShape:
             "health_n", "median_completion_h", "completed_n", "median_scheduled_h",
             "scheduled_n", "no_end_n", "health_now",
             "outage_notices", "per_100km", "count_grade",
+            "supply_notices", "planned", "supply_per_100km", "supply_grade",
         }
 
     def test_the_national_month_keys_are_unchanged(self):
         assert set(self._site()["national"]["2026-05"]) == {
             "median_completion_h", "completed_n", "median_scheduled_h", "scheduled_n",
             "no_end_n", "outage_notices", "per_100km",
+            "supply_notices", "planned", "supply_per_100km",
         }
 
     def test_the_top_row_keys_are_unchanged(self):
