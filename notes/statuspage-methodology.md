@@ -313,10 +313,96 @@ The review behind it is [archive/grading-plan.md](archive/grading-plan.md); the 
 
 - The count ignores size and length: a village burst and a city trunk main each count one, and so do a three-hour planned window and a three-day burst. The median beside the letter is the only length the site measures, and it covers outages alone.
 - How works are published moves the count. 1,140 of 4,211 planned events have another planned event within 200 m and 14 days (Galway 45%): a week of works published daily is several notices, and the same week announced as one repeating window is one.
-- Zones cross county lines, and a notice is placed by pin while its main is counted by zone authority. Measured on the 2026-10-06 release for Louth, Meath and their neighbours, May to September cases: 69 of Meath's 592 pins (11.7%) fall in Louth's "South Louth & East Meath" zone (693 km) and 4 in Fingal Zone 1; 0 of Louth's 298 fall in a Meath zone. So Meath reads high and Louth low, by at most that twelfth.
+- Zones cross county lines, and a notice is counted in the county the feed names while its main is counted by the council that runs its zone. On release 2026-11-22-2154, May to October: 340 of 15,461 pins (2.2%) sit in a zone run from another county, 78 of Meath's 654 in Louth's "South Louth & East Meath" zone (693 km) and 4 in Fingal Zone 1; none of Louth's 330 sits in another county's zone. Counted where its main is counted, Meath's rate over the six months is 11.8% lower and Louth's 24.3% higher, and 18 of the 156 letters differ by one: "A notice counted by its zone's county" below, where the change is recommended and waits on the owner.
 - A county of 585 km (Carlow) moves 0.17 per notice, so one notice is a sixth of the narrowest band; Dublin's 6,170 km moves 0.016. The coarseness is in the small counties, where it is also the honest resolution of the data.
 - The feed's `county` is the notice's claim, not the pin's; "Known limitation: pins outside the county they claim" above applies here as to everything placed by county.
 - The 25 pins with an unmatched title are works by default and count.
+
+## A notice counted by its zone's county (measured 2026-11-23, not adopted)
+
+**Simply put:** the letter divides a county's notices by its length of water main, and the two are not counted over the same ground. A notice goes to the county the feed names; a main goes to the county whose council runs its supply zone. East Meath is on a zone run from Louth, so its notices count against Meath and its mains count for Louth. Counting every notice where its main is counted moves 265 of 12,783 notices and changes 18 of 156 letters by one. Meath's rate falls by an eighth, and Meath is still third from the bottom.
+
+Nothing published has changed: this is a measurement and a recommendation, and the decision is the owner's ([roadmap.md](roadmap.md)). Release 2026-11-22-2154, clock at the data horizon, supply notices of May to October. The replay reproduces `build_site`'s `supply_notices`, rate and letter in all 156 county-months and every county's `last_30` before it moves anything.
+
+**The rule measured.** Each pin votes for the county of the council that runs the zone it falls in (`ZoneLookup.zone`, then `county` in `wsz_mains.csv`). A pin in no zone, 750 of 15,461 (4.9%), votes for the feed's county: no county's total holds its main. The event goes to the county with the most votes, to the feed's county on a tie, else to the earliest pin's, and stays one event under the key the build gives it. Which rule hardly matters: 1,454 events have more than one pin, 35 of them vote for two counties, 20 of those tie and 5 move. Unzoned pins abstaining, the earliest pin alone, and moving only when every zoned pin agrees give 269, 279 and 267 moves and 18, 19 and 18 letters.
+
+**What moves.** 340 pins (2.2%) sit in a zone run from another county and 265 events (2.07%) move. Eight pairs hold 182 of them, each the work of one zone:
+
+| Listed under | Counted for | Events | Zone |
+|---|---|---|---|
+| Meath | Louth | 61 | South Louth & East Meath (693 km) |
+| Roscommon | Mayo | 48 | Lough Mask RWSS (1,391 km) |
+| Clare | Limerick | 22 | Limerick City Environs PWS (965 km) |
+| Sligo | Roscommon | 18 | North Roscommon WSS (381 km) |
+| Mayo | Galway | 13 | Tuam RWSS (711 km) |
+| Laois | Kilkenny | 8 | Galmoy-Rathdowney PWS (50 km) |
+| Kildare | Dublin | 6 | SD_ZONE2 (1,066 km) |
+| Mayo | Sligo | 6 | Lough Talt Regional (625 km) |
+
+The other 83 are spread over 61 pairs. The moves are of two kinds. 187 events have a pin placed in an area of the feed's county: the pin is in the county and its zone is run from the next one. 78 have every pin nearest a Small Area of another county, which is the feed's `county` against its own coordinates ("Known limitation: pins outside the county they claim"); the reference's own prefix (MEA, LOU) sides with the pin in 40 of them and with the feed's county in 35. The 187 alone change 14 letters, the 78 alone 6.
+
+**By county**, notices and mean monthly rate over the six months, lowest first:
+
+| County | Feed's county | Rank | Zone's county | Rank | Letters, feed | Letters, zone |
+|---|---|---|---|---|---|---|
+| Leitrim | 159 = 2.06 | 1 | 158 = 2.05 | 1 | A B B A A B | same |
+| Carlow | 77 = 2.19 | 2 | 80 = 2.28 | 2 | A C A B C A | A C A C C A |
+| Longford | 178 = 2.45 | 3 | 178 = 2.45 | 4 | A B D B B A | same |
+| Westmeath | 209 = 2.48 | 4 | 208 = 2.47 | 5 | B B C A B B | same |
+| Offaly | 175 = 2.55 | 5 | 182 = 2.65 | 10 | A B C C B B | A B D C B B |
+| Sligo | 260 = 2.56 | 6 | 247 = 2.43 | 3 | C C B B A B | C C B B A A |
+| Monaghan | 100 = 2.57 | 7 | 100 = 2.57 | 7 | A B B C B B | same |
+| Cavan | 102 = 2.60 | 8 | 103 = 2.63 | 8 | B A C B B B | same |
+| Wicklow | 166 = 2.66 | 9 | 165 = 2.64 | 9 | B B B B D A | B B B B C A |
+| Louth | 259 = 2.66 | 10 | 322 = 3.30 | 14 | B B C B C B | B C D B C B |
+| Roscommon | 348 = 2.76 | 11 | 317 = 2.51 | 6 | C B B B C B | C A B B B B |
+| Kildare | 335 = 2.96 | 12 | 327 = 2.89 | 12 | B C B C C B | same |
+| Clare | 322 = 2.96 | 13 | 301 = 2.77 | 11 | B B C B C B | B B C B B B |
+| Laois | 204 = 3.18 | 14 | 194 = 3.03 | 13 | A C C D C B | A B C D C B |
+| Donegal | 881 = 3.32 | 15 | 879 = 3.32 | 15 | C C C B B C | same |
+| Mayo | 602 = 3.60 | 16 | 638 = 3.82 | 17 | D C C C C C | D D C C C C |
+| Kilkenny | 246 = 3.74 | 17 | 250 = 3.80 | 16 | D C D C C C | D C D B D C |
+| Galway | 676 = 3.80 | 18 | 691 = 3.89 | 18 | C D C D D D | B D C D D D |
+| Limerick | 585 = 3.86 | 19 | 607 = 4.00 | 19 | C C D B D D | same |
+| Tipperary | 892 = 4.22 | 20 | 896 = 4.24 | 20 | B D D D D C | same |
+| Cork | 1,483 = 4.80 | 21 | 1,480 = 4.80 | 21 | D D D D D D | D D D D D C |
+| Dublin | 1,863 = 5.03 | 22 | 1,868 = 5.05 | 22 | D D D D D D | same |
+| Wexford | 596 = 5.50 | 23 | 599 = 5.53 | 23 | D D E D D D | same |
+| Waterford | 390 = 6.39 | 24 | 385 = 6.31 | 25 | E D F E D D | same |
+| Meath | 566 = 6.61 | 25 | 499 = 5.83 | 24 | E E F D E D | E E E D D C |
+| Kerry | 1,109 = 6.79 | 26 | 1,109 = 6.79 | 26 | D D F E E D | same |
+
+Louth's rate rises 24.3%, Mayo's 6.0%; Meath's falls 11.8%, Roscommon's 8.9%, Clare's 6.5%, Sligo's 5.0%, Laois's 4.9%. No other county moves more than 4%. The middle of the table is bunched, so Offaly's five places are seven notices.
+
+**Letters.** 18 of 156 change, each by one: 12 better, 6 worse. A 17, B 50, C 35, D 44, E 8, F 2 against the published A 15, B 49, C 39, D 42, E 8, F 3, so the cuts stand. Four of the 26 `last_30` letters change: Louth C to D (3.20 to 4.06), Meath E to D (6.23 to 5.18), Roscommon C to B (3.19 to 2.95), Waterford D to C (4.13 to 3.93).
+
+**Meath and Louth.**
+
+| | May | Jun | Jul | Aug | Sep | Oct |
+|---|---|---|---|---|---|---|
+| Meath, feed | 100 = 7.00 E | 111 = 7.77 E | 131 = 9.18 F | 73 = 5.11 D | 88 = 6.16 E | 63 = 4.41 D |
+| Meath, zone | 93 = 6.51 E | 92 = 6.44 E | 114 = 7.98 E | 65 = 4.55 D | 82 = 5.74 D | 53 = 3.71 C |
+| Louth, feed | 40 = 2.46 B | 37 = 2.28 B | 57 = 3.51 C | 41 = 2.52 B | 49 = 3.02 C | 35 = 2.15 B |
+| Louth, zone | 46 = 2.83 B | 57 = 3.51 C | 73 = 4.49 D | 48 = 2.95 B | 54 = 3.32 C | 44 = 2.71 B |
+
+Meath lists 566 notices, 69 leave (61 to Louth) and 2 arrive. E or F in four of six months becomes E in three and no F. Its July sits on the cut: 114 notices is 7.98 and 115 is 8.05. The attribution is not what puts Meath near the bottom. Its 499 notices on the 1,428 km its own council's zones hold are the third-highest rate of the 26, behind Kerry and Waterford and ahead of Wexford's 5.53.
+
+**What would disagree with what**, if the letter alone moved:
+
+- *The county page.* Its "Supply notices" column would print 93 for Meath's May above a list holding 100, and Louth's letter would rest on 63 notices listed under Meath, Laois and Dublin. 265 notices (2.1%) are listed under one county and counted for another.
+- *The outage count, the median and the ten longest* are taken over the feed's county; 162 of the 265 are outage notices. "Outages" stays below "Supply notices" in all 156 county-months, by the data and not by construction.
+- *The area pages.* The moved notices are named for 107 area and county pairings: Kiltullagh's countryside 18 and Cloonfad 17 (Roscommon, counted for Mayo), Duleek 11 and Ratoath 11 (Meath, counted for Louth). An area carries no letter, so nothing on its page contradicts; its county link leads to a letter its notices are not in.
+- *The "Pinned outside the county" bucket* is a different disagreement. Of the 304 unplaced pins, 103 are in a zone run from another county, 173 in one of the feed's own county and 28 in none; of the 340 pins that cross, 237 are placed in an area of the feed's county. The bucket would not explain the moves.
+- *The county bar* stays the feed's: a red day in Meath from a notice counted for Louth. It already disagrees with a rate by construction.
+- *`zones.html` and the zone pages* already group by the council that runs the zone, and would agree.
+- *The national figures* do not move. 13 references the feed publishes under two counties would land twice in one; merging them takes the 12,783 to 12,770.
+- *The build.* The letter would need the zone lookup on every build (about 3 s, already run for the zone pages) and falls back to the feed's county without it, which is how `TestSupplyNotices` builds.
+
+**Recommended: change the attribution**, by the rule above, for `supply_notices`, `planned` and the rate and letter on them, monthly and `last_30`. Whether `outage_notices` follows is part of the decision and was not measured: the page prints it as a part of the supply count, and it is also the set the median is taken over. A rate whose two halves cover different ground is off by an amount now measured: a quarter for Louth, an eighth for Meath, and one letter in 18 of 156 county-months, against the 7 of 156 that did not earn the investigations a heuristic. This is not a heuristic: the lookup is exact, runs already, and the choice of rule moves one letter. The lists, the median, the bar and the area pages stay with the feed's county, and the county page says in one line how many of the notices it lists count for another county's letter and how many arrive. The cost is that line, and that "Louth" then means the zones run from Louth, east Meath's among them.
+
+**The alternative: leave it.** Every page stays consistent with its own list, and the "Known limits" entry above carries the measured error. The published letter then reads Meath one band too harsh in three months of six and Louth one too kind in two.
+
+**Rejected: moving the mains instead**, each crossing zone's length split between counties by the Census population of the Small Areas inside it. It keeps every notice in the county that lists it. 1,020 of 53,756 km change county (Louth 1,625 to 1,377, Meath 1,428 to 1,680), 15 letters change, and it gives the zone rule's letter in 141 of 156: Meath 5.61, D E E D D C, still 24th. Rejected because population is not main. In five of the seven crossing zones over 300 km the notices over the line outrun the people there: Lough Mask 11.2% of people and 20.4% of pins, Limerick City Environs 3.1% and 14.3%, North Roscommon 20.6% and 40.6%, Lough Talt 4.8% and 10.0%, North East Regional 9.3% and 18.6%; a rural edge carries more main per head than the town at the centre. `sa_towns.csv` also files a Small Area under its settlement's county, so Ferrybank reads as Waterford and Graiguecullen as Carlow; 204 zones (832 km) hold no Small Area centroid; and it would put a population estimate back into a published number ("The estimate is removed").
 
 ## The estimate is removed (2026-10-06)
 
