@@ -142,6 +142,10 @@ HARD_CATS = {
 # silently inventing supply outages") for why; unmatched titles fall through
 # to maintenance and are printed by every backfill (see backfill_work_category).
 REPAIR_CATS = {"mains_repair", "valve_repair", "pump_repair"}
+# "We are investigating reports of supply disruptions": a report of lost supply
+# whose cause is not yet known, not exploratory works. An outage on the same
+# terms as a repair (notes/data-quality.md, 2026-11-23).
+REPORTED_CATS = {"investigation"}
 
 # Only health-relevant quality notices knock a grade; discolouration shows
 # but doesn't knock.
@@ -242,7 +246,8 @@ def classify(row, recurring=False):
         return "quality"
     if cat in DEGRADED_CATS or row["water_restrictions"] or row["reduced_pressure"]:
         return "degraded"
-    if cat in HARD_CATS or (cat in REPAIR_CATS and row["work_type"] != "Planned"):
+    unplanned = row["work_type"] != "Planned"
+    if cat in HARD_CATS or (cat in REPAIR_CATS | REPORTED_CATS and unplanned):
         return "degraded" if recurring else "outage"
     # planned works, and non-disruptive activity regardless of work_type
     return "maintenance"
@@ -1835,7 +1840,8 @@ def _county_months_html(cdata, months):
         '<th scope="col" title="Every notice warning of a supply disruption that starts this '
         'month: outages, restrictions and works">Supply notices</th>'
         '<th scope="col" title="Supply notices announced as planned works">Planned</th>'
-        '<th scope="col" title="Bursts, interruptions and unplanned repairs among them">'
+        '<th scope="col" title="Bursts, interruptions, unplanned repairs and reported losses '
+        'under investigation among them">'
         'Outages</th>'
         '<th scope="col" title="Boil water, do not drink, discolouration">Quality</th>'
         f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div></section>'
@@ -1862,10 +1868,11 @@ def _area_months_html(area_months, months):
         '<section id="months"><h2>Month by month</h2>'
         '<div class="scroll"><table><thead><tr>'
         '<th scope="col">Month</th>'
-        '<th scope="col" title="Bursts, interruptions and unplanned repairs">Outages</th>'
+        '<th scope="col" title="Bursts, interruptions, unplanned repairs and reported losses '
+        'under investigation">Outages</th>'
         '<th scope="col" title="Boil water, do not drink, discolouration">Quality</th>'
         '<th scope="col" title="Restrictions and low pressure">Restricted</th>'
-        '<th scope="col" title="Planned works and investigations">Works</th>'
+        '<th scope="col" title="Planned works">Works</th>'
         f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div></section>'
     )
 

@@ -32,17 +32,7 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
    first-paint gate took the footer and area-view shifts to 0). The tiles are not replaced, so
    the browser counts them. Reserving the list's room is a layout decision, not a flag.
 
-4. **An investigation is drawn as works and counted as an unplanned supply notice** (agreed,
-   owner, 2026-11-23). "We are investigating reports of supply disruptions" follows a report
-   of lost supply; it is not exploratory. It classifies as works, so it is blue on the bars
-   and "Works" on the pills, while the letter counts it unplanned. 847 events from May to
-   October on release 2026-11-22-2154, 201 of them with an outage notice within 500 m and 5
-   days (`uv run uisce-eval-grading --to 2026-10`). Before it moves: classing it as an outage
-   also puts it in `outage_notices`, the median, the ten longest, the zone counts and the red
-   days, so measure what each moves, against a class or colour of its own that touches the
-   display alone. data-quality.md, "'We are investigating' notices", has the earlier
-   measurements.
-5. **Zone pages count outage notices alone** (agreed, owner, 2026-11-23). A zone with heavy
+4. **Zone pages count outage notices alone** (agreed, owner, 2026-11-23). A zone with heavy
    planned works shows none of it. Add the supply notices and how many were planned, as the
    county pages carry them, still with no rate or letter (statuspage-methodology.md, "Zone
    pages").

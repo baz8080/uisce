@@ -73,8 +73,7 @@ def supply_events(rows, now):
         e["inv"] |= r["work_category"] == "investigation"
         e["pins"].append((r["full_lat"], r["full_lon"]))
     return {
-        key: Event(key[0], e["sev"], e["first"], e["planned"],
-                   e["inv"] and e["sev"] == "maintenance", tuple(e["pins"]))
+        key: Event(key[0], e["sev"], e["first"], e["planned"], e["inv"], tuple(e["pins"]))
         for key, e in held.items() if e["sev"] != "quality"
     }
 
@@ -206,13 +205,14 @@ def run(argv=None):
 
     in_window = {k for k, e in events.items() if month_of(e) in months}
     investigations = {k for k in in_window if events[k].investigation}
-    outages = {k for k, e in events.items() if e.sev == "outage"}
+    # an investigation is an outage notice itself; the pair is with one that is not
+    outages = {k for k, e in events.items() if e.sev == "outage" and not e.investigation}
     paired = near_another(events, investigations, outages, PAIR_KM, PAIR_DAYS)
     without = monthly_counts(events, months, skip=paired)
     moved = sum(
         letter(round(100.0 * without[k] / km[k[0]], 2), cuts) != letters[k] for k in published
     )
-    print(f"\nInvestigations {len(investigations):,}; with an outage notice within "
+    print(f"\nInvestigations {len(investigations):,}; with another outage notice within "
           f"{PAIR_KM:g} km and {PAIR_DAYS} days {len(paired):,}; "
           f"letters that change if those are not counted: {moved} of {len(published)}")
 

@@ -486,9 +486,32 @@ The "no reference number by construction" line above is true of the description 
 
 The exclusion decision stands anyway, for the reason the re-measured section above establishes: investigations classify as `maintenance`, which is never counted as an outage, so a rescued duration feeds no published number. Recorded here so the pattern isn't re-derived - if investigation-duration stats are ever wanted, 500 m/±5 d unique-sibling coordinate pairing is the mechanism, not references.
 
-### Amended 2026-11-23: investigations count towards the letter, and still are not paired
+### Amended 2026-11-23: an investigation is an outage notice, and still is not paired
 
-Since 2026-11-23 the letter counts every supply notice, so an investigation is no longer "excluded from everything that matters": it counts once, as works. The conclusion above stands for a different reason. On release 2026-11-22-2154, 201 of the 847 investigation events from May to October have an outage notice within 500 m and 5 days and are probably one incident published twice; counting only the other 646 changes 7 of 156 county letters and moves two counties one place. That does not earn a coordinate heuristic in a published number (statuspage-methodology.md, "Every supply notice per 100 km of main"). Their durations still feed nothing: the median is taken over outage notices.
+**Simply put:** a notice saying Uisce Éireann is investigating reports of lost supply is a report of lost supply, so it now counts as an outage: red on the bars, in the outage count and in the typical time. It added 847 outage notices to 6,976 and raised the typical time in every month.
+
+"Leave them" above rested on investigations feeding no published number. Two things changed that on 2026-11-23. The letter began counting every supply notice, so an investigation counted, as unplanned; and it was still drawn as works, blue on the bars and "Works" on the pills, which is the display disagreeing with the arithmetic. Every one of the 947 investigation pins from May to October says "We are investigating reports of supply disruptions"; none is exploratory (owner, 2026-11-23: investigations follow reported issues). `classify` now puts the `investigation` category with the unplanned repairs (`REPORTED_CATS`): an outage unless the feed marks it Planned, which none is.
+
+Measured on release 2026-11-22-2154, May to October, building both ways with the clock at the data horizon:
+
+| | as works | as outages |
+|---|---|---|
+| events changing class | | 847 |
+| outage notices | 6,976 | 7,823 |
+| reported complete | 5,403 | 5,856 |
+| never reported an end | 349 | 742 |
+| national median, May to October (h) | 12.5, 15.7, 12.5, 16.7, 9.7, 16.9 | 12.7, 16.4, 14.0, 17.1, 12.4, 17.1 |
+| county-month medians that change | | 100 of 156, 24 by more than 2h |
+| new rows in the ten longest | | 4 across the six months |
+| red county-days | 3,285 | 3,433 of 4,784 |
+| zone pages: outage notices | 8,022 | 8,986 |
+| zone pages: repeat spots | 1,482 | 1,668 |
+
+The supply count and every letter are unchanged. The median rises in every month because an investigation that reports completion takes a median 19.1h (579 pins, 21% inside 6h). About half report none: 487 of the pins are `not_found`, which is why the notices that never report an end go from one in twenty to about one in ten (742 of 7,823), and the page says so. The largest single moves are small counties with few completions: Meath's May median goes from 21.4h to 39.2h. Kildare's and Wicklow's outage counts rise most, by 35% and 37%.
+
+**Still not paired.** 201 of the 847 have another outage notice within 500 m and 5 days and are probably one incident published twice, so they are now counted twice in the outage count and can sit twice in the median. Pairing them off was measured for the letter (7 of 156 letters) and is not built here either: a coordinate heuristic deciding which of two notices is the incident does not belong in a published number, and 2.6% of the outage count is the size of what it would correct.
+
+**Rejected: a class of its own, for display alone.** It moves no published time, and costs a fifth class through the bars, legends, tables and payload, with a red day that is then not an outage notice. It also leaves the outage count and the typical time blind to notices the site itself draws as lost supply.
 
 ## Closed cases with no end signal create false-green days
 

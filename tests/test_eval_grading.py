@@ -44,7 +44,7 @@ def test_letter_reads_the_site_cuts_unless_told_others():
 
 def test_an_investigation_pairs_with_an_outage_notice_near_it_in_place_and_time():
     events = {
-        "inv": _event(investigation=True, sev="maintenance"),
+        "inv": _event(investigation=True),
         "near": _event(lat=52.839, day=4),          # about 330 m north, 4 days on
         "far": _event(lat=52.846, day=1),           # about 1.1 km north
         "late": _event(day=6),
