@@ -32,11 +32,6 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
    first-paint gate took the footer and area-view shifts to 0). The tiles are not replaced, so
    the browser counts them. Reserving the list's room is a layout decision, not a flag.
 
-4. **Zone pages count outage notices alone** (agreed, owner, 2026-11-23). A zone with heavy
-   planned works shows none of it. Add the supply notices and how many were planned, as the
-   county pages carry them, still with no rate or letter (statuspage-methodology.md, "Zone
-   pages").
-
 ## Waiting on a check by hand
 
 - **Does an old reference still resolve on wtr.ie?** Try one from May. The feed purged

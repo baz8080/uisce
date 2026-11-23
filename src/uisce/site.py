@@ -1608,8 +1608,14 @@ def zone_data(zone_rows, regions, zone_keys, spot_pins, event_meta, event_iv, to
     for row in zone_rows:
         code = row["code"]
         region = regions.get(code) or Region()
-        outage = region.events()["outage"]
+        by_class = region.events()
+        outage = by_class["outage"]
         first_pubs = {key: event_meta[key]["first_pub"] for key in outage}
+        # every event with a pin inside that is not a quality notice, as the county counts
+        supply = [
+            key for key in {key for sev in BAR_SEVS for key in by_class[sev]}
+            if COLLECTION_START <= event_meta[key]["first_pub"] < seen
+        ]
         observed, _, _ = completion_spans(region, outage, first_pubs, COLLECTION_START, seen)
         knock = region.knock_events()
         pins = [
@@ -1649,6 +1655,8 @@ def zone_data(zone_rows, regions, zone_keys, spot_pins, event_meta, event_iv, to
             "county": row["county"],
             "local_authority": row["local_authority"],
             "mains_km": int(row["mains_m"]) / 1000,
+            "supply_n": len(supply),
+            "planned_n": sum(event_meta[key]["planned"] for key in supply),
             "outage_n": count_notices(first_pubs.values(), COLLECTION_START, seen, seen),
             "median_h": round(statistics.median(observed.values()), 1) if observed else None,
             "completed_n": len(observed),
@@ -2104,17 +2112,24 @@ def _plural(n, word):
 
 def _zone_summary_html(zone):
     """The zone's record since collection began, then its health marker."""
-    n, k = zone["outage_n"], zone["completed_n"]
-    if not n:
-        record = f"No outage notice since {_since()}."
+    n, k, supply = zone["outage_n"], zone["completed_n"], zone["supply_n"]
+    if not supply:
+        record = f"No supply notice since {_since()}."
     else:
-        fix = (
-            f"; typical time to &ldquo;works complete&rdquo; "
-            f"<strong>{zone['median_h']:g}h</strong>, from the {k:,} that reported it"
-            if k
-            else "; none has reported its works complete yet"
+        counted = (
+            f"Since {_since()}: <strong>{_plural(supply, 'supply notice')}</strong>, "
+            f"{zone['planned_n']:,} of them planned"
         )
-        record = f"Since {_since()}: <strong>{_plural(n, 'outage notice')}</strong>{fix}."
+        if not n:
+            record = f"{counted}; no outage notice among them."
+        else:
+            fix = (
+                f", typical time to &ldquo;works complete&rdquo; "
+                f"<strong>{zone['median_h']:g}h</strong> from the {k:,} that reported it"
+                if k
+                else ", none of which has reported its works complete yet"
+            )
+            record = f"{counted}; <strong>{_plural(n, 'outage notice')}</strong>{fix}."
     health = ""
     if zone["health_now"]:
         active = _plural(zone["health_now"], "active health notice")
@@ -2195,7 +2210,7 @@ def _zone_index_html(zones, unzoned, area_items):
         rows = "".join(
             f'<li><a href="{zone_path(z["name"])}">{html.escape(z["name"])}</a>'
             f'<span class="fill"></span>'
-            f'<span class="n">{_plural(z["outage_n"], "outage notice")}</span>'
+            f'<span class="n">{_plural(z["supply_n"], "supply notice")}</span>'
             f'<span class="p">{_mains_text(z["mains_km"]) if z["mains_km"] else ""}</span>'
             "</li>"
             for z in sorted(by_county[county], key=lambda z: (z["name"], z["code"]))
@@ -3065,8 +3080,10 @@ def _write_zone_pages(site_dir, zones, unzoned, history, towns, pages, version):
                 ),
                 # the record first, what the page holds after it, as the county pages do
                 "DESC": html.escape(
-                    f"{zone['name']}, Co. {zone['county']}: {_plural(n, 'outage notice')} "
-                    f"since {_since()}{fix}. Every Uisce Éireann notice pinned inside "
+                    f"{zone['name']}, Co. {zone['county']}: "
+                    f"{_plural(zone['supply_n'], 'supply notice')} since {_since()}, "
+                    f"{_plural(n, 'outage notice')} among them{fix}. "
+                    f"Every Uisce Éireann notice pinned inside "
                     f"this water supply zone, newest first."
                 ),
                 "CANONICAL": f"{BASE_URL}/{rel}",
