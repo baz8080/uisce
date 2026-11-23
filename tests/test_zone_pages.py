@@ -110,6 +110,26 @@ class TestTheFigures:
         assert (zone["median_h"], zone["completed_n"]) == (13.5, 2)
         assert len(zone["events"]) == 4
 
+    def test_the_zone_counts_every_supply_notice_and_how_many_were_planned(self):
+        rows = [
+            _case(),
+            _case(id=2, reference_num="CAR2", work_category="essential_works",
+                  work_type="Planned"),
+            _case(id=3, reference_num="CAR3", work_category="water_conservation"),
+            _case(id=4, reference_num="CAR4", work_category="discolouration"),
+        ]
+        zone = _build(rows)["zones"]["SZT1"]
+        assert (zone["supply_n"], zone["planned_n"], zone["outage_n"]) == (3, 1, 1)
+        assert len(zone["events"]) == 4
+
+    def test_a_zone_with_works_and_no_outage_says_so(self, tmp_path):
+        rows = [_case(work_category="essential_works", work_type="Planned")]
+        _write_zoned(tmp_path, rows)
+        text = _text((tmp_path / "z/testzone.html").read_text())
+        assert ("Since 20 April 2026: 1 supply notice , 1 of them planned; "
+                "no outage notice among them.") in text
+        assert "1 supply notice" in _text((tmp_path / "zones.html").read_text())
+
     def test_a_notice_published_before_collection_began_is_not_counted(self):
         zone = _build([_case(start_date="2026-03-01T00:00:00+00:00")])["zones"]["SZT1"]
         assert zone["outage_n"] == 0 and zone["completed_n"] == 0
@@ -163,10 +183,11 @@ class TestThePages:
         text = _text((tmp_path / "z/testzone.html").read_text())
         assert "Water Supply Zone SZT1 · Co. Carlow · 12 km of water main" in text
         assert "4.3 km of water main" in _text((tmp_path / "z/nextzone.html").read_text())
-        assert "Since 20 April 2026: 1 outage notice ; typical time to" in text
+        assert ("Since 20 April 2026: 1 supply notice , 0 of them planned; "
+                "1 outage notice , typical time to") in text
         assert "Every notice published here · 1 notice" in text
         quiet = _text((tmp_path / "z/quiet-zone.html").read_text())
-        assert "No outage notice since 20 April 2026." in quiet
+        assert "No supply notice since 20 April 2026." in quiet
         assert "km of water main" not in quiet
 
     def test_it_needs_no_javascript_and_links_back_to_its_county(self, tmp_path):

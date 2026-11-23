@@ -385,6 +385,19 @@ download pushed a live case out of the next page and stamped it vanished, and a 
 the 1%. Key paging is only sound on pages returned in `OBJECTID` order, so a page that is not
 ascending fails the build rather than skip or repeat rows.
 
+### The build raises an issue for a purge, and for an odd month (2026-11-23)
+
+**Simply put:** when the feed drops a lot of cases at once, or a month's national count lands outside its usual range, the data build opens a GitHub issue saying what happened and what to look at. Each occurrence is raised once.
+
+The 2026-08-10 purge was found a month late because its only trace was a line in a build log. `uv run uisce-check` (`checks.py`) is the last step of the data build and writes a finding for each of two conditions; `scripts/open-check-issues.sh` opens an issue for each, labelled `data-check` and assigned to the repository's owner.
+
+- **Cases gone from the feed in this build**, when they are more than `FEED_COUNT_TOLERANCE` (1%) of what the feed had been serving: the cases whose `vanished_at` is this build's own stamp. The issue carries how many were still `Open` and a count by month of publication, which is what told the August purge (a date range) from a scattered loss. On the 2026-11-22 release eleven builds have stamped anything: 9,179 on 2026-09-05, the August purge found when the stamp was introduced, 100 the day after, and 1 or 2 on each of the other nine.
+- **The newest finished month's national rate outside 3 to 5.5 supply notices per 100 km**, the band statuspage-methodology.md sets ("Every supply notice per 100 km of main"). The issue carries the last six months and the six counties furthest from their own previous three months, to show whether one region moved or all of them, and says it is a prompt to check publishing practice, not to re-fit the cuts. Only the newest finished month is tested, so an old month is never raised late.
+
+An issue is not re-opened: the script skips a title that any issue, open or closed, already carries, and the title names the occurrence (the count and day of a purge, the month and its rate). So closing one is final, and a second purge or another odd month is a new issue.
+
+Rejected: a `::warning::` in the Actions log (owner, 2026-11-23: a line in a log is missed); failing the build, which would hold back a good release for something that wants a look and no more; "none while one is open", which lets a second purge hide behind an unread first.
+
 ### A feature with no pin (2026-09-24)
 
 ArcGIS omits `geometry` for a null shape, or writes an empty point as `"NaN"`, and one such
@@ -473,9 +486,32 @@ The "no reference number by construction" line above is true of the description 
 
 The exclusion decision stands anyway, for the reason the re-measured section above establishes: investigations classify as `maintenance`, which is never counted as an outage, so a rescued duration feeds no published number. Recorded here so the pattern isn't re-derived - if investigation-duration stats are ever wanted, 500 m/±5 d unique-sibling coordinate pairing is the mechanism, not references.
 
-### Amended 2026-11-23: investigations count towards the letter, and still are not paired
+### Amended 2026-11-23: an investigation is an outage notice, and still is not paired
 
-Since 2026-11-23 the letter counts every supply notice, so an investigation is no longer "excluded from everything that matters": it counts once, as works. The conclusion above stands for a different reason. On release 2026-11-22-2154, 201 of the 847 investigation events from May to October have an outage notice within 500 m and 5 days and are probably one incident published twice; counting only the other 646 changes 7 of 156 county letters and moves two counties one place. That does not earn a coordinate heuristic in a published number (statuspage-methodology.md, "Every supply notice per 100 km of main"). Their durations still feed nothing: the median is taken over outage notices.
+**Simply put:** a notice saying Uisce Éireann is investigating reports of lost supply is a report of lost supply, so it now counts as an outage: red on the bars, in the outage count and in the typical time. It added 847 outage notices to 6,976 and raised the typical time in every month.
+
+"Leave them" above rested on investigations feeding no published number. Two things changed that on 2026-11-23. The letter began counting every supply notice, so an investigation counted, as unplanned; and it was still drawn as works, blue on the bars and "Works" on the pills, which is the display disagreeing with the arithmetic. Every one of the 947 investigation pins from May to October says "We are investigating reports of supply disruptions"; none is exploratory (owner, 2026-11-23: investigations follow reported issues). `classify` now puts the `investigation` category with the unplanned repairs (`REPORTED_CATS`): an outage unless the feed marks it Planned, which none is.
+
+Measured on release 2026-11-22-2154, May to October, building both ways with the clock at the data horizon:
+
+| | as works | as outages |
+|---|---|---|
+| events changing class | | 847 |
+| outage notices | 6,976 | 7,823 |
+| reported complete | 5,403 | 5,856 |
+| never reported an end | 349 | 742 |
+| national median, May to October (h) | 12.5, 15.7, 12.5, 16.7, 9.7, 16.9 | 12.7, 16.4, 14.0, 17.1, 12.4, 17.1 |
+| county-month medians that change | | 100 of 156, 24 by more than 2h |
+| new rows in the ten longest | | 4 across the six months |
+| red county-days | 3,285 | 3,433 of 4,784 |
+| zone pages: outage notices | 8,022 | 8,986 |
+| zone pages: repeat spots | 1,482 | 1,668 |
+
+The supply count and every letter are unchanged. The median rises in every month because an investigation that reports completion takes a median 19.1h (579 pins, 21% inside 6h). About half report none: 487 of the pins are `not_found`, which is why the notices that never report an end go from one in twenty to about one in ten (742 of 7,823), and the page says so. The largest single moves are small counties with few completions: Meath's May median goes from 21.4h to 39.2h. Kildare's and Wicklow's outage counts rise most, by 35% and 37%.
+
+**Still not paired.** 201 of the 847 have another outage notice within 500 m and 5 days and are probably one incident published twice, so they are now counted twice in the outage count and can sit twice in the median. Pairing them off was measured for the letter (7 of 156 letters) and is not built here either: a coordinate heuristic deciding which of two notices is the incident does not belong in a published number, and 2.6% of the outage count is the size of what it would correct.
+
+**Rejected: a class of its own, for display alone.** It moves no published time, and costs a fifth class through the bars, legends, tables and payload, with a red day that is then not an outage notice. It also leaves the outage count and the typical time blind to notices the site itself draws as lost supply.
 
 ## Closed cases with no end signal create false-green days
 
