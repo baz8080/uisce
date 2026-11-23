@@ -14,6 +14,7 @@
 <style>
 <!--UI-CSS-->
 <!--SITE-CSS-->
+<!--BAR-CSS-->
   /* Lifted out of the colour legend onto its own line: it is the one thing on
      this page that bears on whether the water is safe to drink, and as the
      seventh entry in a wrapped row of swatches it read as a sixth colour. */
@@ -33,13 +34,6 @@
   }
   .chead .healthmark { width: 24px; height: 24px; font-size: 13.5px; }
   .healthmark.sm { width: 15px; height: 15px; font-size: 10px; }
-
-  /* Solid severity tokens, not opacity over the page: the opacity ramp put
-     most real days at 1.5-1.8:1 against --page, a washed-out pink. */
-  .bar i.outage { background: var(--critical); }
-  .bar i.degraded { background: var(--warning); }
-  .bar i.maintenance { background: var(--maint); }
-  .bar i.future { background: var(--cell-empty); }
 
   /* the county row's readout: a count, then the rate the letter grades */
   :root { --row-cols: 150px 1fr 240px 10px; }
@@ -938,6 +932,43 @@ function historyBody(name) {
   return out;
 }
 
+// Mirrors area_bars in site.py: a day is coloured by the notices listed in the
+// area, on the test the county's day list applies, so the bar and the list
+// under it cannot disagree.
+const BAR_SEVS = ["outage", "degraded", "maintenance"];
+function nextDay(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}
+function areaBars(events) {
+  const worst = {};
+  for (const e of events) {
+    const rank = BAR_SEVS.indexOf(e.sev);
+    if (rank < 0) continue;
+    const first = e.from || e.start, last = e.end || e.start;
+    for (let day = first < D.collected_from ? D.collected_from : first;
+         day <= last && day <= today; day = nextDay(day)) {
+      if (!(day in worst) || rank < BAR_SEVS.indexOf(worst[day])) worst[day] = e.sev;
+    }
+  }
+  const rows = D.months.slice().reverse()
+    .filter(ym => Object.keys(worst).some(day => day.startsWith(ym)))
+    .map(ym => {
+      const n = new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7), 0)).getUTCDate();
+      const cells = Array.from({ length: n }, (_, i) => {
+        const day = `${ym}-${String(i + 1).padStart(2, "0")}`;
+        return [day < D.collected_from ? "nd" : worst[day] || ""];
+      });
+      return `<div class="mbar"><span>${monthLabelLong(ym)}</span><div class="bar">${dayCells(cells, ym, describeCell)}</div></div>`;
+    });
+  if (!rows.length) return "";
+  return `<div class="card">
+      <h3>Day by day <span class="n">· months with a notice</span></h3>
+      ${rows.join("")}
+      <div class="daycap">A coloured day was covered by a notice listed below.</div>
+    </div>`;
+}
+
 // The link is address-flavoured, unlike the county view's, because this page
 // carries the same notices this view does - naming it for its content would
 // promise a reader what they are already looking at. `t.slug` is shipped in the
@@ -958,6 +989,7 @@ function renderArea() {
       <span class="pop">${t && t.pop != null ? t.pop.toLocaleString() + " people · Census 2022 · " : ""}Co.&nbsp;${esc(areaCounty)}</span>
     </div>
     ${t && t.slug ? `<div class="sub"><a href="a/${areaCounty.toLowerCase()}/${t.slug}.html">Permanent link to ${esc(name)}</a></div>` : ""}
+    ${t ? areaBars(t.events) : ""}
     <div class="card">
       <h3>Every notice published here${total == null ? "" : ` <span class="n">· ${total} notice${total === 1 ? "" : "s"}</span>`}</h3>
       ${historyBody(areaCounty)}

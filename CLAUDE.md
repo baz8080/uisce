@@ -1,7 +1,7 @@
 # uisce
 
 A static status site for Uisce Éireann water disruption notices, built from an ArcGIS feed.
-`notes/` carries measured findings and settled decisions across 13 files, indexed in
+`notes/` carries measured findings and settled decisions across 14 files, indexed in
 `notes/README.md`, with retired text in `notes/archive/`. Too much to read wholesale, which is why
 the decisions that bind are indexed here.
 
@@ -12,7 +12,7 @@ all use come from [`../statusui`](https://github.com/baz8080/statusui), a **uv g
 pinned in `uv.lock`** and inlined into every page at build by `statusui.assemble()`. Edit it
 there, push, then `../statusui/rollout.sh` bumps the pin in all three sites and opens the
 PRs; to try an unpushed change here, `uv run --with-editable ../statusui uisce-site`. This
-site's own rules are `src/uisce/site.css` and the inline blocks in the three templates; the
+site's own rules are `src/uisce/site.css`, `bar.css` and the inline blocks in the three templates; the
 shared/per-site rule is in statusui's CLAUDE.md.
 
 ## Before you change how any published number is computed
@@ -79,6 +79,7 @@ with the evidence that closed them.
 | The search box reaches a zone by its name (`[name, "z/<slug>.html"]` in `search.js`), and an area hit names the zones its pins fall in; the area page links them. No map. | frontend-notes.md - "Search reaches the zone" (2026-10-07) |
 | "Which supply zone am I in?" reads the browser's location and tests it in the page against the unsimplified boundaries, shipped as half-degree cells `zs/<i>_<j>.js` by the build's own winding rule; the position is never sent. The tap-a-map (Leaflet, OSM tiles) was declined for it, and one file of every zone (2.85 MB gz) rejected | frontend-notes.md - "Which supply zone am I in?" (2026-10-07) |
 | The page shows outage notices per 100 km of main, its letter and the median, and nothing from the population estimate: no availability, person-hours, people affected or radius, guarded by `TestThePagesSayTheCount`. The newest month reads `last_30`. `#top` is the ten **longest**: the events the month's observed median is taken over, at its hours, one with a pin cut at the cap carrying a "+"; person-hours, open notices, scheduled ends, uncapped spans and pin count were rejected (statuspage-methodology.md - "The estimate is removed"). An open notice prints the end it states as "expected back by". | frontend-notes.md - "The page counts notices" (2026-10-06) |
+| Each area has a day bar and **no letter**: one row per month a notice covered, drawn from the history records by the county day list's own test (`from` to `end`), so it costs the payload nothing and every coloured day is a notice listed under it. A bar from the area's own pins (98.56% identical, 44 KB gzipped) and a row for every month were rejected. The letter itself is being re-based on every supply notice: `notes/grading-plan.md` | frontend-notes.md - "The area's day bar" (2026-11-23) |
 
 ## Conventions
 

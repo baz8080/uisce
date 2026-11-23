@@ -37,8 +37,8 @@ def test_the_first_render_keeps_the_newest_month_and_the_month_lists():
     site = _site()
     first = first_render_payload(site)
     assert set(first) == {
-        "generated", "generated_iso", "data_as_of_iso", "months", "last_30", "mains_km",
-        "top_months", "national", "counties",
+        "generated", "generated_iso", "data_as_of_iso", "collected_from", "months",
+        "last_30", "mains_km", "top_months", "national", "counties",
     }
     assert first["months"] == site["months"] == ["2026-04", "2026-05", "2026-06"]
     assert first["top_months"] == ["2026-04", "2026-05"]

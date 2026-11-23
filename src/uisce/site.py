@@ -62,13 +62,16 @@ ZONE_HTML = Path(__file__).parent / "zone.html"
 ZONES_HTML = Path(__file__).parent / "zones.html"
 ZONEFIND_JS = Path(__file__).parent / "zonefind.js"
 SITE_CSS = Path(__file__).parent / "site.css"
+BAR_CSS = Path(__file__).parent / "bar.css"
 AREAS_MARKER = "<!--AREAS-->"
 CANONICAL_MARKER = "<!--CANONICAL-->"
 
 
 def page_html(template, markers):
     """A template with the shared statusui CSS/JS and site.css inlined, then its markers."""
-    markers = dict(markers, **{"SITE-CSS": SITE_CSS.read_text()})
+    markers = dict(
+        markers, **{"SITE-CSS": SITE_CSS.read_text(), "BAR-CSS": BAR_CSS.read_text()}
+    )
     return statusui.assemble(template.read_text(), markers)
 
 # The feed was first snapshotted on 2026-04-20; earlier days are unobserved
@@ -1858,6 +1861,76 @@ def _area_months_html(area_months, months):
     )
 
 
+# worst first; quality never colours a bar, here as on the county's
+BAR_SEVS = ("outage", "degraded", "maintenance")
+# describeCell in site.html says the same words
+BAR_CAPTIONS = {
+    "": "no supply disruption announced",
+    "outage": "supply disruption",
+    "degraded": "restrictions / low pressure",
+    "maintenance": "planned works",
+    "nd": "before this site started collecting",
+    "future": "still to come",
+}
+
+
+def area_bars(events, months, today):
+    """[(ym, [cell, ...])], newest first, for each month in which a notice listed
+    in the area covered a day: a cell is a BAR_CAPTIONS key.
+
+    Read off the history records by the test the county's day list applies
+    (`from` to `end`), not off the area's own pins, so every coloured day is a
+    notice in the list under the bar. areaBars in site.html mirrors it.
+    """
+    start = local_date(COLLECTION_START)
+    worst = {}
+    for e in events:
+        if e["sev"] not in BAR_SEVS:
+            continue
+        day = date.fromisoformat(max(e.get("from", e["start"]), start))
+        last = date.fromisoformat(min(e.get("end", e["start"]), today))
+        while day <= last:
+            held = worst.get(day.isoformat())
+            if held is None or BAR_SEVS.index(e["sev"]) < BAR_SEVS.index(held):
+                worst[day.isoformat()] = e["sev"]
+            day += timedelta(days=1)
+    bars = []
+    for ym in reversed(months):
+        if not any(day.startswith(ym) for day in worst):
+            continue
+        cells = []
+        for d in range(calendar.monthrange(int(ym[:4]), int(ym[5:]))[1]):
+            day = f"{ym}-{d + 1:02d}"
+            cells.append(
+                "future" if day > today else "nd" if day < start else worst.get(day, "")
+            )
+        bars.append((ym, cells))
+    return bars
+
+
+def _area_bars_html(bars):
+    if not bars:
+        return ""
+    rows = []
+    for ym, cells in bars:
+        row = []
+        for d, cell in enumerate(cells):
+            cap = f"{statusui.fmt_day(f'{ym}-{d + 1:02d}')}: {BAR_CAPTIONS[cell]}"
+            cls = "future" if cell == "nd" else cell
+            attr = f' class="{cls}"' if cls else ""
+            row.append(f'<i{attr} data-cap="{html.escape(cap)}"></i>')
+        rows.append(
+            f'<div class="mbar"><span>{statusui.month_label(ym)}</span>'
+            f'<div class="bar">{"".join(row)}</div></div>'
+        )
+    return (
+        '<section id="days"><h2>Day by day <span>· months with a notice</span></h2>'
+        f'<div class="card">{"".join(rows)}'
+        '<div class="daycap">A coloured day was covered by a notice listed below.</div>'
+        '</div></section>'
+    )
+
+
 def _events_html(events, heading="Notice history", listed_in=None):
     """A list of notices, newest first. Shared by the county, area and zone pages.
 
@@ -1928,7 +2001,9 @@ def _area_zones_html(zones):
     )
 
 
-def area_page_html(county, name, pop, events, area_months=None, months=(), zones=()):
+def area_page_html(
+    county, name, pop, events, area_months=None, months=(), zones=(), today=None
+):
     """The whole body of a/<county>/<area>.html.
 
     Server-rendered in full and carrying no data.js, for the same reason the
@@ -1951,6 +2026,7 @@ def area_page_html(county, name, pop, events, area_months=None, months=(), zones
         f'{f"{pop:,} people · Census 2022 · " if pop is not None else ""}'
         f'Co.&nbsp;{html.escape(county)}</div>'
         f'{_area_zones_html(zones)}'
+        f'{_area_bars_html(area_bars(events, months, today)) if today else ""}'
         f'{_area_months_html(area_months or {}, months)}'
         f'{_events_html(events, "Every notice published here", listed_in="area")}'
         f'<section id="more"><h2>Elsewhere</h2><p class="links">'
@@ -2349,6 +2425,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
         # arithmetic. The human-readable one above stays, in the footer.
         "generated_iso": now.strftime("%Y-%m-%dT%H:%M:00Z"),
         "data_as_of_iso": data_as_of.strftime("%Y-%m-%dT%H:%M:00Z"),
+        "collected_from": local_date(COLLECTION_START),
         "months": months,
         "counties": {},
         "national": {},
@@ -2642,7 +2719,8 @@ def first_render_payload(site):
     """What the first overview render reads, for index.html to inline; data.js stays whole."""
     newest = set(site["months"][-1:])
     # named, not "all but": a key added to the payload must not ride into the HTML
-    keys = ("generated", "generated_iso", "data_as_of_iso", "months", "last_30", "mains_km")
+    keys = ("generated", "generated_iso", "data_as_of_iso", "collected_from", "months",
+            "last_30", "mains_km")
     first = {k: site[k] for k in keys if k in site}
     first["top_months"] = list(site["top"])
     first["national"] = {m: v for m, v in site["national"].items() if m in newest}
@@ -2902,6 +2980,7 @@ def write_site(site, site_dir, towns=None):
                                 for z in area_zones.get((county, code), ())
                                 if z in zones
                             ),
+                            built[:10],
                         ),
                     },
                 )

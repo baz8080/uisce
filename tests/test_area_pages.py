@@ -17,13 +17,15 @@ from pathlib import Path
 import pytest
 import statusui
 from conftest import site_case as _case
-from test_site import NOW, TOWNS
+from test_site import NOW, TOWNS, _app_fn
 
 from uisce.config import BASE_URL
 from uisce.site import (
+    BAR_CAPTIONS,
     SA_TOWNS_PATH,
     UNPLACED,
     _events_html,
+    area_bars,
     area_has_page,
     area_path,
     build_site,
@@ -205,6 +207,62 @@ class TestThePage:
         page = (tmp_path / area_path("Carlow", "Testtown")).read_text()
         assert 'href="../../c/carlow.html"' in page
         assert 'href="../../areas.html"' in page
+
+
+def _notice(sev="outage", start="2026-05-01", **dates):
+    return {"sev": sev, "start": start, **dates}
+
+
+MONTHS = ["2026-04", "2026-05", "2026-06"]
+
+
+class TestTheDayBar:
+    def test_a_notice_colours_its_first_charged_day_to_its_last(self):
+        [(ym, cells)] = area_bars([_notice(end="2026-05-03")], MONTHS, "2026-05-10")
+        assert ym == "2026-05" and len(cells) == 31
+        assert cells[:4] == ["outage", "outage", "outage", ""]
+
+    def test_a_window_that_opens_after_publication_starts_the_colour_there(self):
+        events = [_notice(**{"from": "2026-05-04", "end": "2026-05-05"})]
+        [(_, cells)] = area_bars(events, MONTHS, "2026-05-10")
+        assert cells[:5] == ["", "", "", "outage", "outage"]
+
+    def test_the_worst_class_takes_the_day_and_quality_takes_none(self):
+        events = [
+            _notice("maintenance", end="2026-05-02"),
+            _notice("outage", start="2026-05-02"),
+            _notice("quality", start="2026-05-04", end="2026-05-09"),
+        ]
+        [(_, cells)] = area_bars(events, MONTHS, "2026-05-10")
+        assert cells[:4] == ["maintenance", "outage", "", ""]
+
+    def test_a_month_no_notice_covered_has_no_row(self):
+        events = [_notice(start="2026-06-02"), _notice(start="2026-04-25")]
+        bars = area_bars(events, MONTHS, "2026-06-10")
+        assert [ym for ym, _ in bars] == ["2026-06", "2026-04"]
+
+    def test_days_before_collection_and_after_today_are_not_the_notices(self):
+        events = [_notice(start="2026-04-10", end="2026-05-20")]
+        bars = dict(area_bars(events, MONTHS, "2026-05-10"))
+        assert bars["2026-04"][18:20] == ["nd", "outage"]
+        assert bars["2026-05"][9:11] == ["outage", "future"]
+
+    def test_the_page_draws_it_from_the_notices_it_lists(self, tmp_path):
+        _write(tmp_path)
+        page = (tmp_path / area_path("Carlow", "Testtown")).read_text()
+        days = re.search(r'<section id="days">.*?</section>', page, re.S).group(0)
+        assert days.count("<i") == 31 and days.count('class="outage"') == 2
+        assert 'data-cap="Fri 1 May: supply disruption"' in days
+        assert "May 2026" in days and "April 2026" not in days
+        assert "bindDayCaption();" in page
+
+    def test_the_app_draws_the_same_bar_in_the_same_words(self):
+        bars = _app_fn("areaBars")
+        assert "e.from || e.start" in bars and "e.end || e.start" in bars
+        assert "D.collected_from" in bars and "day <= today" in bars
+        assert "areaBars(t.events)" in _app_fn("renderArea")
+        for caption in BAR_CAPTIONS.values():
+            assert caption in _app_fn("describeCell")
 
 
 class TestTheRestOfTheSite:

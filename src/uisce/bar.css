@@ -1,0 +1,19 @@
+/* The day bar's cells, for the two templates that draw one. */
+
+/* Solid severity tokens, not opacity over the page: the opacity ramp put
+   most real days at 1.5-1.8:1 against --page, a washed-out pink. */
+.bar i.outage { background: var(--critical); }
+.bar i.degraded { background: var(--warning); }
+.bar i.maintenance { background: var(--maint); }
+.bar i.future { background: var(--cell-empty); }
+
+/* an area's bars: one month a row, in the app's area view and on a/*.html */
+.mbar { display: grid; grid-template-columns: 124px 1fr; gap: 12px; align-items: center;
+        margin-top: 8px; font-size: 13px; color: var(--ink-2); }
+/* 31 columns whatever the month, so a day of the month reads down the rows */
+.mbar .bar { display: grid; grid-template-columns: repeat(31, 1fr); height: 22px; }
+/* base.css names the county row's bar a grid area on a phone; this grid has none */
+@media (max-width: 640px) {
+  .mbar { grid-template-columns: 1fr; gap: 3px; }
+  .mbar .bar { grid-area: auto; }
+}

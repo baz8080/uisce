@@ -855,3 +855,42 @@ the browser; there is no map.
   says so beside the answer. Outside every zone gets the group-scheme sentence the footer
   carries. On a phone the button sits under the search box (`order: 2` in the overview's
   flex column).
+
+## The area's day bar - 2026-11-23
+
+**Simply put:** every area now shows a strip of days for each month a notice covered, so a
+reader sees which days their own town was affected. It is drawn from the list of notices
+already on the page, and an area still gets no letter.
+
+Session 1 of [grading-plan.md](grading-plan.md), which holds why an area carries no letter.
+Figures are release 2026-11-22-2154.
+
+- **One rule, both sides.** A day is coloured when a notice listed in the area covers it,
+  from its first charged day to its last (`from` and `end` on the history record), by the
+  event's class, the worst class winning and quality never colouring. That is the test the
+  county's day list already applies, so the bar costs the payload nothing and every coloured
+  day is a notice in the list under it. `area_bars` in `site.py` draws it on
+  `a/<county>/<area>.html` and `areaBars` in `site.html` in the app's area view, which is
+  the only surface the pageless areas have; the captions are the county bar's words, held
+  together by `test_the_app_draws_the_same_bar_in_the_same_words`.
+- **Rejected: a bar from the area's own pins.** The shipped bar is identical to it on 22,018
+  of 22,339 coloured area-days from May to October (98.56%) and differs in 118 of 2,290
+  areas: 211 days where the event's pins elsewhere ran longer, 108 where the event's class is
+  worse than this area's pin, 2 missing. The exact bar costs 44 KB gzipped across the shards
+  for six months and would leave days the list under it says a notice stood on uncoloured.
+- **A month no notice covered has no row.** A page averages 4.2 rows. A row for every month
+  since collection began was rejected on weight: a row is 2.1 KB of markup, because each
+  cell carries its caption for the shared listener.
+- **Weight.** The 816 area pages go from 16,568,726 to 24,303,271 bytes; the section is a
+  mean 8.4 KB a page raw and 0.8 KB gzipped. Celbridge, with a row for all eight months,
+  goes from 24,302 to 41,397 bytes. `index.html` goes from 95.8 KB to 97.6 KB.
+- **`collected_from`** joins the payload and the first render's keys, so the app leaves the
+  days before 20 April 2026 uncoloured as the build does.
+- **31 columns whatever the month**, so a day of the month reads down the rows. On a phone
+  `base.css` names the county row's bar a grid area, which pushed this one into a 153 px
+  column of its own; `.mbar .bar` resets it.
+- **The cell colours moved to `bar.css`**, filled at `<!--BAR-CSS-->` in the two templates
+  that draw a bar. In `site.css` they cost 456 bytes on each of the 1,530 pages that inline
+  it and draw none.
+- **Left as it is.** A repeating window colours every day of its span, as it matches every
+  day in the county's day list ("A day in the county bar lists its notices").
