@@ -106,7 +106,7 @@ COUNTY_POP = {
     "Westmeath": 96221, "Wexford": 163919, "Wicklow": 155851,
 }
 
-# Severity classes, worst first. Only "outage" is counted.
+# Severity classes, worst first. The letter counts all but quality; the median, outages.
 SEV_ORDER = ["outage", "quality", "degraded", "maintenance"]
 
 QUALITY_CATS = {"boil_notice_issued", "consumption_notice_issued", "discolouration"}

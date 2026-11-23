@@ -1,5 +1,11 @@
 # Grading plan (owner decision 2026-11-23)
 
+**Closed 2026-11-23.** All four sessions are merged (#127, #128, #129 and the notes audit).
+The outcomes live in [../statuspage-methodology.md](../statuspage-methodology.md) ("Every
+supply notice per 100 km of main") and [../frontend-notes.md](../frontend-notes.md) ("The
+area's day bar", "The page counts every supply notice"); the letter it retired is in
+[outage-letter.md](outage-letter.md). Kept as it was written.
+
 **Simply put:** the county letter stops counting only unplanned outages and counts every
 notice that says supply may be disrupted, planned works included, per 100 km of main. Each
 area gets a day bar and no letter. The county stays the unit that is lettered, because it is
@@ -163,7 +169,7 @@ tiles, banner, county rows, county pages and their meta descriptions, the method
 its dated "what changed" entry, the bar's caption, `TestThePagesSayTheCount`. Done when: no
 page calls the letter's count "outage notices".
 
-**4. Notes audit.** The "Only outages are counted" text and the October cuts move to
+**4. Notes audit.** (Built 2026-11-23. The October frontend entry was amended rather than archived whole: most of it still binds.) The "Only outages are counted" text and the October cuts move to
 `notes/archive/` unedited; CLAUDE.md's rows for the count and the page are rewritten; the
 roadmap entry closes; this plan is archived.
 
