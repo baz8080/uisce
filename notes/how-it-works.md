@@ -74,7 +74,7 @@ At runtime `TownLookup.place` answers "which named area is this pin in?" by the 
 |---|---|
 | What counts as an outage / a quality notice | `classify` and the `*_CATS` sets in `site.py` |
 | How a title becomes a category | `CategoryRule` in `pipeline.py`, then run `uisce-backfill` |
-| Grade thresholds | `SUPPLY_CUTS` in `site.py` |
+| Grade thresholds | `SUPPLY_CUTS` in `site.py`, after `uisce-eval-grading --cuts ...` against the release DB |
 | Mains length per county | `data/wsz_mains.csv` via `uisce-fetch-wsz`, summed by `wsz.county_mains_km` |
 | Which supply zone a pin is in | `data/wsz.geojson` via `uisce-fetch-wsz`, read by `wsz.ZoneLookup` |
 | How long an open case runs for | `CAP_DAYS`, and `resolve_case` |
