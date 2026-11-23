@@ -62,3 +62,13 @@ def test_a_month_outside_the_band_is_named():
     national = {"2026-05": 3.59, "2026-07": 5.51, "2026-12": 2.99}
     assert outside_band(national) == [("2026-07", 5.51), ("2026-12", 2.99)]
     assert outside_band({"2026-05": 3.0, "2026-06": 5.5}) == []
+
+
+def test_an_event_is_counted_for_the_county_its_zone_is_run_from():
+    from test_zone_pages import CROSS_ROWS, NEXT, ZONES
+
+    rows = [_case(**NEXT)]
+    events = supply_events(rows, NOW, ZONES, CROSS_ROWS)
+    site = build_site(rows, NOW, TOWNS, zones=ZONES, zone_rows=CROSS_ROWS)
+    assert monthly_counts(events, ["2026-05"])["Kilkenny", "2026-05"] == 1
+    assert site["counties"]["Kilkenny"]["months"]["2026-05"]["supply_notices"] == 1

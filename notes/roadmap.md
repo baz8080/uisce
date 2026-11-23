@@ -68,15 +68,6 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
   there; adjudicate that row in end-time-eval.md, never in the CSV. The same bump could say
   that an alternative supply's hours are not the works' end (239696-239698 read the tanker's
   23:59 as the end), measured on its own.
-- **Count a supply notice for the county that runs its zone.** Measured 2026-11-23 and
-  nothing changed (statuspage-methodology.md, "A notice counted by its zone's county"). The
-  letter's notices are placed by the feed's county and its mains by the zone's council, so
-  Meath's rate reads 11.8% high and Louth's 24.3% low. Counting by zone moves 265 of 12,783
-  notices and 18 of 156 letters by one; Meath goes from E E F D E D to E E E D D C and moves
-  from 25th of 26 to 24th. Recommendation is to change it, with a line on the county page for the notices
-  it lists that count elsewhere (Meath lists 566 and would count 499). Leaving it keeps
-  every page consistent with its own list. It rewrites published letters, so it wants a
-  dated section and a CLAUDE.md row when decided either way.
 - **`IGNORE_BOIL_NOTICES`.** Recommendation is to leave it off (boil-notices.md, re-measured
   2026-09-05): the two accruing notices and the one paired one are the live warnings the health
   marker exists for. The cost of leaving it off is 13 of 17 issue events excluded as stale

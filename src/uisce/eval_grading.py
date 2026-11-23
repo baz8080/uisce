@@ -28,6 +28,7 @@ from uisce.site import (
     build_site,
     case_ref,
     collect_lifts,
+    counted_county,
     event_windows,
     km_apart,
     local_date,
@@ -35,7 +36,7 @@ from uisce.site import (
     recurring_events,
     resolve_case,
 )
-from uisce.wsz import county_mains_km, read_zones
+from uisce.wsz import ZoneLookup, county_mains_km, read_zones
 
 # a finished month outside this is a prompt to check how notices are published
 NATIONAL_BAND = (3.0, 5.5)
@@ -53,9 +54,10 @@ class Event(NamedTuple):
     pins: tuple
 
 
-def supply_events(rows, now):
+def supply_events(rows, now, zones=None, zone_rows=()):
     """{(county, ref): Event} of every event that is not a quality notice,
-    grouped and dated as build_site groups and dates them."""
+    grouped, dated and counted for a county as build_site does it."""
+    zone_county = {row["code"]: row["county"] for row in zone_rows}
     lifts = collect_lifts(rows)
     shared = event_windows(rows)
     recurring = recurring_events(rows, shared)
@@ -66,14 +68,18 @@ def supply_events(rows, now):
         if case is None:
             continue
         e = held.setdefault(key, {"sev": case.sev, "first": case.start, "planned": True,
-                                  "inv": False, "pins": []})
+                                  "inv": False, "pins": [], "votes": []})
         e["sev"] = min(e["sev"], case.sev, key=SEV_ORDER.index)
         e["first"] = min(e["first"], case.start)
         e["planned"] &= r["work_type"] == "Planned"
         e["inv"] |= r["work_category"] == "investigation"
         e["pins"].append((r["full_lat"], r["full_lon"]))
+        if zones is not None:
+            zone = zones.zone(r["full_lat"], r["full_lon"])
+            e["votes"].append((case.start, r["id"], zone_county.get(zone, key[0])))
     return {
-        key: Event(key[0], e["sev"], e["first"], e["planned"], e["inv"], tuple(e["pins"]))
+        key: Event(counted_county(key[0], e["votes"]) if e["votes"] else key[0],
+                   e["sev"], e["first"], e["planned"], e["inv"], tuple(e["pins"]))
         for key, e in held.items() if e["sev"] != "quality"
     }
 
@@ -153,13 +159,15 @@ def run(argv=None):
         parser.error("--cuts takes five numbers")
 
     rows, horizon = read_cases()
-    site = build_site(rows, horizon, TownLookup.from_csv(SA_TOWNS_PATH), horizon)
+    zones, zone_rows = ZoneLookup.from_geojson(), read_zones()
+    site = build_site(rows, horizon, TownLookup.from_csv(SA_TOWNS_PATH), horizon,
+                      zones=zones, zone_rows=zone_rows)
     counties = site["counties"]
     months = [ym for ym in site["months"] if args.lo <= ym <= args.hi
               and site["national"][ym]["supply_per_100km"] is not None]
     if not months:
         raise SystemExit("no month in that range was seen whole")
-    events = supply_events(rows, horizon)
+    events = supply_events(rows, horizon, zones, zone_rows)
     counts = monthly_counts(events, months)
     published = {(c, ym): counties[c]["months"][ym]["supply_notices"]
                  for c in counties for ym in months}
@@ -167,7 +175,7 @@ def run(argv=None):
         raise SystemExit("this count of supply notices differs from the payload's: "
                          "supply_events has drifted from build_site")
 
-    km = county_mains_km(read_zones())
+    km = county_mains_km(zone_rows)
     rates = {k: counties[k[0]]["months"][k[1]]["supply_per_100km"] for k in published}
     letters = {k: letter(rate, cuts) for k, rate in rates.items()}
     total = sum(published.values())
