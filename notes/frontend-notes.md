@@ -928,3 +928,19 @@ statuspage-methodology.md, "Every supply notice per 100 km of main". Release 202
 - The 2026-10-06 entry above, "The page counts notices", still binds for everything but
   the letter; its opening and its two entries on the outage letter are in
   [archive/outage-letter.md](archive/outage-letter.md).
+
+## An investigation reads as an outage - 2026-11-23
+
+**Simply put:** a notice titled "Under Investigation" is now red and labelled "Outage"
+wherever a notice is drawn, because it reports lost supply.
+
+The decision and its measurements are in data-quality.md, "an investigation is an outage
+notice, and still is not paired". On the page:
+
+- The method block names it among the outage notices and drops it from the list of what else
+  the letter counts. "About one incident in twenty never reports an end" reads "one in ten":
+  742 of 7,823 on release 2026-11-22-2154.
+- "Changes to how this site measures" carries a second 23 November entry, with the 847
+  notices added, the 0.2 to 2.7 hours the typical time rose by, and the 200 or so counted
+  twice.
+- The area and county tables' "Works" titles no longer name investigations.

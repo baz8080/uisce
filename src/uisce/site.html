@@ -252,21 +252,21 @@
       <p>Water main lengths are Uisce Éireann&rsquo;s own, from its Water Supply Zones, added up by the council each zone belongs to. A few zones reach over a county line - Drogheda&rsquo;s, run from Louth, serves part of Meath - so a county&rsquo;s letter covers the zones run from it, not exactly the ground inside its border: its length is their mains and its count their notices, and a notice in east Meath on Drogheda&rsquo;s zone counts for Louth. Each county page says how many of the notices it lists count elsewhere.</p>
     </details>
 
-    <p class="simply"><b>Simply put:</b> a supply notice is any notice that warns the water may go off or run low: an outage, a restriction, or works, planned ones included. An outage notice is the narrower kind: a burst, a supply interruption or an unplanned repair. Quality notices are shown but not counted.</p>
+    <p class="simply"><b>Simply put:</b> a supply notice is any notice that warns the water may go off or run low: an outage, a restriction, or works, planned ones included. An outage notice is the narrower kind: a burst, a supply interruption, an unplanned repair, or a reported loss of supply still under investigation. Quality notices are shown but not counted.</p>
     <details class="method" id="method">
       <summary>How these numbers are worked out</summary>
 
       <h4>How long a disruption lasted</h4>
       <p>The time from a notice going up to its stated &ldquo;works are now complete&rdquo; update. Incidents whose only end signal was a <em>scheduled</em> finish are counted separately - a published plan is not evidence the works ended then. End times are read from the notice text (see the <a href="https://github.com/baz8080/uisce/blob/main/notes/end-time-eval.md">accuracy evaluation</a>); no time on this page is a measurement taken in the field.</p>
 
-      <p>About one incident in twenty never reports an end at all - the count is shown beside the county&rsquo;s outage count each month. Those stay out of the figure above: checked both ways, they run <em>shorter</em> than average, so leaving them out moves the typical duration <em>up</em>, not down.</p>
+      <p>About one incident in ten never reports an end at all - the count is shown beside the county&rsquo;s outage count each month. Those stay out of the figure above: checked both ways, they run <em>shorter</em> than average, so leaving them out moves the typical duration <em>up</em>, not down.</p>
 
       <h4>When a notice closed</h4>
       <p>A notice counts as closed on the day its own update reports the works complete. One that never says so counts as closed the first time a twice-daily check finds it gone, so those dates run late and the closed-in-month lists are minimums.</p>
 
       <h4>What counts</h4>
-      <p>Every supply notice counts towards the letter: outages, restrictions, low pressure, investigations of reported disruptions, and planned works. Each of them says supply may be disrupted, and a planned shut-off is still a shut-off; the Irish and British water regulators count planned and unplanned interruptions together too. Discolouration and drinking-water notices are shown but never counted.</p>
-      <p>An outage notice is a burst, a reservoir / treatment-plant / pump-station interruption, a pump failure, a power outage or an unplanned repair. The typical time and the ten longest are taken over those alone, because a planned finish is a plan, not a report.</p>
+      <p>Every supply notice counts towards the letter: outages, restrictions, low pressure and planned works. Each of them says supply may be disrupted, and a planned shut-off is still a shut-off; the Irish and British water regulators count planned and unplanned interruptions together too. Discolouration and drinking-water notices are shown but never counted.</p>
+      <p>An outage notice is a burst, a reservoir / treatment-plant / pump-station interruption, a pump failure, a power outage, an unplanned repair, or a notice that Uisce Éireann is investigating reports of lost supply. The typical time and the ten longest are taken over those alone, because a planned finish is a plan, not a report.</p>
       <p>A notice belongs to the month it starts in: the day it was published or, for planned works, the day they are due.</p>
 
       <h4>Repeating works</h4>
@@ -296,6 +296,7 @@
     <p class="simply"><b>Simply put:</b> since 23 November 2026 the letters count every supply notice, planned works included; the entries before it describe figures this site no longer publishes.</p>
     <details class="method">
       <summary>Changes to how this site measures</summary>
+      <p><b>23 November 2026.</b> Notices titled &ldquo;Under Investigation&rdquo; used to be shown as works. Each says Uisce Éireann is investigating reports of supply disruptions, which is a loss of supply whose cause is not yet known, so they are now outage notices: red on the bars, in the outage count and in the typical time. That added 847 notices to the 6,976 outage notices from May to October and raised the typical time in every one of those months, by 0.2 to 2.7 hours. About 200 of them are probably the same incident as an outage notice published beside them, and those are counted twice. The letters did not move: they already counted these notices.</p>
       <p><b>23 November 2026.</b> The letters used to count outage notices alone: bursts, interruptions and unplanned repairs. That left out about half of the notices that warn of a supply disruption, every planned shut-off among them. The letters now count every supply notice per 100&nbsp;km of water main, and the cut-offs moved with the count, from 1 to 5 up to 2 to 8. Every month was re-lettered: of the 156 county-months from May to October, 59 dropped a letter, 8 rose and 89 kept theirs.</p>
       <p><b>6 October 2026.</b> Counties used to be graded on an estimate: each notice was charged to everyone living within a fixed distance of its pin, for as long as it stood, and the letter was the share of people&rsquo;s time no notice covered. The feed never says how many people a notice reaches, and the fixed distance charged a city notice about ten times the people of a rural one. From then the letters counted outage notices per 100&nbsp;km of water main, which the feed and Uisce Éireann&rsquo;s own records do say. The population-weighted figures are gone. Disruptions that never report an end are no longer given an estimated length: they count as notices and stay out of every time. The ten largest disruptions, ranked on the estimate, are now the ten longest, ranked on the time from notice to &ldquo;works complete&rdquo;; the day bars, once shaded by the share of a county&rsquo;s people in range, take one shade; and a notice is placed in the area of the nearest Census Small Area to its pin.</p>
       <p><b>15 August 2026.</b> Disruptions that never report an end used to count as one second long, which recorded a real outage as having disrupted nobody. They were then charged the typical length of completed works of the same kind. The national figure moved by hundredths of a point; four county-months dropped one grade.</p>
@@ -624,7 +625,7 @@ function townRows(c) {
       ${th("name", "Area", "Sort by name")}
       ${th("outages", "Outages", "Outage notices - sort by count")}
       <th title="Boil-water, do-not-drink and discolouration notices">Quality</th>
-      <th title="Restrictions, low pressure, planned works and investigations">Works</th>
+      <th title="Restrictions, low pressure and planned works">Works</th>
       ${isLatest() ? '<th title="Notices Uisce Éireann still shows as open, less any whose own text already reports the works complete and any boil-water or do-not-drink notice closed by its lift or after 14 days with no lift">Open</th>' : ""}
     </tr></thead>
     <tbody>${body}</tbody>
@@ -813,7 +814,7 @@ function renderTop() {
         <b>${nat.median_completion_h == null ? "-" : nat.median_completion_h + "h"}</b>.${startedNote}</p>
       <p class="simply"><b>Simply put:</b> how long the longest outages of the month took to fix, by Uisce Éireann&rsquo;s own updates.</p>
       <div class="note">Only outage notices are ranked - bursts, reservoir, treatment-plant and
-        pump-station interruptions, and unplanned repairs - and only those whose own update said the
+        pump-station interruptions, unplanned repairs and reported losses under investigation - and only those whose own update said the
         works were complete. Every span is measured from when the notice was <em>published</em>, so
         these are minimums, and one notice is counted at most 14 days. More in
         <a href="#" onclick="openMethod(); return false;" style="color:inherit">how these numbers are worked out</a>.</div>
