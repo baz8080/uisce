@@ -8,15 +8,17 @@ import re
 
 import pytest
 from conftest import site_case as _case
-from test_site import NOW, TOWNS
+from test_site import AFTER_MAY, NOW, TOWNS
 
 from uisce.config import BASE_URL
 from uisce.site import (
     SPOT_KM,
     ZONE_CELL_DEG,
+    _counted_elsewhere_html,
     _mains_text,
     _zone_summary_html,
     build_site,
+    counted_county,
     km_apart,
     repeat_spots,
     write_site,
@@ -293,3 +295,76 @@ class TestWhichZoneAmIIn:
         ]
         n, total, largest = written
         assert n >= 1 and 0 < largest <= total
+
+
+# the zone beside the default pin is run from Kilkenny
+CROSS_ROWS = [ZONE_ROWS[0], dict(ZONE_ROWS[1], local_authority="Kilkenny", county="Kilkenny")]
+
+
+def _crossing(rows, **kwargs):
+    kwargs = {"zones": ZONES, "zone_rows": CROSS_ROWS} | kwargs
+    site = build_site([dict(r, id=i + 1) for i, r in enumerate(rows)], AFTER_MAY, TOWNS, **kwargs)
+    site.pop("recurrence_report")
+    return site
+
+
+def _may(site, county, key="supply_notices"):
+    return site["counties"][county]["months"]["2026-05"][key]
+
+
+class TestTheLetterCountsByZone:
+    """notes/statuspage-methodology.md, "A notice counted by its zone's county"."""
+
+    def test_a_notice_counts_for_the_county_its_zone_is_run_from(self):
+        site = _crossing([_case(**NEXT)])
+        assert (_may(site, "Carlow"), _may(site, "Kilkenny")) == (0, 1)
+        assert site["national"]["2026-05"]["supply_notices"] == 1
+        assert _may(site, "Kilkenny", "supply_per_100km") > 0
+
+    def test_the_outage_count_and_the_lists_stay_with_the_county_the_feed_names(self):
+        site = _crossing([_case(**NEXT)])
+        assert _may(site, "Carlow", "outage_notices") == 1
+        assert _may(site, "Kilkenny", "outage_notices") == 0
+        assert list(site["history"]) == ["Carlow"]
+
+    def test_a_pin_in_no_zone_stays_with_the_county_the_feed_names(self):
+        assert _may(_crossing([_case(**OUTSIDE)]), "Carlow") == 1
+
+    def test_most_pins_decide_and_a_tie_stays_with_the_feed(self):
+        tie = _crossing([_case(), _case(**NEXT)])
+        assert _may(tie, "Carlow") == 1
+        most = _crossing([_case(), _case(**NEXT), _case(**NEXT)])
+        assert (_may(most, "Carlow"), _may(most, "Kilkenny")) == (0, 1)
+
+    def test_a_tie_between_two_other_counties_goes_to_the_earliest_pin(self):
+        pins = [("2026-05-02", 1, "Louth"), ("2026-05-01", 2, "Dublin")]
+        assert counted_county("Meath", pins) == "Dublin"
+
+    def test_without_the_zones_the_feed_names_the_county(self):
+        site = _crossing([_case(**NEXT)], zones=None, zone_rows=None)
+        assert _may(site, "Carlow") == 1 and "Kilkenny" not in site["counties"]
+
+    def test_a_quality_notice_moves_nothing(self):
+        site = _crossing([_case(work_category="discolouration", **NEXT)])
+        assert site["counted_elsewhere"] == {}
+
+    def test_the_county_page_says_what_counts_elsewhere(self, tmp_path):
+        write_site(_crossing([_case(**NEXT)]), tmp_path, TOWNS)
+        carlow = _text((tmp_path / "c" / "carlow.html").read_text())
+        assert ("1 of the supply notices listed on this page is pinned in a supply zone "
+                "run from Co. Kilkenny and counts toward its grade") in carlow
+        kilkenny = _text((tmp_path / "c" / "kilkenny.html").read_text())
+        assert "1 listed under Co. Carlow counts toward Co. Kilkenny's" in kilkenny
+
+    def test_the_county_page_is_silent_when_nothing_counts_elsewhere(self, tmp_path):
+        write_site(_crossing([_case()]), tmp_path, TOWNS)
+        assert "The grade counts a notice" not in (tmp_path / "c" / "carlow.html").read_text()
+
+    def test_the_tally_never_reaches_the_payload(self, tmp_path):
+        write_site(_crossing([_case(**NEXT)]), tmp_path, TOWNS)
+        assert "counted_elsewhere" not in (tmp_path / "data.js").read_text()
+
+    def test_the_line_names_a_county_only_when_it_holds_most_of_them(self):
+        line = _counted_elsewhere_html("Meath", {"out": {"Louth": 80, "Dublin": 4},
+                                                 "in": {"Westmeath": 1, "Dublin": 1}})
+        assert "grade, 80 of them Co. Louth's; 2 listed under other counties count" in line
