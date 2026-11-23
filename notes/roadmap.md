@@ -79,10 +79,13 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
 
 ## Re-measure when
 
-- **The letter's cuts**, in November 2027 against the release DB, and sooner if a band holds
-  nothing over a full year of months or the national rate leaves 3 to 5.5 supply notices per
-  100 km (statuspage-methodology.md, "Every supply notice per 100 km of main"). The trigger
-  band is carried over from the outage letter's in proportion; the owner has not set it.
+- **The letter's cuts**, in November 2027 against the release DB, and sooner only if a band
+  holds nothing over a full year of months (statuspage-methodology.md, "Every supply notice
+  per 100 km of main").
+- **How notices are published**, if a finished month's national rate leaves 3 to 5.5 supply
+  notices per 100 km: check whether a region changed how it announces works or
+  investigations before reading the month as service. Not a reason to re-fit (owner,
+  2026-11-23).
 - **The zone pages' window**, on 2027-04-20, when the archive first holds twelve months:
   checkpoint C chose "since 20 April 2026" for an archive under a year
   (statuspage-methodology.md, "Zone pages"). Ask the owner whether the pages move to "in the
