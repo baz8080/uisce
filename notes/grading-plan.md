@@ -158,7 +158,7 @@ payload, `COUNT_CUTS`, the last-30 window; statuspage-methodology.md section wit
 note's tables, `TestNoticesPer100km` re-pinned to the new sums. Depends on: A, B. Done
 when: Kerry July 11.46, Carlow May 0.68 and the national 3.59 for May reproduce.
 
-**3. The page says the count.** PR "The page counts every supply notice", stacked on 2:
+**3. The page says the count.** (Built 2026-11-23: frontend-notes.md, "The page counts every supply notice".) PR "The page counts every supply notice", stacked on 2:
 tiles, banner, county rows, county pages and their meta descriptions, the method block and
 its dated "what changed" entry, the bar's caption, `TestThePagesSayTheCount`. Done when: no
 page calls the letter's count "outage notices".

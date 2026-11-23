@@ -252,7 +252,7 @@ class TestTheDayBar:
         page = (tmp_path / area_path("Carlow", "Testtown")).read_text()
         days = re.search(r'<section id="days">.*?</section>', page, re.S).group(0)
         assert days.count("<i") == 31 and days.count('class="outage"') == 2
-        assert 'data-cap="Fri 1 May: supply disruption"' in days
+        assert 'data-cap="Fri 1 May: outage notice"' in days
         assert "May 2026" in days and "April 2026" not in days
         assert "bindDayCaption();" in page
 

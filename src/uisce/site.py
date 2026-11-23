@@ -4,7 +4,8 @@ Per county and calendar month the generator computes:
 
 - a daily worst-condition status for the statuspage-style day bars
 - events, deduplicated by reference_num with pin intervals unioned
-- outage notices per 100 km of water main, and the A-F letter cut on that count
+- supply notices per 100 km of water main (every event but quality notices,
+  planned works included), and the A-F letter cut on that count
   (count_grade); an active boil-water / do-not-drink / do-not-consume notice is
   published beside the letter (health_n) rather than folded into it
 - a median notice-to-completion time over events whose end was *observed*
@@ -464,17 +465,12 @@ def overlaps(intervals, lo, hi):
     return any(max(start, lo) < min(end, hi) for start, end in intervals)
 
 
-# Fitted on May-Sep 2026 and re-fitted yearly; see "Outage notices per 100 km of main".
-COUNT_CUTS = (1.0, 2.0, 3.0, 4.0, 5.0)
-
-
-# Every supply notice, planned works included; fitted on May-Oct 2026
-# (notes/grading-plan.md). The page reads the outage count until it is re-worded.
+# Fitted on May-Oct 2026 and re-fitted yearly; see "Every supply notice per 100 km of main".
 SUPPLY_CUTS = (2.0, 3.0, 4.0, 6.0, 8.0)
 
 
-def count_grade(per_100km, cuts=COUNT_CUTS):
-    for letter, cut in zip("ABCDE", cuts):
+def count_grade(per_100km):
+    for letter, cut in zip("ABCDE", SUPPLY_CUTS):
         if per_100km < cut:
             return letter
     return "F"
@@ -1084,26 +1080,18 @@ def count_notices(first_pubs, lo, hi, seen):
     return sum(1 for pub in first_pubs if eff_lo <= pub < eff_hi)
 
 
-def count_figures(notices, km, *, whole, graded=True):
-    """The count, its rate per 100 km of main and the letter on the published
-    figure; a span the site saw only in part carries its count so far alone."""
-    per_100km = round(100.0 * notices / km, 2) if whole else None
-    figures = {"outage_notices": notices, "per_100km": per_100km}
-    if graded:
-        figures["count_grade"] = count_grade(per_100km) if whole else None
-    return figures
-
-
 def supply_figures(pubs, km, lo, hi, seen, *, graded=True):
-    """count_figures over every supply notice in [lo, hi): `pubs` is
-    [(first publication, planned)] of the events that are not quality notices."""
+    """The supply notices in [lo, hi), how many were planned, their rate per
+    100 km of main and the letter on the published figure; a span the site saw
+    only in part carries its counts so far alone. `pubs` is [(first
+    publication, planned)] of the events that are not quality notices."""
     whole = seen_whole(lo, hi, seen)
     eff_lo, eff_hi = seen_span(lo, hi, seen)
     inside = [planned for pub, planned in pubs if eff_lo <= pub < eff_hi]
     rate = round(100.0 * len(inside) / km, 2) if whole else None
     figures = {"supply_notices": len(inside), "planned": sum(inside), "supply_per_100km": rate}
     if graded:
-        figures["supply_grade"] = count_grade(rate, SUPPLY_CUTS) if whole else None
+        figures["supply_grade"] = count_grade(rate) if whole else None
     return figures
 
 
@@ -1670,10 +1658,10 @@ def zone_data(zone_rows, regions, zone_keys, spot_pins, event_meta, event_iv, to
 # Kept in step with SEVLABEL in site.html by hand — the same duplication, and
 # for the same reason, as the :root token block areas.html repeats.
 SEV_LABEL = {
-    "outage": "Supply disruption",
+    "outage": "Outage",
     "quality": "Water quality notice",
     "degraded": "Restrictions / low pressure",
-    "maintenance": "Works (planned / non-disruptive)",
+    "maintenance": "Works",
 }
 
 def county_events(areas_history):
@@ -1803,13 +1791,14 @@ def _county_summary_html(county, cdata, n_areas, n_events, months):
                 f' <span class="health">{m["health_now"]} active health '
                 f'notice{"" if m["health_now"] == 1 else "s"}</span>'
             )
-        n = last["outage_notices"]
+        n = last["supply_notices"]
+        counted = f'{n} supply notice{"" if n == 1 else "s"}, {last["planned"]} of them planned'
         # inside collection's first 30 days the window carries its count alone
         rated = (
-            f'grade <strong>{last["count_grade"]}</strong>, {n} outage '
-            f'notice{"" if n == 1 else "s"}, {_rate_text(last["per_100km"])} per 100 km of main'
-            if last["count_grade"]
-            else f'{n} outage notice{"" if n == 1 else "s"}, too soon for a rate'
+            f'grade <strong>{last["supply_grade"]}</strong>, {counted}, '
+            f'{_rate_text(last["supply_per_100km"])} per 100 km of main'
+            if last["supply_grade"]
+            else f'{counted}, too soon for a rate'
         )
         parts.append(
             f'<p class="now">Over the last 30 days: {rated}. This month, '
@@ -1830,10 +1819,10 @@ def _county_months_html(cdata, months):
         ev = m["events"]
         rows.append(
             f'<tr><th scope="row">{ym}</th>'
-            f'{_grade_cell(m["count_grade"])}'
-            f'<td>{_rate_text(m["per_100km"])}</td>'
-            f'<td>{m["outage_notices"]}</td><td>{ev["quality"]}</td>'
-            f'<td>{ev["degraded"]}</td><td>{ev["maintenance"]}</td></tr>'
+            f'{_grade_cell(m["supply_grade"])}'
+            f'<td>{_rate_text(m["supply_per_100km"])}</td>'
+            f'<td>{m["supply_notices"]}</td><td>{m["planned"]}</td>'
+            f'<td>{m["outage_notices"]}</td><td>{ev["quality"]}</td></tr>'
         )
     if not rows:
         return ""
@@ -1841,12 +1830,14 @@ def _county_months_html(cdata, months):
         '<section id="months"><h2>Month by month</h2>'
         '<div class="scroll"><table><thead><tr>'
         '<th scope="col">Month</th><th scope="col">Grade</th>'
-        '<th scope="col" title="Outage notices published per 100 km of the county\'s water main; '
+        '<th scope="col" title="Supply notices per 100 km of the county\'s water main; '
         'only for a month the site saw whole">Per 100 km</th>'
-        '<th scope="col" title="Supply disruptions first published this month">Outages</th>'
+        '<th scope="col" title="Every notice warning of a supply disruption that starts this '
+        'month: outages, restrictions and works">Supply notices</th>'
+        '<th scope="col" title="Supply notices announced as planned works">Planned</th>'
+        '<th scope="col" title="Bursts, interruptions and unplanned repairs among them">'
+        'Outages</th>'
         '<th scope="col" title="Boil water, do not drink, discolouration">Quality</th>'
-        '<th scope="col" title="Restrictions and low pressure">Restricted</th>'
-        '<th scope="col" title="Planned or non-disruptive works">Works</th>'
         f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div></section>'
     )
 
@@ -1871,10 +1862,10 @@ def _area_months_html(area_months, months):
         '<section id="months"><h2>Month by month</h2>'
         '<div class="scroll"><table><thead><tr>'
         '<th scope="col">Month</th>'
-        '<th scope="col" title="Supply disruptions">Outages</th>'
+        '<th scope="col" title="Bursts, interruptions and unplanned repairs">Outages</th>'
         '<th scope="col" title="Boil water, do not drink, discolouration">Quality</th>'
         '<th scope="col" title="Restrictions and low pressure">Restricted</th>'
-        '<th scope="col" title="Planned or non-disruptive works">Works</th>'
+        '<th scope="col" title="Planned works and investigations">Works</th>'
         f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div></section>'
     )
 
@@ -1884,9 +1875,9 @@ BAR_SEVS = ("outage", "degraded", "maintenance")
 # describeCell in site.html says the same words
 BAR_CAPTIONS = {
     "": "no supply disruption announced",
-    "outage": "supply disruption",
+    "outage": "outage notice",
     "degraded": "restrictions / low pressure",
-    "maintenance": "planned works",
+    "maintenance": "works",
     "nd": "before this site started collecting",
     "future": "still to come",
 }
@@ -2469,17 +2460,14 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
     national_pubs = [pub for pubs in supply_pubs.values() for pub in pubs]
     national_km = sum(mains_km.values())
     site["mains_km"] = round(national_km)
-    national_notices = Counter()
     # counted to the last feed read: a UI deploy on a stale release must not
     # read the days nobody fetched as quiet ones
     seen = min(now, data_as_of)
     # the month in progress is graded on this window, not on its own part-month
     rolling_lo = seen - timedelta(days=30)
-    rolling_whole = seen_whole(rolling_lo, seen, seen)
-    site["last_30"] = count_figures(
-        sum(count_notices(pubs, rolling_lo, seen, seen) for pubs in outage_pubs.values()),
-        national_km, graded=False, whole=rolling_whole,
-    ) | supply_figures(national_pubs, national_km, rolling_lo, seen, seen, graded=False)
+    site["last_30"] = supply_figures(
+        national_pubs, national_km, rolling_lo, seen, seen, graded=False
+    )
 
     for county in sorted(counties):
         region = counties[county]
@@ -2488,10 +2476,9 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
         cdata = {
             "pop": COUNTY_POP[county],
             "mains_km": round(mains_km[county]),
-            "last_30": count_figures(
-                count_notices(outage_pubs[county], rolling_lo, seen, seen), mains_km[county],
-                whole=rolling_whole,
-            ) | supply_figures(supply_pubs[county], mains_km[county], rolling_lo, seen, seen),
+            "last_30": supply_figures(
+                supply_pubs[county], mains_km[county], rolling_lo, seen, seen
+            ),
             "months": {},
             "open": sorted(
                 (
@@ -2550,7 +2537,6 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
             stats = region_month(region, ym, now)
 
             notices = count_notices(outage_pubs[county], lo, hi, seen)
-            national_notices[ym] += notices
 
             observed, scheduled_h, no_end_n = completion_spans(
                 region, events["outage"], first_pubs, lo, hi
@@ -2567,7 +2553,8 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
                 "days_elapsed": days_elapsed,
                 **stats,
                 **span_stats(observed_h, scheduled_h, no_end_n),
-                **count_figures(notices, mains_km[county], whole=seen_whole(lo, hi, seen)),
+                # what the median and the ten longest are taken over
+                "outage_notices": notices,
                 **supply_figures(supply_pubs[county], mains_km[county], lo, hi, seen),
             }
         site["counties"][county] = cdata
@@ -2576,9 +2563,6 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
         lo, hi = month_bounds(ym)
         site["national"][ym] = {
             **span_stats(national_observed[ym], national_scheduled[ym], national_no_end[ym]),
-            **count_figures(
-                national_notices[ym], national_km, graded=False, whole=seen_whole(lo, hi, seen)
-            ),
             **supply_figures(national_pubs, national_km, lo, hi, seen, graded=False),
         }
 

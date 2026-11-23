@@ -24,7 +24,7 @@
   }
 
   /* an active health notice sits beside the letter, not inside it: the grade
-     counts outage notices, and whether the water is safe to drink is a
+     counts supply notices, and whether the water is safe to drink is a
      different question that a letter cannot answer */
   .healthmark {
     flex: none; display: inline-grid; place-items: center;
@@ -244,15 +244,15 @@
     <p><a href="areas.html" style="color:inherit">Every area with a notice</a> - a full directory of the 1,800-odd Census areas on this site, each linking to its incident history.</p>
     <p><a href="zones.html" style="color:inherit">Every supply zone</a> - a page for each of Uisce Éireann&rsquo;s water supply zones. About one person in five is on a group or private scheme instead, which no zone covers. A notice pinned outside every zone is listed under its area.</p>
     <p>New notices as an <a href="feed.xml" style="color:inherit">Atom feed</a>, nationally; each county page carries its own.</p>
-    <p class="simply"><b>Simply put:</b> each county gets a letter for how many outage notices Uisce Éireann published per 100&nbsp;km of its water main in the month, with the typical time to &ldquo;works complete&rdquo; beside it.</p>
+    <p class="simply"><b>Simply put:</b> each county gets a letter for how many supply notices Uisce Éireann published per 100&nbsp;km of its water main in the month - outages, restrictions and works, planned ones included - with the typical time to fix an outage beside it.</p>
     <details class="method">
       <summary>What this measures</summary>
-      <p>This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. A notice counts once, however many pins it is published as, in the county it names. The count ignores size: a burst on a village main and one on a city trunk main each count one.</p>
-      <p>The typical time to &ldquo;works complete&rdquo; is the only measure of how long, and it is a <b>minimum</b>: it runs from when a notice was published, not when the service was lost, and counts only the notices that reported completion.</p>
+      <p>This site tracks what Uisce Éireann <em>announces</em>, not what happens at your tap. A notice counts once, however many pins it is published as, in the county it names. The count ignores size and length: a burst on a village main and one on a city trunk main each count one, and so do a three-hour planned window and a burst that runs three days. How works are announced moves it too: a week of works published as a notice a day is seven notices, and the same week announced as one repeating window is one.</p>
+      <p>The typical time to &ldquo;works complete&rdquo; is the only measure of how long. It is taken over outage notices alone, and it is a <b>minimum</b>: it runs from when a notice was published, not when the service was lost, and counts only the notices that reported completion.</p>
       <p>Water main lengths are Uisce Éireann&rsquo;s own, from its Water Supply Zones, added up by the council each zone belongs to. A few zones reach over a county line - Drogheda&rsquo;s, run from Louth, serves part of Meath - so a county&rsquo;s length is its council&rsquo;s mains, not exactly the mains inside its border.</p>
     </details>
 
-    <p class="simply"><b>Simply put:</b> an outage notice is a burst, a supply interruption or an unplanned repair. Restrictions, low pressure, quality notices and planned works are shown but not counted.</p>
+    <p class="simply"><b>Simply put:</b> a supply notice is any notice that warns the water may go off or run low: an outage, a restriction, or works, planned ones included. An outage notice is the narrower kind: a burst, a supply interruption or an unplanned repair. Quality notices are shown but not counted.</p>
     <details class="method" id="method">
       <summary>How these numbers are worked out</summary>
 
@@ -264,21 +264,23 @@
       <h4>When a notice closed</h4>
       <p>A notice counts as closed on the day its own update reports the works complete. One that never says so counts as closed the first time a twice-daily check finds it gone, so those dates run late and the closed-in-month lists are minimums.</p>
 
-      <h4>What counts as an outage</h4>
-      <p>Bursts, reservoir / treatment-plant / pump-station interruptions, pump failures, power outages and unplanned repairs. Restrictions, low pressure, discolouration and routine works are shown but never counted. A notice belongs to the month it was first published in.</p>
+      <h4>What counts</h4>
+      <p>Every supply notice counts towards the letter: outages, restrictions, low pressure, investigations of reported disruptions, and planned works. Each of them says supply may be disrupted, and a planned shut-off is still a shut-off; the Irish and British water regulators count planned and unplanned interruptions together too. Discolouration and drinking-water notices are shown but never counted.</p>
+      <p>An outage notice is a burst, a reservoir / treatment-plant / pump-station interruption, a pump failure, a power outage or an unplanned repair. The typical time and the ten longest are taken over those alone, because a planned finish is a plan, not a report.</p>
+      <p>A notice belongs to the month it starts in: the day it was published or, for planned works, the day they are due.</p>
 
       <h4>Repeating works</h4>
-      <p>Works announced as a repeating window - &ldquo;daily from 10pm until 7am, from 9 to 27 July&rdquo; - are treated as a restriction whatever the title says, so they are shown but not counted.</p>
+      <p>Works announced as a repeating window - &ldquo;daily from 10pm until 7am, from 9 to 27 July&rdquo; - are treated as a restriction whatever the title says: one supply notice, not an outage, and kept out of the typical time.</p>
 
       <h4>What the letters mean</h4>
-      <p>Outage notices published per 100&nbsp;km of water main in the month:</p>
+      <p>Supply notices published per 100&nbsp;km of water main in the month:</p>
       <ul class="grades">
-        <li><span class="gradechip g-A">A</span> fewer than 1</li>
-        <li><span class="gradechip g-B">B</span> fewer than 2</li>
-        <li><span class="gradechip g-C">C</span> fewer than 3</li>
-        <li><span class="gradechip g-D">D</span> fewer than 4</li>
-        <li><span class="gradechip g-E">E</span> fewer than 5</li>
-        <li><span class="gradechip g-F">F</span> 5 or more</li>
+        <li><span class="gradechip g-A">A</span> fewer than 2</li>
+        <li><span class="gradechip g-B">B</span> fewer than 3</li>
+        <li><span class="gradechip g-C">C</span> fewer than 4</li>
+        <li><span class="gradechip g-D">D</span> fewer than 6</li>
+        <li><span class="gradechip g-E">E</span> fewer than 8</li>
+        <li><span class="gradechip g-F">F</span> 8 or more</li>
       </ul>
       <p>The month under way is graded on the last 30 days, so a letter does not open every month at A; it can change between updates with nothing new published, as older notices leave the window. The cut-offs are whole numbers, chosen to be read, and reviewed once a year. April 2026, which this site saw only from the 20th, has no letter.</p>
 
@@ -291,10 +293,11 @@
       <p>Full methodology: <a href="https://github.com/baz8080/uisce/blob/main/notes/statuspage-methodology.md">the full methodology, on GitHub</a>.</p>
     </details>
 
-    <p class="simply"><b>Simply put:</b> since 6 October 2026 the letters count notices; the entries before it describe figures this site no longer publishes.</p>
+    <p class="simply"><b>Simply put:</b> since 23 November 2026 the letters count every supply notice, planned works included; the entries before it describe figures this site no longer publishes.</p>
     <details class="method">
       <summary>Changes to how this site measures</summary>
-      <p><b>6 October 2026.</b> Counties used to be graded on an estimate: each notice was charged to everyone living within a fixed distance of its pin, for as long as it stood, and the letter was the share of people&rsquo;s time no notice covered. The feed never says how many people a notice reaches, and the fixed distance charged a city notice about ten times the people of a rural one. The letters now count outage notices per 100&nbsp;km of water main, which the feed and Uisce Éireann&rsquo;s own records do say. The population-weighted figures are gone. Disruptions that never report an end are no longer given an estimated length: they count as notices and stay out of every time. The ten largest disruptions, ranked on the estimate, are now the ten longest, ranked on the time from notice to &ldquo;works complete&rdquo;; the day bars, once shaded by the share of a county&rsquo;s people in range, take one shade; and a notice is placed in the area of the nearest Census Small Area to its pin.</p>
+      <p><b>23 November 2026.</b> The letters used to count outage notices alone: bursts, interruptions and unplanned repairs. That left out about half of the notices that warn of a supply disruption, every planned shut-off among them. The letters now count every supply notice per 100&nbsp;km of water main, and the cut-offs moved with the count, from 1 to 5 up to 2 to 8. Every month was re-lettered: of the 156 county-months from May to October, 59 dropped a letter, 8 rose and 89 kept theirs.</p>
+      <p><b>6 October 2026.</b> Counties used to be graded on an estimate: each notice was charged to everyone living within a fixed distance of its pin, for as long as it stood, and the letter was the share of people&rsquo;s time no notice covered. The feed never says how many people a notice reaches, and the fixed distance charged a city notice about ten times the people of a rural one. From then the letters counted outage notices per 100&nbsp;km of water main, which the feed and Uisce Éireann&rsquo;s own records do say. The population-weighted figures are gone. Disruptions that never report an end are no longer given an estimated length: they count as notices and stay out of every time. The ten largest disruptions, ranked on the estimate, are now the ten longest, ranked on the time from notice to &ldquo;works complete&rdquo;; the day bars, once shaded by the share of a county&rsquo;s people in range, take one shade; and a notice is placed in the area of the nearest Census Small Area to its pin.</p>
       <p><b>15 August 2026.</b> Disruptions that never report an end used to count as one second long, which recorded a real outage as having disrupted nobody. They were then charged the typical length of completed works of the same kind. The national figure moved by hundredths of a point; four county-months dropped one grade.</p>
       <p><b>2 August 2026.</b> An active boil-water or do-not-drink notice used to knock the grade down one step. It no longer does - a notice affecting 200 people read the same as a county that lost supply county-wide. It is now a marker beside the grade instead.</p>
     </details>
@@ -311,8 +314,8 @@
 // the first overview's data, inline; data.js replaces D when it lands (adopt)
 const FIRST = window.UISCE_DATA;
 let D = FIRST;
-const SEVLABEL = { outage: "Supply disruption", quality: "Water quality notice",
-                   degraded: "Restrictions / low pressure", maintenance: "Works (planned / non-disruptive)",
+const SEVLABEL = { outage: "Outage", quality: "Water quality notice",
+                   degraded: "Restrictions / low pressure", maintenance: "Works",
                    "": "No announced disruption" };
 let LATEST = D.months[D.months.length - 1];
 let curMonth = LATEST;
@@ -331,9 +334,9 @@ const today = irishNow().slice(0, 10);
 // explains an orange that is not there.
 const LEGEND = `
   <span><i style="background:var(--good)"></i> No disruption</span>
-  <span><i style="background:var(--critical)"></i> Supply disruption</span>
+  <span><i style="background:var(--critical)"></i> Outage</span>
   <span><i style="background:var(--warning)"></i> Restrictions / low pressure</span>
-  <span><i style="background:var(--maint)"></i> Planned works</span>`;
+  <span><i style="background:var(--maint)"></i> Works</span>`;
 
 // The seventh legend entry, promoted to its own line and its own colour. As a
 // swatch among five others it was the least noticeable thing on the page and the
@@ -358,15 +361,16 @@ function healthKey() {
 
 // one hover cue above the list, not a placeholder in every strip
 function basisNote(last30, graded) {
-  return `Counties are graded on outage notices published per 100&nbsp;km of water main` +
+  return `Counties are graded on supply notices published per 100&nbsp;km of water main` +
     (last30 ? `, over the last 30 days while ${monthLabelLong(curMonth)} is under way.`
       : graded ? ` in the month.` : `; ${monthLabelLong(curMonth)} has no letters, because this site did not see all of it.`) +
+    ` A day is red when an outage notice stood anywhere in the county.` +
     ` <span class="hoverhint">Hover a day in a bar for its detail.</span>`;
 }
 
 // A month the site has not seen whole carries no rate: the newest is graded on
 // the last 30 days instead, and April 2026, seen from the 20th, has no letter.
-function onLast30(m) { return m.per_100km == null && isLatest(); }
+function onLast30(m) { return m.supply_per_100km == null && isLatest(); }
 function figures(c, m) { return onLast30(m) ? c.last_30 : m; }
 function rateText(r) { return r == null ? "-" : r.toFixed(2); }
 function gradeChip(letter) {
@@ -379,7 +383,7 @@ function gradeChip(letter) {
 // build schedule here to go stale.
 const STALE_AFTER_H = 24;
 
-// The grade is the outage count alone. An active boil-water / do-not-drink /
+// The grade is the supply count alone. An active boil-water / do-not-drink /
 // do-not-consume notice is shown next to it rather than folded into it, so a
 // county graded D with unsafe water reads as exactly that.
 // "the water may not be safe to drink" is a claim about *now*, so it is made
@@ -393,9 +397,9 @@ function healthTitle(m) {
   const what = `boil-water, do-not-drink or do-not-consume ${n === 1 ? "notice" : "notices"}`;
   return live
     ? `${n === 1 ? "An active" : n + " active"} ${what} - the water may not be safe ` +
-      `to drink. Separate from the grade, which counts outage notices.`
+      `to drink. Separate from the grade, which counts supply notices.`
     : `${n === 1 ? "A" : n} ${what} active in ${monthLabelLong(curMonth)}. ` +
-      `Separate from the grade, which counts outage notices.`;
+      `Separate from the grade, which counts supply notices.`;
 }
 
 function healthMark(m) {
@@ -448,8 +452,8 @@ function describeCell([s], date) {
   // a stale data.js beside a new page can still carry quality days
   if (!s || s === "quality") return ["", `${fmtDay(date)}: no supply disruption announced`];
   if (s === "degraded") return ["degraded", `${fmtDay(date)}: restrictions / low pressure`];
-  if (s === "maintenance") return ["maintenance", `${fmtDay(date)}: planned works`];
-  return ["outage", `${fmtDay(date)}: supply disruption`];
+  if (s === "maintenance") return ["maintenance", `${fmtDay(date)}: works`];
+  return ["outage", `${fmtDay(date)}: outage notice`];
 }
 function bar(days) { return dayCells(days, curMonth, describeCell); }
 
@@ -497,12 +501,12 @@ function renderOverview() {
   const nat = D.national[curMonth] || {};
   const last30 = onLast30(nat);
   const rate = last30 ? D.last_30 : nat;
-  document.getElementById("basis").innerHTML = basisNote(last30, rate.per_100km != null);
+  document.getElementById("basis").innerHTML = basisNote(last30, rate.supply_per_100km != null);
   const natFix = nat.median_completion_h == null ? "—" : nat.median_completion_h + "h";
   document.getElementById("natHeading").textContent = `The national picture in ${monthLabelLong(curMonth)}`;
   // no outage-count or typical-time tile: the banner already carries both
   document.getElementById("tiles").innerHTML = `
-    <div class="tile"><div class="v">${rateText(rate.per_100km)}</div><div class="k">outage notices per 100&nbsp;km of water main${last30 ? ", last 30 days" : ""}</div></div>
+    <div class="tile"><div class="v">${rateText(rate.supply_per_100km)}</div><div class="k">supply notices per 100&nbsp;km of water main${last30 ? ", last 30 days" : ""}</div></div>
     <div class="tile"><div class="v">${D.mains_km.toLocaleString()}</div><div class="k">km of water main, from Uisce Éireann&rsquo;s supply zones</div></div>
     <div class="tile"><div class="v">${quality}</div><div class="k">water-quality notices</div></div>
     ${isLatest() ? `<a class="tile" href="#open" onclick="go('#open'); return false;"><div class="v">${openNow}</div><div class="k">notices open right now →</div></a>` : ""}`;
@@ -515,13 +519,13 @@ function renderOverview() {
     : "";
 
   const letters = Object.values(D.counties)
-    .map(c => figures(c, c.months[curMonth]).count_grade).filter(Boolean);
+    .map(c => figures(c, c.months[curMonth]).supply_grade).filter(Boolean);
   const nF = letters.filter(g => g === "F").length;
   const graded = !letters.length ? ""
     : ` · ${nF} ${nF === 1 ? "county" : "counties"} graded F${last30 ? " over the last 30 days" : ""}`;
-  const notices = nat.outage_notices || 0;
+  const notices = nat.supply_notices || 0;
   document.getElementById("banner").innerHTML =
-    `<strong>${monthLabelLong(curMonth)}${isPartial() ? " so far" : ""}:</strong> ${notices} outage ${pl(notices, "notice")} · typical time to &ldquo;works complete&rdquo; ${natFix}${graded}
+    `<strong>${monthLabelLong(curMonth)}${isPartial() ? " so far" : ""}:</strong> ${notices.toLocaleString()} supply ${pl(notices, "notice")}, ${(nat.planned || 0).toLocaleString()} planned · typical outage ${natFix} to &ldquo;works complete&rdquo;${graded}
      <span class="meta">${freshness(D.data_as_of_iso, STALE_AFTER_H)}</span>`;
 
   // county rows, always alphabetical: 26 rows scroll, and the search box is
@@ -534,7 +538,7 @@ function renderOverview() {
     // "open" is a right-now snapshot, not a property of the selected month -
     // say so, or it reads as "open during July"
     const openNow = isLatest() ? `<div><b>${c.open_total || 0}</b> open now</div>` : "";
-    const rate = f.per_100km == null ? "" : `<div class="gloss"><b>${f.per_100km.toFixed(1)}</b> per 100&nbsp;km of water main</div>`;
+    const rate = f.supply_per_100km == null ? "" : `<div class="gloss"><b>${f.supply_per_100km.toFixed(1)}</b> per 100&nbsp;km of water main</div>`;
     const when = f === m ? `in ${MFULL[+curMonth.slice(5, 7) - 1]}` : "in 30 days";
     // the name is a real anchor, as the area rows already are: the row-level
     // onclick alone left every county unreachable by keyboard and unannounced
@@ -546,10 +550,10 @@ function renderOverview() {
     // no row title either: it would surface over the bar in place of the readout
     return `<div class="place">
       <div class="row" onclick="${jump}">
-        <div class="cname">${gradeChip(f.count_grade)}${healthMark(m)}<a href="${href}" onclick="if (newTab(event)) return true; ${jump}; return false;">${name}</a></div>
+        <div class="cname">${gradeChip(f.supply_grade)}${healthMark(m)}<a href="${href}" onclick="if (newTab(event)) return true; ${jump}; return false;">${name}</a></div>
         <div class="bar">${bar(m.days)}</div>
         <div class="stats">
-          <div><b>${f.outage_notices}</b> ${pl(f.outage_notices, "outage")} ${when}</div>
+          <div><b>${f.supply_notices}</b> ${pl(f.supply_notices, "notice")} ${when}</div>
           ${openNow}${rate}
         </div>
         <span class="chev">›</span>
@@ -613,14 +617,14 @@ function townRows(c) {
   // header, so narrow screens get a select instead
   const opt = (key, label) => `<option value="${key}"${townSort === key ? " selected" : ""}>Sort: ${label}</option>`;
   return `<select class="tsort" onchange="setTownSort(this.value)">
-    ${opt("outages", "most disruptions")}${opt("name", "area name")}
+    ${opt("outages", "most outages")}${opt("name", "area name")}
   </select>
   <div class="scroll"><table class="towns">
     <thead><tr>
       ${th("name", "Area", "Sort by name")}
-      ${th("outages", "Disrup&shy;tions", "Supply disruptions - sort by count")}
+      ${th("outages", "Outages", "Outage notices - sort by count")}
       <th title="Boil-water, do-not-drink and discolouration notices">Quality</th>
-      <th title="Restrictions, low pressure, and planned or non-disruptive works">Works</th>
+      <th title="Restrictions, low pressure, planned works and investigations">Works</th>
       ${isLatest() ? '<th title="Notices Uisce Éireann still shows as open, less any whose own text already reports the works complete and any boil-water or do-not-drink notice closed by its lift or after 14 days with no lift">Open</th>' : ""}
     </tr></thead>
     <tbody>${body}</tbody>
@@ -695,7 +699,7 @@ function renderCounty() {
   document.getElementById("countyview").innerHTML = `
     <a class="back" href="#" onclick="go(''); return false;">← All counties</a>
     <div class="chead">
-      ${gradeChip(f.count_grade)}
+      ${gradeChip(f.supply_grade)}
       <h2>${esc(county)}</h2>
       <span class="pop">${c.pop.toLocaleString()} people · Census 2022 · ${c.mains_km.toLocaleString()} km of water main, from Uisce Éireann&rsquo;s supply zones</span>
       ${healthPill(m)}
@@ -716,10 +720,10 @@ function renderCounty() {
       <div class="daycap">Tap a day for its notices.</div>
       <div id="dayEvents">${dayEventsHtml()}</div>
       <div class="tiles" style="margin-bottom:0">
-        <div class="tile"><div class="v">${rateText(f.per_100km)}</div><div class="k">outage notices per 100&nbsp;km of water main${onLast30(m) ? ", last 30 days" : ""}</div></div>
+        <div class="tile"><div class="v">${rateText(f.supply_per_100km)}</div><div class="k">supply notices per 100&nbsp;km of water main${onLast30(m) ? ", last 30 days" : ""}</div></div>
+        <div class="tile"><div class="v">${f.supply_notices}</div><div class="k">supply ${pl(f.supply_notices, "notice")}${onLast30(m) ? " in the last 30 days" : isPartial() ? " so far" : ""} · ${f.supply_notices - f.planned} unplanned, ${f.planned} planned</div></div>
         <div class="tile"><div class="v">${m.outage_notices}</div><div class="k">outage ${pl(m.outage_notices, "notice")} published${isPartial() ? " so far" : ""}${endSplit}</div></div>
         ${fixTile}
-        <div class="tile"><div class="v">${m.events.maintenance}</div><div class="k">planned ${pl(m.events.maintenance, "work item", "works")}</div></div>
         <div class="tile"><div class="v">${m.events.quality}</div><div class="k">quality ${pl(m.events.quality, "notice")}</div></div>
         <div class="tile"><div class="v">${m.clear_days}/${m.days_elapsed}</div><div class="k">clear days${isPartial() ? " so far" : ""}</div></div>
       </div>

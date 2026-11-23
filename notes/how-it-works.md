@@ -1,6 +1,6 @@
 # How it works
 
-**Simply put:** a script downloads every notice Uisce Éireann has published into a database, twice a day, and keeps the ones the feed later drops. A second script reads each notice's text for when the works ended. A third turns the database into a static website: a letter per county per month for outage notices per 100 km of water main, the typical time to "works complete", day bars, and a page for every county and town.
+**Simply put:** a script downloads every notice Uisce Éireann has published into a database, twice a day, and keeps the ones the feed later drops. A second script reads each notice's text for when the works ended. A third turns the database into a static website: a letter per county per month for supply notices per 100 km of water main, the typical time to "works complete", day bars, and a page for every county and town.
 
 A map of the moving parts, for picking the project back up after a while away. **Structure only**: every measurement and every *why* lives in the other notes, linked from here and indexed in [README.md](README.md). If a number appears in this file, it is wrong; go and read the note.
 
@@ -49,7 +49,7 @@ The only genuinely intricate part. It runs in four stages:
 
 **b. Cases accumulate into regions.** A `Region` is interval accounting for one grouping: counts by severity, day coverage, end signals. A county and an area within it are the *same object*; every case is added twice, once to its county and once to the area its pin was placed in.
 
-**c. Regions become months.** `region_month` produces counts, day bars and the notice-to-completion medians for one region in one month. Counties additionally get outage notices per 100 km of main and the letter cut on it, a rolling `last_30` for the month in progress, and the health-marker counts; areas get counts only, written sparsely because they dominate the payload.
+**c. Regions become months.** `region_month` produces counts, day bars and the notice-to-completion medians for one region in one month. Counties additionally get supply notices per 100 km of main and the letter cut on it, a rolling `last_30` for the month in progress, and the health-marker counts; areas get counts only, written sparsely because they dominate the payload.
 
 **d. Output.** `write_site` writes the pages, `data.js` and two shards per county. The county *metrics* are serialised into `data.js` as `window.UISCE_DATA`, and `site.html` is copied beside it; `index.html` also inlines the newest month of every county, which is all the first overview reads, so the first paint does not wait on `data.js`; the per-area breakdown and the closed-in-month lists go to `t/<county>.js`, loaded when a county is opened. A `<script>` tag rather than `fetch`, so the site works opened straight off disk.
 
@@ -74,7 +74,7 @@ At runtime `TownLookup.place` answers "which named area is this pin in?" by the 
 |---|---|
 | What counts as an outage / a quality notice | `classify` and the `*_CATS` sets in `site.py` |
 | How a title becomes a category | `CategoryRule` in `pipeline.py`, then run `uisce-backfill` |
-| Grade thresholds | `COUNT_CUTS` in `site.py` |
+| Grade thresholds | `SUPPLY_CUTS` in `site.py` |
 | Mains length per county | `data/wsz_mains.csv` via `uisce-fetch-wsz`, summed by `wsz.county_mains_km` |
 | Which supply zone a pin is in | `data/wsz.geojson` via `uisce-fetch-wsz`, read by `wsz.ZoneLookup` |
 | How long an open case runs for | `CAP_DAYS`, and `resolve_case` |
