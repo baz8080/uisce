@@ -468,8 +468,13 @@ def overlaps(intervals, lo, hi):
 COUNT_CUTS = (1.0, 2.0, 3.0, 4.0, 5.0)
 
 
-def count_grade(per_100km):
-    for letter, cut in zip("ABCDE", COUNT_CUTS):
+# Every supply notice, planned works included; fitted on May-Oct 2026
+# (notes/grading-plan.md). The page reads the outage count until it is re-worded.
+SUPPLY_CUTS = (2.0, 3.0, 4.0, 6.0, 8.0)
+
+
+def count_grade(per_100km, cuts=COUNT_CUTS):
+    for letter, cut in zip("ABCDE", cuts):
         if per_100km < cut:
             return letter
     return "F"
@@ -1086,6 +1091,19 @@ def count_figures(notices, km, *, whole, graded=True):
     figures = {"outage_notices": notices, "per_100km": per_100km}
     if graded:
         figures["count_grade"] = count_grade(per_100km) if whole else None
+    return figures
+
+
+def supply_figures(pubs, km, lo, hi, seen, *, graded=True):
+    """count_figures over every supply notice in [lo, hi): `pubs` is
+    [(first publication, planned)] of the events that are not quality notices."""
+    whole = seen_whole(lo, hi, seen)
+    eff_lo, eff_hi = seen_span(lo, hi, seen)
+    inside = [planned for pub, planned in pubs if eff_lo <= pub < eff_hi]
+    rate = round(100.0 * len(inside) / km, 2) if whole else None
+    figures = {"supply_notices": len(inside), "planned": sum(inside), "supply_per_100km": rate}
+    if graded:
+        figures["supply_grade"] = count_grade(rate, SUPPLY_CUTS) if whole else None
     return figures
 
 
@@ -2362,10 +2380,11 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
              "first_pub": case.start,
              "pins": 0, "confirmed": 0, "scheduled": 0, "sev": case.sev,
              "loc": r["location"] or "", "open": False, "closed": None, "health": False,
-             "measured": [], "capped": False,
+             "measured": [], "capped": False, "planned": True,
              "seen": r["first_seen"] or r["start_date"]},
         )
         meta["pins"] += 1
+        meta["planned"] &= r["work_type"] == "Planned"
         # the build that first saw any pin; NULL on every case before the column
         meta["seen"] = min(meta["seen"], r["first_seen"] or r["start_date"])
         # the earliest publication across the event's pins, which is what
@@ -2440,9 +2459,14 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
 
     # county -> first publication of each event whose worst pin is an outage
     outage_pubs = defaultdict(list)
+    # county -> (first publication, planned) of every event that is not a quality notice
+    supply_pubs = defaultdict(list)
     for (county, _ref), meta in event_meta.items():
         if meta["sev"] == "outage":
             outage_pubs[county].append(meta["first_pub"])
+        if meta["sev"] != "quality":
+            supply_pubs[county].append((meta["first_pub"], meta["planned"]))
+    national_pubs = [pub for pubs in supply_pubs.values() for pub in pubs]
     national_km = sum(mains_km.values())
     site["mains_km"] = round(national_km)
     national_notices = Counter()
@@ -2455,7 +2479,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
     site["last_30"] = count_figures(
         sum(count_notices(pubs, rolling_lo, seen, seen) for pubs in outage_pubs.values()),
         national_km, graded=False, whole=rolling_whole,
-    )
+    ) | supply_figures(national_pubs, national_km, rolling_lo, seen, seen, graded=False)
 
     for county in sorted(counties):
         region = counties[county]
@@ -2467,7 +2491,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
             "last_30": count_figures(
                 count_notices(outage_pubs[county], rolling_lo, seen, seen), mains_km[county],
                 whole=rolling_whole,
-            ),
+            ) | supply_figures(supply_pubs[county], mains_km[county], rolling_lo, seen, seen),
             "months": {},
             "open": sorted(
                 (
@@ -2544,6 +2568,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
                 **stats,
                 **span_stats(observed_h, scheduled_h, no_end_n),
                 **count_figures(notices, mains_km[county], whole=seen_whole(lo, hi, seen)),
+                **supply_figures(supply_pubs[county], mains_km[county], lo, hi, seen),
             }
         site["counties"][county] = cdata
 
@@ -2554,6 +2579,7 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
             **count_figures(
                 national_notices[ym], national_km, graded=False, whole=seen_whole(lo, hi, seen)
             ),
+            **supply_figures(national_pubs, national_km, lo, hi, seen, graded=False),
         }
 
     # Complete months only. The in-progress month gains completions as notices

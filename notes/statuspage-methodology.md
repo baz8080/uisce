@@ -301,6 +301,59 @@ Nationally May 1.87, June 2.03, July 2.69, August 2.11, September 2.21.
 - A county of 585 km (Carlow) moves 0.17 per notice, so one notice is a sixth of a band; Dublin's 6,170 km moves 0.016. The coarseness is in the small counties, where it is also the honest resolution of the data.
 - The feed's `county` is the notice's claim, not the pin's; "Known limitation: pins outside the county they claim" above applies here as to everything placed by county.
 
+## Every supply notice per 100 km of main (2026-11-23)
+
+**Simply put:** the payload now also counts every notice that warns of a supply disruption, planned works included, per 100 km of main, with a letter cut on that count. The page still shows the outage count and its letter above until its wording changes (session 3 of [grading-plan.md](grading-plan.md)); this is the figure it moves to.
+
+Session 2 of [grading-plan.md](grading-plan.md), which holds the review behind it and the alternatives that lost. All figures are release 2026-11-22-2154, built with the clock at the data horizon, over May to October (156 county-months).
+
+**Why.** The outage count sees 6,976 of the 12,783 events in those months that are not quality notices. The other 5,807 are 620 restrictions and 5,187 works, and the text of 5,800 of them names a supply disruption: every planned category says "may cause supply disruptions", and 847 of the works are "we are investigating reports of supply disruptions". A planned repair counts against a county (owner, 2026-11-23): overdue maintenance is part of what the letter should show. CRU and Ofwat count planned and unplanned interruptions together ([water-sla-benchmarks.md](water-sla-benchmarks.md)).
+
+**The numerator.** A supply notice is an event whose worst pin is an outage, a restriction or works: everything but quality notices, which stay the health marker's, and lifts. The class decides, not a text match, which would be one more thing to drift. It is dated as the outage count is, by its earliest pin's start, so a planned notice counts in the month its works run: `start_date` on a planned case is the works' start, a median 90h after the build that first saw it. The denominator, the gate on a month seen whole and the last-30-days window are the outage count's. `planned` beside it is the events planned on every pin, by `work_type`: 4,356 of the 12,783. In the payload: `supply_notices`, `planned`, `supply_per_100km` and `supply_grade` on each county-month and each county's `last_30`, and the first three nationally (`supply_figures`). The median time to "works complete" and the ten longest stay on outage notices: a planned end is a plan.
+
+**The distribution**, notices per 100 km per month: min 0.68 (Carlow May), p10 2.00, p25 2.49, median 3.20, p75 4.33, p90 5.65, max 11.46 (Kerry July). Nationally 3.59, 3.81, 4.78, 3.86, 4.02, 3.73.
+
+| county | outage rank | supply rank | May | Jun | Jul | Aug | Sep | Oct |
+|---|---|---|---|---|---|---|---|---|
+| Leitrim | 4 | 1 | 0.93 A | 2.80 B | 2.49 B | 1.71 A | 1.95 A | 2.49 B |
+| Carlow | 1 | 2 | 0.68 A | 3.25 C | 1.37 A | 2.56 B | 3.59 C | 1.71 A |
+| Longford | 13 | 3 | 1.98 A | 2.31 B | 4.21 D | 2.23 B | 2.31 B | 1.65 A |
+| Westmeath | 7 | 4 | 2.28 B | 2.28 B | 3.35 C | 1.78 A | 2.92 B | 2.28 B |
+| Offaly | 12 | 5 | 1.31 A | 2.18 B | 3.93 C | 3.06 C | 2.01 B | 2.80 B |
+| Sligo | 9 | 6 | 3.60 C | 3.01 C | 2.07 B | 2.71 B | 1.95 A | 2.01 B |
+| Monaghan | 8 | 7 | 1.54 A | 2.92 B | 2.31 B | 3.54 C | 2.31 B | 2.77 B |
+| Cavan | 6 | 8 | 2.30 B | 1.99 A | 3.98 C | 2.45 B | 2.76 B | 2.14 B |
+| Wicklow | 5 | 9 | 2.40 B | 2.50 B | 2.98 B | 2.11 B | 4.03 D | 1.92 A |
+| Louth | 2 | 10 | 2.46 B | 2.28 B | 3.51 C | 2.52 B | 3.02 C | 2.15 B |
+| Roscommon | 10 | 11 | 3.33 C | 2.00 B | 2.66 B | 2.90 B | 3.14 C | 2.52 B |
+| Kildare | 3 | 12 | 2.76 B | 3.29 C | 2.76 B | 3.08 C | 3.61 C | 2.28 B |
+| Clare | 15 | 13 | 2.76 B | 2.87 B | 3.20 C | 2.76 B | 3.20 C | 2.98 B |
+| Laois | 20 | 14 | 1.87 A | 3.09 C | 3.75 C | 4.21 D | 3.28 C | 2.90 B |
+| Donegal | 16 | 15 | 3.03 C | 3.96 C | 3.82 C | 2.53 B | 2.94 B | 3.64 C |
+| Mayo | 18 | 16 | 4.17 D | 3.88 C | 3.31 C | 3.34 C | 3.27 C | 3.66 C |
+| Kilkenny | 17 | 17 | 4.74 D | 3.65 C | 4.01 D | 3.01 C | 3.83 C | 3.19 C |
+| Galway | 11 | 18 | 3.00 C | 4.15 D | 3.04 C | 4.22 D | 4.02 D | 4.39 D |
+| Limerick | 21 | 19 | 3.17 C | 3.09 C | 4.83 D | 2.77 B | 4.67 D | 4.63 D |
+| Tipperary | 22 | 20 | 2.90 B | 4.35 D | 5.71 D | 4.43 D | 4.49 D | 3.47 C |
+| Cork | 23 | 21 | 4.76 D | 4.86 D | 5.81 D | 4.26 D | 5.11 D | 4.02 D |
+| Dublin | 14 | 22 | 4.33 D | 4.26 D | 5.01 D | 5.74 D | 5.09 D | 5.77 D |
+| Wexford | 24 | 23 | 4.93 D | 4.32 D | 7.92 E | 5.54 D | 5.37 D | 4.93 D |
+| Waterford | 25 | 24 | 6.49 E | 4.03 D | 10.12 F | 7.77 E | 5.21 D | 4.72 D |
+| Meath | 19 | 25 | 7.00 E | 7.77 E | 9.18 F | 5.11 D | 6.16 E | 4.41 D |
+| Kerry | 26 | 26 | 5.80 D | 5.65 D | 11.46 F | 6.35 E | 6.10 E | 5.36 D |
+
+**The cuts: A below 2, B below 3, C below 4, D below 6, E below 8, F at 8 or more** (`SUPPLY_CUTS`; owner, 2026-11-23). A 15, B 49, C 39, D 42, E 8, F 3; the three F are July in Kerry, Waterford and Meath. Against the outage letter 89 county-months keep theirs, 59 drop and 8 rise. The county bar is red when an outage notice stands anywhere in the county, so it still disagrees with a rate, but less: the A and B months red on half their days or more fall from 50 of 92 to 28 of 64. Rejected: even steps, 2 / 3 / 4 / 5 / 6 (D 28, E 14, F 11; 70 months drop), which leaves no room above the record for a winter the archive has not seen. Re-fit as the outage cuts are: yearly, dated, and sooner if a band empties.
+
+**Investigations are counted, all of them.** 201 of the 847 have an outage notice within 500 m and 5 days and are probably one incident published twice. Counting only the other 646 changes 7 of 156 letters and moves two counties one place, which does not earn a coordinate heuristic in a published number. Dropping all 847 moves 8 counties, one by 5 places.
+
+**What it costs the payload** while both counts ship: `data.js` 205.3 KB to 225.1 KB and the inline first render 19.2 KB to 23.2 KB, against a 512 KB budget. Session 3 takes the outage rate and letter back out.
+
+**Known limits**, beside those of the outage count above.
+
+- How works are published moves the count. 1,140 of 4,211 planned events have another planned event within 200 m and 14 days (Galway 45%): a week of works published daily is several notices, and the same week announced as one repeating window is one.
+- A three-hour planned window and a three-day burst each count one. The median is the only length the site measures, and it covers outages alone.
+- The 25 pins with an unmatched title are works by default and count.
+
 ## The estimate is removed (2026-10-06)
 
 **Simply put:** the code no longer works out how many people a notice reached. A pin is placed in the area of its nearest Census Small Area, a notice that never reported an end counts as a notice and has no length, and the ten largest disruptions are now the ten longest. Session 4 of [simplification-plan.md](archive/simplification-plan.md); the page stopped showing the estimate in session 3 (frontend-notes.md, "The page counts notices").

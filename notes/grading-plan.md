@@ -153,7 +153,7 @@ E 14, F 11; 70 months drop).
 the letter counts. Owner: "supply notices", split "unplanned" and "planned", with "outage
 notices" kept for what the median and the ten longest read.
 
-**2. The count.** PR "Count every supply notice": the numerator, the planned split in the
+**2. The count.** (Built 2026-11-23, beside the outage count so the page is unchanged until session 3: statuspage-methodology.md, "Every supply notice per 100 km of main".) PR "Count every supply notice": the numerator, the planned split in the
 payload, `COUNT_CUTS`, the last-30 window; statuspage-methodology.md section with this
 note's tables, `TestNoticesPer100km` re-pinned to the new sums. Depends on: A, B. Done
 when: Kerry July 11.46, Carlow May 0.68 and the national 3.59 for May reproduce.
