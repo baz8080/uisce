@@ -1187,7 +1187,7 @@ def _supply(site, county, key):
 
 
 class TestSupplyNotices:
-    """The count grading-plan.md measured on release 2026-11-22-2154: every event
+    """The count the methodology note measured on release 2026-11-22-2154: every event
     that is not a quality notice, planned works included. The rows here are
     Kerry's and Carlow's May to September, one event each."""
 

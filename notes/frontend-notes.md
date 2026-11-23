@@ -747,25 +747,24 @@ arrives after the first render, so it costs no LCP, only 28.4 KB gz of transfer.
 
 ## The page counts notices - 2026-10-06
 
-**Simply put:** every page now shows the count of outage notices per 100 km of water main,
-its letter and the typical time to "works complete", and nothing from the population
-estimate. Session 3 of [simplification-plan.md](archive/simplification-plan.md); the arithmetic is
-statuspage-methodology.md, "Outage notices per 100 km of main".
+**Simply put:** since 6 October 2026 no page shows anything from the population estimate.
+This entry holds what took its place, apart from the letter itself, which is now in "The
+page counts every supply notice" below. Session 3 of
+[simplification-plan.md](archive/simplification-plan.md). Its opening and its two entries on
+the outage letter are in [archive/outage-letter.md](archive/outage-letter.md); the first two
+below restate what still holds of them.
 
-- **Letters and rates.** A finished month shows its own `count_grade` and `per_100km`. The
-  newest month, which has no rate until the site has seen it whole, shows the county's
-  `last_30` and says "last 30 days" wherever it does. April 2026 has neither and gets the
-  shared `g-none` chip with a hyphen; the banner drops its "graded F" clause and the basis
-  line says why there are no letters, rather than "0 counties graded F" of a month nobody
-  was graded on.
-  Inside collection's first 30 days `last_30` carries its count alone (#115 gated the
-  window as a month is gated); the app shows the hyphen chip and the county page says
-  "too soon for a rate".
-- **The outage count beside a rate is the one the rate divides**: `outage_notices` (events
-  by first publication), not `events.outage` (events active in the month), and on the
-  newest month the overview row's count is `last_30`'s, labelled "30 days". The county
-  view's tiles keep the month's count beside the 30-day rate, each labelled. The bars, the
-  area breakdown and the quality and works tiles keep the active-in-month counts.
+- **Letters and rates.** A finished month shows its own letter and rate. The newest month,
+  which has no rate until the site has seen it whole, shows the county's `last_30` and says
+  "last 30 days" wherever it does. April 2026 has neither and gets the shared `g-none` chip
+  with a hyphen; the banner drops its "graded F" clause and the basis line says why there
+  are no letters. Inside collection's first 30 days `last_30` carries its counts alone; the
+  app shows the hyphen chip and the county page says "too soon for a rate".
+- **The count beside a rate is the one the rate divides**: `supply_notices` (events by first
+  publication), not the events active in the month, and on the newest month it is
+  `last_30`'s, labelled "30 days". The county view's outage tile keeps the month's
+  `outage_notices`, labelled. The bars, the area breakdown and the quality tile keep the
+  active-in-month counts.
 - **Mains length is credited** wherever it is shown: "from Uisce Éireann's supply zones".
   The national figure is the unrounded total (`site["mains_km"]`, 53,756 km); summing the
   rounded county figures gave 53,759.
@@ -862,7 +861,8 @@ the browser; there is no map.
 reader sees which days their own town was affected. It is drawn from the list of notices
 already on the page, and an area still gets no letter.
 
-Session 1 of [grading-plan.md](grading-plan.md), which holds why an area carries no letter.
+Session 1 of [grading-plan.md](archive/grading-plan.md); why an area carries no letter is in
+statuspage-methodology.md, "Every supply notice per 100 km of main".
 Figures are release 2026-11-22-2154.
 
 - **One rule, both sides.** A day is coloured when a notice listed in the area covers it,
@@ -901,7 +901,7 @@ Figures are release 2026-11-22-2154.
 disruption, planned works included, and the page says "supply notices" for that count and
 "outage notices" only for the bursts and unplanned repairs the typical time is taken over.
 
-Session 3 of [grading-plan.md](grading-plan.md); the count and its cuts are in
+Session 3 of [grading-plan.md](archive/grading-plan.md); the count and its cuts are in
 statuspage-methodology.md, "Every supply notice per 100 km of main". Release 2026-11-22-2154.
 
 - **One name per thing.** "Supply notices" is what the letter counts; "outage notices" is the
@@ -917,12 +917,14 @@ statuspage-methodology.md, "Every supply notice per 100 km of main". Release 202
   decomposes what the median rests on. The county page's month table reads Grade, Per 100 km,
   Supply notices, Planned, Outages, Quality.
 - **The county bar keeps its meaning**, and the line above the list now says what red is: an
-  outage notice stood anywhere in the county. Why nothing replaced it is in the plan.
+  outage notice stood anywhere in the county. Why nothing replaced it is in
+  statuspage-methodology.md, "Every supply notice per 100 km of main".
 - **The payload** drops `per_100km`, `count_grade` and the national and last-30 `outage_notices`;
   `outage_notices` stays on a county-month. `data.js` is 215.2 KB and the first render 20.8 KB.
 - **What a reader sees move.** Of 156 county-months from May to October, 59 drop a letter, 8
   rise and 89 keep theirs; over the 30 days to 2026-11-22 Kildare reads B on 2.86 where it
   read A on 0.48, and Dublin D where it read B. The "Changes to how this site measures" list
   carries the entry, and its 6 October entry is put in the past tense.
-- The 2026-10-06 entry above, "The page counts notices", describes the outage letter this
-  replaces; the notes audit archives it.
+- The 2026-10-06 entry above, "The page counts notices", still binds for everything but
+  the letter; its opening and its two entries on the outage letter are in
+  [archive/outage-letter.md](archive/outage-letter.md).

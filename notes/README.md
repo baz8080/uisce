@@ -15,7 +15,6 @@ The measurements and decisions behind the site, so nobody has to work one out tw
 | [pipeline-dependencies.md](pipeline-dependencies.md) | how the DB, the JSONL and the site get out of step |
 | [population-data-sources.md](population-data-sources.md) | the Census geography a pin is placed by |
 | [water-sla-benchmarks.md](water-sla-benchmarks.md) | what regulators measure, and why the site cannot borrow it |
-| [grading-plan.md](grading-plan.md) | the 2026-11-23 review of the letter: count every supply notice, give areas a bar; not built yet |
 | [roadmap.md](roadmap.md) | follow-ups not started, and decisions waiting on the owner |
 
 Settled decisions are indexed in [../CLAUDE.md](../CLAUDE.md), one row each, pointing at the section that closed them.
@@ -27,6 +26,8 @@ Retired text, kept as it was written. Nothing in it describes a figure the site 
 | File | What it was |
 |---|---|
 | [archive/availability-method.md](archive/availability-method.md) | the population-weighted availability method and its grades, used until 2026-10-06 |
+| [archive/outage-letter.md](archive/outage-letter.md) | the letter on outage notices alone, cut at 1 to 5, used from 2026-10-06 to 2026-11-23 |
+| [archive/grading-plan.md](archive/grading-plan.md) | the review that moved the letter to every supply notice and gave areas a day bar, closed 2026-11-23 |
 | [archive/frontend-superseded.md](archive/frontend-superseded.md) | three frontend entries a later one replaced |
 | [archive/simplification-plan.md](archive/simplification-plan.md) | the plan that replaced the population estimate with a count and added supply zones, closed 2026-10-07 |
 | [archive/end-time-eval-handoffs.md](archive/end-time-eval-handoffs.md) | the working notes of the pv2 prompt change, completed July 2026 |

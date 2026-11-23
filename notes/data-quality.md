@@ -473,6 +473,10 @@ The "no reference number by construction" line above is true of the description 
 
 The exclusion decision stands anyway, for the reason the re-measured section above establishes: investigations classify as `maintenance`, which is never counted as an outage, so a rescued duration feeds no published number. Recorded here so the pattern isn't re-derived - if investigation-duration stats are ever wanted, 500 m/±5 d unique-sibling coordinate pairing is the mechanism, not references.
 
+### Amended 2026-11-23: investigations count towards the letter, and still are not paired
+
+Since 2026-11-23 the letter counts every supply notice, so an investigation is no longer "excluded from everything that matters": it counts once, as works. The conclusion above stands for a different reason. On release 2026-11-22-2154, 201 of the 847 investigation events from May to October have an outage notice within 500 m and 5 days and are probably one incident published twice; counting only the other 646 changes 7 of 156 county letters and moves two counties one place. That does not earn a coordinate heuristic in a published number (statuspage-methodology.md, "Every supply notice per 100 km of main"). Their durations still feed nothing: the median is taken over outage notices.
+
 ## Closed cases with no end signal create false-green days
 
 ~300 `not_found` cases (plus closed unpaired boil notices) have no interval at all, so day-level views show green where a notice demonstrably existed. A same-day outage-then-all-clear is *not* affected - a case with any inferred duration still overlaps its start day - the hole is only the no-signal cases. The status site gives them a token 1-second footprint: the start day colours and the event counts, but no length is read.

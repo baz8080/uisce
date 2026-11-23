@@ -1,6 +1,6 @@
 # Water supply SLA benchmarks
 
-**Simply put:** regulators measure the minutes a property is without water. This site cannot: it only sees published notices. So its letters count notices per 100 km of main, which is how the water industry counts main breaks, and its time figure is notice to "works complete". Neither is comparable to a regulator's figure.
+**Simply put:** regulators measure the minutes a property is without water. This site cannot: it only sees published notices. So its letters count notices per 100 km of main, the unit the water industry counts main breaks in, and its time figure is notice to "works complete". Neither is comparable to a regulator's figure.
 
 Documented service levels for municipal water supply in nearby jurisdictions, researched July 2026 when the status site's A-F grades were first calibrated (see [statuspage-methodology.md](statuspage-methodology.md)). Headline: real SLAs exist and are strikingly tight, but they measure something different from what this project can measure, so they inform the framing rather than the thresholds.
 
@@ -26,6 +26,6 @@ Regulators count *measured* minutes without water at the customer's tap, general
 
 ## Related metrics worth adopting later
 
-- **AWWA benchmark**: water main breaks per 100 miles of main per year (industry guide is below ~15). The site's count metric is this lens, in notices per 100 km per month (statuspage-methodology.md, "Outage notices per 100 km of main").
+- **AWWA benchmark**: water main breaks per 100 miles of main per year (industry guide is below ~15). The site's outage count is this lens, in notices per 100 km per month; the letter is wider, counting planned works and restrictions too (statuspage-methodology.md, "Every supply notice per 100 km of main").
 - **CAIDI** (electricity: median time to restore) is the analogue of the published median completion.
 - **IBNET/IWA continuity** (hours of supply per day) — aimed at intermittent-supply systems, less relevant here.

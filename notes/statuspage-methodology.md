@@ -17,7 +17,7 @@ Each case maps to one class from `work_category` plus the impact flags, tested i
 5. mains_repair / valve_repair / pump_repair / NULL category, when not marked Planned → **outage** (emergency repairs normally shut off supply)
 6. everything else — investigations, leak detection, hydrant works, installations, and anything Planned → **works**
 
-Only the **outage** class is counted in the median and the ten longest. Until 2026-11-23 the letter counted it alone too, on the reasoning that an F should mean supply was lost, not that a county ran many investigations; it now counts every class but quality ("Every supply notice per 100 km of main"). No feed flag can do this job: `water_outage` is set on 97% of all cases, and the two health flags carry nothing the category does not (2026-08-18).
+Only the **outage** class is counted in the median and the ten longest. Until 2026-11-23 the letter counted it alone too, on the reasoning that an F should mean supply was lost, not that a county ran many investigations; it now counts every class but quality ("Every supply notice per 100 km of main"; the retired text is in [archive/outage-letter.md](archive/outage-letter.md)). No feed flag can do this job: `water_outage` is set on 97% of all cases, and the two health flags carry nothing the category does not (2026-08-18).
 
 Interval inputs come from `inferred_cases.notice_to_end_seconds`, capped at 14 days. The genuinely long events (40–87-day conservation restrictions) are classed degraded and never count, so the cap is a backstop, not the outlier strategy - see the outliers section of [data-quality.md](data-quality.md).
 
@@ -191,7 +191,7 @@ With every Small Area belonging to a named area, a pin only fails to place when 
 
 **Simply put:** a county's letter for a month is the number of supply notices published per 100 km of its water main: fewer than two is an A, eight or more an F. The cuts are fixed whole numbers, so a B means the same thing every month.
 
-The letter is cut on the count below ("Every supply notice per 100 km of main"): **A below 2, B below 3, C below 4, D below 6, E below 8, F at 8 or more**, and nothing else. From 2026-10-06 to 2026-11-23 it was cut on outage notices alone, at 1 to 5 ("Outage notices per 100 km of main"). Until 2026-10-06 it was cut on population-weighted availability; that scale, its E band and the sensitivity checks that retired it are in [archive/availability-method.md](archive/availability-method.md).
+The letter is cut on the count below ("Every supply notice per 100 km of main"): **A below 2, B below 3, C below 4, D below 6, E below 8, F at 8 or more**, and nothing else. From 2026-10-06 to 2026-11-23 it was cut on outage notices alone, at 1 to 5 ([archive/outage-letter.md](archive/outage-letter.md)). Until 2026-10-06 it was cut on population-weighted availability; that scale, its E band and the sensitivity checks that retired it are in [archive/availability-method.md](archive/availability-method.md).
 
 ### The health notice is a marker beside the grade, not inside it (2026-08-02)
 
@@ -241,77 +241,21 @@ Session 7 of [simplification-plan.md](archive/simplification-plan.md). All figur
 
 **Paths and directory.** The path is the zone's name through `statusui.slug`, unique over all 688 (asserted in `tests/test_zone_pages.py`); a trailing space in the layer's names is stripped. A zone renamed on a re-fetch moves its URL, and the fetch prints boundary changes, not renames. Rejected: the zone code, which is stable but not a name anyone searches for. `zones.html` groups the zones under the county of the council that runs them, so a Louth zone serving Meath sits under Louth. The pages carry no `data.js`; nothing about a zone enters the payload. 688 pages, 13.9 MB, median 17.7 KB, largest 90 KB (SD Zone2).
 
-## Outage notices per 100 km of main (2026-10-06)
-
-**Superseded for the letter, 2026-11-23:** the letter now counts every supply notice (the section after this one), and `per_100km`, `count_grade` and `COUNT_CUTS` are gone from the payload and the code. What still holds here: the outage numerator, which `outage_notices` carries for the median and the ten longest; the gate on a month seen whole; the last-30-days window; and the known limits. The cuts and the distribution below are the retired letter's, kept until the notes audit archives them.
-
-**Simply put:** each county-month carries how many outage notices were published per 100 km of the county's water main, and a letter cut on that count. The median time to "works complete" sits beside it, unchanged.
-
-**The numerator.** An outage notice is an event (one `reference_num` in one county, pins grouped as `event_meta` groups them) whose worst pin classifies as `outage`: a hard-supply category or an unplanned repair, not a repeating window (a restriction whatever its title), not a quality, conservation or pressure notice, not a lift. It is placed in the county the feed put it in, and dated by its earliest pin's publication (`first_pub`, the pinned start for a re-stamped case), which is the same reading the completion median uses for "started this month". A month counts only the part of it the site has seen: nothing before `COLLECTION_START`, and a notice dated ahead of the build waits for its day. The denominator is `wsz.county_mains_km` ("Mains length per county" above). On release 2026-10-06-2104, May to September, that is 5,869 events, and it reproduces to the decimal the figures first measured in a scratch probe with shapely ([archive/availability-method.md](archive/availability-method.md), "Supply zones as a limit on the circle"): Carlow 4.4, Louth 4.7, Leitrim 4.8, Dublin 8.7, Wexford 17.0, Waterford 20.8 (20.7 before the payload's two-decimal rounding), Kerry 23.8. Any-pin-outage and worst-pin-outage give the same set; all-pins-outage drops 26 events and moves Kerry to 23.7, so the worst-pin rule the top ten already uses is kept. `tests/test_site.py`, `TestNoticesPer100km`, builds that many notices on a fixture against the committed mains table and asserts the two headline sums.
-
-**Simply put:** a month gets its letter only once it is over. Until then the page shows the letter for the last 30 days, which always rests on a full month of notices. Scaling a part month up was tried first: one notice on the 1st of the month gave Carlow an F.
-
-**The month in progress is graded on the last 30 days** (owner, 2026-10-06). A month the site saw whole gets its rate and letter; any other (the month in progress, and April 2026, seen from the 20th) carries only `outage_notices`, its count so far, with `per_100km` and `count_grade` null. Each county carries `last_30` (count, rate, letter over the 30 days to the build) and the site carries the national `last_30` (count and rate), for every surface that says "now". The first version scaled the part-month count to the month's length; one notice in Carlow on the 1st read 5.1, an F. Measured on May to September, a part-month letter matches the month-end one in 53 of 130 county-months at day 3, 50 at day 5, 73 at day 7 and 71 at day 10, so a minimum-days gate like esb's stops the day-1 F but leaves a coin flip. An "above, about or below its usual pace" trend did no better (46 of 130 at day 5, 12 pointing the wrong way). The rolling window always rests on a full month of notices; its costs are that it lags (a burst stays in it for 30 days) and that it can change between builds with nothing new published, which the label carries. It is graded on the calendar-month cuts, so it reads about 1.5% more leniently than an average month (30 days against 30.4) and can sit a letter apart from the month just finished at a cut; not corrected, because a rate per 30 days is what a reader takes "a month" to mean. The window is gated as a month is, lettered only once it lies wholly from `COLLECTION_START` on. Both the window and the 'seen whole' test run to the last feed read (`data_as_of`), not the build clock: a UI deploy on a stale release would otherwise count the unread days as quiet ones. History stays on calendar months: they do not overlap, so they compare and sum, and the cuts were fitted on them.
-
-**The distribution** over the 130 finished county-months, notices per 100 km per month:
-
-| min | p10 | p25 | median | p75 | p90 | max |
-|---|---|---|---|---|---|---|
-| 0.17 (Carlow May) | 0.92 | 1.24 | 1.76 | 2.50 | 3.38 | 7.20 (Kerry July) |
-
-Nationally May 1.87, June 2.03, July 2.69, August 2.11, September 2.21.
-
-| county | km | May | Jun | Jul | Aug | Sep | notices | per 100 km |
-|---|---|---|---|---|---|---|---|---|
-| Carlow | 585 | 0.17 A | 0.68 A | 0.51 A | 1.20 B | 1.88 B | 26 | 4.4 |
-| Louth | 1,625 | 0.80 A | 0.80 A | 1.66 B | 0.86 A | 0.62 A | 77 | 4.7 |
-| Leitrim | 1,285 | 0.23 A | 1.40 B | 1.17 B | 1.17 B | 0.78 A | 61 | 4.8 |
-| Kildare | 1,886 | 1.38 B | 1.06 B | 1.06 B | 1.01 B | 0.74 A | 99 | 5.2 |
-| Cavan | 653 | 1.07 B | 1.07 B | 1.38 B | 1.23 B | 0.92 A | 37 | 5.7 |
-| Wicklow | 1,042 | 0.96 A | 1.06 B | 1.15 B | 0.86 A | 2.02 C | 63 | 6.0 |
-| Westmeath | 1,402 | 1.28 B | 1.21 B | 1.50 B | 0.57 A | 1.50 B | 85 | 6.1 |
-| Monaghan | 650 | 0.92 A | 1.39 B | 1.54 B | 2.31 C | 1.08 B | 47 | 7.2 |
-| Galway | 2,963 | 1.05 B | 1.55 B | 1.28 B | 1.49 B | 1.92 B | 216 | 7.3 |
-| Sligo | 1,695 | 1.89 B | 1.48 B | 1.48 B | 1.83 B | 0.89 A | 128 | 7.6 |
-| Roscommon | 2,102 | 1.38 B | 1.38 B | 1.71 B | 1.52 B | 1.76 B | 163 | 7.8 |
-| Offaly | 1,145 | 0.96 A | 1.75 B | 2.53 C | 1.92 B | 0.96 A | 93 | 8.1 |
-| Dublin | 6,170 | 1.56 B | 1.43 B | 1.82 B | 1.82 B | 2.04 C | 534 | 8.7 |
-| Longford | 1,213 | 1.57 B | 1.65 B | 2.97 C | 1.57 B | 1.40 B | 111 | 9.2 |
-| Clare | 1,811 | 1.71 B | 1.60 B | 2.21 C | 1.77 B | 2.32 C | 174 | 9.6 |
-| Donegal | 4,418 | 1.58 B | 2.56 C | 2.51 C | 1.49 B | 1.90 B | 444 | 10.0 |
-| Kilkenny | 1,097 | 2.37 C | 2.28 C | 2.01 C | 2.37 C | 1.82 B | 119 | 10.8 |
-| Mayo | 2,784 | 2.05 C | 2.12 C | 2.26 C | 2.34 C | 2.26 C | 307 | 11.0 |
-| Limerick | 2,527 | 2.14 C | 1.98 B | 2.93 C | 1.70 B | 2.85 C | 293 | 11.6 |
-| Meath | 1,428 | 2.31 C | 2.52 C | 3.01 D | 1.68 B | 2.38 C | 170 | 11.9 |
-| Laois | 1,068 | 0.94 A | 2.06 C | 3.00 D | 3.65 D | 2.62 C | 131 | 12.3 |
-| Tipperary | 3,519 | 2.13 C | 3.01 D | 3.61 D | 2.84 C | 3.35 D | 526 | 14.9 |
-| Cork | 5,144 | 2.90 C | 3.05 D | 3.81 D | 2.66 C | 3.11 D | 799 | 15.5 |
-| Wexford | 1,807 | 3.38 D | 2.27 C | 4.71 E | 3.43 D | 3.21 D | 307 | 17.0 |
-| Waterford | 1,017 | 3.74 D | 2.75 C | 6.49 F | 5.31 F | 2.46 C | 211 | 20.8 |
-| Kerry | 2,723 | 3.64 D | 3.67 D | 7.20 F | 4.77 E | 4.52 E | 648 | 23.8 |
-
-**The cuts are whole numbers: A below 1, B below 2, C below 3, D below 4, E below 5, F at 5 or more** (`COUNT_CUTS`, `count_grade`). The scale reads in its own unit, "fewer than one outage notice per 100 km of main a month is an A", which the availability cuts never could. The letter is cut on the two-decimal figure the payload carries, so a rate that rounds onto a cut takes the letter the page shows: Laois July, 32 notices on 1,068 km, is 2.996, published as 3.00 and a D. Every band holds something on May to September, A 19, B 57, C 33, D 15, E 3, F 3; the three F are Kerry July 7.20, Waterford July 6.49 and Waterford August 5.31, the three E Kerry August and September and Wexford July. By month: May A 7 B 10 C 6 D 3, June A 2 B 14 C 7 D 3, July A 1 B 11 C 7 D 4 E 1 F 2, August A 3 B 14 C 5 D 2 E 1 F 1, September A 6 B 8 C 8 D 3 E 1. The median county-month (1.76) is a B where the availability scale put it at C: the count is not a re-labelling of the old letter, and the two agree on 28 of the 130 county-months, which is the point of the change rather than a defect of it. A fixed scale has to leave room above the record for a winter the archive has not seen; the two bands above the May-Sep p90 are that room.
-
-**Rejected: cuts shaped to the archive's percentiles**, 0.5 / 1 / 2 / 3 / 5, which reproduce the availability scale's shape (A at the top 3%, the median at C): A 2, B 17, C 57, D 33, E 18, F 3. Two A in 130 is the empty-band problem the availability scale's E band was fitted to avoid (archive/availability-method.md, "The scale grew an E"), met from the other end, and shaping the cuts to the dataset is the ranking the owner declined at checkpoint B wearing fixed numbers. **Rejected: archive quantiles** (checkpoint B, owner answer 2026-10-06, fixed). Sextiles on May to September fall at 1.06 / 1.48 / 1.76 / 2.26 / 2.95, none of them a number a reader can hold; they fill every band by construction, 22 a letter; a fit on May to July alone (1.06 / 1.40 / 1.69 / 2.23 / 2.97) already moves 6 of those 78 letters against the May to September fit, so published letters would move every build; and they differ from the whole-number cuts on 86 of 130 county-months, which is the dataset-shape argument above in another form.
-
-**Re-fit yearly**, first in October 2027 against the release DB, and sooner if a band holds nothing over a full year of months or the national rate leaves 1.5 to 3. The record to beat is the table above. Raising a cut moves published letters, so the re-fit is a dated section here, not a quiet constant change.
-
-**Known limits.**
-
-- The count ignores size: a village burst and a city trunk main each count one. The page says so (session 3); the median time to completion beside it is the only size the site can measure.
-- Zones cross county lines, and a notice is placed by pin while its main is counted by zone authority. Measured on the 2026-10-06 release with the zone boundaries fetched into a scratch probe (nothing committed) for Louth, Meath and their neighbours, May to September cases: 69 of Meath's 592 pins (11.7%) fall in Louth's "South Louth & East Meath" zone (693 km) and 4 in Fingal Zone 1; 0 of Louth's 298 fall in a Meath zone; 14 Louth and 38 Meath pins are in no zone. So Meath's 1,428 km serves fewer of its notices than the count assumes and Louth's 1,625 km more: Meath reads high and Louth low, by at most that twelfth. Nothing else in the layer's attributes can say how much of a zone's main is over the line; session 6 brings the polygons in.
-- A county of 585 km (Carlow) moves 0.17 per notice, so one notice is a sixth of a band; Dublin's 6,170 km moves 0.016. The coarseness is in the small counties, where it is also the honest resolution of the data.
-- The feed's `county` is the notice's claim, not the pin's; "Known limitation: pins outside the county they claim" above applies here as to everything placed by county.
-
 ## Every supply notice per 100 km of main (2026-11-23)
 
-**Simply put:** the letter counts every notice that warns of a supply disruption, planned works included, per 100 km of main. It went into the payload beside the outage letter first, and the page moved to it the same day.
+**Simply put:** a county's letter counts every notice that warns of a supply disruption, planned works included, per 100 km of its water main. The typical time to "works complete" beside it is still taken over outage notices alone.
 
-Sessions 2 and 3 of [grading-plan.md](grading-plan.md), which holds the review behind it and the alternatives that lost. All figures are release 2026-11-22-2154, built with the clock at the data horizon, over May to October (156 county-months).
+The review behind it is [archive/grading-plan.md](archive/grading-plan.md); the outage letter it replaced, with its cuts and distribution, is [archive/outage-letter.md](archive/outage-letter.md). All figures are release 2026-11-22-2154, built with the clock at the data horizon, over May to October (156 county-months), unless dated otherwise.
 
-**Why.** The outage count sees 6,976 of the 12,783 events in those months that are not quality notices. The other 5,807 are 620 restrictions and 5,187 works, and the text of 5,800 of them names a supply disruption: every planned category says "may cause supply disruptions", and 847 of the works are "we are investigating reports of supply disruptions". A planned repair counts against a county (owner, 2026-11-23): overdue maintenance is part of what the letter should show. CRU and Ofwat count planned and unplanned interruptions together ([water-sla-benchmarks.md](water-sla-benchmarks.md)).
+**Why.** From 2026-10-06 the letter counted outage notices alone, which is 6,976 of the 12,783 events in those months that are not quality notices. The other 5,807 are 620 restrictions and 5,187 works, and the text of 5,800 of them names a supply disruption: every planned category says "may cause supply disruptions", and 847 of the works are "we are investigating reports of supply disruptions". A planned repair counts against a county (owner, 2026-11-23): overdue maintenance is part of what the letter should show. CRU and Ofwat count planned and unplanned interruptions together ([water-sla-benchmarks.md](water-sla-benchmarks.md)).
 
-**The numerator.** A supply notice is an event whose worst pin is an outage, a restriction or works: everything but quality notices, which stay the health marker's, and lifts. The class decides, not a text match, which would be one more thing to drift. It is dated as the outage count is, by its earliest pin's start, so a planned notice counts in the month its works run: `start_date` on a planned case is the works' start, a median 90h after the build that first saw it. The denominator, the gate on a month seen whole and the last-30-days window are the outage count's. `planned` beside it is the events planned on every pin, by `work_type`: 4,356 of the 12,783. In the payload: `supply_notices`, `planned`, `supply_per_100km` and `supply_grade` on each county-month and each county's `last_30`, and the first three nationally (`supply_figures`). The median time to "works complete" and the ten longest stay on outage notices: a planned end is a plan.
+**The numerator.** A supply notice is an event (one `reference_num` in one county, pins grouped as `event_meta` groups them) whose worst pin is an outage, a restriction or works: everything but quality notices, which stay the health marker's, and lifts. The class decides, not a text match, which would be one more thing to drift. It is placed in the county the feed put it in and dated by its earliest pin's start (`first_pub`, the pinned start for a re-stamped case), so a planned notice counts in the month its works run: `start_date` on a planned case is the works' start, a median 90h after the build that first saw it. A month counts only the part of it the site has seen: nothing before `COLLECTION_START`, and a notice dated ahead of the build waits for its day. `planned` beside it is the events planned on every pin, by `work_type`: 4,356 of the 12,783. The denominator is `wsz.county_mains_km` ("Mains length per county" above). In the payload: `supply_notices`, `planned`, `supply_per_100km` and `supply_grade` on each county-month and each county's `last_30`, and the first three nationally (`supply_figures`). `tests/test_site.py`, `TestSupplyNotices`, builds Kerry's and Carlow's May to September on a fixture against the committed mains table.
+
+**The outage count beside it.** `outage_notices` on a county-month is the events whose worst pin classifies as `outage`: a hard-supply category or an unplanned repair, not a repeating window. It is what the median time to "works complete" and the ten longest are taken over, because a planned end is a plan, not a report. Any-pin-outage and worst-pin-outage gave the same set on release 2026-10-06-2104, and all-pins-outage dropped 26 events of 5,869, so the worst-pin rule the top ten uses is kept. It carries no rate and no letter of its own now.
+
+**Simply put:** a month gets its letter only once it is over. Until then the page shows the letter for the last 30 days, which always rests on a full month of notices. Scaling a part month up was tried first: one notice on the 1st of the month gave Carlow the worst letter.
+
+**The month in progress is graded on the last 30 days** (owner, 2026-10-06). A month the site saw whole gets its rate and letter; any other (the month in progress, and April 2026, seen from the 20th) carries its counts so far alone. Each county carries `last_30` (counts, rate, letter over the 30 days to the build) and the site carries the national `last_30` (counts and rate), for every surface that says "now". The measurements that settled it were made on the outage letter, on May to September of release 2026-10-06-2104, and the reasoning does not depend on which notices are counted. Scaling the part-month count to the month's length read one Carlow notice on the 1st as 5.1 per 100 km. A part-month letter matched the month-end one in 53 of 130 county-months at day 3, 50 at day 5, 73 at day 7 and 71 at day 10, so a minimum-days gate like esb's stops the day-1 extreme but leaves a coin flip. An "above, about or below its usual pace" trend did no better (46 of 130 at day 5, 12 pointing the wrong way). The rolling window always rests on a full month of notices; its costs are that it lags (a burst stays in it for 30 days) and that it can change between builds with nothing new published, which the label carries. It is graded on the calendar-month cuts, so it reads about 1.5% more leniently than an average month (30 days against 30.4) and can sit a letter apart from the month just finished at a cut; not corrected, because a rate per 30 days is what a reader takes "a month" to mean. The window is gated as a month is, lettered only once it lies wholly from `COLLECTION_START` on. Both the window and the 'seen whole' test run to the last feed read (`data_as_of`), not the build clock: a UI deploy on a stale release would otherwise count the unread days as quiet ones. History stays on calendar months: they do not overlap, so they compare and sum, and the cuts were fitted on them.
 
 **The distribution**, notices per 100 km per month: min 0.68 (Carlow May), p10 2.00, p25 2.49, median 3.20, p75 4.33, p90 5.65, max 11.46 (Kerry July). Nationally 3.59, 3.81, 4.78, 3.86, 4.02, 3.73.
 
@@ -344,16 +288,34 @@ Sessions 2 and 3 of [grading-plan.md](grading-plan.md), which holds the review b
 | Meath | 19 | 25 | 7.00 E | 7.77 E | 9.18 F | 5.11 D | 6.16 E | 4.41 D |
 | Kerry | 26 | 26 | 5.80 D | 5.65 D | 11.46 F | 6.35 E | 6.10 E | 5.36 D |
 
-**The cuts: A below 2, B below 3, C below 4, D below 6, E below 8, F at 8 or more** (`SUPPLY_CUTS`; owner, 2026-11-23). A 15, B 49, C 39, D 42, E 8, F 3; the three F are July in Kerry, Waterford and Meath. Against the outage letter 89 county-months keep theirs, 59 drop and 8 rise. The county bar is red when an outage notice stands anywhere in the county, so it still disagrees with a rate, but less: the A and B months red on half their days or more fall from 50 of 92 to 28 of 64. Rejected: even steps, 2 / 3 / 4 / 5 / 6 (D 28, E 14, F 11; 70 months drop), which leaves no room above the record for a winter the archive has not seen. Re-fit as the outage cuts are: yearly, dated, and sooner if a band empties.
+**The cuts: A below 2, B below 3, C below 4, D below 6, E below 8, F at 8 or more** (`SUPPLY_CUTS`, `count_grade`; owner, 2026-11-23). The scale reads in its own unit, "fewer than two supply notices per 100 km of main a month is an A". The letter is cut on the two-decimal figure the payload carries, so a rate that rounds onto a cut takes the letter the page shows. A 15, B 49, C 39, D 42, E 8, F 3; the three F are July in Kerry, Waterford and Meath. Against the outage letter 89 county-months keep theirs, 59 drop and 8 rise. A fixed scale has to leave room above the record for a winter the archive has not seen; the bands above the May-Oct p90 are that room. Rejected: even steps, 2 / 3 / 4 / 5 / 6 (D 28, E 14, F 11; 70 months drop), which leaves none. Archive quantiles were rejected for the outage letter on 2026-10-06 and stay rejected: they fill every band by construction and move published letters every build.
+
+**Re-fit yearly**, first in November 2027 against the release DB, and sooner only if a band holds nothing over a full year of months. The record to beat is the table above. Raising a cut moves published letters, so the re-fit is a dated section here, not a quiet constant change.
+
+**A national rate outside 3 to 5.5 is a prompt to check how notices are being published, not to re-fit** (owner, 2026-11-23). The months so far run 3.59 to 4.78, and the count moves with publishing practice ("Known limits" below): a region that starts announcing a week of works as a notice a day, or stops publishing investigations, shifts every letter with no change in service. So a finished month outside the band is looked at for that first. A hard month is not a reason to touch the cuts: the bands above the record exist for it, and a re-fit then would soften the letters when service is worst. The band's edges are not measured; they are the outage letter's 1.5 to 3 carried over in proportion, which is enough for a check that costs a look.
 
 **Investigations are counted, all of them.** 201 of the 847 have an outage notice within 500 m and 5 days and are probably one incident published twice. Counting only the other 646 changes 7 of 156 letters and moves two counties one place, which does not earn a coordinate heuristic in a published number. Dropping all 847 moves 8 counties, one by 5 places.
 
-**What it costs the payload**, with the outage rate and letter taken back out: `data.js` 205.3 KB to 215.2 KB and the inline first render 19.2 KB to 20.8 KB, against a 512 KB budget.
+**The county bar stays as it is.** It is red when an outage notice stands anywhere in the county, the reading rejected as a metric in July because Cork came out at 2% ([archive/availability-method.md](archive/availability-method.md)), so it still disagrees with a rate: the A and B months red on half their days or more fall from 50 of 92 on the outage letter to 28 of 64. The page says what red means, and the area bar (frontend-notes.md, "The area's day bar") is where a red day is a notice in the reader's own town. Rejected: shading a day by the places hit, because 929 of 3,285 red county-days have one place and 648 two, the objection that closed the notice ramp on 2026-10-06; and grading each day on the letter's own cuts, which cannot contradict the letter but puts 57% of 4,784 day cells within one band of their month's, Dublin reading A on 43 days of 184 and F on 37.
 
-**Known limits**, beside those of the outage count above.
+**Rejected for the letter**, each measured on the same release:
 
+- *Re-cutting the outage count.* 0.75 / 1.5 / 2.25 / 3 / 4 gives A 8, B 50, C 45, D 29, E 18, F 6 and leaves the order alone; 0.5 / 1 / 1.5 / 2.5 / 4 leaves 2 A in 156.
+- *Another county figure.* Outage hours, red days and place-days per 100 km correlate 0.84, 0.78 and 0.92 with the outage count by rank.
+- *A letter on time to "works complete".* County medians on single-pin observed outages run from Wexford 3.6h to Monaghan 24.7h; 68% of Wexford's close inside 6h against 27% of Kildare's. The feed cannot say whether that is repair time or when a region posts its update.
+- *A letter per supply zone.* 224 of 688 zones have 50 km of main or more, holding 88.5% of the main and 82.1% of zoned outage notices; 464 zones would carry none, and the names are not what people call places.
+- *A letter per area.* No length of main exists by area. Outage days track population (0.63 with its log; median 2 days under 500 people, 24 for 15,000 to 50,000), and a rate per head inverts it: Burnfoot 41.2 notices per 1,000 people, Rathfarnham-Templeogue 0.5.
+- *No county letter.* Honest, and it loses the page's one-glance reading.
+
+**What it cost the payload:** `data.js` 205.3 KB to 215.2 KB and the inline first render 19.2 KB to 20.8 KB, against a 512 KB budget.
+
+**Known limits.**
+
+- The count ignores size and length: a village burst and a city trunk main each count one, and so do a three-hour planned window and a three-day burst. The median beside the letter is the only length the site measures, and it covers outages alone.
 - How works are published moves the count. 1,140 of 4,211 planned events have another planned event within 200 m and 14 days (Galway 45%): a week of works published daily is several notices, and the same week announced as one repeating window is one.
-- A three-hour planned window and a three-day burst each count one. The median is the only length the site measures, and it covers outages alone.
+- Zones cross county lines, and a notice is placed by pin while its main is counted by zone authority. Measured on the 2026-10-06 release for Louth, Meath and their neighbours, May to September cases: 69 of Meath's 592 pins (11.7%) fall in Louth's "South Louth & East Meath" zone (693 km) and 4 in Fingal Zone 1; 0 of Louth's 298 fall in a Meath zone. So Meath reads high and Louth low, by at most that twelfth.
+- A county of 585 km (Carlow) moves 0.17 per notice, so one notice is a sixth of the narrowest band; Dublin's 6,170 km moves 0.016. The coarseness is in the small counties, where it is also the honest resolution of the data.
+- The feed's `county` is the notice's claim, not the pin's; "Known limitation: pins outside the county they claim" above applies here as to everything placed by county.
 - The 25 pins with an unmatched title are works by default and count.
 
 ## The estimate is removed (2026-10-06)
@@ -409,7 +371,7 @@ Overlapping villages, identical window, near-identical wording, opposite treatme
 
 `classify` now takes `recurring` and downgrades an outage to `degraded` when the *event* announced a window repeating over a date range. It downgrades an outage and nothing else: a nightly leak-detection round is still maintenance. Recurrence is read at event level, not per notice, because the pin carrying the completion update reports no window and would otherwise sit as a lone outage inside a restriction event, whose interval the per-reference union then charges in full.
 
-The reasoning: a scheduled, repeating, announced overnight window is demand management rather than a failure, and that is true whichever title carries it. The conservative side is also the one already published — restrictions have never counted here.
+The reasoning: a scheduled, repeating, announced overnight window is demand management rather than a failure, and that is true whichever title carries it. The conservative side is also the one already published — restrictions have never counted here. (Since 2026-11-23 a restriction counts once towards the letter, as any supply notice does; it still feeds no median, which is the line this rule draws.)
 
 Measured on the 2026-08-02 corpus: only two July events move class, and no county's letter changed.
 
