@@ -37,9 +37,9 @@ Started 2026-09-05, from the follow-ups the nine PRs of the missing-features sur
    the browser counts them. Reserving the list's room is a layout decision, not a flag.
 
 5. **The letter counts every supply notice, and areas get a day bar** (owner, 2026-11-23).
-   Four sessions in [grading-plan.md](grading-plan.md); the area bars and the count are
-   built, and the page still letters on the outage count until session 3 re-words it. Do
-   not re-fit the October cuts in the meantime: the count they are cut on is being replaced.
+   Four sessions in [grading-plan.md](grading-plan.md); sessions 1 to 3 are built and
+   the page letters on supply notices. Left: session 4, the notes audit, which archives the
+   October outage letter's cuts and distribution and the superseded frontend entry.
 
 ## Waiting on a check by hand
 

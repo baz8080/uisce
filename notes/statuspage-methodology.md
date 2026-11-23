@@ -1,12 +1,12 @@
 # Status site methodology
 
-**Simply put:** the site counts notices, not people. A county's letter for a month is how many outage notices were published per 100 km of its water main. The time beside it runs from a notice going up to its own "works complete" update. A notice is listed under the town nearest its map pin. Everything else in this note is why those three choices were made, and what lost to them.
+**Simply put:** the site counts notices, not people. A county's letter for a month is how many supply notices were published per 100 km of its water main: outages, restrictions and works, planned ones included. The time beside it runs from an outage notice going up to its own "works complete" update. A notice is listed under the town nearest its map pin. Everything else in this note is why those three choices were made, and what lost to them.
 
 How `uisce-site` (src/uisce/site.py) turns `out/uisce.db` into the statuspage-style site in `out/site/`, and why each modelling decision was made. Companion notes: [data-quality.md](data-quality.md) for what the underlying fields can and cannot support, [water-sla-benchmarks.md](water-sla-benchmarks.md) for how the figures relate to regulators' measures, and [population-data-sources.md](population-data-sources.md) for the Census geography. The population-weighted availability method the site used until 2026-10-06 is in [archive/availability-method.md](archive/availability-method.md).
 
 ## Severity classes
 
-**Simply put:** each notice is sorted into one of four kinds: outage, restriction ("degraded"), quality, or works. The title decides, except that the feed's own restriction and low-pressure flags can make a notice a restriction. Only outages are counted; the rest are shown.
+**Simply put:** each notice is sorted into one of four kinds: outage, restriction ("degraded"), quality, or works. The title decides, except that the feed's own restriction and low-pressure flags can make a notice a restriction. The letter counts every kind but quality; the median counts outages alone.
 
 Each case maps to one class from `work_category` plus the impact flags, tested in that order:
 
@@ -17,7 +17,7 @@ Each case maps to one class from `work_category` plus the impact flags, tested i
 5. mains_repair / valve_repair / pump_repair / NULL category, when not marked Planned → **outage** (emergency repairs normally shut off supply)
 6. everything else — investigations, leak detection, hydrant works, installations, and anything Planned → **works**
 
-Only the **outage** class is counted in the letter and the median. This is deliberate: an F should mean supply was lost, not that a county ran many investigations. No feed flag can do this job: `water_outage` is set on 97% of all cases, and the two health flags carry nothing the category does not (2026-08-18).
+Only the **outage** class is counted in the median and the ten longest. Until 2026-11-23 the letter counted it alone too, on the reasoning that an F should mean supply was lost, not that a county ran many investigations; it now counts every class but quality ("Every supply notice per 100 km of main"). No feed flag can do this job: `water_outage` is set on 97% of all cases, and the two health flags carry nothing the category does not (2026-08-18).
 
 Interval inputs come from `inferred_cases.notice_to_end_seconds`, capped at 14 days. The genuinely long events (40–87-day conservation restrictions) are classed degraded and never count, so the cap is a backstop, not the outlier strategy - see the outliers section of [data-quality.md](data-quality.md).
 
@@ -189,9 +189,9 @@ With every Small Area belonging to a named area, a pin only fails to place when 
 
 ## Grades
 
-**Simply put:** a county's letter for a month is the number of outage notices published per 100 km of its water main: fewer than one is an A, five or more an F. The cuts are fixed whole numbers, so a B means the same thing every month.
+**Simply put:** a county's letter for a month is the number of supply notices published per 100 km of its water main: fewer than two is an A, eight or more an F. The cuts are fixed whole numbers, so a B means the same thing every month.
 
-The letter is cut on the count metric below ("Outage notices per 100 km of main"): **A below 1, B below 2, C below 3, D below 4, E below 5, F at 5 or more**, and nothing else. Until 2026-10-06 it was cut on population-weighted availability; that scale, its E band and the sensitivity checks that retired it are in [archive/availability-method.md](archive/availability-method.md).
+The letter is cut on the count below ("Every supply notice per 100 km of main"): **A below 2, B below 3, C below 4, D below 6, E below 8, F at 8 or more**, and nothing else. From 2026-10-06 to 2026-11-23 it was cut on outage notices alone, at 1 to 5 ("Outage notices per 100 km of main"). Until 2026-10-06 it was cut on population-weighted availability; that scale, its E band and the sensitivity checks that retired it are in [archive/availability-method.md](archive/availability-method.md).
 
 ### The health notice is a marker beside the grade, not inside it (2026-08-02)
 
@@ -242,6 +242,8 @@ Session 7 of [simplification-plan.md](archive/simplification-plan.md). All figur
 **Paths and directory.** The path is the zone's name through `statusui.slug`, unique over all 688 (asserted in `tests/test_zone_pages.py`); a trailing space in the layer's names is stripped. A zone renamed on a re-fetch moves its URL, and the fetch prints boundary changes, not renames. Rejected: the zone code, which is stable but not a name anyone searches for. `zones.html` groups the zones under the county of the council that runs them, so a Louth zone serving Meath sits under Louth. The pages carry no `data.js`; nothing about a zone enters the payload. 688 pages, 13.9 MB, median 17.7 KB, largest 90 KB (SD Zone2).
 
 ## Outage notices per 100 km of main (2026-10-06)
+
+**Superseded for the letter, 2026-11-23:** the letter now counts every supply notice (the section after this one), and `per_100km`, `count_grade` and `COUNT_CUTS` are gone from the payload and the code. What still holds here: the outage numerator, which `outage_notices` carries for the median and the ten longest; the gate on a month seen whole; the last-30-days window; and the known limits. The cuts and the distribution below are the retired letter's, kept until the notes audit archives them.
 
 **Simply put:** each county-month carries how many outage notices were published per 100 km of the county's water main, and a letter cut on that count. The median time to "works complete" sits beside it, unchanged.
 
@@ -303,9 +305,9 @@ Nationally May 1.87, June 2.03, July 2.69, August 2.11, September 2.21.
 
 ## Every supply notice per 100 km of main (2026-11-23)
 
-**Simply put:** the payload now also counts every notice that warns of a supply disruption, planned works included, per 100 km of main, with a letter cut on that count. The page still shows the outage count and its letter above until its wording changes (session 3 of [grading-plan.md](grading-plan.md)); this is the figure it moves to.
+**Simply put:** the letter counts every notice that warns of a supply disruption, planned works included, per 100 km of main. It went into the payload beside the outage letter first, and the page moved to it the same day.
 
-Session 2 of [grading-plan.md](grading-plan.md), which holds the review behind it and the alternatives that lost. All figures are release 2026-11-22-2154, built with the clock at the data horizon, over May to October (156 county-months).
+Sessions 2 and 3 of [grading-plan.md](grading-plan.md), which holds the review behind it and the alternatives that lost. All figures are release 2026-11-22-2154, built with the clock at the data horizon, over May to October (156 county-months).
 
 **Why.** The outage count sees 6,976 of the 12,783 events in those months that are not quality notices. The other 5,807 are 620 restrictions and 5,187 works, and the text of 5,800 of them names a supply disruption: every planned category says "may cause supply disruptions", and 847 of the works are "we are investigating reports of supply disruptions". A planned repair counts against a county (owner, 2026-11-23): overdue maintenance is part of what the letter should show. CRU and Ofwat count planned and unplanned interruptions together ([water-sla-benchmarks.md](water-sla-benchmarks.md)).
 
@@ -346,7 +348,7 @@ Session 2 of [grading-plan.md](grading-plan.md), which holds the review behind i
 
 **Investigations are counted, all of them.** 201 of the 847 have an outage notice within 500 m and 5 days and are probably one incident published twice. Counting only the other 646 changes 7 of 156 letters and moves two counties one place, which does not earn a coordinate heuristic in a published number. Dropping all 847 moves 8 counties, one by 5 places.
 
-**What it costs the payload** while both counts ship: `data.js` 205.3 KB to 225.1 KB and the inline first render 19.2 KB to 23.2 KB, against a 512 KB budget. Session 3 takes the outage rate and letter back out.
+**What it costs the payload**, with the outage rate and letter taken back out: `data.js` 205.3 KB to 215.2 KB and the inline first render 19.2 KB to 20.8 KB, against a 512 KB budget.
 
 **Known limits**, beside those of the outage count above.
 

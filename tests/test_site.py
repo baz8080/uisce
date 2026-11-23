@@ -30,7 +30,6 @@ from uisce.site import (
     classify,
     closed_on,
     collect_lifts,
-    count_figures,
     count_grade,
     county_events,
     county_slug,
@@ -52,6 +51,7 @@ from uisce.site import (
     recurrence_report,
     recurring_events,
     resolve_case,
+    supply_figures,
     write_site,
 )
 from uisce.wsz import county_mains_km, read_zones
@@ -263,14 +263,14 @@ class TestBoilNoticeFate:
 
 class TestCountGrade:
     def test_the_bands_meet_where_they_say_they_do(self):
-        for cut, above, below in ((1, "A", "B"), (2, "B", "C"), (3, "C", "D"), (4, "D", "E"),
-                                  (5, "E", "F")):
+        for cut, above, below in ((2, "A", "B"), (3, "B", "C"), (4, "C", "D"), (6, "D", "E"),
+                                  (8, "E", "F")):
             assert count_grade(cut - 0.001) == above
             assert count_grade(cut) == below
 
     def test_more_notices_is_a_worse_letter(self):
         assert count_grade(0) == "A"
-        assert count_grade(7.2) == "F"
+        assert count_grade(11.46) == "F"
 
 
 class TestIntervals:
@@ -1219,10 +1219,9 @@ class TestSupplyNotices:
         july = self._site()["counties"]["Kerry"]["months"]["2026-07"]
         assert (july["supply_notices"], july["planned"]) == (312, 22)
 
-    def test_the_outage_count_beside_it_is_untouched(self):
+    def test_the_outage_count_sits_beside_it(self):
         july = self._site()["counties"]["Kerry"]["months"]["2026-07"]
         assert july["outage_notices"] == 312 - 22
-        assert july["count_grade"] == count_grade(july["per_100km"])
 
     def test_every_class_but_quality_counts(self):
         extra = [
@@ -1253,8 +1252,8 @@ class TestSupplyNotices:
     def test_the_cuts_are_two_three_four_six_and_eight(self):
         assert SUPPLY_CUTS == (2.0, 3.0, 4.0, 6.0, 8.0)
         for above, below, cut in zip("ABCDE", "BCDEF", SUPPLY_CUTS):
-            assert count_grade(cut - 0.01, SUPPLY_CUTS) == above
-            assert count_grade(cut, SUPPLY_CUTS) == below
+            assert count_grade(cut - 0.01) == above
+            assert count_grade(cut) == below
 
     def test_a_month_seen_only_in_part_carries_its_count_and_no_letter(self):
         site = self._site()
@@ -1265,7 +1264,7 @@ class TestSupplyNotices:
     def test_the_last_30_days_and_the_nation_carry_it_and_the_nation_no_letter(self):
         site = self._site()
         last_30 = site["counties"]["Kerry"]["last_30"]
-        assert last_30["supply_grade"] == count_grade(last_30["supply_per_100km"], SUPPLY_CUTS)
+        assert last_30["supply_grade"] == count_grade(last_30["supply_per_100km"])
         assert site["last_30"]["supply_notices"] == sum(
             c["last_30"]["supply_notices"] for c in site["counties"].values())
         assert site["national"]["2026-07"]["supply_notices"] == 312 + 8
@@ -1274,13 +1273,14 @@ class TestSupplyNotices:
 
 
 def _per_100km(site, county):
-    return [site["counties"][county]["months"][f"2026-{m:02d}"]["per_100km"] for m in range(5, 10)]
+    return _supply(site, county, "supply_per_100km")
 
 
 class TestNoticesPer100km:
-    """The count the methodology note measured on release 2026-10-06-2104: 648
-    Kerry and 26 Carlow outage notices over May to September, 23.8 and 4.4 per
-    100 km of main. The rows here are that many notices, one event each."""
+    """The gate, the window and the outage count beside the letter's. The rows
+    are release 2026-10-06-2104's 648 Kerry and 26 Carlow outage notices over
+    May to September, one event each; an outage notice is a supply notice, so
+    the two counts agree here and TestSupplyNotices tells them apart."""
 
     KERRY = (99, 100, 196, 130, 123)
     CARLOW = (1, 4, 3, 7, 11)
@@ -1295,13 +1295,13 @@ class TestNoticesPer100km:
         assert round(sum(_per_100km(site, "Kerry")), 1) == 23.8
         assert round(sum(_per_100km(site, "Carlow")), 1) == 4.4
         assert site["counties"]["Kerry"]["mains_km"] == 2723
-        assert site["national"]["2026-07"]["outage_notices"] == 196 + 3
+        assert site["national"]["2026-07"]["supply_notices"] == 196 + 3
 
     def test_a_month_counts_what_was_published_in_it(self):
         kerry = self._site()["counties"]["Kerry"]["months"]["2026-07"]
         assert kerry["outage_notices"] == 196
-        assert kerry["per_100km"] == round(100 * 196 / MAINS_KM["Kerry"], 2)
-        assert kerry["count_grade"] == count_grade(kerry["per_100km"]) == "F"
+        assert kerry["supply_per_100km"] == round(100 * 196 / MAINS_KM["Kerry"], 2)
+        assert kerry["supply_grade"] == count_grade(kerry["supply_per_100km"]) == "E"
 
     def test_an_event_counts_once_and_in_the_month_of_its_earliest_pin(self):
         twin = _case(county="Kerry", reference_num="KER00000001",
@@ -1342,13 +1342,13 @@ class TestNoticesPer100km:
         fresh = _case(county="Kerry", reference_num="KER00000900",
                       start_date="2026-10-01T09:00:00+00:00", end_local_date="2026-10-01")
         month = self._site([fresh])["counties"]["Kerry"]["months"]["2026-10"]
-        figures = (month["outage_notices"], month["per_100km"], month["count_grade"])
+        figures = (month["supply_notices"], month["supply_per_100km"], month["supply_grade"])
         assert figures == (1, None, None)
 
     def test_a_month_seen_only_in_part_gets_no_letter(self):
         april = self._site()["counties"]["Carlow"]["months"]["2026-04"]
-        assert (april["per_100km"], april["count_grade"]) == (None, None)
-        assert self._site()["national"]["2026-04"]["per_100km"] is None
+        assert (april["supply_per_100km"], april["supply_grade"]) == (None, None)
+        assert self._site()["national"]["2026-04"]["supply_per_100km"] is None
 
     def test_the_last_30_days_span_the_month_boundary(self):
         # OCTOBER is the 6th: the window opens on 6 September
@@ -1358,25 +1358,25 @@ class TestNoticesPer100km:
                        start_date="2026-09-07T09:00:00+00:00", end_local_date="2026-09-07")
         today = _case(county="Carlow", reference_num="CAR00000903",
                       start_date="2026-10-02T09:00:00+00:00", end_local_date="2026-10-02")
-        base = self._site()["counties"]["Carlow"]["last_30"]["outage_notices"]
+        base = self._site()["counties"]["Carlow"]["last_30"]["supply_notices"]
         site = self._site([before, inside, today])
         last_30 = site["counties"]["Carlow"]["last_30"]
-        assert last_30["outage_notices"] == base + 2
+        assert last_30["supply_notices"] == base + 2
         km = MAINS_KM["Carlow"]
-        assert last_30["per_100km"] == round(100 * last_30["outage_notices"] / km, 2)
-        assert last_30["count_grade"] == count_grade(last_30["per_100km"])
-        assert site["last_30"]["outage_notices"] == sum(
-            c["last_30"]["outage_notices"] for c in site["counties"].values())
-        assert "count_grade" not in site["last_30"]
+        assert last_30["supply_per_100km"] == round(100 * last_30["supply_notices"] / km, 2)
+        assert last_30["supply_grade"] == count_grade(last_30["supply_per_100km"])
+        assert site["last_30"]["supply_notices"] == sum(
+            c["last_30"]["supply_notices"] for c in site["counties"].values())
+        assert "supply_grade" not in site["last_30"]
 
-    def test_one_notice_on_the_first_of_the_month_is_not_an_f(self):
+    def test_one_notice_on_the_first_of_the_month_does_not_set_the_letter(self):
         first = datetime(2026, 11, 1, 6, tzinfo=timezone.utc)
         fresh = _case(county="Carlow", reference_num="CAR00000904",
                       start_date="2026-11-01T02:00:00+00:00", end_local_date="2026-11-01")
         rows = _notices("Carlow", "CAR", self.CARLOW) + [dict(fresh, id=999)]
         carlow = build_site(rows, first, TOWNS)["counties"]["Carlow"]
-        assert carlow["months"]["2026-11"]["count_grade"] is None
-        assert carlow["last_30"]["count_grade"] == "A"
+        assert carlow["months"]["2026-11"]["supply_grade"] is None
+        assert carlow["last_30"]["supply_grade"] == "A"
 
     def test_a_window_seen_only_in_part_gets_no_letter(self):
         # the fixture's one May notice is in both windows; the one before
@@ -1388,41 +1388,42 @@ class TestNoticesPer100km:
                               (COLLECTION_START + timedelta(days=30), True)):
             site = build_site(rows, now, TOWNS)
             last_30 = site["counties"]["Carlow"]["last_30"]
-            assert last_30["outage_notices"] == 1
-            assert (last_30["count_grade"] is not None) is lettered
-            assert (site["last_30"]["per_100km"] is not None) is lettered
+            assert last_30["supply_notices"] == 1
+            assert (last_30["supply_grade"] is not None) is lettered
+            assert (site["last_30"]["supply_per_100km"] is not None) is lettered
 
     def test_a_month_is_lettered_from_the_instant_it_ends(self):
         rows = _notices("Carlow", "CAR", self.CARLOW)
         end = datetime(2026, 9, 30, 23, tzinfo=timezone.utc)  # Dublin midnight
         for now, lettered in ((end - timedelta(seconds=1), False), (end, True)):
             sep = build_site(rows, now, TOWNS)["counties"]["Carlow"]["months"]["2026-09"]
-            assert (sep["count_grade"] is not None) is lettered
+            assert (sep["supply_grade"] is not None) is lettered
 
     def test_a_stale_release_counts_only_to_its_last_read(self):
         rows = _notices("Carlow", "CAR", self.CARLOW)
         last_read = datetime(2026, 9, 29, 7, tzinfo=timezone.utc)
         stale = build_site(rows, OCTOBER, TOWNS, data_as_of=last_read)
         fresh = build_site(rows, last_read, TOWNS)
-        assert stale["counties"]["Carlow"]["months"]["2026-09"]["count_grade"] is None
+        assert stale["counties"]["Carlow"]["months"]["2026-09"]["supply_grade"] is None
         assert stale["counties"]["Carlow"]["last_30"] == fresh["counties"]["Carlow"]["last_30"]
         assert stale["last_30"] == fresh["last_30"]
 
     def test_a_rate_rounding_onto_a_cut_takes_the_letter_it_shows(self):
         rows = _notices("Carlow", "CAR", self.CARLOW)
-        mains = dict(MAINS_KM, Carlow=100 / 4.996)
+        mains = dict(MAINS_KM, Carlow=100 / 1.996)
         may = build_site(rows, OCTOBER, TOWNS, mains_km=mains)["counties"]["Carlow"]
-        assert (may["months"]["2026-05"]["per_100km"], may["months"]["2026-05"]["count_grade"]) == (
-            5.0, "F")
+        month = may["months"]["2026-05"]
+        assert (month["supply_per_100km"], month["supply_grade"]) == (2.0, "B")
 
     def test_a_quiet_month_is_an_a(self):
-        assert count_figures(0, MAINS_KM["Carlow"], whole=True) == {
-            "outage_notices": 0, "per_100km": 0.0, "count_grade": "A"}
+        lo, hi = month_bounds("2026-05")
+        assert supply_figures([], MAINS_KM["Carlow"], lo, hi, hi) == {
+            "supply_notices": 0, "planned": 0, "supply_per_100km": 0.0, "supply_grade": "A"}
 
     def test_the_national_rate_is_over_every_county_main(self):
         national = self._site()["national"]["2026-05"]
-        assert national["outage_notices"] == 100
-        assert national["per_100km"] == round(100 * 100 / sum(MAINS_KM.values()), 2)
+        assert national["supply_notices"] == 100
+        assert national["supply_per_100km"] == round(100 * 100 / sum(MAINS_KM.values()), 2)
 
 
 class TestClearDays:
@@ -2492,7 +2493,8 @@ def _bare_site(county="Kildare"):
             county: {
                 "pop": COUNTY_POP[county],
                 "mains_km": round(MAINS_KM[county]),
-                "last_30": count_figures(0, MAINS_KM[county], whole=True),
+                "last_30": {"supply_notices": 0, "planned": 0, "supply_per_100km": 0.0,
+                            "supply_grade": "A"},
                 "months": {},
                 "open": [],
                 "open_total": 0,
@@ -2765,7 +2767,7 @@ class TestFeeds:
         assert e.find("a:link", ns).get("href") == f"{BASE_URL}/a/carlow/testtown.html"
         assert e.find("a:id", ns).text == f"{BASE_URL}/n/carlow/CAR00000001"
         summary = e.find("a:summary", ns).text
-        assert "Supply disruption · Co. Carlow · Testtown · published 2026-05-01" in summary
+        assert "Outage · Co. Carlow · Testtown · published 2026-05-01" in summary
 
     def test_the_sighting_orders_the_feed_and_publication_stands_in_for_it(self, tmp_path):
         rows = [
@@ -2903,7 +2905,8 @@ class TestIndexablePages:
             notice_to_end_seconds=3600.0, end_local_time="01:00",
         )])
         page = (tmp_path / "c" / "dublin.html").read_text()
-        assert "Over the last 30 days: 1 outage notice, too soon for a rate." in page
+        assert ("Over the last 30 days: 1 supply notice, 0 of them planned, "
+                "too soon for a rate.") in page
         assert "None" not in page
         assert "km of water main, from Uisce Éireann's supply zones" in page
         assert "availability" not in page.lower() and "person-hours" not in page.lower()
@@ -2913,7 +2916,8 @@ class TestIndexablePages:
                                  start_date="2026-06-01T00:00:00+00:00")], AFTER_MAY, TOWNS)
         write_site(site, tmp_path, TOWNS)
         page = (tmp_path / "c" / "dublin.html").read_text()
-        assert "Over the last 30 days: grade <strong>A</strong>, 1 outage notice, 0.02 per" in page
+        assert ("Over the last 30 days: grade <strong>A</strong>, 1 supply notice, "
+                "0 of them planned, 0.02 per") in page
 
     def test_an_empty_county_page_still_renders_and_says_so(self, tmp_path):
         """A county with no notice is a page a search result can still land on,
@@ -3097,15 +3101,13 @@ class TestPayloadShape:
             "days", "clear_days", "days_elapsed", "events",
             "health_n", "median_completion_h", "completed_n", "median_scheduled_h",
             "scheduled_n", "no_end_n", "health_now",
-            "outage_notices", "per_100km", "count_grade",
-            "supply_notices", "planned", "supply_per_100km", "supply_grade",
+            "outage_notices", "supply_notices", "planned", "supply_per_100km", "supply_grade",
         }
 
     def test_the_national_month_keys_are_unchanged(self):
         assert set(self._site()["national"]["2026-05"]) == {
             "median_completion_h", "completed_n", "median_scheduled_h", "scheduled_n",
-            "no_end_n", "outage_notices", "per_100km",
-            "supply_notices", "planned", "supply_per_100km",
+            "no_end_n", "supply_notices", "planned", "supply_per_100km",
         }
 
     def test_the_top_row_keys_are_unchanged(self):
@@ -3386,11 +3388,22 @@ class TestThePagesSayTheCount:
                 assert word not in text, (page.name, word)
 
     def test_the_newest_month_reads_the_last_30_days_and_no_other_does(self):
-        assert "m.per_100km == null && isLatest()" in _app_fn("onLast30")
+        assert "m.supply_per_100km == null && isLatest()" in _app_fn("onLast30")
         assert "onLast30(m) ? c.last_30 : m" in _app_fn("figures")
         for view in ("renderOverview", "renderCounty"):
             assert "figures(c, " in _app_fn(view)
-            assert "m.count_grade" not in _app_fn(view)
+            assert "m.supply_grade" not in _app_fn(view)
+
+    def test_the_letter_is_said_to_count_supply_notices(self, tmp_path):
+        assert "graded on supply notices" in _app_fn("basisNote")
+        assert "Supply notices published per 100&nbsp;km" in APP
+        for view in ("renderOverview", "renderCounty"):
+            assert "f.supply_grade" in _app_fn(view) and "f.supply_per_100km" in _app_fn(view)
+            assert "outage notices per 100" not in _app_fn(view)
+        write_site(build_site([_case()], AFTER_MAY, TOWNS), tmp_path, TOWNS)
+        county = (tmp_path / "c" / "carlow.html").read_text()
+        assert "Supply notices per 100 km" in county
+        assert "outage notices published per 100" not in county.lower()
 
     def test_the_top_ten_ranks_on_hours_and_prints_no_headcount(self):
         top = _app_fn("renderTop")

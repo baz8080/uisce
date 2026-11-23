@@ -15,7 +15,7 @@ from test_site import APP, NOW, TOWNS
 from test_zone_pages import _write_zoned
 
 from uisce import build, pipeline, site
-from uisce.site import COUNT_CUTS, classify, count_grade, knocks_grade, resolve_case
+from uisce.site import SUPPLY_CUTS, classify, count_grade, knocks_grade, resolve_case
 
 
 class TestFirstInferenceStartIsPinned:
@@ -111,14 +111,14 @@ def test_the_printed_grade_legend_matches_count_grade():
         legend.group(1),
     )
     assert [letter for letter, *_ in items] == list("ABCDEF")
-    for (letter, fewer, cut, more), bound in zip(items, COUNT_CUTS):
+    for (letter, fewer, cut, more), bound in zip(items, SUPPLY_CUTS):
         assert (fewer, more) == ("fewer than", "")
         assert float(cut) == bound
         assert count_grade(bound - 0.01) == letter
         assert count_grade(bound) != letter
     letter, fewer, cut, more = items[-1]
     assert (letter, fewer, more) == ("F", "", " or more")
-    assert float(cut) == COUNT_CUTS[-1] and count_grade(float(cut)) == "F"
+    assert float(cut) == SUPPLY_CUTS[-1] and count_grade(float(cut)) == "F"
 
 
 class TestInitialBudgetWarnsNeverFails:

@@ -894,3 +894,35 @@ Figures are release 2026-11-22-2154.
   it and draw none.
 - **Left as it is.** A repeating window colours every day of its span, as it matches every
   day in the county's day list ("A day in the county bar lists its notices").
+
+## The page counts every supply notice - 2026-11-23
+
+**Simply put:** the letter on every page now counts all the notices that warn of a supply
+disruption, planned works included, and the page says "supply notices" for that count and
+"outage notices" only for the bursts and unplanned repairs the typical time is taken over.
+
+Session 3 of [grading-plan.md](grading-plan.md); the count and its cuts are in
+statuspage-methodology.md, "Every supply notice per 100 km of main". Release 2026-11-22-2154.
+
+- **One name per thing.** "Supply notices" is what the letter counts; "outage notices" is the
+  narrower kind the median and the ten longest read. The red class is "Outage" in the legend,
+  the pills, the bar captions and the Atom summaries, where it read "Supply disruption": with
+  every counted notice warning of a supply disruption, that name no longer told the classes
+  apart. The blue class is "Works", where it read "Works (planned / non-disruptive)": each of
+  those notices says supply may be disrupted.
+- **Where the count shows.** The banner gives the month's supply notices and how many were
+  planned; a county row gives its count and rate; the county view gains a tile splitting
+  unplanned from planned, in place of the "planned works" tile, which counted the works class
+  standing in the month and so included investigations. The outage tile stays, because it
+  decomposes what the median rests on. The county page's month table reads Grade, Per 100 km,
+  Supply notices, Planned, Outages, Quality.
+- **The county bar keeps its meaning**, and the line above the list now says what red is: an
+  outage notice stood anywhere in the county. Why nothing replaced it is in the plan.
+- **The payload** drops `per_100km`, `count_grade` and the national and last-30 `outage_notices`;
+  `outage_notices` stays on a county-month. `data.js` is 215.2 KB and the first render 20.8 KB.
+- **What a reader sees move.** Of 156 county-months from May to October, 59 drop a letter, 8
+  rise and 89 keep theirs; over the 30 days to 2026-11-22 Kildare reads B on 2.86 where it
+  read A on 0.48, and Dublin D where it read B. The "Changes to how this site measures" list
+  carries the entry, and its 6 October entry is put in the past tense.
+- The 2026-10-06 entry above, "The page counts notices", describes the outage letter this
+  replaces; the notes audit archives it.

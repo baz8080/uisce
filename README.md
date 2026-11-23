@@ -1,12 +1,12 @@
 # uisce
 
-**Simply put:** this project collects every water-supply notice Uisce Éireann publishes, keeps the ones the feed later drops, reads each notice for when the works ended, and builds a website that grades each county, month by month, on how many outage notices it had per 100 km of water main and how long the works typically took.
+**Simply put:** this project collects every water-supply notice Uisce Éireann publishes, keeps the ones the feed later drops, reads each notice for when the works ended, and builds a website that grades each county, month by month, on how many supply notices it had per 100 km of water main and how long an outage typically took to fix.
 
 Download, transform, and geocode [Uisce Éireann](https://www.water.ie/) (Irish Water) supply and works notices, and read each notice's end time from its text with rules and a local LLM. The result is a single SQLite database, rebuilt by CI twice a day and published as a GitHub release, plus a statuspage-style static site with an A-F letter per county per month.
 
 The [website that this repo generates](https://baz8080.github.io/uisce/) is rebuilt from the latest published DB after every data build and on every push to `main`, so a UI change is live in about a minute without waiting for the next data build.
 
-**What the figures mean.** This project does not measure outage duration and cannot: the feed never records when supply was actually lost. What it measures is the span from **when a notice was published** to **the end that notice reports** (`notice_to_end_seconds`), and the site publishes the subset where that end is an observed "works are now complete" update rather than a schedule. That published median is a floor on true length. The letters count outage notices per 100 km of water main; a notice that never reports an end (about one in twenty) still counts as a notice and has no length. See [notes/data-quality.md](notes/data-quality.md) and [notes/statuspage-methodology.md](notes/statuspage-methodology.md).
+**What the figures mean.** This project does not measure outage duration and cannot: the feed never records when supply was actually lost. What it measures is the span from **when a notice was published** to **the end that notice reports** (`notice_to_end_seconds`), and the site publishes the subset where that end is an observed "works are now complete" update rather than a schedule. That published median is a floor on true length. The letters count supply notices per 100 km of water main, planned works included; a notice that never reports an end (about one in twenty) still counts as a notice and has no length. See [notes/data-quality.md](notes/data-quality.md) and [notes/statuspage-methodology.md](notes/statuspage-methodology.md).
 
 ## Just want the data?
 
@@ -73,7 +73,7 @@ Two options for working without the paid geocoding step:
 uv run uisce-site
 ```
 
-Reads `out/uisce.db` and writes a fully static site to `out/site/` (serve it with any file server, e.g. `python -m http.server -d out/site`, or just open `index.html`; it needs no server). Per county and month it shows day-by-day status bars, the outage notices published per 100 km of water main with an A-F letter cut on that count, and the typical time from notice to "works complete". Only hard supply outages (bursts, plant/reservoir/pump interruptions, unplanned repairs) are counted; restrictions, discolouration and non-disruptive works are shown but never counted. `#top` lists the ten longest outages of each finished month.
+Reads `out/uisce.db` and writes a fully static site to `out/site/` (serve it with any file server, e.g. `python -m http.server -d out/site`, or just open `index.html`; it needs no server). Per county and month it shows day-by-day status bars, the supply notices published per 100 km of water main with an A-F letter cut on that count, and the typical time from an outage notice to "works complete". Every notice that warns of a supply disruption counts towards the letter, planned works and restrictions included; only hard supply outages (bursts, plant/reservoir/pump interruptions, unplanned repairs) feed the typical time, and discolouration and drinking-water notices are shown but never counted. `#top` lists the ten longest outages of each finished month.
 
 Clicking a county drills into it (`#county/Kildare`): the notice counts per **named area**, plus the cases open right now grouped by area and the cases observed to close that month. There are no letter grades at that level: a letter needs a length of main, which Uisce Éireann publishes by supply zone, not by town.
 

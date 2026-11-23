@@ -22,7 +22,7 @@ Sources: [framework publications](https://www.cru.ie/document_group/irish-water-
 
 ## Why these numbers can't be this project's thresholds
 
-Regulators count *measured* minutes without water at the customer's tap, generally only for ≥3-hour events. This project sees only published notices, with publication-time start floors and "customers may experience disruptions" wording on every one, so it does not measure minutes lost at all. Until 2026-10-06 it published an availability estimate ([archive/availability-method.md](archive/availability-method.md)) that sat two to three orders of magnitude from a regulator's figure by construction; it now counts outage notices per 100 km of main, with cuts fixed on this site's own record, and a median time from notice to "works complete". Neither borrows a regulator's number, and the page says so.
+Regulators count *measured* minutes without water at the customer's tap, generally only for ≥3-hour events. This project sees only published notices, with publication-time start floors and "customers may experience disruptions" wording on every one, so it does not measure minutes lost at all. Until 2026-10-06 it published an availability estimate ([archive/availability-method.md](archive/availability-method.md)) that sat two to three orders of magnitude from a regulator's figure by construction; it now counts supply notices per 100 km of main, planned works included as the regulators include them, with cuts fixed on this site's own record, and a median time from notice to "works complete". Neither borrows a regulator's number, and the page says so.
 
 ## Related metrics worth adopting later
 
