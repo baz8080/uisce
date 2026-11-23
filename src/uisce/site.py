@@ -565,6 +565,14 @@ def event_area(pins):
     return min(placed, key=lambda pin: (-n[pin[2]], pin[0], pin[1]))[2]
 
 
+def counted_county(feed, pins):
+    """The county an event's supply count goes to, from `pins` [(publication, id,
+    county)], each pin naming the county whose council runs its zone: the county
+    most pins name, the feed's on a tie, else the earliest pin's."""
+    n = Counter(county for _, _, county in pins)
+    return min(pins, key=lambda pin: (-n[pin[2]], pin[2] != feed, pin[0], pin[1]))[2]
+
+
 def span_stats(observed_h, scheduled_h, no_end_n=0):
     """Published notice-to-end figures. `median_completion_h` is the headline and
     covers observed completions only; the scheduled figures are reported
@@ -1822,7 +1830,47 @@ def _county_summary_html(county, cdata, n_areas, n_events, months):
     return "".join(parts)
 
 
-def _county_months_html(cdata, months):
+def _counted_elsewhere_html(county, elsewhere):
+    """Why the month table's supply count is not the count of the notices listed:
+    `elsewhere` is {"out": {county: n}, "in": {county: n}}, or nothing."""
+    out, into = (elsewhere or {}).get("out"), (elsewhere or {}).get("in")
+    if not out and not into:
+        return ""
+
+    def most(counts):
+        name, n = max(counts.items(), key=lambda item: (item[1], item[0]))
+        return html.escape(name), n
+
+    parts = []
+    if out:
+        n, (name, top) = sum(out.values()), most(out)
+        where = (
+            f"Co. {name} and count{'s' if n == 1 else ''} toward its grade"
+            if len(out) == 1
+            else "another county and count toward that county's grade"
+                 + (f", {top} of them Co. {name}'s" if 2 * top > n else "")
+        )
+        parts.append(
+            f"{n} of the supply notices listed on this page {'is' if n == 1 else 'are'} "
+            f"pinned in a supply zone run from {where}"
+        )
+    if into:
+        n, (name, top) = sum(into.values()), most(into)
+        listed = (
+            f"Co. {name}" if len(into) == 1
+            else "other counties" + (f", {top} of them under Co. {name}," if 2 * top > n else "")
+        )
+        parts.append(
+            f"{n} listed under {listed} count{'s' if n == 1 else ''} toward "
+            f"Co. {html.escape(county)}'s"
+        )
+    return (
+        '<p class="sub">The grade counts a notice for the county its supply zone is run '
+        f'from, where the zone\'s length of main is counted: {"; ".join(parts)}.</p>'
+    )
+
+
+def _county_months_html(cdata, months, note=""):
     """One row per month: the same figures the app's county view charts."""
     rows = []
     for ym in reversed(months):
@@ -1846,13 +1894,13 @@ def _county_months_html(cdata, months):
         '<th scope="col" title="Supply notices per 100 km of the county\'s water main; '
         'only for a month the site saw whole">Per 100 km</th>'
         '<th scope="col" title="Every notice warning of a supply disruption that starts this '
-        'month: outages, restrictions and works">Supply notices</th>'
+        'month, in the supply zones the county runs: outages, restrictions and works">'
+        'Supply notices</th>'
         '<th scope="col" title="Supply notices announced as planned works">Planned</th>'
         '<th scope="col" title="Bursts, interruptions, unplanned repairs and reported losses '
-        'under investigation among them">'
-        'Outages</th>'
+        'under investigation listed on this page">Outages</th>'
         '<th scope="col" title="Boil water, do not drink, discolouration">Quality</th>'
-        f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div></section>'
+        f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div>{note}</section>'
     )
 
 
@@ -2062,7 +2110,8 @@ def area_page_html(
 
 
 def county_page_html(
-    county, cdata, areas, events, months, all_counties, today, text=None, built=""
+    county, cdata, areas, events, months, all_counties, today, text=None, built="",
+    elsewhere=None,
 ):
     """The whole body of c/<slug>.html.
 
@@ -2086,7 +2135,7 @@ def county_page_html(
         f'area drill-down.</p></header>'
         f'<nav>{nav}</nav>'
         f'{_county_open_html(cdata, today, text, built)}'
-        f'{_county_months_html(cdata, months)}'
+        f'{_county_months_html(cdata, months, _counted_elsewhere_html(county, elsewhere))}'
         f'{_events_html(events)}'
         f'<section id="areas"><h2>Areas with a notice '
         f'<span>· {len(areas):,} area{"" if len(areas) == 1 else "s"}</span></h2>'
@@ -2376,6 +2425,12 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
     spot_pins = defaultdict(list)  # zone -> ((lat, lon), key, location) of its outage pins
     unzoned = defaultdict(lambda: defaultdict(set))  # county -> area -> keys
     area_zones = defaultdict(set)  # (county, area) -> zone codes its pins fall in
+    if zoned:
+        zone_rows = zone_rows or read_zones()
+        zone_county = {row["code"]: row["county"] for row in zone_rows}
+    # (county, ref) -> (publication, id, county) per pin: the county whose council
+    # runs the pin's zone, which is where its length of main is counted
+    zone_pins = defaultdict(list)
 
     for r in rows:
         key = (r["county"], case_ref(r))
@@ -2433,6 +2488,10 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
         if zoned:
             key = (case.county, case.ref)
             zone = zones.zone(r["full_lat"], r["full_lon"])
+            # a pin in no zone is on main no county's total holds
+            zone_pins[key].append(
+                (case.start, r["id"], zone_county.get(zone, case.county))
+            )
             if zone is None:
                 unzoned[case.county][code].add(key)
             else:
@@ -2472,13 +2531,23 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
 
     # county -> first publication of each event whose worst pin is an outage
     outage_pubs = defaultdict(list)
-    # county -> (first publication, planned) of every event that is not a quality notice
+    # county -> (first publication, planned) of every event that is not a quality
+    # notice, under the county its main is counted in, not the one that lists it
     supply_pubs = defaultdict(list)
-    for (county, _ref), meta in event_meta.items():
+    # county -> where the supply notices it lists are counted, and where the ones
+    # counted for it are listed, when that is another county
+    counted_out = defaultdict(Counter)
+    counted_in = defaultdict(Counter)
+    for (county, ref), meta in event_meta.items():
         if meta["sev"] == "outage":
             outage_pubs[county].append(meta["first_pub"])
         if meta["sev"] != "quality":
-            supply_pubs[county].append((meta["first_pub"], meta["planned"]))
+            pins = zone_pins.get((county, ref))
+            counted = counted_county(county, pins) if pins else county
+            supply_pubs[counted].append((meta["first_pub"], meta["planned"]))
+            if counted != county:
+                counted_out[county][counted] += 1
+                counted_in[counted][county] += 1
     national_pubs = [pub for pubs in supply_pubs.values() for pub in pubs]
     national_km = sum(mains_km.values())
     site["mains_km"] = round(national_km)
@@ -2491,7 +2560,8 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
         national_pubs, national_km, rolling_lo, seen, seen, graded=False
     )
 
-    for county in sorted(counties):
+    # a county can be counted for and list nothing of its own
+    for county in sorted(set(counties) | set(supply_pubs)):
         region = counties[county]
         merged, events = region.merged(), region.events()
         first_pubs = {ref: event_meta[(county, ref)]["first_pub"] for ref in events["outage"]}
@@ -2607,10 +2677,14 @@ def build_site(rows, now, towns=None, data_as_of=None, mains_km=None, zones=None
     if zoned:
         # popped by write_site into the zone pages; never part of the payload
         site["zones"] = zone_data(
-            zone_rows or read_zones(), zone_regions, zone_keys, spot_pins,
+            zone_rows, zone_regions, zone_keys, spot_pins,
             event_meta, event_iv, towns, now, seen,
         )
         site["area_zones"] = dict(area_zones)
+        site["counted_elsewhere"] = {
+            county: {"out": dict(counted_out[county]), "in": dict(counted_in[county])}
+            for county in set(counted_out) | set(counted_in)
+        }
         site["zone_cells"] = zones.cells(ZONE_CELL_DEG)
         site["unzoned"] = {
             county: {code: len(keys) for code, keys in areas.items()}
@@ -2804,6 +2878,7 @@ def write_site(site, site_dir, towns=None):
         for county, cdata in site["counties"].items()
     }
     notice_text = site.pop("notice_text", {})
+    counted_elsewhere = site.pop("counted_elsewhere", {})
     feed = site.pop("feed", {})
     zones = site.pop("zones", {})
     unzoned = site.pop("unzoned", {})
@@ -2948,7 +3023,7 @@ def write_site(site, site_dir, towns=None):
             body = county_page_html(
                 county, site["counties"][county] | county_data[county], areas, events,
                 site["months"], all_counties, built[:10],
-                notice_text.get(county), built,
+                notice_text.get(county), built, counted_elsewhere.get(county),
             )
             page = page_html(
                 COUNTY_HTML,
@@ -3166,6 +3241,8 @@ def run():
     for line in site.pop("recurrence_report"):
         print(line)
     print(zone_report(rows, zones))
+    moved = sum(sum(c["out"].values()) for c in site["counted_elsewhere"].values())
+    print(f"Supply notices counted for another county than the feed names: {moved:,}")
 
     n_counties, n_months = len(site["counties"]), len(site["months"])
     n_towns = sum(len(c["towns"]) for c in site["counties"].values())

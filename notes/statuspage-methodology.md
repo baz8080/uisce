@@ -205,7 +205,7 @@ The layer's 31 local authorities merge to the site's 26 counties: Dublin City, F
 
 Totals sum to 53,756 km, the layer's own figure. Largest: Dublin 6,170, Cork 5,144, Donegal 4,418, Tipperary 3,519, Galway 2,963; smallest: Carlow 585, Monaghan 650, Cavan 653, Waterford 1,017, Wicklow 1,042.
 
-Zones keyed to one authority can serve another county. With attributes alone, the one measurable signal is zone `CENSUSPOPULATION` against the county's census population: only Louth exceeds 100% (153,114 against 139,703, 109.6%, so about 13,400 people served from Louth zones live elsewhere, in practice Meath around Drogheda). Every other county is at or below 97%, the shortfall being group and private schemes. How much Louth's 1,625 km, or any other zone's, belongs over the line is not known without the boundary polygons; the figure is read as the authority's mains, not the county's, and a notice pinned in Meath counts against Meath but its zone's mains count for Louth, so Louth's rate per 100 km is the one most likely to read low and Meath's high.
+Zones keyed to one authority can serve another county. With attributes alone, the one measurable signal is zone `CENSUSPOPULATION` against the county's census population: only Louth exceeds 100% (153,114 against 139,703, 109.6%, so about 13,400 people served from Louth zones live elsewhere, in practice Meath around Drogheda). Every other county is at or below 97%, the shortfall being group and private schemes. How much Louth's 1,625 km, or any other zone's, belongs over the line is not known without the boundary polygons; the figure is read as the authority's mains, not the county's. Until 2026-11-23 a notice pinned in Meath counted against Meath while its zone's mains counted for Louth, so Louth's rate read low and Meath's high; a notice now follows its zone ("A notice counted by its zone's county").
 
 ## Zone lookup (2026-10-07)
 
@@ -247,11 +247,11 @@ Session 7 of [simplification-plan.md](archive/simplification-plan.md). All figur
 
 **Simply put:** a county's letter counts every notice that warns of a supply disruption, planned works included, per 100 km of its water main. The typical time to "works complete" beside it is still taken over outage notices alone.
 
-The review behind it is [archive/grading-plan.md](archive/grading-plan.md); the outage letter it replaced, with its cuts and distribution, is [archive/outage-letter.md](archive/outage-letter.md). All figures are release 2026-11-22-2154, built with the clock at the data horizon, over May to October (156 county-months), unless dated otherwise. `uv run uisce-eval-grading --to 2026-10` re-measures the count, the table, the letters, the investigations, the repeated works and the county bar's disagreement below against whatever release is in `out/uisce.db`, and `--cuts` shows the letters under candidate cuts.
+The review behind it is [archive/grading-plan.md](archive/grading-plan.md); the outage letter it replaced, with its cuts and distribution, is [archive/outage-letter.md](archive/outage-letter.md). All figures are release 2026-11-22-2154, built with the clock at the data horizon, over May to October (156 county-months), unless dated otherwise. `uv run uisce-eval-grading --to 2026-10` re-measures the count, the table, the letters, the investigations, the repeated works and the county bar's disagreement below against whatever release is in `out/uisce.db`, and `--cuts` shows the letters under candidate cuts. The distribution, the table and the letter counts are as counted by zone ("A notice counted by its zone's county" below, 2026-11-23). Every rejected alternative was measured with a notice in the county the feed names, where 18 of the 156 letters differ.
 
 **Why.** From 2026-10-06 the letter counted outage notices alone, which is 6,976 of the 12,783 events in those months that are not quality notices. The other 5,807 are 620 restrictions and 5,187 works, and the text of 5,800 of them names a supply disruption: every planned category says "may cause supply disruptions", and 847 of the works are "we are investigating reports of supply disruptions". A planned repair counts against a county (owner, 2026-11-23): overdue maintenance is part of what the letter should show. CRU and Ofwat count planned and unplanned interruptions together ([water-sla-benchmarks.md](water-sla-benchmarks.md)).
 
-**The numerator.** A supply notice is an event (one `reference_num` in one county, pins grouped as `event_meta` groups them) whose worst pin is an outage, a restriction or works: everything but quality notices, which stay the health marker's, and lifts. The class decides, not a text match, which would be one more thing to drift. It is placed in the county the feed put it in and dated by its earliest pin's start (`first_pub`, the pinned start for a re-stamped case), so a planned notice counts in the month its works run: `start_date` on a planned case is the works' start, a median 90h after the build that first saw it. A month counts only the part of it the site has seen: nothing before `COLLECTION_START`, and a notice dated ahead of the build waits for its day. `planned` beside it is the events planned on every pin, by `work_type`: 4,356 of the 12,783. The denominator is `wsz.county_mains_km` ("Mains length per county" above). In the payload: `supply_notices`, `planned`, `supply_per_100km` and `supply_grade` on each county-month and each county's `last_30`, and the first three nationally (`supply_figures`). `tests/test_site.py`, `TestSupplyNotices`, builds Kerry's and Carlow's May to September on a fixture against the committed mains table.
+**The numerator.** A supply notice is an event (one `reference_num` in one county, pins grouped as `event_meta` groups them) whose worst pin is an outage, a restriction or works: everything but quality notices, which stay the health marker's, and lifts. The class decides, not a text match, which would be one more thing to drift. It is counted for the county its supply zone is run from, or the county the feed names when no pin is in a zone ("A notice counted by its zone's county" below), and dated by its earliest pin's start (`first_pub`, the pinned start for a re-stamped case), so a planned notice counts in the month its works run: `start_date` on a planned case is the works' start, a median 90h after the build that first saw it. A month counts only the part of it the site has seen: nothing before `COLLECTION_START`, and a notice dated ahead of the build waits for its day. `planned` beside it is the events planned on every pin, by `work_type`: 4,356 of the 12,783. The denominator is `wsz.county_mains_km` ("Mains length per county" above). In the payload: `supply_notices`, `planned`, `supply_per_100km` and `supply_grade` on each county-month and each county's `last_30`, and the first three nationally (`supply_figures`). `tests/test_site.py`, `TestSupplyNotices`, builds Kerry's and Carlow's May to September on a fixture against the committed mains table.
 
 **The outage count beside it.** `outage_notices` on a county-month is the events whose worst pin classifies as `outage`: a hard-supply category, an unplanned repair or a reported loss under investigation, not a repeating window. It is what the median time to "works complete" and the ten longest are taken over, because a planned end is a plan, not a report. Any-pin-outage and worst-pin-outage gave the same set on release 2026-10-06-2104, and all-pins-outage dropped 26 events of 5,869, so the worst-pin rule the top ten uses is kept. It carries no rate and no letter of its own now. Investigations joined it on 2026-11-23: 7,823 outage notices from May to October where there were 6,976, and a median 0.2h to 2.7h higher in each of those months (data-quality.md, "an investigation is an outage notice").
 
@@ -259,46 +259,46 @@ The review behind it is [archive/grading-plan.md](archive/grading-plan.md); the 
 
 **The month in progress is graded on the last 30 days** (owner, 2026-10-06). A month the site saw whole gets its rate and letter; any other (the month in progress, and April 2026, seen from the 20th) carries its counts so far alone. Each county carries `last_30` (counts, rate, letter over the 30 days to the build) and the site carries the national `last_30` (counts and rate), for every surface that says "now". The measurements that settled it were made on the outage letter, on May to September of release 2026-10-06-2104, and the reasoning does not depend on which notices are counted. Scaling the part-month count to the month's length read one Carlow notice on the 1st as 5.1 per 100 km. A part-month letter matched the month-end one in 53 of 130 county-months at day 3, 50 at day 5, 73 at day 7 and 71 at day 10, so a minimum-days gate like esb's stops the day-1 extreme but leaves a coin flip. An "above, about or below its usual pace" trend did no better (46 of 130 at day 5, 12 pointing the wrong way). The rolling window always rests on a full month of notices; its costs are that it lags (a burst stays in it for 30 days) and that it can change between builds with nothing new published, which the label carries. It is graded on the calendar-month cuts, so it reads about 1.5% more leniently than an average month (30 days against 30.4) and can sit a letter apart from the month just finished at a cut; not corrected, because a rate per 30 days is what a reader takes "a month" to mean. The window is gated as a month is, lettered only once it lies wholly from `COLLECTION_START` on. Both the window and the 'seen whole' test run to the last feed read (`data_as_of`), not the build clock: a UI deploy on a stale release would otherwise count the unread days as quiet ones. History stays on calendar months: they do not overlap, so they compare and sum, and the cuts were fitted on them.
 
-**The distribution**, notices per 100 km per month: min 0.68 (Carlow May), p10 2.00, p25 2.49, median 3.20, p75 4.33, p90 5.65, max 11.46 (Kerry July). Nationally 3.59, 3.81, 4.78, 3.86, 4.02, 3.73.
+**The distribution**, notices per 100 km per month: min 0.68 (Carlow May), p10 1.98, p25 2.49, median 3.25, p75 4.46, p90 5.65, max 11.38 (Kerry July). Nationally 3.59, 3.81, 4.78, 3.86, 4.02, 3.73.
 
 | county | outage rank | supply rank | May | Jun | Jul | Aug | Sep | Oct |
 |---|---|---|---|---|---|---|---|---|
-| Leitrim | 4 | 1 | 0.93 A | 2.80 B | 2.49 B | 1.71 A | 1.95 A | 2.49 B |
-| Carlow | 1 | 2 | 0.68 A | 3.25 C | 1.37 A | 2.56 B | 3.59 C | 1.71 A |
-| Longford | 13 | 3 | 1.98 A | 2.31 B | 4.21 D | 2.23 B | 2.31 B | 1.65 A |
-| Westmeath | 7 | 4 | 2.28 B | 2.28 B | 3.35 C | 1.78 A | 2.92 B | 2.28 B |
-| Offaly | 12 | 5 | 1.31 A | 2.18 B | 3.93 C | 3.06 C | 2.01 B | 2.80 B |
-| Sligo | 9 | 6 | 3.60 C | 3.01 C | 2.07 B | 2.71 B | 1.95 A | 2.01 B |
+| Leitrim | 4 | 1 | 0.93 A | 2.80 B | 2.41 B | 1.71 A | 1.95 A | 2.49 B |
+| Carlow | 1 | 2 | 0.68 A | 3.25 C | 1.37 A | 3.25 C | 3.42 C | 1.71 A |
+| Sligo | 9 | 3 | 3.25 C | 3.01 C | 2.24 B | 2.24 B | 1.95 A | 1.89 A |
+| Longford | 13 | 4 | 1.98 A | 2.39 B | 4.04 D | 2.23 B | 2.39 B | 1.65 A |
+| Westmeath | 7 | 5 | 2.28 B | 2.21 B | 3.28 C | 1.78 A | 2.92 B | 2.35 B |
+| Roscommon | 10 | 6 | 3.14 C | 1.57 A | 2.52 B | 2.90 B | 2.76 B | 2.19 B |
 | Monaghan | 8 | 7 | 1.54 A | 2.92 B | 2.31 B | 3.54 C | 2.31 B | 2.77 B |
-| Cavan | 6 | 8 | 2.30 B | 1.99 A | 3.98 C | 2.45 B | 2.76 B | 2.14 B |
-| Wicklow | 5 | 9 | 2.40 B | 2.50 B | 2.98 B | 2.11 B | 4.03 D | 1.92 A |
-| Louth | 2 | 10 | 2.46 B | 2.28 B | 3.51 C | 2.52 B | 3.02 C | 2.15 B |
-| Roscommon | 10 | 11 | 3.33 C | 2.00 B | 2.66 B | 2.90 B | 3.14 C | 2.52 B |
-| Kildare | 3 | 12 | 2.76 B | 3.29 C | 2.76 B | 3.08 C | 3.61 C | 2.28 B |
-| Clare | 15 | 13 | 2.76 B | 2.87 B | 3.20 C | 2.76 B | 3.20 C | 2.98 B |
-| Laois | 20 | 14 | 1.87 A | 3.09 C | 3.75 C | 4.21 D | 3.28 C | 2.90 B |
-| Donegal | 16 | 15 | 3.03 C | 3.96 C | 3.82 C | 2.53 B | 2.94 B | 3.64 C |
-| Mayo | 18 | 16 | 4.17 D | 3.88 C | 3.31 C | 3.34 C | 3.27 C | 3.66 C |
-| Kilkenny | 17 | 17 | 4.74 D | 3.65 C | 4.01 D | 3.01 C | 3.83 C | 3.19 C |
-| Galway | 11 | 18 | 3.00 C | 4.15 D | 3.04 C | 4.22 D | 4.02 D | 4.39 D |
-| Limerick | 21 | 19 | 3.17 C | 3.09 C | 4.83 D | 2.77 B | 4.67 D | 4.63 D |
-| Tipperary | 22 | 20 | 2.90 B | 4.35 D | 5.71 D | 4.43 D | 4.49 D | 3.47 C |
-| Cork | 23 | 21 | 4.76 D | 4.86 D | 5.81 D | 4.26 D | 5.11 D | 4.02 D |
-| Dublin | 14 | 22 | 4.33 D | 4.26 D | 5.01 D | 5.74 D | 5.09 D | 5.77 D |
-| Wexford | 24 | 23 | 4.93 D | 4.32 D | 7.92 E | 5.54 D | 5.37 D | 4.93 D |
-| Waterford | 25 | 24 | 6.49 E | 4.03 D | 10.12 F | 7.77 E | 5.21 D | 4.72 D |
-| Meath | 19 | 25 | 7.00 E | 7.77 E | 9.18 F | 5.11 D | 6.16 E | 4.41 D |
-| Kerry | 26 | 26 | 5.80 D | 5.65 D | 11.46 F | 6.35 E | 6.10 E | 5.36 D |
+| Cavan | 6 | 8 | 2.30 B | 1.99 A | 3.98 C | 2.45 B | 2.76 B | 2.30 B |
+| Wicklow | 5 | 9 | 2.40 B | 2.69 B | 2.98 B | 2.02 B | 3.84 C | 1.92 A |
+| Offaly | 12 | 10 | 1.31 A | 2.27 B | 4.19 D | 3.14 C | 2.10 B | 2.88 B |
+| Clare | 15 | 11 | 2.65 B | 2.59 B | 3.04 C | 2.71 B | 2.87 B | 2.76 B |
+| Kildare | 3 | 12 | 2.76 B | 3.08 C | 2.49 B | 3.08 C | 3.66 C | 2.28 B |
+| Laois | 20 | 13 | 1.87 A | 2.81 B | 3.28 C | 4.03 D | 3.28 C | 2.90 B |
+| Louth | 2 | 14 | 2.83 B | 3.51 C | 4.49 D | 2.95 B | 3.32 C | 2.71 B |
+| Donegal | 16 | 15 | 3.03 C | 3.92 C | 3.85 C | 2.53 B | 2.96 B | 3.60 C |
+| Kilkenny | 17 | 16 | 4.56 D | 3.74 C | 4.47 D | 2.83 B | 4.01 D | 3.19 C |
+| Mayo | 18 | 17 | 4.63 D | 4.06 D | 3.48 C | 3.56 C | 3.41 C | 3.77 C |
+| Galway | 11 | 18 | 2.94 B | 4.39 D | 3.00 C | 4.29 D | 4.08 D | 4.62 D |
+| Limerick | 21 | 19 | 3.28 C | 3.28 C | 4.99 D | 2.81 B | 4.87 D | 4.79 D |
+| Tipperary | 22 | 20 | 2.90 B | 4.35 D | 5.65 D | 4.46 D | 4.57 D | 3.52 C |
+| Cork | 23 | 21 | 4.78 D | 4.84 D | 5.81 D | 4.26 D | 5.09 D | 3.99 C |
+| Dublin | 14 | 22 | 4.33 D | 4.30 D | 5.06 D | 5.75 D | 5.09 D | 5.75 D |
+| Wexford | 24 | 23 | 4.93 D | 4.32 D | 7.92 E | 5.54 D | 5.48 D | 4.98 D |
+| Meath | 19 | 24 | 6.51 E | 6.44 E | 7.98 E | 4.55 D | 5.74 D | 3.71 C |
+| Waterford | 25 | 25 | 6.49 E | 4.03 D | 10.32 F | 7.57 E | 4.82 D | 4.62 D |
+| Kerry | 26 | 26 | 5.80 D | 5.65 D | 11.38 F | 6.39 E | 6.13 E | 5.36 D |
 
-**The cuts: A below 2, B below 3, C below 4, D below 6, E below 8, F at 8 or more** (`SUPPLY_CUTS`, `count_grade`; owner, 2026-11-23). The scale reads in its own unit, "fewer than two supply notices per 100 km of main a month is an A". The letter is cut on the two-decimal figure the payload carries, so a rate that rounds onto a cut takes the letter the page shows. A 15, B 49, C 39, D 42, E 8, F 3; the three F are July in Kerry, Waterford and Meath. Against the outage letter 89 county-months keep theirs, 59 drop and 8 rise. A fixed scale has to leave room above the record for a winter the archive has not seen; the bands above the May-Oct p90 are that room. Rejected: even steps, 2 / 3 / 4 / 5 / 6 (D 28, E 14, F 11; 70 months drop), which leaves none. Archive quantiles were rejected for the outage letter on 2026-10-06 and stay rejected: they fill every band by construction and move published letters every build.
+**The cuts: A below 2, B below 3, C below 4, D below 6, E below 8, F at 8 or more** (`SUPPLY_CUTS`, `count_grade`; owner, 2026-11-23). The scale reads in its own unit, "fewer than two supply notices per 100 km of main a month is an A". The letter is cut on the two-decimal figure the payload carries, so a rate that rounds onto a cut takes the letter the page shows. A 17, B 50, C 35, D 44, E 8, F 2; the two F are July in Kerry and Waterford. Against the outage letter 85 county-months keep theirs, 58 drop and 13 rise. A fixed scale has to leave room above the record for a winter the archive has not seen; the bands above the May-Oct p90 are that room. Rejected: even steps, 2 / 3 / 4 / 5 / 6 (D 28, E 14, F 11; 70 months drop), which leaves none. Archive quantiles were rejected for the outage letter on 2026-10-06 and stay rejected: they fill every band by construction and move published letters every build.
 
 **Re-fit yearly**, first in November 2027 against the release DB, and sooner only if a band holds nothing over a full year of months. The record to beat is the table above. Raising a cut moves published letters, so the re-fit is a dated section here, not a quiet constant change.
 
 **A national rate outside 3 to 5.5 is a prompt to check how notices are being published, not to re-fit** (owner, 2026-11-23). The months so far run 3.59 to 4.78, and the count moves with publishing practice ("Known limits" below): a region that starts announcing a week of works as a notice a day, or stops publishing investigations, shifts every letter with no change in service. So a finished month outside the band is looked at for that first: the data build opens an issue for it (data-quality.md, "The build raises an issue for a purge, and for an odd month"). A hard month is not a reason to touch the cuts: the bands above the record exist for it, and a re-fit then would soften the letters when service is worst. The band's edges are not measured; they are the outage letter's 1.5 to 3 carried over in proportion, which is enough for a check that costs a look.
 
-**Investigations are counted, all of them**, and since 2026-11-23 as outage notices. 201 of the 847 have another outage notice within 500 m and 5 days and are probably one incident published twice. Counting only the other 646 changes 7 of 156 letters and moves two counties one place, which does not earn a coordinate heuristic in a published number. Dropping all 847 moves 8 counties, one by 5 places.
+**Investigations are counted, all of them**, and since 2026-11-23 as outage notices. 201 of the 847 have another outage notice within 500 m and 5 days and are probably one incident published twice. Counting only the other 646 changes 7 of 156 letters (5 with the letter counted by zone) and moves two counties one place, which does not earn a coordinate heuristic in a published number. Dropping all 847 moves 8 counties, one by 5 places.
 
-**The county bar stays as it is.** It is red when an outage notice stands anywhere in the county, the reading rejected as a metric in July because Cork came out at 2% ([archive/availability-method.md](archive/availability-method.md)), so it still disagrees with a rate: the A and B months red on half their days or more fell from 50 of 92 on the outage letter to 28 of 64, and stand at 34 of 64 with investigations drawn red. The page says what red means, and the area bar (frontend-notes.md, "The area's day bar") is where a red day is a notice in the reader's own town. Rejected: shading a day by the places hit, because 929 of 3,285 red county-days have one place and 648 two, the objection that closed the notice ramp on 2026-10-06; and grading each day on the letter's own cuts, which cannot contradict the letter but puts 57% of 4,784 day cells within one band of their month's, Dublin reading A on 43 days of 184 and F on 37.
+**The county bar stays as it is.** It is red when an outage notice stands anywhere in the county, the reading rejected as a metric in July because Cork came out at 2% ([archive/availability-method.md](archive/availability-method.md)), so it still disagrees with a rate: the A and B months red on half their days or more fell from 50 of 92 on the outage letter to 28 of 64, stood at 34 of 64 with investigations drawn red, and stand at 38 of 67 with the letter counted by zone. The page says what red means, and the area bar (frontend-notes.md, "The area's day bar") is where a red day is a notice in the reader's own town. Rejected: shading a day by the places hit, because 929 of 3,285 red county-days have one place and 648 two, the objection that closed the notice ramp on 2026-10-06; and grading each day on the letter's own cuts, which cannot contradict the letter but puts 57% of 4,784 day cells within one band of their month's, Dublin reading A on 43 days of 184 and F on 37.
 
 **Rejected for the letter**, each measured on the same release:
 
@@ -315,10 +315,96 @@ The review behind it is [archive/grading-plan.md](archive/grading-plan.md); the 
 
 - The count ignores size and length: a village burst and a city trunk main each count one, and so do a three-hour planned window and a three-day burst. The median beside the letter is the only length the site measures, and it covers outages alone.
 - How works are published moves the count. 1,193 of 4,211 planned events have another planned event within 200 m and 14 days (28%; Galway 45%): a week of works published daily is several notices, and the same week announced as one repeating window is one.
-- Zones cross county lines, and a notice is placed by pin while its main is counted by zone authority. Measured on the 2026-10-06 release for Louth, Meath and their neighbours, May to September cases: 69 of Meath's 592 pins (11.7%) fall in Louth's "South Louth & East Meath" zone (693 km) and 4 in Fingal Zone 1; 0 of Louth's 298 fall in a Meath zone. So Meath reads high and Louth low, by at most that twelfth.
+- Zones cross county lines, so a county's letter covers the zones run from it and not the ground inside its border. A notice is counted where its main is counted, which is not always the county that lists it: 265 of the 12,783 are listed under one county and counted for another, 61 of them east Meath's for Louth ("A notice counted by its zone's county" below).
 - A county of 585 km (Carlow) moves 0.17 per notice, so one notice is a sixth of the narrowest band; Dublin's 6,170 km moves 0.016. The coarseness is in the small counties, where it is also the honest resolution of the data.
-- The feed's `county` is the notice's claim, not the pin's; "Known limitation: pins outside the county they claim" above applies here as to everything placed by county.
+- The feed's `county` is the notice's claim, not the pin's; "Known limitation: pins outside the county they claim" above applies to everything listed by county. The count follows the pin wherever a zone holds it, right or wrong: 78 of the 265 moved notices have every pin outside the county the feed names.
 - The 25 pins with an unmatched title are works by default and count.
+
+## A notice counted by its zone's county (2026-11-23)
+
+**Simply put:** the letter divides a county's notices by its length of water main, and the two are not counted over the same ground. A notice goes to the county the feed names; a main goes to the county whose council runs its supply zone. East Meath is on a zone run from Louth, so its notices count against Meath and its mains count for Louth. Since 2026-11-23 every notice is counted where its main is counted, which moved 265 of 12,783 notices and changed 18 of 156 letters by one. Meath's rate fell by an eighth, and Meath moved from 25th of 26 to 24th.
+
+Measured first with nothing published changed, then taken (owner, 2026-11-23). Release 2026-11-22-2154, clock at the data horizon, supply notices of May to October; "feed" below is the letter as published until then. The replay reproduced the old build's `supply_notices`, rate and letter in all 156 county-months and every county's `last_30` before it moved anything, and the new build matches the replay's rule in all of them.
+
+**The rule** (`counted_county`). Each pin votes for the county of the council that runs the zone it falls in (`ZoneLookup.zone`, then `county` in `wsz_mains.csv`). A pin in no zone, 750 of 15,461 (4.9%), votes for the feed's county: no county's total holds its main. The event goes to the county with the most votes, to the feed's county on a tie, else to the earliest pin's, and stays one event under the key the build gives it. Which rule hardly matters: 1,454 events have more than one pin, 35 of them vote for two counties, 20 of those tie and 5 move. Unzoned pins abstaining, the earliest pin alone, and moving only when every zoned pin agrees give 269, 279 and 267 moves and 18, 19 and 18 letters.
+
+**What moves.** 340 pins (2.2%) sit in a zone run from another county and 265 events (2.07%) move. Eight pairs hold 182 of them, each the work of one zone:
+
+| Listed under | Counted for | Events | Zone |
+|---|---|---|---|
+| Meath | Louth | 61 | South Louth & East Meath (693 km) |
+| Roscommon | Mayo | 48 | Lough Mask RWSS (1,391 km) |
+| Clare | Limerick | 22 | Limerick City Environs PWS (965 km) |
+| Sligo | Roscommon | 18 | North Roscommon WSS (381 km) |
+| Mayo | Galway | 13 | Tuam RWSS (711 km) |
+| Laois | Kilkenny | 8 | Galmoy-Rathdowney PWS (50 km) |
+| Kildare | Dublin | 6 | SD_ZONE2 (1,066 km) |
+| Mayo | Sligo | 6 | Lough Talt Regional (625 km) |
+
+The other 83 are spread over 61 pairs. The moves are of two kinds. 187 events have a pin placed in an area of the feed's county: the pin is in the county and its zone is run from the next one. 78 have every pin nearest a Small Area of another county, which is the feed's `county` against its own coordinates ("Known limitation: pins outside the county they claim"); the reference's own prefix (MEA, LOU) sides with the pin in 40 of them and with the feed's county in 35. The 187 alone change 14 letters, the 78 alone 6.
+
+**By county**, notices and mean monthly rate over the six months, lowest first:
+
+| County | Feed's county | Rank | Zone's county | Rank | Letters, feed | Letters, zone |
+|---|---|---|---|---|---|---|
+| Leitrim | 159 = 2.06 | 1 | 158 = 2.05 | 1 | A B B A A B | same |
+| Carlow | 77 = 2.19 | 2 | 80 = 2.28 | 2 | A C A B C A | A C A C C A |
+| Longford | 178 = 2.45 | 3 | 178 = 2.45 | 4 | A B D B B A | same |
+| Westmeath | 209 = 2.48 | 4 | 208 = 2.47 | 5 | B B C A B B | same |
+| Offaly | 175 = 2.55 | 5 | 182 = 2.65 | 10 | A B C C B B | A B D C B B |
+| Sligo | 260 = 2.56 | 6 | 247 = 2.43 | 3 | C C B B A B | C C B B A A |
+| Monaghan | 100 = 2.57 | 7 | 100 = 2.57 | 7 | A B B C B B | same |
+| Cavan | 102 = 2.60 | 8 | 103 = 2.63 | 8 | B A C B B B | same |
+| Wicklow | 166 = 2.66 | 9 | 165 = 2.64 | 9 | B B B B D A | B B B B C A |
+| Louth | 259 = 2.66 | 10 | 322 = 3.30 | 14 | B B C B C B | B C D B C B |
+| Roscommon | 348 = 2.76 | 11 | 317 = 2.51 | 6 | C B B B C B | C A B B B B |
+| Kildare | 335 = 2.96 | 12 | 327 = 2.89 | 12 | B C B C C B | same |
+| Clare | 322 = 2.96 | 13 | 301 = 2.77 | 11 | B B C B C B | B B C B B B |
+| Laois | 204 = 3.18 | 14 | 194 = 3.03 | 13 | A C C D C B | A B C D C B |
+| Donegal | 881 = 3.32 | 15 | 879 = 3.32 | 15 | C C C B B C | same |
+| Mayo | 602 = 3.60 | 16 | 638 = 3.82 | 17 | D C C C C C | D D C C C C |
+| Kilkenny | 246 = 3.74 | 17 | 250 = 3.80 | 16 | D C D C C C | D C D B D C |
+| Galway | 676 = 3.80 | 18 | 691 = 3.89 | 18 | C D C D D D | B D C D D D |
+| Limerick | 585 = 3.86 | 19 | 607 = 4.00 | 19 | C C D B D D | same |
+| Tipperary | 892 = 4.22 | 20 | 896 = 4.24 | 20 | B D D D D C | same |
+| Cork | 1,483 = 4.80 | 21 | 1,480 = 4.80 | 21 | D D D D D D | D D D D D C |
+| Dublin | 1,863 = 5.03 | 22 | 1,868 = 5.05 | 22 | D D D D D D | same |
+| Wexford | 596 = 5.50 | 23 | 599 = 5.53 | 23 | D D E D D D | same |
+| Waterford | 390 = 6.39 | 24 | 385 = 6.31 | 25 | E D F E D D | same |
+| Meath | 566 = 6.61 | 25 | 499 = 5.83 | 24 | E E F D E D | E E E D D C |
+| Kerry | 1,109 = 6.79 | 26 | 1,109 = 6.79 | 26 | D D F E E D | same |
+
+Louth's rate rises 24.3%, Mayo's 6.0%; Meath's falls 11.8%, Roscommon's 8.9%, Clare's 6.5%, Sligo's 5.0%, Laois's 4.9%. No other county moves more than 4%. The middle of the table is bunched, so Offaly's five places are seven notices.
+
+**Letters.** 18 of 156 change, each by one: 12 better, 6 worse. A 17, B 50, C 35, D 44, E 8, F 2 against the published A 15, B 49, C 39, D 42, E 8, F 3, so the cuts stand. Four of the 26 `last_30` letters change: Louth C to D (3.20 to 4.06), Meath E to D (6.23 to 5.18), Roscommon C to B (3.19 to 2.95), Waterford D to C (4.13 to 3.93).
+
+**Meath and Louth.**
+
+| | May | Jun | Jul | Aug | Sep | Oct |
+|---|---|---|---|---|---|---|
+| Meath, feed | 100 = 7.00 E | 111 = 7.77 E | 131 = 9.18 F | 73 = 5.11 D | 88 = 6.16 E | 63 = 4.41 D |
+| Meath, zone | 93 = 6.51 E | 92 = 6.44 E | 114 = 7.98 E | 65 = 4.55 D | 82 = 5.74 D | 53 = 3.71 C |
+| Louth, feed | 40 = 2.46 B | 37 = 2.28 B | 57 = 3.51 C | 41 = 2.52 B | 49 = 3.02 C | 35 = 2.15 B |
+| Louth, zone | 46 = 2.83 B | 57 = 3.51 C | 73 = 4.49 D | 48 = 2.95 B | 54 = 3.32 C | 44 = 2.71 B |
+
+Meath lists 566 notices, 69 leave (61 to Louth) and 2 arrive. E or F in four of six months becomes E in three and no F. Its July sits on the cut: 114 notices is 7.98 and 115 is 8.05. The attribution is not what puts Meath near the bottom. Its 499 notices on the 1,428 km its own council's zones hold are the third-highest rate of the 26, behind Kerry and Waterford and ahead of Wexford's 5.53.
+
+**What disagrees with what**, the letter alone having moved:
+
+- *The county page.* Its "Supply notices" column prints 93 for Meath's May above a list holding 100, and Louth's letter rests on 63 notices listed under Meath, Laois and Dublin. 265 notices (2.1%) are listed under one county and counted for another. A line under the month table says so, for every notice the page lists, April and the month in progress included: 88 leave Meath's page, 80 of them for Louth, and 3 arrive.
+- *The outage count, the median and the ten longest* stay with the feed's county (owner, 2026-11-23, with both sides below measured); 188 of the 265 are outage notices, investigations among them. `outage_notices` is the set the median and its "scheduled only" and "never reported an end" split are taken over: following the zone it would differ in 95 county-months, and the split would exceed it in 44. "Outages" exceeds "Supply notices" in none of the 156 county-months, by the data and not by construction: Laois's July reads 35 and 35.
+- *The area pages.* The moved notices are named for 107 area and county pairings: Kiltullagh's countryside 18 and Cloonfad 17 (Roscommon, counted for Mayo), Duleek 11 and Ratoath 11 (Meath, counted for Louth). An area carries no letter, so nothing on its page contradicts; its county link leads to a letter its notices are not in, and to the line that says so.
+- *The "Pinned outside the county" bucket* is a different disagreement. Of the 304 unplaced pins, 103 are in a zone run from another county, 173 in one of the feed's own county and 28 in none; of the 340 pins that cross, 237 are placed in an area of the feed's county. The bucket does not explain the moves.
+- *The county bar* stays the feed's: a red day in Meath from a notice counted for Louth. It already disagrees with a rate by construction.
+- *`zones.html` and the zone pages* already group by the council that runs the zone, and agree.
+- *The national figures* do not move. 13 references the feed publishes under two counties land twice in one and still count twice; merging them would take the 12,783 to 12,770.
+- *The build.* The letter needs the zone lookup (about 3 s, already run for the zone pages) and falls back to the feed's county without it, which is how `TestSupplyNotices` builds; `tests/test_zone_pages.py`, `TestTheLetterCountsByZone`, builds with it. A county counted for and listing nothing still gets its row. `uisce-site` prints how many notices count for another county than the feed names.
+
+**Why it was taken.** A rate whose two halves cover different ground is off by an amount now measured: a quarter for Louth, an eighth for Meath, and one letter in 18 of 156 county-months, against the 7 of 156 that did not earn the investigations a heuristic. This is not a heuristic: the lookup is exact, runs already, and the choice of rule moves one letter. `supply_notices`, `planned` and the rate and letter on them moved, monthly and `last_30`; the lists, `outage_notices`, the median, the bar and the area pages stay with the feed's county. The cost is the line on the county page, and that "Louth" now means the zones run from Louth, east Meath's among them; the index's "What this measures" says so.
+
+**Rejected: leaving it.** Every page stays consistent with its own list, and the published letter reads Meath one band too harsh in three months of six and Louth one too kind in two.
+
+**Rejected: moving the mains instead**, each crossing zone's length split between counties by the Census population of the Small Areas inside it. It keeps every notice in the county that lists it. 1,020 of 53,756 km change county (Louth 1,625 to 1,377, Meath 1,428 to 1,680), 15 letters change, and it gives the zone rule's letter in 141 of 156: Meath 5.61, D E E D D C, 24th as under the zone rule. Rejected because population is not main. In five of the seven crossing zones over 300 km the notices over the line outrun the people there: Lough Mask 11.2% of people and 20.4% of pins, Limerick City Environs 3.1% and 14.3%, North Roscommon 20.6% and 40.6%, Lough Talt 4.8% and 10.0%, North East Regional 9.3% and 18.6%; a rural edge carries more main per head than the town at the centre. `sa_towns.csv` also files a Small Area under its settlement's county, so Ferrybank reads as Waterford and Graiguecullen as Carlow; 204 zones (832 km) hold no Small Area centroid; and it would put a population estimate back into a published number ("The estimate is removed").
 
 ## The estimate is removed (2026-10-06)
 
@@ -416,7 +502,7 @@ esb (baz8080/esb#51) and lifts (2026-08-18) follow the same rule.
 - The count ignores size: a village burst and a city trunk main each count one. The median time to "works complete" beside it is the only size the site measures.
 - The 14-day cap applies to each *notice*, not each event, so an event published as several staggered notices can run longer than 14 days; the ten longest flags such an event with a "+".
 - `start_date` is the notice publication time, so every duration is a floor on true outage length (overnight events are typically posted the next working morning; see [data-quality.md](data-quality.md)).
-- A notice counts for the county the feed names, not the one its pin sits in ("pins outside the county they claim" above).
+- A notice is listed under the county the feed names, not the one its pin sits in ("pins outside the county they claim" above); the letter's count follows the pin's zone ("A notice counted by its zone's county").
 - The county populations printed beside each county are hardcoded Census 2022 figures in site.py; no figure is computed from them.
 - The month in progress has no letter of its own; the page shows the rolling 30-day letter instead. Cases downloaded since the last `uisce-infer` run have no end signal yet, so they colour the day bars to "now" and are missing from the median until inferred (see [pipeline-dependencies.md](pipeline-dependencies.md)).
 - "Open cases" on the page is a right-now snapshot of `Case.is_open` (below), attached to the county rather than the selected month, so it does not vary as you page through months (the copy says so).

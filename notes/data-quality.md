@@ -523,4 +523,4 @@ Building the county drill-down surfaced a small class where `cases.county` and `
 
 About 1.5% of case-months, concentrated in border counties — Tipperary has the most at 21 case-months, Kilkenny 24 across four months.
 
-Which of the two fields is wrong is not established here, and it matters which way you lean: the county drives every county-level figure on the site, while the coordinates drive where it is listed. The site keeps the case on the county the feed names, so county totals stay consistent with `cases.county`, and gives it a `Pinned outside the county` row that reports case counts only.
+Which of the two fields is wrong is not established here, and it matters which way you lean: the county drives every county-level figure on the site, while the coordinates drive where it is listed. (Since 2026-11-23 the letter's supply count is the exception and follows the pin's zone: statuspage-methodology.md, "A notice counted by its zone's county".) The site keeps the case on the county the feed names, so county totals stay consistent with `cases.county`, and gives it a `Pinned outside the county` row that reports case counts only.
